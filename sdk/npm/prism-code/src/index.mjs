@@ -10,13 +10,16 @@
 import { parseArchive, resolveArchive, asBytes } from './archive.mjs';
 import { attestationSection, readAttestations } from './attestations.mjs';
 import { decodeHoloview } from './view.mjs';
-import { compileGuest, runGuest, runAcceptance } from './core.mjs';
+import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptance } from './core.mjs';
 import { parseCapabilities, grantOf, DEFAULT_SET } from './capabilities.mjs';
 import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
 import { CapabilityDeniedError, PrismCodeError, fail } from './errors.mjs';
 import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
+import { acceptanceHistory, experimental_recorder, experimental_replay } from './replay.mjs';
+import { createMiddlewareStack } from './middleware.mjs';
 import { worldPolicy } from './vendor/verify.mjs';
+import { createContainers } from './containers.mjs';
 import * as canonical from './canonical/index.js';
 
 export {
@@ -35,19 +38,47 @@ export {
   SubjectMismatchError,
   AttestationNotFoundError,
   TrustRootError,
+  RegistryError,
+  RegistryAuthError,
+  ReferrersUnsupportedError,
+  ManifestNotFoundError,
+  DigestMismatchError,
+  PullVerificationError,
+  ReferenceInvalidError,
   ProviderError,
   ProviderNotFoundError,
   ProviderReplyError,
   ProviderFailedError,
+  ExportMismatchError,
+  MiddlewareError,
   ERROR_CLASSES,
+  PolicyParseError,
+  PolicyEvaluationError,
+  PolicyDeniedError,
   classForCheck,
   errorForReason,
   errorFromVerdict,
+  EXIT_CODES,
+  exitCodeFor,
 } from './errors.mjs';
 export { experimental_verify, experimental_createClient, MINIMUM_LEVEL_ENV } from './verify.mjs';
+export {
+  HISTORY_SCHEMA,
+  REPLAY_PREDICATE_TYPE,
+  parseHistory,
+  historyBytes,
+  historyDigest,
+  historyJson,
+  acceptanceHistory,
+  experimental_recorder,
+  experimental_replay,
+} from './replay.mjs';
+export { CONTAINER_SCHEMA, memoryContainerStore } from './containers.mjs';
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';
+export { MIDDLEWARE_STEPS } from './middleware.mjs';
+export { experimental_tracing } from './tracing.mjs';
 export { parseCapabilities, grantOf, CAPABILITIES_SCHEMA, CAPABILITY_KINDS, DEFAULT_SET } from './capabilities.mjs';
 export {
   parseManifest,
@@ -124,6 +155,11 @@ function evidenceOf(provenance) {
   };
 }
 
+/** Run one step of `app` through its middleware stack, around the runtime's own `terminal`. */
+function stepper(stack, application) {
+  return (step, terminal, args) => stack.resolve(step, terminal, { application: application() })(args);
+}
+
 /**
  * The grant for `options.capabilities` (a capability file as text, bytes or a
  * parsed value) and `options.capabilitySet`. No file grants nothing (#279).
@@ -185,9 +221,18 @@ export async function loadArchive(source, options = {}) {
       metadata = parsed.metadata.text;
     }
   }
-  const dispatch = async (request) => runGuest(module, asBytes(request), limits);
+  const middleware = createMiddlewareStack();
+  let app = null;
+  const step = stepper(middleware, () => app);
+  const dispatch = async (input) => {
+    const request = asBytes(input);
+    checkRequest(request, limits);
+    const instance = await step('instantiate', (args) => instantiateGuest(args.module, args.imports), { module, imports: {} });
+    const response = await step('dispatch', (args) => runInstance(args.instance, args.request), { request, instance });
+    return step('record', (args) => args.response, { request, response });
+  };
   let inspection = null;
-  return Object.freeze({
+  app = Object.freeze({
     kind: 'holo',
     name: application.name ?? provenance.cargo_name ?? null,
     model: modelDocument,
@@ -215,8 +260,18 @@ export async function loadArchive(source, options = {}) {
      * The capability set the holo was loaded with is the default `capabilities`
      * option, so `world.capabilities` judges the grant it runs under (#283).
      */
-    experimental_verify: (options) => experimental_verify(parsed.bytes, { capabilities: capabilities.members, ...(options ?? {}) }),
+    experimental_verify: (options) =>
+      step('verify', (args) => experimental_verify(parsed.bytes, { capabilities: capabilities.members, ...(args.options ?? {}) }), { options }),
+    /** The middleware stack around verify, instantiate, dispatch and record (#295). */
+    experimental_middleware: middleware,
+    /** The acceptance vectors as a history, this application's first (#284). */
+    history: () => acceptanceHistory(app),
+    /** Record dispatches as they run (#284). */
+    experimental_recorder: () => experimental_recorder(app),
+    /** Re-execute histories against this build; see `experimental_replay`. */
+    experimental_replay: (histories, options) => experimental_replay(app, histories, options),
   });
+  return app;
 }
 
 /**
@@ -238,7 +293,15 @@ export async function loadClosure(files, importGlue, { model = null, capabilitie
   const profile = modelDocument ? profileOf(modelDocument) : typeof glue.invoke_bytes === 'function' ? 'text' : 'numeric';
   const dispatch = closureDispatch(glue, { profile, model: modelDocument, limits });
   const view = { entry: 'index.html', files };
-  return Object.freeze({
+  // The glue instantiated its module once, above; a closure runs the verify, dispatch and record steps.
+  const middleware = createMiddlewareStack();
+  let app = null;
+  const step = stepper(middleware, () => app);
+  const dispatchThrough = async (request) => {
+    const response = await step('dispatch', (args) => dispatch(args.request), { request });
+    return step('record', (args) => args.response, { request, response });
+  };
+  app = Object.freeze({
     kind: 'closure',
     name: stem,
     model: modelDocument,
@@ -258,12 +321,17 @@ export async function loadClosure(files, importGlue, { model = null, capabilitie
     capabilities: grant,
     /** A closure names no guest contract, so there is no world to check (#283). */
     world: Object.freeze({ contract: null, within: null, pure: null, effects: null }),
-    dispatch: async (request) => dispatch(asBytes(request)),
+    dispatch: async (request) => dispatchThrough(asBytes(request)),
     attestations: () => [],
-    acceptance: () => runAcceptance(vectors, (r) => dispatch(r)),
+    acceptance: () => runAcceptance(vectors, (r) => dispatchThrough(r)),
     inspect: async () => fail('inspect.kind', 'inspect reads a .holo archive; a closure has no section table'),
-    experimental_verify: (options) => experimental_verify({ kind: 'closure' }, options),
+    experimental_verify: (options) => step('verify', (args) => experimental_verify({ kind: 'closure' }, args.options), { options }),
+    experimental_middleware: middleware,
+    history: () => acceptanceHistory(app),
+    experimental_recorder: () => experimental_recorder(app),
+    experimental_replay: (histories, options) => experimental_replay(app, histories, options),
   });
+  return app;
 }
 
 /**
@@ -288,6 +356,18 @@ export async function load(source, options = {}) {
   }
   fail('load.source', 'load() takes bytes, a Blob, a path or a URL');
 }
+
+/**
+ * A client with containers of its own (issue #348). `options.store` keeps the
+ * records, in memory unless given; `options.warn` receives the warning of an
+ * unverified run, `console.warn` unless given.
+ */
+export function createPrism(options = {}) {
+  return Object.freeze({ containers: createContainers({ load, ...options }) });
+}
+
+/** The default client: `prism.containers.run(image, input)`. Its records live in memory until removed. */
+export const prism = createPrism();
 
 // 0.1.0 compatibility: the canonicalization API stays at `prism-code/canonical`.
 // These top-level re-exports are deprecated and will be removed in 0.3.0.

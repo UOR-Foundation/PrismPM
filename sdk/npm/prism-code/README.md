@@ -68,17 +68,64 @@ request the view posts) by dispatching through the guest.
 
 `run` gates on `check` (#282): it judges the holo against the policy, with the
 capability set it will run under, before anything is instantiated. A holo
-that fails is refused with exit 1 and its verdict on stderr; no verdict (an
+that fails is refused with its verdict on stderr and the exit code of the reason
+(1 for every holo today, see the table under Containers); no verdict (an
 unreadable policy, a file that is not a holo) is exit 2. Every holo is P0
 until holos carry signed statements, so under the default policy (P2) every
 `run` is refused today: pass a policy that accepts the holo, such as
 `{"minimum": "P0"}`, or `--allow-unverified`, which runs it anyway and prints a
 warning on every start. A closure cannot be judged and runs only with the flag.
 
+With an input, `run` is one run as a container (below) and does not serve:
+`prism-code run app.holo "$REQUEST"` or `--input "$REQUEST"`.
+
 A policy's `effects` lists the impure effects the world may import: `[]` is
 the pure-world policy, which refuses a world importing a clock, random,
 socket, filesystem or unknown interface (`policy.effects`); `["clock"]` grants
 the clock.
+
+## Containers (experimental, #348)
+
+One run of a holo is a container: `created`, `running` or `exited`, with a start
+and finish time, an exit code and the returned output, kept until removed.
+
+```js
+import { prism } from 'prism-code';
+
+const container = await prism.containers.run('app.holo', '1\tadd\t20\t22', { policy: { minimum: 'P0' } });
+container.status;     // 'exited'
+container.exitCode;   // 0
+container.text();     // '1\tok\t42'
+await container.inspect();   // { schema: 'prism/container/1', id, image: { digest, ... }, state, verdict, output }
+await container.remove();
+```
+
+`create` then `start` is the two-step form. `rm: true` removes it on exit. A run
+is gated on `check`, and a failed run is an exit code, never a rejection; an image
+that cannot be opened makes no container, and the call rejects.
+
+```
+npx prism-code run app.holo "$REQUEST" [--rm] [--policy policy.json] [--allow-unverified]
+npx prism-code inspect <container> [--json] [--format state.exitCode]
+npx prism-code rm <container>
+```
+
+stdout holds the guest's output and nothing else, and the process exits with the
+container's code. The command line keeps one file per container in
+`$PRISM_HOME/containers`, by default `~/.prism/containers`, with the output and never
+the input. `EXIT_CODES` and `exitCodeFor(error)` are the table both use:
+
+| Exit | From |
+| --- | --- |
+| 0 | Success |
+| 1 | `VerificationError` with a verdict, an attestation error, any other `PrismError` |
+| 2 | `VerificationError` with no verdict, `PrismCodeError`, `CapabilityDeniedError` |
+| 3 | `SigningError` |
+| 10 | `ProofMismatchError` |
+| 11 | `WorldMismatchError` |
+| 12 | `DeterminismViolationError` |
+| 13 | `ReplayError` |
+| 70 | Anything untyped: a guest trap, or a bug in the runtime |
 
 ## Capabilities (experimental, #279)
 
@@ -341,6 +388,75 @@ Every error is a `PrismError` with a stable `code`: `VerificationError`
 code, `verdict` and `reasons` the whole result. Load and archive failures remain
 `PrismCodeError`, a `PrismError` whose `code` is the check (`archive.magic`, ...).
 
+## Replay a history (experimental)
+
+A history, `prism/history/1`, is the dispatches of one application in order, each with its recorded outcome. A holo's acceptance vectors are its first history, and `run --record` or a recorder takes another from live dispatches. A replay runs every event against a build and compares the outcomes byte for byte, so a build that changed what it answers fails, even when its own vectors changed with it.
+
+```
+npx prism-code history app.holo --output app.history.json     # the acceptance vectors as a history
+npx prism-code replay app.history.json --holo app.holo        # exit 0 unchanged, 1 diverged, 2 could not replay
+npx prism-code replay histories/ --holo app.holo --statement replay.json
+npx prism-code run app.holo --record live.history.json        # every dispatch, as it happens
+```
+
+```js
+const app = await load('app.holo');
+const history = await app.history();
+
+const recorder = app.experimental_recorder();
+await recorder.dispatch(encoder.encode('1\tadd\t20\t22'));
+const recorded = await recorder.history();
+
+const { statement, divergenceCount } = await app.experimental_replay([history, recorded]);
+```
+
+A divergence rejects with `DeterminismViolationError` (`replay.divergence`), and every divergence is in its `details`. With `throw: false` the result comes back instead. A replay that cannot be carried out always rejects with `ReplayError`.
+
+`statement` is an in-toto Statement v1 of type `https://uor.foundation/prism/replay/v1`: the guest as its subject, the model, every history by its sha256 and BLAKE3, the divergence count and the runtime. It holds no clock, so the same replay writes the same bytes. Sign it with `prism-code attest`. `check <holo> --replay <file>` judges a statement from beside the holo, which can withhold P3 and never support it because it is unsigned. Reading signed statements from the holo waits on #270, and until then every holo is P0. The design is `docs/proposals/284-histories-replay.md`.
+
+## Generate a typed client (experimental)
+
+`prism-code generate` writes bindings and a typed client from the holo's WIT
+world and its model into a directory you name. There is no default directory,
+and nothing is written into `node_modules`.
+
+```
+npx prism-code generate Calculator.holo --out src/calculator
+```
+
+For the Calculator it writes four files, ES modules with TypeScript
+declarations beside them, that import nothing:
+
+- `world.js`, `world.d.ts`: the world `hologram:guest/core-wasm@1`, read from
+  its WIT file. `instantiate(module)` checks the guest's exports, and
+  `dispatch(module, request)` runs one request on a fresh instance.
+- `calculator.js`, `calculator.d.ts`: the `Calculator` class, with one method
+  per operation of the model, `CalculatorError` with the guest's error codes,
+  and `MODEL`, `OPERATIONS`.
+
+```js
+import { load } from 'prism-code';
+import { Calculator, CalculatorError } from './calculator/calculator.js';
+
+const app = await load('Calculator.holo');
+const calculator = new Calculator(app.dispatch);
+await calculator.add(20, 22);      // 42n
+await calculator.divide(1, 0);     // rejects: CalculatorError, code 'division-by-zero'
+```
+
+A model without typed operations gets a client with `invoke(bytes)`.
+
+Beside the files, `prism-generate.json` records the language, the generator
+(version and the sha256 of its source), the world and the model the files came
+from, and the sha256 of each file. The world and the model are shaped like
+`inputs.world` and `inputs.model` of `prismpm.lock`. A second run with the same
+inputs and intact files writes nothing and says the directory is up to date. An
+edited generated file is written again; a file in the directory that
+`generate` did not write is never overwritten.
+
+`--lang js` is the only writer today. Rust and Python writers follow on the
+same code model (#289).
+
 ## Check one in CI (experimental)
 
 `prism-code check <app.holo>` judges a holo against a policy and prints the
@@ -355,14 +471,38 @@ npx prism-code check Calculator.holo --policy policy.json --json
 | Exit | Meaning | stdout with `--json` |
 | --- | --- | --- |
 | 0 | A verdict was reached and the policy passed. | one verdict |
-| 1 | A verdict was reached and the policy failed. | one verdict |
-| 2 | No verdict: not a holo, an unreadable policy, an unknown format revision. | nothing |
+| 1 | A verdict was reached and the policy failed or denied. | one verdict |
+| 2 | No verdict: not a holo, an unreadable, unparsable or unevaluable policy, an unknown format revision. | nothing |
 
-The policy is a verify-time input, never read from the holo. A policy file is
-one JSON object with `name`, `minimum` (`P0` to `P3`), `digests` and `world`,
-the options of `experimental_verify`. Without `--policy` the default policy
-asks for `P2` or above; `PRISM_MINIMUM_LEVEL` sets the minimum when the policy
-does not. Without a `name`, the verdict names the policy by its path.
+The policy is a verify-time input, never read from the holo. `--policy` takes a
+Rego file (`.rego`), the name of a shipped policy (`pure-only`,
+`provenance-only`, `default`), or a JSON file with `name`, `minimum` (`P0` to
+`P3`), `digests`, `world` and `effects`, the options of `experimental_verify`,
+which adjust the default policy. Without `--policy` the default policy asks for
+`P2` or above and the declared world within the granted capabilities;
+`PRISM_MINIMUM_LEVEL` sets the minimum when the policy does not, and never
+applies to a Rego policy, which states its own. A file is named in the verdict by
+its path, unless JSON names itself. The format is in
+[docs/proposals/285-policy-file.md](../../../docs/proposals/285-policy-file.md).
+
+A Rego policy is in the package `prism.policy` and decides with `minimum` and `deny`:
+
+```rego
+package prism.policy
+
+import rego.v1
+
+minimum := "P0"
+
+deny contains {"rule": "policy.house.pure", "message": "the world must be pure"} if {
+	input.world.pure == false
+}
+```
+
+A policy that denies is a verdict and exits 1, with the rule as the reason's
+`check`; with `throw: true` it is `PolicyDeniedError`. A policy that does not parse
+is `PolicyParseError` and one that cannot be evaluated is `PolicyEvaluationError`,
+and both exit 2.
 
 A CI job gates on the exit code and keeps the verdict when it fails:
 
@@ -386,6 +526,30 @@ trusts the signer for.
 
 `prism-code check` with no holo is the 0.2.0 spelling of `build --check`. It
 still runs, prints a deprecation warning, and is removed in 0.4.0.
+
+## Develop with the studio (experimental, #288)
+
+`prism-code dev` watches a project, rebuilds and re-checks on every save, and
+serves a local studio at `http://localhost:4100`. The port is fixed: `--port`
+moves it, and a port in use is an error.
+
+```
+npx prism-code dev
+npx prism-code dev path/to/project --policy policy.json --no-open
+npx prism-code dev --build "make holo" --holo out/app.holo
+```
+
+The Check tab shows the verdict `check` prints for the same holo, with its
+level and every reason, and the time from the edit to the verdict. The page
+also judges the bytes itself with `@prism-code/verify` and says whether the two
+agree. The Replay tab says `unavailable` until `prism replay` ships.
+
+A build that fails, or names no holo, leaves no current verdict: the last one
+stays visible, labeled as describing source that has since changed. The page
+loads nothing from outside the machine. The build is separate: without
+`--build` or `[model].build` it runs `prism-code build --update`, which rewrites the model's pins in
+`prismpm.lock` as you save, so commit the lock with your source. It needs Docker and
+`prismpm.lock`. A build command from `prism.toml` runs with your permissions.
 
 ## Build one
 
@@ -585,6 +749,89 @@ Errors are typed: `SigningError` (`sign.*`), `SignatureInvalidError`, `IdentityM
 `VerificationError` with check `policy.invalid`. The verb is `verify-attestation` because
 `prism-code verify` already runs `prismpm verify`. The design is
 [docs/proposals/272-attest-verify.md](../../../docs/proposals/272-attest-verify.md).
+
+## Push and pull (experimental, #292)
+
+```
+prism-code push app.holo ghcr.io/acme/app:1.0 --keyless
+prism-code pull ghcr.io/acme/app:1.0 app.holo \
+  --certificate-identity https://github.com/acme/app/.github/workflows/release.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+`push` puts the holo in any OCI Distribution 1.1 registry as one layer of a deterministic manifest, so the
+same file has one digest everywhere. Each line of its attestation section becomes a referrer with the same bytes,
+in the layout cosign writes. A registry without the referrers API gets the spec's `sha256-<digest>` tag instead.
+With `--key` or `--keyless`, `push` also signs a statement per predicate that names the manifest, which is what
+`cosign verify-attestation` looks for; without a signer it warns. `oras discover` lists them all.
+
+`pull` writes nothing until the holo has passed, in order: the manifest and layer digests, the archive's footer and
+labels, the BLAKE3 annotations, the verdict of `check` under `--policy` (default P0, or `PRISM_MINIMUM_LEVEL`),
+the subjects of every attestation, and, when you name a signer with the flags of `verify-attestation`, at least one
+signature. Without a signer it says signatures were not checked. Exit codes: 0 done, 1 a digest or a check failed,
+2 no answer from the registry, 3 signing failed, 64 usage.
+
+| Reference | Means |
+| --- | --- |
+| `ghcr.io/acme/app:1.0` | A tag; `latest` when none is given. A registry is required: there is no default. |
+| `ghcr.io/acme/app@sha256:<hex>` | The manifest digest. |
+| `ghcr.io/acme/app@blake3:<hex>` | The archive fingerprint, pull only, through the `blake3-<hex>` tag `push` writes. The bytes are checked, so the tag proves nothing by itself. |
+| `dir://./store:1.0`, `--store ./store app:1.0` | A local OCI image layout, for offline use. `oras --oci-layout` reads it. |
+
+`pull ghcr.io/acme/app:1.0 dir://./store:1.0` keeps the holo and its referrers for offline use, and `push
+dir://./store:1.0 registry.internal/app:1.0` publishes them again with the same digest.
+
+Credentials come from Docker's config (`credHelpers`, `auths`, `credsStore`), and for `ghcr.io` from `GHCR_TOKEN` or
+`GITHUB_TOKEN`. No flag takes a token. A loopback registry speaks HTTP; any other needs `--plain-http`.
+
+```js
+import { experimental_push, experimental_pull } from 'prism-code/node';
+
+const pushed = await experimental_push(bytes, 'ghcr.io/acme/app:1.0', { key: privatePem });
+pushed.digest;       // sha256:...
+pushed.fingerprint;  // blake3:...
+const { holo, verdict } = await experimental_pull('ghcr.io/acme/app:1.0', { key: publicPem, output: 'app.holo' });
+```
+
+Errors are typed: `RegistryAuthError`, `ReferrersUnsupportedError`, `DigestMismatchError`, `PullVerificationError`,
+`ManifestNotFoundError`, `RegistryError`, `ReferenceInvalidError`. The design is
+[docs/proposals/292-push-pull-oci.md](../../../docs/proposals/292-push-pull-oci.md).
+
+## Export for the browser (experimental, #290)
+
+```
+prism-code export ghcr.io/acme/calculator@sha256:<digest> --out site
+prism-code export ghcr.io/acme/calculator@sha256:<digest> --tar site.tar
+```
+
+`export` writes the six-file browser export of a release that `prismpm build`
+or `prismpm pull` left verified in `.prism/oci`: `index.html`, `app.js`,
+`app.css`, the wasm-bindgen glue `<stem>.js`, the adapter `<stem>_bg.wasm` and
+`provenance.json`. `--tar` writes the same six files as one deterministic ustar
+archive instead (name order, mode 0644, owner 0, mtime 0, no directory entry).
+The holo's attestation bundles, when it carries any, go byte for byte to
+`<name>.attestations.jsonl` beside the output, as buildx writes attestation
+files beside its `local` and `tar` output. `--out` defaults to `export`; both
+are new names in the project (`--project`, default the current directory), and
+nothing that exists is replaced. `--json` prints the `prismpm/browser-export/1`
+receipt `prismpm export-browser` prints.
+
+The bytes come from the release, not from a `.holo` (a holo carries the core
+guest, not the browser adapter) and not from a copied folder. Each file is read
+from its stored release blob, checked against its layer digest and its build
+manifest row (`manifest.json`), written, and read back. A file whose bytes
+differ is an `ExportMismatchError` (`export_mismatch`, exit 2) with `check`
+`export.manifest`, `export.layer`, `export.files` or `export.tree`, and the
+export is removed. The shared Action's Pages closure check reads the release
+and the exported directory with the same code. This checks integrity only; it
+grants no publication or deployment authority.
+
+```js
+import { experimental_exportBrowser, experimental_checkExport } from 'prism-code/node';
+
+const { receipt, path, attestations } = experimental_exportBrowser({ reference, out: 'site' });
+experimental_checkExport({ releaseDigest: receipt.release_digest, path: 'site' }); // { files, tree_digest }
+```
 
 ## In the browser
 

@@ -79,8 +79,15 @@ pub enum Commands {
         #[arg(long)]
         locked: bool,
     },
-    /// Check project static validity without filesystem modification.
-    Check,
+    /// Check project static validity without filesystem modification, or judge a
+    /// `.holo` against a policy: exit 0 when it passes, 1 when it fails, 2 when no verdict was reached.
+    Check {
+        /// Path of a `.holo` to judge. Without it, check the project model.
+        holo: Option<PathBuf>,
+        /// JSON policy file for a holo check: name, minimum (P0 to P3), digests, world, effects.
+        #[arg(long, requires = "holo")]
+        policy: Option<PathBuf>,
+    },
     /// Build project artifacts or a locked verified OCI product release.
     Build {
         /// Tagged discovery reference for product release construction.
@@ -106,6 +113,67 @@ pub enum Commands {
         /// One value of a holo inspection by dotted path, such as sections[0].digest.sha256.
         #[arg(long)]
         format: Option<String>,
+    },
+    /// Re-execute recorded histories against a `.holo` and fail on divergence.
+    Replay {
+        /// History files, or directories of them.
+        #[arg(required = true)]
+        histories: Vec<PathBuf>,
+        /// The build to replay against.
+        #[arg(long)]
+        holo: PathBuf,
+        /// Write the prism/replay/v1 statement here, also when the replay diverged.
+        #[arg(long)]
+        statement: Option<PathBuf>,
+    },
+    /// Sign an in-toto statement about a `.holo` file into its attestation section with a local key (#272, Experimental).
+    Attest {
+        /// The `.holo` file to attest; rewritten in place unless --output names another file.
+        holo: PathBuf,
+        /// A JSON file: the statement's predicate.
+        #[arg(long)]
+        predicate: PathBuf,
+        /// The predicate type, a URI such as https://slsa.dev/provenance/v1.
+        #[arg(long = "type", value_name = "URI")]
+        predicate_type: String,
+        /// A subject: guest, view, model, capabilities, a blake3: label, or name=<either>. Repeatable; the default is guest.
+        #[arg(long)]
+        subject: Vec<String>,
+        /// An unencrypted PKCS#8 or SEC1 PEM private key, P-256 or Ed25519. Keyless signing is `prism-code attest`.
+        #[arg(long)]
+        key: PathBuf,
+        /// Write the attested holo here instead of in place.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Check the attestations of a `.holo` file against a signer policy (#272, Experimental). Exit 0 verified, 1 not.
+    VerifyAttestation {
+        /// The `.holo` file whose attestations are checked.
+        holo: PathBuf,
+        /// Only check bundles of this predicate type.
+        #[arg(long = "type", value_name = "URI")]
+        predicate_type: Option<String>,
+        /// The signer's certificate identity, compared exactly.
+        #[arg(long)]
+        certificate_identity: Option<String>,
+        /// A regular expression the signer's certificate identity must match.
+        #[arg(long)]
+        certificate_identity_regexp: Option<String>,
+        /// The OIDC issuer of the signer's certificate, compared exactly.
+        #[arg(long)]
+        certificate_oidc_issuer: Option<String>,
+        /// A PEM public key, for bundles signed with a local key.
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// The pinned Sigstore trusted_root.json; nothing is fetched.
+        #[arg(long)]
+        trusted_root: Option<PathBuf>,
+        /// The least number of log entries that must verify: 1 keyless, 0 keyed.
+        #[arg(long)]
+        entries: Option<u64>,
+        /// The least number of RFC 3161 timestamps that must verify: 1 keyless, 0 keyed.
+        #[arg(long)]
+        timestamps: Option<u64>,
     },
     /// Export unchanged browser artifacts after source-free release integrity replay.
     ExportBrowser {
@@ -442,6 +510,46 @@ fn confined_input(root: &Path, relative: &Path) -> Result<PathBuf, PrismError> {
     Ok(resolved)
 }
 
+/// `check <path.holo>` (#270): print the verdict and exit 0 when the policy
+/// passes, 1 when it fails, 2 when no verdict was reached. With `--json`,
+/// stdout holds exactly one canonical verdict on 0 and 1 and nothing on 2; the
+/// diagnostic goes to stderr (docs/proposals/269-assurance-levels.md). The
+/// holo is judged on its own, without a project root.
+fn holo_check(holo: &Path, policy: Option<&Path>, json: bool) -> ExitCode {
+    use crate::inspect::verdict;
+    if let Err(error) = crate::process_resources::configure()
+        .and_then(|()| crate::sdk::verify_environment().map(|_| ()))
+    {
+        let _ = writeln!(std::io::stderr().lock(), "{error}");
+        return ExitCode::from(error.exit_code());
+    }
+    let minimum = std::env::var(verdict::MINIMUM_LEVEL_ENV).ok();
+    match verdict::check_path(holo, policy, minimum.as_deref()) {
+        Ok(verdict) => {
+            let written = if json {
+                canonical(&verdict.value())
+                    .and_then(|bytes| write_line(std::io::stdout().lock(), &bytes))
+            } else {
+                let text = verdict.text(Some(&holo.display().to_string()));
+                std::io::stdout()
+                    .lock()
+                    .write_all(text.as_bytes())
+                    .map_err(|error| {
+                        PrismError::new("PP9001", format!("write CLI output: {error}"))
+                    })
+            };
+            match written {
+                Ok(()) => ExitCode::from(verdict.exit_code()),
+                Err(error) => ExitCode::from(error.exit_code()),
+            }
+        }
+        Err(no_verdict) => {
+            let _ = writeln!(std::io::stderr().lock(), "{}", no_verdict.diagnostic());
+            ExitCode::from(verdict::EXIT_NO_VERDICT)
+        }
+    }
+}
+
 fn write_line(mut stream: impl Write, bytes: &[u8]) -> Result<(), PrismError> {
     stream
         .write_all(bytes)
@@ -498,6 +606,19 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             script,
         ));
     }
+    // A replay reads a holo and its histories, not a project.
+    if let Commands::Replay {
+        histories,
+        holo,
+        statement,
+    } = &cli.command
+    {
+        return crate::replay::run(&crate::replay::ReplayRequest {
+            histories: histories.clone(),
+            holo: holo.clone(),
+            statement: statement.clone(),
+        });
+    }
     let context = match &cli.command {
         Commands::Build { context, .. } => context.as_deref(),
         _ => None,
@@ -529,9 +650,17 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             "reviewable SDK-lock migration generated; not adopted".to_owned(),
         ));
     }
+    // The attestation verbs act on one .holo file wherever it is, like a holo inspection, and need no project.
+    if matches!(
+        &cli.command,
+        Commands::Attest { .. } | Commands::VerifyAttestation { .. }
+    ) {
+        return attestation_command(&cli.command);
+    }
     let controller = Controller::load(root)?;
     match &cli.command {
         Commands::Completion { .. } => unreachable!("completion returns before project loading"),
+        Commands::Replay { .. } => unreachable!("replay returns before project loading"),
         Commands::Lock {
             command: None,
             check,
@@ -648,7 +777,10 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             );
             Ok((value, human))
         }
-        Commands::Check => {
+        Commands::Check { holo: Some(_), .. } => {
+            unreachable!("a holo check returns before project loading")
+        }
+        Commands::Check { holo: None, .. } => {
             let result = controller.check(CheckRequest {
                 config_path: cli.config.clone(),
             })?;
@@ -700,6 +832,9 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
                     human,
                 ))
             }
+        }
+        Commands::Attest { .. } | Commands::VerifyAttestation { .. } => {
+            unreachable!("attestation verbs return before project loading")
         }
         Commands::Inspect { reference, format } => {
             if is_holo_argument(reference) {
@@ -1048,6 +1183,191 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
 
 /// A `.holo` path is inspected as an archive; anything else is a
 /// registry-qualified product-release reference.
+fn read_holo(path: &Path) -> Result<Vec<u8>, PrismError> {
+    std::fs::read(path).map_err(|error| {
+        PrismError::new(
+            "PP3001",
+            format!("cannot read the .holo file {}: {error}", path.display()),
+        )
+    })
+}
+
+/// An operand of the attestation verbs other than the holo: unreadable is exit 2, like a missing configuration.
+fn read_operand(path: &Path, what: &str) -> Result<Vec<u8>, PrismError> {
+    std::fs::read(path).map_err(|error| {
+        PrismError::new(
+            "PP1002",
+            format!("{what} {} cannot be read: {error}", path.display()),
+        )
+    })
+}
+
+fn read_text_operand(path: &Path, what: &str) -> Result<String, PrismError> {
+    String::from_utf8(read_operand(path, what)?).map_err(|_| {
+        PrismError::new(
+            "PP1002",
+            format!("{what} {} is not UTF-8 text", path.display()),
+        )
+    })
+}
+
+/// `attest` and `verify-attestation` (#272): read the operands, run the library, print.
+fn attestation_command(command: &Commands) -> Result<(serde_json::Value, String), PrismError> {
+    use crate::attest::{attest, verify_attestations, AttestRequest, VerifyPolicy, ATTEST_SCHEMA};
+    match command {
+        Commands::Attest {
+            holo,
+            predicate,
+            predicate_type,
+            subject,
+            key,
+            output,
+        } => {
+            let bytes = read_holo(holo)?;
+            let request = AttestRequest {
+                predicate_type: predicate_type.clone(),
+                predicate: read_operand(predicate, "the predicate")?,
+                subjects: subject.clone(),
+                key: read_text_operand(key, "the key")?,
+            };
+            let attested = attest(&bytes, &request)?;
+            let target = output.clone().unwrap_or_else(|| holo.clone());
+            // Write beside the target and rename, so an interrupted run never leaves half a holo.
+            let mut scratch_name = target.as_os_str().to_owned();
+            scratch_name.push(format!(".attest-{}.tmp", std::process::id()));
+            let scratch = PathBuf::from(scratch_name);
+            let written = std::fs::write(&scratch, &attested.holo)
+                .and_then(|()| std::fs::rename(&scratch, &target));
+            if let Err(error) = written {
+                let _ = std::fs::remove_file(&scratch);
+                return Err(PrismError::new(
+                    "PP1002",
+                    format!("the output {} cannot be written: {error}", target.display()),
+                ));
+            }
+            let subjects = attested.subjects.join(", ");
+            let human = format!(
+                "{}: attested {predicate_type} ({subjects}), key {}; {} attestation{}",
+                target.display(),
+                attested.key_id,
+                attested.attestations,
+                if attested.attestations == 1 { "" } else { "s" }
+            );
+            Ok((
+                json!({
+                    "schema": ATTEST_SCHEMA,
+                    "output": target.display().to_string(),
+                    "predicate_type": predicate_type,
+                    "subjects": attested.subjects,
+                    "signer": {"key_id": attested.key_id},
+                    "attestations": attested.attestations,
+                }),
+                human,
+            ))
+        }
+        Commands::VerifyAttestation {
+            holo,
+            predicate_type,
+            certificate_identity,
+            certificate_identity_regexp,
+            certificate_oidc_issuer,
+            key,
+            trusted_root,
+            entries,
+            timestamps,
+        } => {
+            let bytes = read_holo(holo)?;
+            let trusted_root = match trusted_root {
+                None => None,
+                Some(path) => Some(
+                    serde_json::from_slice(&read_operand(path, "the trusted root")?).map_err(
+                        |error| {
+                            PrismError::new(
+                                "PP3107",
+                                format!("the trusted root {} is not JSON: {error}", path.display()),
+                            )
+                            .with_note("check: trustedroot.invalid")
+                        },
+                    )?,
+                ),
+            };
+            let policy = VerifyPolicy {
+                predicate_type: predicate_type.clone(),
+                certificate_identity: certificate_identity.clone(),
+                certificate_identity_regexp: certificate_identity_regexp.clone(),
+                certificate_oidc_issuer: certificate_oidc_issuer.clone(),
+                key: match key {
+                    None => None,
+                    Some(path) => Some(read_text_operand(path, "the key")?),
+                },
+                trusted_root,
+                entries: *entries,
+                timestamps: *timestamps,
+            };
+            let result = verify_attestations(&bytes, &policy)?;
+            let mut lines = Vec::new();
+            for outcome in &result.results {
+                let who = outcome
+                    .signer
+                    .as_ref()
+                    .and_then(|signer| {
+                        signer
+                            .identity
+                            .clone()
+                            .or_else(|| signer.key_id.as_ref().map(|id| format!("key {id}")))
+                    })
+                    .unwrap_or_default();
+                let text = match &outcome.error {
+                    None => format!(
+                        "verified {who}{}",
+                        outcome
+                            .time
+                            .as_ref()
+                            .map(|time| format!(" at {time}"))
+                            .unwrap_or_default()
+                    ),
+                    Some(error) => {
+                        format!("{} ({}): {}", error.code, error.kind.name(), error.message)
+                    }
+                };
+                lines.push(format!(
+                    "attestation {} {} ({}): {text}",
+                    outcome.index,
+                    outcome.predicate_type,
+                    outcome.subjects.join(", ")
+                ));
+            }
+            if let (true, Some(error)) = (result.results.is_empty(), &result.error) {
+                lines.push(format!(
+                    "{} ({}): {}",
+                    error.code,
+                    error.kind.name(),
+                    error.message
+                ));
+            }
+            lines.push(
+                if result.passed {
+                    "verified"
+                } else {
+                    "not verified"
+                }
+                .to_owned(),
+            );
+            Ok((result.to_value(), lines.join("\n")))
+        }
+        _ => unreachable!("only the attestation verbs reach here"),
+    }
+}
+
+/// A verdict document is printed on exit 0 and exit 1 alike: `verify-attestation` says "not verified" as data.
+fn verdict_exit(value: &serde_json::Value) -> ExitCode {
+    if value["schema"] == crate::attest::VERIFICATION_SCHEMA && value["passed"] == false {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
 fn is_holo_argument(argument: &str) -> bool {
     argument.ends_with(".holo") || Path::new(argument).is_file()
 }
@@ -1129,6 +1449,14 @@ pub fn run() -> ExitCode {
         }
     };
 
+    if let Commands::Check {
+        holo: Some(holo),
+        policy,
+    } = &cli.command
+    {
+        return holo_check(holo, policy.as_deref(), cli.json);
+    }
+
     match crate::process_resources::configure().and_then(|()| execute(&cli)) {
         Ok((value, human)) => {
             let result = if cli.json {
@@ -1137,7 +1465,7 @@ pub fn run() -> ExitCode {
                 write_line(std::io::stdout().lock(), human.as_bytes())
             };
             match result {
-                Ok(()) => ExitCode::SUCCESS,
+                Ok(()) => verdict_exit(&value),
                 Err(error) => ExitCode::from(error.exit_code()),
             }
         }
@@ -1165,6 +1493,38 @@ pub fn run() -> ExitCode {
 mod tests {
     use super::{inspection_summary, Cli, Commands};
     use clap::Parser;
+
+    #[test]
+    fn check_judges_a_holo_only_when_one_is_named() {
+        let model = Cli::try_parse_from(["prismpm", "check"]).unwrap();
+        assert!(matches!(
+            model.command,
+            Commands::Check {
+                holo: None,
+                policy: None
+            }
+        ));
+        let holo = Cli::try_parse_from(["prismpm", "check", "app.holo", "--json"]).unwrap();
+        assert!(holo.json);
+        assert!(matches!(
+            holo.command,
+            Commands::Check {
+                holo: Some(_),
+                policy: None
+            }
+        ));
+        let policy =
+            Cli::try_parse_from(["prismpm", "check", "app.holo", "--policy", "ci.json"]).unwrap();
+        assert!(matches!(
+            policy.command,
+            Commands::Check {
+                holo: Some(_),
+                policy: Some(_)
+            }
+        ));
+        assert!(Cli::try_parse_from(["prismpm", "check", "--policy", "ci.json"]).is_err());
+        assert!(Cli::try_parse_from(["prismpm", "check", "a.holo", "b.holo"]).is_err());
+    }
 
     #[test]
     fn the_inspect_summary_names_each_statement_of_a_signed_archive() {
@@ -1474,5 +1834,87 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(prepare.command, Commands::PreparePromotion { .. }));
+    }
+
+    #[test]
+    fn attest_and_verify_attestation_take_a_holo_and_a_policy() {
+        let attest = Cli::try_parse_from([
+            "prismpm",
+            "attest",
+            "app.holo",
+            "--predicate",
+            "predicate.json",
+            "--type",
+            "https://uor.foundation/prism/proof/v1",
+            "--subject",
+            "guest",
+            "--subject",
+            "copy=model",
+            "--key",
+            "private.pem",
+            "--output",
+            "signed.holo",
+        ])
+        .unwrap();
+        match attest.command {
+            Commands::Attest {
+                predicate_type,
+                subject,
+                output,
+                ..
+            } => {
+                assert_eq!(predicate_type, "https://uor.foundation/prism/proof/v1");
+                assert_eq!(subject, ["guest", "copy=model"]);
+                assert_eq!(output.as_deref(), Some(std::path::Path::new("signed.holo")));
+            }
+            other => panic!("{other:?}"),
+        }
+        // The key is required: keyless signing is the JavaScript CLI's until the Rust CLI has an OIDC client.
+        assert!(Cli::try_parse_from([
+            "prismpm",
+            "attest",
+            "app.holo",
+            "--predicate",
+            "p.json",
+            "--type",
+            "https://x/y"
+        ])
+        .is_err());
+        let verify = Cli::try_parse_from([
+            "prismpm",
+            "verify-attestation",
+            "app.holo",
+            "--certificate-identity",
+            "https://github.com/o/r/.github/workflows/w.yml@refs/heads/main",
+            "--certificate-oidc-issuer",
+            "https://token.actions.githubusercontent.com",
+            "--trusted-root",
+            "trusted_root.json",
+            "--entries",
+            "1",
+            "--timestamps",
+            "0",
+            "--json",
+        ])
+        .unwrap();
+        assert!(verify.json);
+        assert!(matches!(
+            verify.command,
+            Commands::VerifyAttestation {
+                entries: Some(1),
+                timestamps: Some(0),
+                key: None,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from([
+            "prismpm",
+            "verify-attestation",
+            "app.holo",
+            "--entries",
+            "many"
+        ])
+        .is_err());
+        assert!(Cli::try_parse_from(["prismpm", "verify-attestation"]).is_err());
     }
 }

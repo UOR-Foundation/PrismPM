@@ -313,16 +313,19 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "sdk/npm/prism-code/test/errors.test.mjs",
             "sdk/npm/prism-code/test/inspect.test.mjs",
             "sdk/npm/prism-code/test/node.test.mjs",
+            "sdk/npm/prism-code/test/replay.test.mjs",
             "sdk/npm/prism-code/test/verify.test.mjs",
             "sdk/npm/spec/test/agreement.test.mjs",
             "sdk/npm/spec/test/attestation-bundle.test.mjs",
             "sdk/npm/spec/test/package.test.mjs",
             "sdk/npm/spec/test/reference.test.mjs",
+            "sdk/npm/spec/test/replay.test.mjs",
             "sdk/npm/spec/test/schemas.test.mjs",
             "sdk/npm/verify/test/agreement.test.mjs",
             "sdk/npm/verify/test/browser.test.mjs",
             "sdk/npm/verify/test/entry-kinds.test.mjs",
             "sdk/npm/verify/test/inspect.test.mjs",
+            "sdk/npm/verify/test/replay-statement.test.mjs",
             "sdk/npm/verify/test/transparency.test.mjs",
             "sdk/npm/verify/test/verify.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
@@ -1040,7 +1043,8 @@ const COMMAND_LINE_TARGETS: [&str; 2] = ["aarch64-unknown-linux-musl", "x86_64-u
 /// within and beyond its request maximum. Calculator is built in both LexLean
 /// languages; the 1.2 copy is `lexlean migrate --to 1.2` of the 1.1 example.
 /// The prism-code model is the first downstream language-1.2 project (#203).
-const EXAMPLES: [Example; 5] = [
+/// Payment Approval is the second reference archive, a text/1 application (#278).
+const EXAMPLES: [Example; 6] = [
     Example {
         name: "Calculator",
         project: "examples/Calculator",
@@ -1052,6 +1056,12 @@ const EXAMPLES: [Example; 5] = [
         project: "tests/fixtures/controller/ct-02-calculator-language-1-2/project",
         command_line: None,
         same_outputs_as: Some("Calculator"),
+    },
+    Example {
+        name: "Payment Approval",
+        project: "examples/PaymentApproval",
+        command_line: None,
+        same_outputs_as: None,
     },
     Example {
         name: "Text Request",
