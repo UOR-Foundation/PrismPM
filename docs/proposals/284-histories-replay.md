@@ -35,7 +35,7 @@ A history is held outside the build, so it can.
 ### Non-goals
 
 - Signing. `prism-code attest` already signs any statement into a holo (#272).
-- Reading statements inside `check`. That needs the attestation wire model change (#267) and the proof and provenance joins, which this issue does not own. See "What P3 needs next".
+- Reading signed statements from the holo inside `check`. That needs `verify` to read the attestation section and the proof and provenance joins, which this issue does not own. See "What P3 needs next".
 - Replay of a world with imports. Every world today is pure, and a history records no effect. An effectful world needs its effects in the history, which is a new schema version.
 - Which histories a policy requires. #285 owns the policy file.
 
@@ -169,11 +169,16 @@ Node only executes the requests. Rust reads the archive, compares the outcomes a
 This change makes the replay evidence real and the check that judges it real.
 It does not make P3 reachable through `check`, and no change here pretends to.
 
-- `verify()` does not read statements yet. Format revision `2026-10-23` has no attestation row, so a holo with one gets no verdict (#267's wire model change).
-- `checkProofStatement` waits on the same join, and P3 needs P1 and P2 first.
-- Until then every holo is P0, and `replay.statement` stays among its reasons. Both tests that hold this are in `sdk/npm/prism-code/test/replay.test.mjs`.
+`prism-code check <holo> --replay <file>` and the `replay` option of `verify` are as far as the check goes today.
+They run `checkReplayStatement` on a statement from beside the holo, so its reasons replace `replay.statement` in the verdict, and `predicates.replay` in the policy input holds it with `verified: false`.
+A policy can deny on what it says.
+The statement is unsigned and no option claims otherwise, so `replay.envelope` is always among the reasons and the check can only withhold P3.
 
-When `verify` joins the statements, `checkReplayStatement` is the function it calls for `replay.*`, and `levelOf` in `sdk/npm/verify/src/level.mjs` already decides the level for both.
+- What remains for #270: read signed statements from the attestation section instead of refusing it. `attestationBlocker` still gives such a holo no verdict, and `verify()` does not read that section.
+- `checkProofStatement` and the provenance statement wait on the same join, and P3 needs P1 and P2 first.
+- Until then every holo is P0. The tests that hold this are in `sdk/npm/prism-code/test/replay.test.mjs`.
+
+When `verify` reads the section, `checkReplayStatement` is the function it calls for `replay.*`, with the outcome of the real signature check in place of `DETACHED`, and `levelOf` in `sdk/npm/verify/src/level.mjs` already decides the level for both.
 
 ### Test plan
 

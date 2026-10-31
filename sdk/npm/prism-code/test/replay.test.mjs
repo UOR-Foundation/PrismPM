@@ -28,6 +28,7 @@ import {
   blake3Hex,
 } from '../src/index.mjs';
 import { fromFile } from '../src/node.mjs';
+import { policyInput } from '../src/vendor/verify.mjs';
 import { VERSION } from '../src/version.mjs';
 import { deriveChangedModel } from '../scripts/derive-changed-model.mjs';
 
@@ -227,6 +228,81 @@ test('check does not reach P3 on the changed model today: it still names the mis
   assert.equal(verdict.level, 'P0');
   assert.ok(verdict.reasons.some((r) => r.check === 'replay.statement' && r.withholds === 'P3'));
   assert.ok(!verdict.reasons.some((r) => r.check === 'holo.integrity'), 'the fixture is coherent, so only replay can catch it');
+});
+
+// ---- The replay statement in the verdict (`check --replay`).
+
+test('check judges a statement from beside the holo: the changed model fails replay in the verdict', async () => {
+  const before = await (await load(original)).experimental_replay(historyText);
+  const after = await (await load(changed)).experimental_replay(historyText, { throw: false });
+  const replayChecks = (verdict) => verdict.reasons.filter((r) => r.check.startsWith('replay.')).map((r) => [r.check, r.code, r.withholds]);
+  const envelope = ['replay.envelope', 'PP5702', 'P3'];
+
+  const own = await experimental_verify(changed, { minimum: 'P0', replay: after.statement, env: {} });
+  assert.deepEqual(replayChecks(own), [envelope, ['replay.divergence', 'PP5701', 'P3']]);
+  assert.equal(own.level, 'P0');
+  assert.equal(own.passed, true, 'replay withholds P3; the policy says whether that fails the holo');
+
+  const stale = await experimental_verify(changed, { minimum: 'P0', replay: before.statement, env: {} });
+  assert.deepEqual(replayChecks(stale), [envelope, ['replay.subject', 'PP5704', 'P3'], ['replay.model', 'PP5705', 'P3']]);
+
+  const shape = await experimental_verify(changed, { minimum: 'P0', replay: { not: 'a statement' }, env: {} });
+  assert.deepEqual(replayChecks(shape), [envelope, ['replay.statement', 'PP5703', 'P3']]);
+});
+
+test('a clean statement from beside the holo cannot raise the level: it is unsigned, and no option says otherwise', async () => {
+  const { statement } = await (await load(original)).experimental_replay(historyText);
+  const verdict = await experimental_verify(original, { minimum: 'P3', replay: statement, env: {} });
+  assert.deepEqual(verdict.reasons.filter((r) => r.check.startsWith('replay.')).map((r) => r.check), ['replay.envelope']);
+  assert.equal(verdict.level, 'P0');
+  assert.equal(verdict.passed, false);
+
+  const claimed = { ...statement, verified: true, envelope: { verified: true } };
+  const again = await experimental_verify(original, { minimum: 'P0', replay: claimed, env: {} });
+  assert.ok(again.reasons.some((r) => r.check.startsWith('replay.') && r.withholds === 'P3'), 'extra members claim nothing');
+});
+
+test('a Rego policy can deny on what the replay statement says, and it is marked unverified', async () => {
+  const { statement } = await (await load(changed)).experimental_replay(historyText, { throw: false });
+  const rego = [
+    'package prism.policy',
+    'minimum := "P0"',
+    'deny contains {"rule": "policy.replay.diverged", "message": "the replay diverged"} if {',
+    '  input.predicates.replay.predicate.divergenceCount > 0',
+    '}',
+    'deny contains {"rule": "policy.replay.unsigned", "message": "the replay is unsigned"} if {',
+    '  input.predicates.replay.verified == false',
+    '}',
+  ].join('\n');
+  const verdict = await experimental_verify(changed, { name: 'replay', rego, replay: statement, env: {} });
+  assert.equal(verdict.passed, false);
+  assert.deepEqual(verdict.reasons.filter((r) => r.check.startsWith('policy.')).map((r) => r.check).sort(), ['policy.replay.diverged', 'policy.replay.unsigned']);
+
+  const without = await experimental_verify(changed, { name: 'replay', rego, env: {} });
+  assert.equal(without.passed, true, 'no statement, nothing to deny on');
+
+  const input = await policyInput(changed, { replay: statement });
+  assert.deepEqual(validate(json(here('../../spec/schemas/policy/policy-input-v1.schema.json')), input), []);
+  assert.equal(input.predicates.replay.verified, false);
+  assert.equal((await policyInput(changed, { replay: { not: 'a statement' } })).predicates.replay, null);
+  assert.equal((await policyInput(changed)).predicates.replay, null);
+});
+
+test('check --replay: the reasons print, the exit follows the policy, and an unreadable statement is no verdict', async () => {
+  const { statement } = await (await load(changed)).experimental_replay(historyText, { throw: false });
+  const statementPath = join(dir, 'check-replay.statement.json');
+  writeFileSync(statementPath, JSON.stringify(statement));
+
+  const failed = cli('check', changedPath, '--replay', statementPath, '--json');
+  assert.equal(failed.status, 1);
+  const verdict = JSON.parse(failed.stdout);
+  assert.ok(verdict.reasons.some((r) => r.check === 'replay.divergence' && r.code === 'PP5701'));
+  assert.ok(!verdict.reasons.some((r) => r.check === 'replay.statement'));
+
+  assert.equal(cli('check', changedPath, '--replay', join(dir, 'absent.json')).status, 2);
+  writeFileSync(join(dir, 'not-json.json'), 'not json');
+  assert.equal(cli('check', changedPath, '--replay', join(dir, 'not-json.json')).status, 2);
+  assert.equal(cli('check', changedPath, '--replay').status, 64);
 });
 
 test('the changed-model fixture is what the reference archive derives to', () => {
