@@ -1,0 +1,66 @@
+name: Residual gate 6 proof (scratch, not for merge)
+
+# Every test of `cargo test --workspace --all-features`, split so each shard
+# fits one hosted job. Job status is the real test status.
+on:
+  push:
+    branches: [probe/residual-*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shard:
+    name: ${{ matrix.shard.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - {name: residual, args: "-p repo-conformance --all-features --locked --offline --test conformance -- conformance_ho_15 conformance_ho_19 conformance_tm_03 conformance_sy_08"}
+    steps:
+      - name: Free runner disk (owners retain their private work)
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Run the shard in the pinned devcontainer with the SDK image, as V&V does
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        env:
+          SHARD_ARGS: ${{ matrix.shard.args }}
+        with:
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          push: never
+          env: SHARD_ARGS
+          runCmd: |
+            set -euo pipefail
+            mkdir -p target/ci-diagnostics
+            status=0
+            bash scripts/vv.sh --with-sdk bash -uo pipefail -c "$(cat <<'SHARD'
+            cargo test $SHARD_ARGS > /tmp/shard.log 2>&1; code=$?
+            grep -E '^test .* FAILED$|^test result:' /tmp/shard.log || true
+            n=$(grep -n '^failures:' /tmp/shard.log | head -1 | cut -d: -f1 || true)
+            cp /tmp/shard.log target/ci-diagnostics/shard.log
+            df -h / /tmp | tail -2
+            echo "cargo exit $code"
+            exit $code
+            SHARD
+            )" || status=$?
+            exit $status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: gate6-${{ matrix.shard.name }}-${{ github.run_id }}
+          path: target/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
