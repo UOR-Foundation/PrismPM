@@ -4,22 +4,23 @@
  * docs/proposals/269-assurance-levels.md).
  *
  * The verdict is `experimental_verify`'s, so `check`, `holo.verify()` and
- * `@prism-code/verify` cannot disagree. The policy is a verify-time input, a
- * JSON file given with `--policy`, and is never read from the holo.
+ * `@prism-code/verify` cannot disagree. The policy is a verify-time input, never
+ * read from the holo: a shipped policy by name, a Rego file (#285,
+ * docs/proposals/285-policy-file.md) or a JSON file of options.
  *
- * Exit 0 when the policy passes, 1 when it fails, 2 when no verdict was
- * reached. With `--json`, stdout holds exactly one canonical verdict on 0 and
+ * Exit 0 when the policy passes, 1 when it fails or denies, 2 when no verdict
+ * was reached, which includes a policy that does not parse or cannot be
+ * evaluated. With `--json`, stdout holds exactly one canonical verdict on 0 and
  * 1 and nothing on 2; diagnostics go to stderr.
  *
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { experimental_verify } from './verify.mjs';
-import { ASSURANCE } from './vendor/verify.mjs';
-import { parseArchive, canonicalJson } from './archive.mjs';
-import { attestationSection, ATTESTATION_EXTENSION } from './attestations.mjs';
-import { PrismError, VerificationError, classForCheck } from './errors.mjs';
+import { experimental_verify, attestationBlocker } from './verify.mjs';
+import { ASSURANCE, POLICIES } from './vendor/verify.mjs';
+import { canonicalJson } from './archive.mjs';
+import { PolicyParseError, PrismError, VerificationError, classForCheck } from './errors.mjs';
 
 export const EXIT = ASSURANCE.EXIT;
 
@@ -35,23 +36,31 @@ export const LIMITS = Object.freeze([
   'That the named SDK image was the one used: the signature binds the claim, not the execution.',
 ]);
 
-/** The members a policy file may hold. Signer trust and attestation rules arrive with #285. */
+/** The members a JSON policy file may hold. A rule beyond these is written in Rego (#285). */
 const POLICY_MEMBERS = ['name', 'minimum', 'digests', 'world', 'effects'];
 
 const noVerdict = (check, message, cause) => new VerificationError(message, { check, cause });
 
 /**
- * Read a policy file: a JSON object with `name`, `minimum`, `digests` and
- * `world`, the members `experimental_verify` takes. Without a `name`, the
- * policy is named by the path as given. Rejects with a no-verdict error.
+ * Read a policy: the name of a shipped policy (`default`, `pure-only`,
+ * `provenance-only`), a Rego file ending in `.rego`, or a JSON object with
+ * `name`, `minimum`, `digests` and `world`, the members `experimental_verify`
+ * takes. A file is named by the path as given, unless JSON names itself. A file
+ * that shares a name with a shipped policy is reached as `./name`. Rejects with
+ * a no-verdict error.
  */
 export async function readPolicy(path) {
+  if (Object.hasOwn(POLICIES, path)) return { name: path, rego: POLICIES[path] };
+  if (/\.cue$/i.test(path)) {
+    throw new PolicyParseError(`the policy file ${path} is CUE, which this version does not evaluate; write the policy in Rego (.rego)`, { check: 'policy.parse' });
+  }
   let text;
   try {
     text = await readFile(resolve(path), 'utf8');
   } catch (cause) {
     throw noVerdict('policy.unreadable', `the policy file ${path} cannot be read: ${cause.code ?? cause.message}`, cause);
   }
+  if (/\.rego$/i.test(path)) return { name: path, rego: text };
   let policy;
   try {
     policy = JSON.parse(text);
@@ -72,23 +81,19 @@ async function holoBytes(path) {
   return new Uint8Array(await readFile(resolve(path)));
 }
 
-/**
- * Why a holo with an attestation section has no verdict yet, or null. The
- * section joins a format revision only when the wire model change of #267
- * merges; until then every reader refuses it, and a pass would be invented.
- */
-function attestationBlocker(bytes) {
-  let section;
+/** A replay statement from a file (#284), or a no-verdict error. Its checks are the verdict's; only reading it is here. */
+async function readReplay(path) {
+  let text;
   try {
-    section = attestationSection(parseArchive(bytes));
-  } catch {
-    return null;
+    text = await readFile(resolve(path), 'utf8');
+  } catch (cause) {
+    throw noVerdict('replay.statement', `the replay statement ${path} cannot be read: ${cause.code ?? cause.message}`, cause);
   }
-  if (!section) return null;
-  return noVerdict(
-    'format.revision',
-    `the holo carries an attestation section (${ATTESTATION_EXTENSION}), which joins a format revision only when the wire model change of #267 merges; no reader can judge its statements until then`,
-  );
+  try {
+    return JSON.parse(text);
+  } catch (cause) {
+    throw noVerdict('replay.statement', `the replay statement ${path} is not JSON: ${cause.message}`, cause);
+  }
 }
 
 /**
@@ -96,12 +101,13 @@ function attestationBlocker(bytes) {
  * when no verdict was reached.
  *
  * @param {string} path the holo
- * @param {{ policy?: string, capabilities?: object | null, env?: object }} [options] `policy` is a policy file path; `capabilities` the granted set
+ * @param {{ policy?: string, capabilities?: object | null, replay?: string, env?: object }} [options] `policy` is a shipped policy's name or a file path; `capabilities` the granted set; `replay` the path of a `prism/replay/v1` statement
  */
 export async function check(path, options = {}) {
   const policy = options.policy === undefined ? {} : await readPolicy(options.policy);
   // The capability set the caller grants (run, #282); a policy file never grants.
   if (options.capabilities !== undefined) policy.capabilities = options.capabilities;
+  if (options.replay !== undefined) policy.replay = await readReplay(options.replay);
   const bytes = await holoBytes(path);
   const blocked = attestationBlocker(bytes);
   if (blocked) throw blocked;

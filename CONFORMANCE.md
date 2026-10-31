@@ -30,6 +30,14 @@ The three honesty levels:
 | `AR-09` | `build` | Source maps provide complete token traceability between .lex.tex and generated Lean. |
 | `AR-10` | `build` | Coverage reports document all modeled and unmodeled elements. |
 
+## assurance
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `AL-03` | `build` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. |
+| `AL-05` | `build` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. |
+| `AL-06` | `build` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. |
+
 ## authorities
 
 | ID | Level | Statement |
@@ -125,7 +133,16 @@ The three honesty levels:
 | `HO-17` | `build` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. |
 | `HO-18` | `build` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. |
 | `HO-19` | `build` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. |
+| `HO-31` | `build` | A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build. |
 | `HO-20` | `build` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. |
+| `HO-23` | `build` | A holo without the attestation section loads and verifies with the same bytes and identities as before the section existed, and reports no attestations. |
+| `HO-24` | `build` | An attestation section is an Extension row named https://uor.foundation/extension/attestation-bundle/v1, is the last row, appears at most once, and the footer is BLAKE3 of the body including it. |
+| `HO-25` | `build` | Removing the attestation section yields the unsigned archive byte for byte; rows 0 to 7, every blob label and application_kappa are unchanged by adding it, and the Rust and JavaScript writers produce the same bytes. |
+| `HO-26` | `build` | Every attestation line is one Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1, and every subject names a content blob of the archive with matching sha256 and blake3. |
+| `HO-27` | `build` | A blank line, a v0.2 bundle, a messageSignature, a single-digest subject and an oci-manifest subject inside the holo are each refused with a registered diagnostic. |
+| `HO-28` | `build` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. |
+| `HO-29` | `build` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. |
+| `HO-30` | `build` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. |
 
 ## lifecycle
 

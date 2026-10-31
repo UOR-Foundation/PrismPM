@@ -34,7 +34,7 @@ const HOLO_KEYS = ['ARCHIVE', 'APP_MANIFEST', 'SOURCE_MANIFEST', 'APPLICATION_DI
  * A file of their own, so the browser build and prism-code's copy carry them only once
  * `verify` reads statements.
  */
-const PREDICATE_PATHS = ['predicates/proof-v1.schema.json'];
+const PREDICATE_PATHS = ['predicates/proof-v1.schema.json', 'predicates/replay-v1.schema.json'];
 
 /** The `schema` names of the documents a reader of the spec's format revisions checks. */
 function documentNames(spec) {
@@ -93,6 +93,16 @@ function predicateModule() {
   );
 }
 
+/** The policies this package ships and the schema of the document they judge (issue #285). */
+function policyModule(spec) {
+  const sources = Object.entries(spec.POLICY.SHIPPED).map(([name, path]) => `  ${JSON.stringify(name)}: ${JSON.stringify(read(`../../spec/${path}`))},`);
+  const schema = JSON.stringify(JSON.parse(read(`../../spec/${spec.POLICY.INPUT_SCHEMA}`)));
+  return (
+    header('sdk/npm/spec/policies', 'The source of each shipped policy, and the prism/policy-input/1 schema, whitespace removed.') +
+    `export const POLICY_SOURCES = Object.freeze({\n${sources.join('\n')}\n});\n\nexport const POLICY_INPUT_JSON_SCHEMA = ${schema};\n`
+  );
+}
+
 const spec = await loadSpec();
 
 const outputs = {
@@ -110,6 +120,7 @@ const outputs = {
     ) + read('../../spec/test/json-schema.mjs'),
   'src/vendor/schemas.mjs': await schemaModule(spec),
   'src/vendor/predicates.mjs': predicateModule(),
+  'src/vendor/policies.mjs': policyModule(spec),
 };
 
 let stale = 0;

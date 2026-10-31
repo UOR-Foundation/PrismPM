@@ -246,6 +246,69 @@ exit = 1
 statement = "The closed Prism model-provenance extension is malformed or disagrees with embedded evidence."
 
 [[error]]
+code = "PP3016"
+title = "Attestation section disagreement"
+class = "holo"
+exit = 1
+statement = "The attestation section of a Holo archive holds no bundle, an empty or unterminated line, or a bundle that is already present."
+
+[[error]]
+code = "PP3017"
+title = "Attestation bundle disagreement"
+class = "holo"
+exit = 1
+statement = "An attestation bundle is not a Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1 whose subjects carry exactly sha256 and blake3, or it names the OCI manifest."
+
+[[error]]
+code = "PP3101"
+title = "Attestation signing failure"
+class = "attestation"
+exit = 3
+statement = "An attestation could not be signed: the key, the predicate, its type or a subject cannot be used."
+
+[[error]]
+code = "PP3102"
+title = "Attestation signature invalid"
+class = "attestation"
+exit = 1
+statement = "The DSSE signature of an attestation bundle does not verify under the signing certificate or the given key, or the certificate does not chain to the pinned root at a signed time with a verified signed certificate timestamp."
+
+[[error]]
+code = "PP3103"
+title = "Attestation identity mismatch"
+class = "attestation"
+exit = 1
+statement = "The signer of an attestation is not the certificate identity or OIDC issuer the policy names; identities are compared exactly."
+
+[[error]]
+code = "PP3104"
+title = "Attestation transparency failure"
+class = "attestation"
+exit = 1
+statement = "A log entry or timestamp of an attestation bundle is missing, is not about this bundle, or does not verify against the pinned trusted root."
+
+[[error]]
+code = "PP3105"
+title = "Attestation subject mismatch"
+class = "attestation"
+exit = 1
+statement = "A statement subject names a blob that is not in the holo, or its digests are not the blob's."
+
+[[error]]
+code = "PP3106"
+title = "Attestation not found"
+class = "attestation"
+exit = 1
+statement = "The holo has no attestation section, or none of its attestations has the requested predicate type."
+
+[[error]]
+code = "PP3107"
+title = "Trusted root invalid"
+class = "attestation"
+exit = 1
+statement = "The Sigstore trusted root cannot be read, is not pinned, or pins none of what the policy relies on."
+
+[[error]]
 code = "PP4001"
 title = "Artifact checksum mismatch"
 class = "artifact"
@@ -435,11 +498,123 @@ exit = 1
 statement = "The pinned independent Hologram loader, planner, executor, or View encoder disagrees with Prism evidence."
 
 [[error]]
+code = "PP5501"
+title = "Proof statement signature failure"
+class = "acceptance"
+exit = 1
+statement = "The DSSE signature of a proof statement does not verify against the trust root, or no trust root is available to verify it."
+
+[[error]]
+code = "PP5502"
+title = "Proof statement shape failure"
+class = "acceptance"
+exit = 1
+statement = "A proof statement is not an in-toto Statement v1 with one subject and a prism/proof/v1 predicate whose verifiedLevels is exactly P2."
+
+[[error]]
+code = "PP5503"
+title = "Proof subject disagreement"
+class = "acceptance"
+exit = 1
+statement = "The subject of a proof statement is not the guest blob of the holo it travels in."
+
+[[error]]
+code = "PP5504"
+title = "Proof model disagreement"
+class = "acceptance"
+exit = 1
+statement = "The model a proof statement describes is not the model document and provenance of the holo."
+
+[[error]]
+code = "PP5505"
+title = "Proof verifier disagreement"
+class = "acceptance"
+exit = 1
+statement = "The verifier pins of a proof statement differ from the pins of the project lock."
+
+[[error]]
+code = "PP5506"
+title = "Proof verdict failure"
+class = "acceptance"
+exit = 1
+statement = "A proof statement reports a failed verification result, a failed theorem, or a theorem whose observed axioms are outside its policy."
+
+[[error]]
+code = "PP5507"
+title = "Proof TCB incomplete"
+class = "acceptance"
+exit = 1
+statement = "The named trusted computing base of a proof statement lacks one of its seven components."
+
+[[error]]
+code = "PP5601"
+title = "Assurance level below the policy minimum"
+class = "acceptance"
+exit = 1
+statement = "The level computed from the evidence in the holo is below the minimum the policy requires."
+
+[[error]]
+code = "PP5602"
+title = "Declared world exceeds the granted capabilities"
+class = "acceptance"
+exit = 1
+statement = "The world the holo declares imports a capability kind the granted capability set grants nothing of."
+
+[[error]]
+code = "PP5603"
+title = "No verdict reached"
+class = "acceptance"
+exit = 2
+statement = "check could not judge the holo: the file is not a readable archive, its layout matches no format revision, or the policy file is unreadable or invalid."
+
+[[error]]
 code = "PP6001"
 title = "Reference model identity drift"
 class = "acceptance"
 exit = 1
 statement = "The reference repository model or lock is not byte-identical to the authoritative PrismPM getting-started source closure."
+
+[[error]]
+code = "PP5701"
+title = "Replay diverged from its history"
+class = "acceptance"
+exit = 1
+statement = "Re-executing a recorded history against this build produced an outcome that differs from the recording, or a replay statement records a divergence (replay.divergence, DeterminismViolationError)."
+
+[[error]]
+code = "PP5702"
+title = "Replay statement signature invalid"
+class = "acceptance"
+exit = 1
+statement = "A prism/replay/v1 statement is not signed by a key or identity the trust root accepts (replay.envelope)."
+
+[[error]]
+code = "PP5703"
+title = "Replay statement absent or malformed"
+class = "acceptance"
+exit = 1
+statement = "A holo carries no prism/replay/v1 statement, or its statement has the wrong shape or a divergence count its histories do not sum to (replay.statement)."
+
+[[error]]
+code = "PP5704"
+title = "Replay statement names another guest"
+class = "acceptance"
+exit = 1
+statement = "The subject of a prism/replay/v1 statement is not the guest blob of this holo, by either digest (replay.subject)."
+
+[[error]]
+code = "PP5705"
+title = "Replay statement names another model"
+class = "acceptance"
+exit = 1
+statement = "The model of a prism/replay/v1 statement is not the model blob of this holo, by either digest (replay.model)."
+
+[[error]]
+code = "PP5706"
+title = "Replay could not be carried out"
+class = "configuration"
+exit = 2
+statement = "A history is not prism/history/1, is repeated or cannot be read, or the holo cannot be read or fails its own integrity checks, so nothing was compared."
 
 [[error]]
 code = "PP6002"

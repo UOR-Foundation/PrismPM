@@ -77,7 +77,7 @@ What this package does check today appears as reasons that withhold P1:
 | `world.contract` | The guest module does not have the imports and exports of the WIT world its contract names: an import the world does not list, a missing or extra export, or an export of another kind or signature (issue #278). Not checked when the guest fails its label, which `holo.integrity` already reports. |
 | `provenance.statement` | Always, until the attestation bundle exists (issues #267 and #268). |
 | `proof.statement` | Always, until the proof predicate is carried (issue #266). Withholds P2. |
-| `replay.statement` | Always, until replay arrives (issue #284). Withholds P3. |
+| `replay.statement` | Always, until `verify` reads statements (issue #267). Replay itself has arrived (issue #284): `prism-code replay` writes the statement. Withholds P3. |
 | `policy.level` | The level is below `policy.minimum`. Code `PP5601`. |
 | `policy.digests.<part>` | A pinned digest does not match. |
 | `world.capabilities` | The world the contract names imports a capability kind `policy.capabilities` grants nothing of, or an import that names no kind. Code `PP5602`. It withholds P3, and it fails the policy at every level: the default policy requires the world within the grant (issue #283). `worldPolicy(contract, set)` runs the same check alone and also reports whether the world is pure. |
@@ -85,6 +85,14 @@ What this package does check today appears as reasons that withhold P1:
 | `world.hash` | The policy pins a world and the holo's world differs: another contract, another digest, or `null`. It withholds no level. |
 
 So until the bundle lands, read a verdict this way: no `holo.integrity` and no `holo.documents` reason means the holo is intact and well-formed. A P0 policy accepts any readable holo, tampered or not, because P0 promises nothing. Pin a digest when you need a pass or fail answer today.
+
+## Policy files
+
+`verify(bytes, { name, rego, capabilities })` judges a holo by a Rego policy (issue #285, [docs/proposals/285-policy-file.md](../../../docs/proposals/285-policy-file.md)). Without `rego`, the shipped default policy decides, and `minimum`, `digests`, `world` and `effects` adjust it.
+
+`POLICIES` holds the source of `default`, `pure-only` and `provenance-only`. `policyInput(bytes, { capabilities })` returns the `prism/policy-input/1` document a policy reads. `parsePolicy(source)` and `evaluatePolicy(parsed, input)` run a policy on a document alone, and return `{ minimum, denied, denials }`.
+
+The evaluator, `src/rego.mjs`, is a closed subset of Rego v1 with no dependencies. It refuses what it does not implement, by name, and `test/rego-opa.test.mjs` pins its answers against OPA.
 
 ## Example
 
@@ -188,7 +196,7 @@ A failed check is a reason in a verdict, not an error.
 
 ## Size
 
-`browser.js` is about 160 KB. Most of it is the JSON Schemas of the four model document versions a holo can carry, BLAKE3, and the log and timestamp checks.
+`browser.js` is about 265 KB. Most of it is the JSON Schemas of the model document versions a holo can carry, BLAKE3, the log and timestamp checks, and the Rego evaluator with the shipped policies.
 
 ## How it is built
 

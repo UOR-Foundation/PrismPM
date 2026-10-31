@@ -43,6 +43,18 @@ export class CapabilityDeniedError extends PrismError {
 export class WorldMismatchError extends PrismError {
   static readonly code: 'world_mismatch';
 }
+/** `policy_parse_failed`: the policy file does not parse, or uses a construct outside the subset (`policy.parse`). No verdict; `check` exits 2. Issue #285. */
+export class PolicyParseError extends VerificationError {
+  static readonly code: 'policy_parse_failed';
+}
+/** `policy_evaluation_failed`: the policy file parsed but produced no decision (`policy.evaluation`); the message names the rule. No verdict; `check` exits 2. Issue #285. */
+export class PolicyEvaluationError extends VerificationError {
+  static readonly code: 'policy_evaluation_failed';
+}
+/** `policy_denied`: a rule of a policy file denied the holo; `check` is the rule, such as `policy.pure-only.effects`. `check` exits 1. Issue #285. */
+export class PolicyDeniedError extends VerificationError {
+  static readonly code: 'policy_denied';
+}
 /** `determinism_violation`: a replay diverged from its recorded history (`replay.divergence`). */
 export class DeterminismViolationError extends PrismError {
   static readonly code: 'determinism_violation';
@@ -75,9 +87,65 @@ export class SubjectMismatchError extends PrismError {
 export class AttestationNotFoundError extends PrismError {
   static readonly code: 'attestation_not_found';
 }
+/** Running a provider service failed (#294). `details` names the capability and the provider type. */
+export class ProviderError extends PrismError {
+  static readonly code: 'provider_error' | 'provider_not_found' | 'provider_reply_invalid' | 'provider_failed';
+}
+/** No `prism-provider-<type>` is on the PATH. */
+export class ProviderNotFoundError extends ProviderError {
+  static readonly code: 'provider_not_found';
+}
+/** A provider broke the protocol (`provider.reply`), or a variable it returned has a second source (`provider.collision`). */
+export class ProviderReplyError extends ProviderError {
+  static readonly code: 'provider_reply_invalid';
+}
+/** A provider failed (`provider.failed`), would not start (`provider.spawn`) or ran out of time (`provider.timeout`). */
+export class ProviderFailedError extends ProviderError {
+  static readonly code: 'provider_failed';
+}
 /** `trust_root_invalid`: the pinned trusted root cannot be read or does not pin what the policy needs. */
 export class TrustRootError extends PrismError {
   static readonly code: 'trust_root_invalid';
+}
+/** `registry_failed`: a registry or a local store could not do what was asked. `check` is `registry.*` or `store.*`. */
+export class RegistryError extends PrismError {
+  static readonly code: 'registry_failed';
+}
+/** `registry_auth_failed`: the registry refused the credentials, or asked for them where they must not be sent. */
+export class RegistryAuthError extends PrismError {
+  static readonly code: 'registry_auth_failed';
+}
+/** `referrers_unsupported`: no referrers API, and the referrers tag cannot be read or written, or the fallback is off. */
+export class ReferrersUnsupportedError extends PrismError {
+  static readonly code: 'referrers_unsupported';
+}
+/** `manifest_not_found`: the reference names nothing in the registry or the store. */
+export class ManifestNotFoundError extends PrismError {
+  static readonly code: 'manifest_not_found';
+}
+/** `digest_mismatch`: bytes differ from the digest a descriptor, a reference, a registry header or an annotation claimed. */
+export class DigestMismatchError extends PrismError {
+  static readonly code: 'digest_mismatch';
+}
+/** `pull_verification_failed`: a pulled holo failed its verdict, its attestations or the signer policy; nothing was written. */
+export class PullVerificationError extends PrismError {
+  static readonly code: 'pull_verification_failed';
+}
+/** `reference_invalid`: the text is not a registry or store reference. `check` is `reference.*`. */
+export class ReferenceInvalidError extends PrismError {
+  static readonly code: 'reference_invalid';
+}
+/** `export_mismatch`: a browser export's bytes differ from the release. `check` is `export.manifest`, `export.layer`, `export.files` or `export.tree`. */
+export class ExportMismatchError extends PrismError {
+  static readonly code: 'export_mismatch';
+}
+/**
+ * `middleware_failed`: a middleware threw something that is not a `PrismError` (#295).
+ * `details` names it and `cause` is what it threw; a `PrismError` a middleware throws passes through as it is.
+ */
+export class MiddlewareError extends PrismError {
+  static readonly code: 'middleware_failed';
+  details: { name: string | null; step: MiddlewareStep; tags: string[] };
 }
 export const ERROR_CLASSES: Readonly<Record<string, typeof PrismError>>;
 /** The class a verdict reason's check id maps to. */
@@ -85,6 +153,108 @@ export function classForCheck(check: string): typeof PrismError;
 export function errorForReason(reason: VerdictReason, verdict?: Verdict): PrismError;
 /** The error that explains a failed verdict, or null for a passed one. `ranks` is `ASSURANCE.RANK`. */
 export function errorFromVerdict(verdict: Verdict, ranks: Record<AssuranceLevel, number>): PrismError | null;
+
+/** One row of the exit table. `error` names a class, null for success, or `anything else`. */
+export interface ExitCodeRow {
+  readonly exit: number;
+  readonly error: string | null;
+  /** Narrows `error`: `with a verdict` or `no verdict`. */
+  readonly when?: string;
+  readonly meaning: string;
+}
+/** Experimental. What a run exits with: the single source of truth for containers and the command line (#348). */
+export const EXIT_CODES: readonly ExitCodeRow[];
+/** Experimental. The exit code for how a run ended: null is 0, a typed error takes its row, anything else is 70. */
+export function exitCodeFor(error: unknown): number;
+
+/** Experimental. The `schema` of `Container.inspect()`. */
+export const CONTAINER_SCHEMA: 'prism/container/1';
+export type ContainerStatus = 'created' | 'running' | 'exited';
+
+/** What `Container.inspect()` returns (#348). */
+export interface ContainerRecord {
+  schema: 'prism/container/1';
+  /** 64 lowercase hex characters. A unique prefix also names the container. */
+  id: string;
+  image: {
+    name: string | null;
+    kind: 'holo' | 'closure' | null;
+    /** The archive fingerprint, `blake3:` and 64 hex characters, as in `verdict.holo`. Null for a closure. */
+    digest: string | null;
+  };
+  /** ISO 8601. */
+  created: string;
+  rm: boolean;
+  state: {
+    status: ContainerStatus;
+    /** Null until exited. */
+    exitCode: number | null;
+    /** What ended the run, or null. */
+    error: { name: string; code: string | null; message: string; check?: string; diagnostic?: string } | null;
+    /** Null until running, and null for good when check refused the holo: the guest never ran. */
+    startedAt: string | null;
+    finishedAt: string | null;
+  };
+  /** The verdict of the check this run was gated on, or null when none was reached. */
+  verdict: Verdict | null;
+  /** The output the guest returned, as text when it is valid UTF-8, otherwise as hex. Never the input. */
+  output: { encoding: 'utf-8' | 'hex'; data: string } | null;
+}
+
+/** Experimental. One run of a holo (#348). */
+export interface Container {
+  readonly id: string;
+  readonly status: ContainerStatus;
+  readonly exitCode: number | null;
+  /** The bytes the guest returned, or null. */
+  readonly output: Uint8Array | null;
+  /** The typed error that ended this run, or null. A container read back from a store has the summary in `inspect()` instead. */
+  readonly error: unknown;
+  /** The output as text, or null. */
+  text(): string | null;
+  /** Run it, and resolve to this container once it has exited. A failed run is the exit code, never a rejection. Again after exit runs it again. */
+  start(): Promise<Container>;
+  /** Rejects with `container.missing` once removed. */
+  inspect(): Promise<ContainerRecord>;
+  /** Refused with `container.running` while it runs. */
+  remove(): Promise<void>;
+}
+
+/** Where records are kept. `memoryContainerStore` is the default. */
+export interface ContainerStore {
+  put(record: ContainerRecord): Promise<void>;
+  get(id: string): Promise<ContainerRecord | undefined>;
+  /** The full ids that start with this prefix. */
+  find(prefix: string): Promise<string[]>;
+  remove(id: string): Promise<void>;
+}
+export function memoryContainerStore(): ContainerStore;
+
+export interface ContainerOptions extends LoadOptions {
+  /** The policy to gate on, as `experimental_verify` takes it, or a function that returns it. Default: P2 or above, or `PRISM_MINIMUM_LEVEL`. */
+  policy?: VerifyOptions | (() => VerifyOptions | Promise<VerifyOptions>);
+  /** Run a holo that fails check, or that check cannot judge. Warns on every start; never the default. */
+  allowUnverified?: boolean;
+  /** Remove the container when it exits, as `docker run --rm` does. */
+  rm?: boolean;
+}
+
+/** Experimental. `prism.containers` (#348). `image` is what `load` takes, or an application it returned. */
+export interface Containers {
+  /** Create and start: resolves to the container once it has exited, whatever its exit code. */
+  run(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
+  /** Open the image and make a container in state `created`. An image that cannot be opened makes no container. */
+  create(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
+  start(id: string): Promise<Container>;
+  /** The container with this id or unique id prefix. Rejects with `container.missing` or `container.ambiguous`. */
+  get(id: string): Promise<Container>;
+  remove(id: string): Promise<void>;
+}
+
+/** Experimental. The default client. Its records live in memory until removed. */
+export const prism: { readonly containers: Containers };
+/** Experimental. A client with containers of its own. `warn` receives the warning of an unverified run. */
+export function createPrism(options?: { store?: ContainerStore; warn?: (message: string) => void }): { readonly containers: Containers };
 
 export type AssuranceLevel = 'P0' | 'P1' | 'P2' | 'P3';
 
@@ -127,6 +297,11 @@ export interface VerifyOptions {
   capabilities?: CapabilitySet | null;
   /** The impure effects the policy allows the world (#282). Absent allows any; `[]` is the pure-world policy (`policy.effects`). */
   effects?: Array<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'>;
+  /**
+   * A decoded `prism/replay/v1` statement from beside the holo (#284). Its checks join the reasons as `replay.*`. It is
+   * unsigned, so it can withhold P3 and never support it. A signed statement inside the holo waits on #270.
+   */
+  replay?: unknown;
   /** Throw the typed error for a verdict that did not pass. Default false. */
   throw?: boolean;
   /** Where `PRISM_MINIMUM_LEVEL` is read. Default `process.env`. */
@@ -238,19 +413,211 @@ export interface Application {
   dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
   /** Replay every acceptance vector, comparing bytes. */
   acceptance(): Promise<AcceptanceResult>;
+  /** The acceptance vectors as a history, this application's first. Rejects with `replay.history` when it carries none. */
+  history(): Promise<History>;
+  /** Experimental. Record dispatches as they run. */
+  experimental_recorder(): Recorder;
+  /** Experimental. Re-execute histories against this build; see `experimental_replay`. */
+  experimental_replay(histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
   /** What the holo says about itself, without running the guest. Rejects with `inspect.kind` for a closure. */
   inspect(): Promise<Inspection>;
   /** Experimental. The verdict `prism check` returns for this holo. Rejects with `VerificationError` for a closure. */
   experimental_verify(options?: VerifyOptions): Promise<Verdict>;
   /** The bundles of the attestation section (#267), in order; empty without the section and for closures. Signatures are not verified. */
   attestations(): Attestation[];
+  /** Experimental. The middleware around this application's verify, instantiate, dispatch and record steps (#295). */
+  experimental_middleware: MiddlewareStack;
 }
+
+/** The steps the runtime performs, in order. A closure instantiates once at load and runs no `instantiate` step. */
+export type MiddlewareStep = 'verify' | 'instantiate' | 'dispatch' | 'record';
+export const MIDDLEWARE_STEPS: readonly ['verify', 'instantiate', 'dispatch', 'record'];
+
+/** What each step takes and returns. */
+export interface MiddlewareSteps {
+  verify: { args: { options: VerifyOptions | undefined }; result: Verdict };
+  instantiate: { args: { module: WebAssembly.Module; imports: WebAssembly.Imports }; result: WebAssembly.Instance };
+  /** `instance` is absent for a closure. */
+  dispatch: { args: { request: Uint8Array; instance?: WebAssembly.Instance }; result: Uint8Array };
+  record: { args: { request: Uint8Array; response: Uint8Array }; result: Uint8Array };
+}
+
+export interface MiddlewareContext {
+  step: MiddlewareStep;
+  application: Application;
+}
+
+export type MiddlewareHandler<S extends MiddlewareStep = MiddlewareStep> = (
+  args: MiddlewareSteps[S]['args'],
+) => Promise<MiddlewareSteps[S]['result']>;
+
+/** `(next, context) => handler`. Call `next(args)` to run the rest of the step; the first middleware of a step is the outermost. */
+export type Middleware<S extends MiddlewareStep = MiddlewareStep> = (next: MiddlewareHandler<S>, context: MiddlewareContext) => MiddlewareHandler<S>;
+
+export interface MiddlewareOptions {
+  /** Unique on the stack. Needed to place another middleware relative to this one, or to remove it by name. */
+  name?: string;
+  tags?: string[];
+  /** Replace a middleware of the same name instead of refusing with `middleware.name`. */
+  override?: boolean;
+}
+
+export interface AbsoluteMiddlewareOptions<S extends MiddlewareStep = MiddlewareStep> extends MiddlewareOptions {
+  step: S;
+  /** Within a step: `high` first, then `normal` (the default), then `low`; ties in the order added. */
+  priority?: 'high' | 'normal' | 'low';
+}
+
+export interface RelativeMiddlewareOptions extends MiddlewareOptions {
+  relation: 'before' | 'after';
+  /** The name of the middleware to sit next to, at its step. It must be on the stack when the step runs (`middleware.relative`). */
+  toMiddleware: string;
+}
+
+/** Anything that adds middleware: `stack.use(pluggable)`. */
+export interface Pluggable {
+  applyToStack(stack: MiddlewareStack): void;
+}
+
+export interface MiddlewareStack {
+  add<S extends MiddlewareStep>(middleware: Middleware<S>, options: AbsoluteMiddlewareOptions<S>): this;
+  addRelativeTo(middleware: Middleware, options: RelativeMiddlewareOptions): this;
+  /** By name or by the function itself; true when something was removed. */
+  remove(nameOrMiddleware: string | Middleware): boolean;
+  removeByTag(tag: string): boolean;
+  use(pluggable: Pluggable): this;
+  clone(): MiddlewareStack;
+  /** Every entry in the order it runs: by step, then outermost first. */
+  identify(): { step: MiddlewareStep; name: string | null; tags: string[] }[];
+  /** The handler for one step: every middleware at that step around `terminal`. */
+  resolve<S extends MiddlewareStep>(
+    step: S,
+    terminal: (args: MiddlewareSteps[S]['args']) => MiddlewareSteps[S]['result'] | Promise<MiddlewareSteps[S]['result']>,
+    context?: Partial<MiddlewareContext>,
+  ): MiddlewareHandler<S>;
+}
+
+/** The part of an OpenTelemetry `Tracer` tracing uses; `trace.getTracer()` from `@opentelemetry/api` is one. */
+export interface TracerLike {
+  startActiveSpan<T>(name: string, options: { kind?: number; attributes?: Record<string, unknown> }, fn: (span: SpanLike) => T): T;
+}
+export interface SpanLike {
+  setAttribute(key: string, value: unknown): unknown;
+  setAttributes(attributes: Record<string, unknown>): unknown;
+  recordException(exception: unknown): unknown;
+  setStatus(status: { code: number; message?: string }): unknown;
+  end(): void;
+}
+
+/**
+ * Experimental. One span per step, named `prism.<step>`, from the tracer you pass; the package depends on no tracing library.
+ * Adds `tracing.<step>` middleware, tagged `tracing`, first in each step.
+ */
+export function experimental_tracing(options: { tracer: TracerLike; steps?: MiddlewareStep[] }): Pluggable;
 
 /** sha256 and BLAKE3, lowercase hex, over the same bytes (ADR-015). */
 export interface DigestSet {
   sha256: string;
   blake3: string;
 }
+
+/** One recorded dispatch. Bytes are lowercase hex; `error` is a stable code such as `core.allocation`. */
+export type HistoryEvent = { request: string; response: string; error?: never } | { request: string; error: string; response?: never };
+
+/** A history, `prism/history/1`: the dispatches of one application, in order. */
+export interface History {
+  schema: 'prism/history/1';
+  /** The name of the application when it was recorded. Replay never compares it. */
+  application: string | null;
+  /** The build it was recorded from; absent for a closure. Replay never compares it. */
+  recordedFrom?: { guest: DigestSet; model: DigestSet };
+  events: HistoryEvent[];
+}
+
+/** A history as text, UTF-8 bytes or a parsed value. */
+export type HistorySource = string | Uint8Array | ArrayBuffer | History;
+
+export declare const HISTORY_SCHEMA: 'prism/history/1';
+export declare const REPLAY_PREDICATE_TYPE: 'https://uor.foundation/prism/replay/v1';
+/** Read a history. Rejects with `ReplayError` (`replay.history`) for anything the schema rejects. */
+export function parseHistory(source: HistorySource): History;
+/** The bytes both digests of a history cover: its canonical JSON, with no trailing newline. */
+export function historyBytes(history: HistorySource): Uint8Array;
+/** Both digests of a history, as `prism/replay/v1` names it. */
+export function historyDigest(history: HistorySource): Promise<DigestSet>;
+/** A history as a file: canonical JSON and one LF. */
+export function historyJson(history: HistorySource): string;
+/** The acceptance vectors of an application as a history. */
+export function acceptanceHistory(app: Application): Promise<History>;
+
+export interface Recorder {
+  /** Behaves as `app.dispatch` does, a refusal included, and records the outcome. */
+  dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
+  /** What has finished, in call order. Rejects with `replay.history` when nothing has. */
+  history(): Promise<History>;
+  /** How many dispatches have finished. */
+  events(): number;
+}
+
+/** Experimental. Record dispatches as they run. */
+export function experimental_recorder(app: Application): Recorder;
+
+export type ReplayOutcome = { response: string; error?: never } | { error: string; response?: never };
+
+/** One event whose outcome differs from the recording. */
+export interface ReplayDivergence {
+  /** The event's position in its history. */
+  index: number;
+  /** The request, lowercase hex. */
+  request: string;
+  expected: ReplayOutcome;
+  actual: ReplayOutcome;
+}
+
+export interface ReplayedHistoryResult {
+  digest: DigestSet;
+  application: string | null;
+  events: number;
+  divergences: ReplayDivergence[];
+}
+
+/** An in-toto Statement v1 with predicate type `https://uor.foundation/prism/replay/v1` and the guest blob as its one subject. */
+export interface ReplayStatement {
+  _type: 'https://in-toto.io/Statement/v1';
+  subject: [{ name: string; digest: DigestSet }];
+  predicateType: 'https://uor.foundation/prism/replay/v1';
+  predicate: {
+    runtime: { name: string; version: string };
+    model: DigestSet;
+    histories: Array<{ digest: DigestSet; events: number; divergences: number }>;
+    divergenceCount: number;
+  };
+}
+
+export interface ReplayResult {
+  application: string | null;
+  runtime: { name: string; version: string };
+  /** Events re-executed, across every history. */
+  events: number;
+  divergenceCount: number;
+  histories: ReplayedHistoryResult[];
+  /** Null for a closure, which has no guest blob to name. */
+  statement: ReplayStatement | null;
+}
+
+export interface ReplayOptions {
+  /** False resolves to the result on a divergence, instead of rejecting. Default true. */
+  throw?: boolean;
+  /** The runtime the statement names. Default this package. */
+  runtime?: { name: string; version: string };
+}
+
+/**
+ * Experimental. Re-execute histories against an opened application; every event runs. On a divergence it rejects with
+ * `DeterminismViolationError` (`replay.divergence`), whose `details` is the result, unless `throw` is false. A replay
+ * that cannot be carried out always rejects with `ReplayError`.
+ */
+export function experimental_replay(app: Application, histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
 
 export type SectionRole =
   | 'app-manifest'
@@ -379,8 +746,8 @@ export interface LoadOptions {
   capabilitySet?: string;
 }
 
-/** The three resource kinds a capability set grants. */
-export type CapabilityKind = 'outbound-hosts' | 'key-value-stores' | 'variables';
+/** The resource kinds a capability set grants. */
+export type CapabilityKind = 'outbound-hosts' | 'key-value-stores' | 'variables' | 'providers';
 
 /** A `prism/capabilities/1` file; see `@prism-code/spec` `schemas/capabilities/capabilities-v1.schema.json`. */
 export interface Capabilities {
@@ -394,6 +761,8 @@ export interface CapabilitySet {
   'deny-key-value-stores'?: readonly string[];
   'allow-variables'?: readonly string[];
   'deny-variables'?: readonly string[];
+  'allow-providers'?: readonly string[];
+  'deny-providers'?: readonly string[];
 }
 
 /** What a runtime enforces: one set of a capability file, or nothing. A deny entry wins over an allow entry. */
@@ -411,7 +780,7 @@ export interface CapabilityGrant {
 }
 
 export const CAPABILITIES_SCHEMA: 'prism/capabilities/1';
-export const CAPABILITY_KINDS: readonly ['outbound-hosts', 'key-value-stores', 'variables'];
+export const CAPABILITY_KINDS: readonly ['outbound-hosts', 'key-value-stores', 'variables', 'providers'];
 export const DEFAULT_SET: 'default';
 /** Validate a capability file and return it frozen. Throws `PrismCodeError` `capabilities.invalid`; unknown members are errors. */
 export function parseCapabilities(source: Capabilities | Uint8Array | string): Capabilities;
@@ -423,11 +792,21 @@ export interface Manifest {
   manifest_version?: 1;
   application: { name: string; version: string; description?: string; authors?: readonly string[] };
   model?: { source?: string; build?: string; watch?: readonly string[] };
-  /** A capability file and set, or the members of one capability set inline. Absent grants nothing. */
-  capabilities?: { file: string; set?: string } | CapabilitySet;
+  /** A capability file and set, or the members of one capability set inline, and any capabilities a provider provisions. Absent grants nothing. */
+  capabilities?: ({ file: string; set?: string } | CapabilitySet) & { [name: string]: unknown };
   variables?: Readonly<Record<string, string | { value?: string; secret?: boolean }>>;
 }
 export type ManifestTarget = 'browser' | 'node';
+
+/** One provider a manifest declares (#294). `flags` are its options as `--<key>=<value>` arguments, sorted by key. */
+export interface ManifestProviderDeclaration {
+  readonly name: string;
+  readonly type: string;
+  readonly options: Readonly<Record<string, string | number | boolean | readonly (string | number | boolean)[]>>;
+  readonly flags: readonly string[];
+}
+/** The providers a manifest declares, in order of capability name. */
+export function manifestProviders(manifest: Manifest): readonly ManifestProviderDeclaration[];
 /** A lint finding: `secret-literal` and `credential` are errors, `variable-not-granted` a warning. */
 export interface ManifestFinding {
   rule: 'secret-literal' | 'credential' | 'variable-not-granted';

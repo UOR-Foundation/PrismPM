@@ -51,6 +51,9 @@ That change is RT-01, [#276](https://github.com/UOR-Foundation/PrismPM/issues/27
 | `types/capabilities.d.ts` | The capability file `prism/capabilities/1` (#279): named sets of `allow-*` and `deny-*` entries for outbound hosts, key-value stores and variables. |
 | `schemas/holo/` | The decoded header and table, application manifest, source manifest and application directory. |
 | `schemas/documents/` | `prismpm/model-document/1` to `/6`, `prismpm/sdk-lock/1` to `/3`, `prismpm/model-provenance/1`, `prismpm/build-manifest/1`, `prismpm/browser-provenance/1`. |
+| `types/policy.d.ts` | The document a policy judges, `prism/policy-input/1` (#285). |
+| `schemas/policy/` | `prism/policy-input/1`, which a policy reads as `input`. It never holds a policy. |
+| `policies/` | The shipped policies, in Rego: `default`, `pure-only` and `provenance-only`. `POLICY.SHIPPED` names them. A policy never lives in a holo. |
 | `schemas/capabilities/` | `prism/capabilities/1`, the capability file a runtime grants a holo by; deny by default, deny wins (#279). |
 | `schemas/attestation/` | in-toto Statement v1, the DSSE envelope and the Sigstore bundle of the attestation section. |
 | `predicates/` | Per predicate `<name>-v<N>.json` (status, owner, description), `.d.ts` and `.schema.json`; the registry schema; `registry.json`, generated and not committed. |
@@ -102,7 +105,9 @@ A predicate is four files in `predicates/`, and nothing else changes:
 The predicate type is `https://uor.foundation/prism/<name>/v<N>`.
 `npm run build` writes `predicates/registry.json`, the `<NAME>_PREDICATE_TYPE` constants in `index.mjs` and `PredicateMap` in `types/predicate-map.d.ts` from those files.
 The proof predicate is defined (`proof-v1`, issue [#266](https://github.com/UOR-Foundation/PrismPM/issues/266)); its design is [docs/proposals/266-proof-predicate.md](../../../docs/proposals/266-proof-predicate.md) and `test/fixtures/attestation/statement/calculator.json` is its calculator example.
-`replay-v1` is a placeholder: its type is still `unknown`.
+The replay predicate is defined (`replay-v1`, issue [#284](https://github.com/UOR-Foundation/PrismPM/issues/284)); its design is [docs/proposals/284-histories-replay.md](../../../docs/proposals/284-histories-replay.md) and `test/fixtures/attestation/statement/calculator-replay.json` is its calculator example.
+A replay statement has one subject, the guest blob, and names the runtime, the model, every history by dual digest and the divergence count. It holds no clock, so the same replay writes the same bytes.
+The history it replays is `schemas/history/history-v1.schema.json`, `prism/history/1`, a superset of a model's acceptance vectors.
 The type files are `.d.ts`, not `.ts`, because the package has no compile step.
 
 ## Adding a schema
