@@ -396,7 +396,9 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-13" => holo_browser::verify(root),
         // The attestation section (#267): the Rust reader and writer over the modeled
         // wire codec, bound to the JavaScript appender by the committed signed archive.
-        "HO-23" | "HO-24" | "HO-25" | "HO-26" | "HO-27" => verify_attestation(root, id),
+        "HO-23" | "HO-24" | "HO-25" | "HO-26" | "HO-27" | "HO-28" | "HO-29" | "HO-30" => {
+            verify_attestation(root, id)
+        }
         // Assurance levels (#269) as `prismpm check` computes them (#270): the Rust
         // regressions hold the verdict against the spec fixtures and the JavaScript goldens.
         "AL-03" | "AL-05" | "AL-06" => verify_assurance(root, id),
@@ -3484,7 +3486,7 @@ fn verify_assurance(root: &Path, id: &str) {
     rust_regressions(root, id, filter, expected, "target/conformance-assurance");
 }
 
-/// HO-23 to HO-27: run the named Rust regressions with their exact inventory and, where the
+/// HO-23 to HO-30: run the named Rust regressions with their exact inventory and, where the
 /// JavaScript reference implementation owns the same rule, its complete Node file.
 fn verify_attestation(root: &Path, id: &str) {
     let (filter, expected) = match id {
@@ -3493,7 +3495,10 @@ fn verify_attestation(root: &Path, id: &str) {
         "HO-25" => ("holo::attestation::tests::ho_25_", 3),
         "HO-26" => ("holo::attestation::tests::ho_26_", 2),
         "HO-27" => ("holo::attestation::tests::ho_27_", 3),
-        _ => unreachable!("HO-23 to HO-27 only"),
+        "HO-28" => ("attest::tests::ho_28_", 6),
+        "HO-29" => ("attest::tests::ho_29_", 2),
+        "HO-30" => ("attest::tests::ho_30_", 2),
+        _ => unreachable!("HO-23 to HO-30 only"),
     };
     rust_regressions(root, id, filter, expected, "target/conformance-attestation");
 }
@@ -3541,6 +3546,7 @@ fn rust_regressions(root: &Path, id: &str, filter: &str, expected: usize, target
         "HO-24" => &[("sdk/npm/prism-code/test/attestations.test.mjs", 11)],
         "HO-25" => &[("sdk/npm/prism-code/test/attestation-interop.test.mjs", 2)],
         "HO-26" => &[("sdk/npm/spec/test/attestation-bundle.test.mjs", 6)],
+        "HO-28" => &[("sdk/npm/verify/test/entry-kinds.test.mjs", 5)],
         _ => &[],
     };
     if !owned.is_empty() {
