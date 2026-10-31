@@ -421,7 +421,7 @@ test('one normative workflow owns complete main acceptance and diagnostic owners
       + 'bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<\'PRISMPM_VV\'\n'
       + 'node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv-part ${{ matrix.part }}\n'
       + 'PRISMPM_VV\n)"\n');
-    assert.deepEqual(normative.jobs.vv.strategy, {'fail-fast': false, matrix: {part: ['source', 'conformance', 'browser']}});
+    assert.deepEqual(normative.jobs.vv.strategy, {'fail-fast': false, matrix: {part: ['source', 'gates', 'conformance', 'ho-oc', 'st-sy', 'dk-0-1', 'dk-2', 'dk-3']}});
     assert.deepEqual(normative.jobs.complete.needs, 'vv');
     assert.equal(normative.jobs.complete.if, undefined);
     assert(normative.jobs.complete.steps.some(step => step.run?.includes('node scripts/vv-assemble.mjs target/vv-parts target/vv-evidence.json "$GITHUB_SHA"')));

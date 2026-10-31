@@ -285,11 +285,9 @@ function invoke(f, overrides = {}, script = entrypoint) {
 const isolation = () => ['run', '--rm', '--user', `${process.getuid()}:${process.getgid()}`,
   '--env', 'HOME=/tmp/prismpm-home', '--env', 'PRISMPM_EPHEMERAL_HOME=1',
   '--tmpfs', '/tmp:rw,exec,nosuid,size=1g', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'];
-// The build alone keeps a private Buildx configuration and a 2g scratch (entrypoint.sh, 77f5fd6d and
-// 03e8dfd0, landed by #326); the export and closure runs keep the 1g isolation above.
+// Only the build step gets private Buildx state and the larger scratch (58c8034f, 77f5fd6d).
 const buildIsolation = () => ['run', '--rm', '--user', `${process.getuid()}:${process.getgid()}`,
-  '--env', 'HOME=/tmp/prismpm-home', '--env', 'PRISMPM_EPHEMERAL_HOME=1',
-  '--env', 'BUILDX_CONFIG=/tmp/prismpm-buildx',
+  '--env', 'HOME=/tmp/prismpm-home', '--env', 'PRISMPM_EPHEMERAL_HOME=1', '--env', 'BUILDX_CONFIG=/tmp/prismpm-buildx',
   '--tmpfs', '/tmp:rw,exec,nosuid,size=2g', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'];
 
 function verifyPublication(result, f) {

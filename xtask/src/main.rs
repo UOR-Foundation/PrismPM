@@ -736,20 +736,69 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
-/// One of three separately run parts of `cargo xtask vv`. A complete pass
-/// outgrows the 6 hour limit for one hosted CI job, so CI runs these parts on
-/// the same commit and `scripts/vv-assemble.mjs` requires all of them.
+/// The separately run parts of `cargo xtask vv`. A complete pass outgrows both
+/// the 6 hour limit and the disk of one hosted CI job, so CI runs these on the
+/// same commit and `scripts/vv-assemble.mjs` requires all of them.
 ///
-/// - `source`: gates 1 to 5, gate 6 without `repo-conformance`, gates 7 to 15.
-/// - `conformance`: gate 6 for `repo-conformance` without its DK owners.
-/// - `browser`: gate 6 for the DK owners of `repo-conformance`.
+/// - `source`: gates 1 to 5, gate 6 without `repo-conformance`.
+/// - `gates`: gates 7 to 15.
+/// - The rest split gate 6 for `repo-conformance`, which keeps its owners' work
+///   on disk, by test name.
+const VV_CONFORMANCE_PARTS: [(&str, &[&str]); 5] = [
+    ("ho-oc", &["conformance_ho_", "conformance_oc_"]),
+    ("st-sy", &["conformance_st_", "conformance_sy_"]),
+    ("dk-0-1", &["conformance_dk_0", "conformance_dk_1"]),
+    ("dk-2", &["conformance_dk_2"]),
+    ("dk-3", &["conformance_dk_3"]),
+];
+
+/// Every registered conformance test must belong to exactly one named part, and
+/// every named part must select a test, or a rename could pass with no tests
+/// run. Tests matching none run in the `conformance` part, except DK owners.
+fn verify_vv_conformance_partition(source: &str) -> Result<(), Fail> {
+    let names: Vec<&str> = source
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("test_case!("))
+        .filter_map(|rest| rest.split(',').next())
+        .filter(|name| name.starts_with("conformance_"))
+        .collect();
+    if names.is_empty() {
+        return Err("no registered conformance tests found".into());
+    }
+    for name in &names {
+        let owners = VV_CONFORMANCE_PARTS
+            .iter()
+            .filter(|(_, filters)| filters.iter().any(|filter| name.starts_with(filter)))
+            .count();
+        if owners > 1 || (owners == 0 && name.starts_with("conformance_dk_")) {
+            return Err(format!("{name} is in {owners} V&V parts").into());
+        }
+    }
+    for (part, filters) in VV_CONFORMANCE_PARTS {
+        if !names
+            .iter()
+            .any(|name| filters.iter().any(|filter| name.starts_with(filter)))
+        {
+            return Err(format!("V&V part {part} selects no tests").into());
+        }
+    }
+    Ok(())
+}
+
 fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
     let [part] = arguments else {
-        return Err("usage: cargo xtask vv-part <source|conformance|browser>".into());
+        return Err("usage: cargo xtask vv-part <part>".into());
     };
-    if !["source", "conformance", "browser"].contains(&part.as_str()) {
+    let named = VV_CONFORMANCE_PARTS
+        .iter()
+        .find(|(name, _)| name == part)
+        .map(|(_, filters)| *filters);
+    if named.is_none() && !["source", "gates", "conformance"].contains(&part.as_str()) {
         return Err(format!("unknown V&V part: {part}").into());
     }
+    verify_vv_conformance_partition(&std::fs::read_to_string(
+        root.join("crates/conformance/tests/conformance.rs"),
+    )?)?;
     let evidence_path = root.join(format!("target/vv-part-{part}.json"));
     match std::fs::remove_file(&evidence_path) {
         Ok(()) => {}
@@ -774,40 +823,30 @@ fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
                     "--offline",
                 ],
             )?;
-            run_vv_gates_7_to_15(root)?;
         }
-        "conformance" => {
-            println!("VV gate 6/15: repo-conformance without DK owners");
-            driver.run_cargo(
-                root,
-                &[
-                    "test",
-                    "--package",
-                    "repo-conformance",
-                    "--all-features",
-                    "--locked",
-                    "--offline",
-                    "--",
-                    "--skip",
-                    "conformance_dk_",
-                ],
-            )?;
-        }
+        "gates" => run_vv_gates_7_to_15(root)?,
         _ => {
-            println!("VV gate 6/15: DK owners of repo-conformance");
-            driver.run_cargo(
-                root,
-                &[
-                    "test",
-                    "--package",
-                    "repo-conformance",
-                    "--all-features",
-                    "--locked",
-                    "--offline",
-                    "--",
-                    "conformance_dk_",
-                ],
-            )?;
+            println!("VV gate 6/15: repo-conformance part {part}");
+            let mut arguments = vec![
+                "test",
+                "--package",
+                "repo-conformance",
+                "--all-features",
+                "--locked",
+                "--offline",
+                "--",
+            ];
+            match named {
+                Some(filters) => arguments.extend_from_slice(filters),
+                None => {
+                    for (_, filters) in VV_CONFORMANCE_PARTS {
+                        for filter in filters {
+                            arguments.extend_from_slice(&["--skip", filter]);
+                        }
+                    }
+                }
+            }
+            driver.run_cargo(root, &arguments)?;
         }
     }
     require_clean_worktree(root)?;
@@ -2429,6 +2468,40 @@ mod command_tests {
             &["--input-type=module", "-e", "import assert from 'node:assert/strict'; import {run} from '../tests/browser-view/compile.mjs'; assert.equal(process.env.LD_LIBRARY_PATH, undefined); assert.equal(process.env.CARGO_NET_OFFLINE, 'true'); process.env.RUSTFLAGS='-C opt-level=0'; assert.throws(()=>run('cargo',['--version'],process.cwd()),/inherited compiler override refused: RUSTFLAGS/);"],
         )
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod vv_part_tests {
+    use super::verify_vv_conformance_partition;
+
+    fn registered(ids: &[&str]) -> String {
+        ids.iter()
+            .map(|id| format!("test_case!(conformance_{id}, x);\n"))
+            .collect()
+    }
+
+    const ALL: [&str; 9] = [
+        "ho_01", "oc_01", "st_01", "sy_01", "rp_01", "dk_07", "dk_10", "dk_20", "dk_30",
+    ];
+
+    #[test]
+    fn every_conformance_test_belongs_to_one_part() {
+        verify_vv_conformance_partition(&registered(&ALL)).unwrap();
+    }
+
+    #[test]
+    fn a_dk_owner_outside_every_part_is_refused() {
+        let mut ids = ALL.to_vec();
+        ids.push("dk_40");
+        assert!(verify_vv_conformance_partition(&registered(&ids)).is_err());
+    }
+
+    #[test]
+    fn a_part_selecting_no_tests_is_refused() {
+        let ids: Vec<&str> = ALL.iter().copied().filter(|id| *id != "dk_20").collect();
+        assert!(verify_vv_conformance_partition(&registered(&ids)).is_err());
+        assert!(verify_vv_conformance_partition("").is_err());
     }
 }
 
