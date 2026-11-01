@@ -19,7 +19,6 @@
  */
 import { readAttestations, stripAttestations } from './attestations.mjs';
 import { classForCheck, VerificationError } from './errors.mjs';
-import { readProvenance } from './provenance.mjs';
 import {
   HISTORY_SCHEMA,
   REPLAY_PREDICATE_TYPE,
@@ -104,8 +103,6 @@ const policy = Object.freeze({
 const attestations = Object.freeze({
   /** Every bundle in the attestation section, in order. Reading verifies nothing. */
   read: readAttestations,
-  /** The provenance statements, each with its mode and whether a signature is present. Reading verifies nothing. */
-  provenance: readProvenance,
   /** The archive without its attestation section, which is what reproducibility checks compare. */
   strip: stripAttestations,
   /** Check a holo's attestations against a signer policy; see `experimental_verifyAttestations`. Node only. */

@@ -46,7 +46,7 @@ async function outcome(call) {
 test('the namespace holds exactly these members, frozen all the way down', () => {
   assert.deepEqual(Object.keys(verify).sort(), ['attestations', 'check', 'format', 'limits', 'policy', 'replay', 'verdict']);
   assert.deepEqual(Object.keys(verify.policy).sort(), ['evaluate', 'input', 'levels', 'minimumLevelEnv', 'names', 'parse', 'read', 'resolve']);
-  assert.deepEqual(Object.keys(verify.attestations).sort(), ['provenance', 'read', 'strip', 'verify', 'verifyBundle']);
+  assert.deepEqual(Object.keys(verify.attestations).sort(), ['read', 'strip', 'verify', 'verifyBundle']);
   assert.deepEqual(Object.keys(verify.replay).sort(), ['acceptance', 'digest', 'historySchema', 'json', 'parse', 'predicateType', 'record', 'run']);
   for (const value of [verify, verify.policy, verify.policy.names, verify.attestations, verify.replay]) assert.ok(Object.isFrozen(value));
 });
@@ -147,9 +147,6 @@ test('attestations reads statements without trusting them; verify and verifyBund
   const signed = new Uint8Array(readFileSync(signedPath));
   assert.deepEqual(verify.attestations.read(signed), readAttestations(signed));
   assert.equal(verify.attestations.read(calculator).length, 0);
-  const provenance = verify.attestations.provenance(signed);
-  assert.equal(provenance.length, 1);
-  assert.equal(provenance[0].signed, true);
   assert.deepEqual(verify.attestations.strip(signed), stripAttestations(signed));
 
   const [bundle] = verify.attestations.read(signed);
@@ -222,17 +219,15 @@ function closure(entry) {
   return seen;
 }
 
-test('at load the module needs no Node and reaches only verify, errors and the two pending exceptions; #440 forbids anything else', () => {
+test('at load the module needs no Node and reaches only what docs/proposals/440-nine-modules.md gives verify and errors', () => {
   const graph = closure(here('../src/verify-namespace.mjs'));
-  // verify: its own files. errors: archive reading, with blake3 under it (#440 puts format reading with the shared types).
-  // sha256 is the WebCrypto digest under provenance and replay. version is `system`'s, and replay.mjs reads it for the
-  // default runtime name of a statement: the PR lists it, and #441 or the move has to pass it in.
+  // verify: archive, attestations, blake3, sha256, replay, the vendored verifier and its own files. errors: errors, version.
+  // provenance.mjs writes statements, so it is `images`', and verify may not depend on images.
   assert.deepEqual([...graph.keys()].sort(), [
     'archive.mjs',
     'attestations.mjs',
     'blake3.mjs',
     'errors.mjs',
-    'provenance.mjs',
     'replay.mjs',
     'sha256.mjs',
     'vendor/verify.mjs',
