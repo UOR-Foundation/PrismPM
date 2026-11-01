@@ -531,6 +531,17 @@ pub fn run_at(root: &Path, id: &str) {
             verify_controller(root, id);
         }
 
+        // The `errors` module of #440, and the codes prism-code raises against the register.
+        "CT-12" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("sdk/npm/prism-code/test/errors-namespace.test.mjs", 8),
+                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 4),
+            ],
+            "600000",
+        ),
+
         "ST-01" | "ST-02" | "ST-03" | "ST-04" | "ST-05" | "ST-06" | "ST-07" | "ST-08" | "ST-09"
         | "ST-10" => {
             verify_stdlib(root, id);

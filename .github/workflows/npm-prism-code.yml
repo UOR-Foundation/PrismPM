@@ -14,6 +14,11 @@ on:
       - sdk/npm/prism-code/**
       # test/inspect.test.mjs checks its format revision table against the spec's.
       - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
       # src/vendor/verify.mjs is a copy of this file; test/verify.test.mjs checks it.
       - sdk/npm/verify/browser.js
       # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
@@ -34,6 +39,11 @@ on:
     paths:
       - sdk/npm/prism-code/**
       - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
       - sdk/npm/verify/browser.js
       # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
       - sdk/npm/spec/test/fixtures/manifest/**
