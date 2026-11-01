@@ -246,6 +246,16 @@ test('a holo with an attestation section reaches the verdict of check, and unsig
   assert.deepEqual(pulled.verdict, await check(placeholders, { policy: { name: 'pull-default', minimum: 'P0' } }));
 });
 
+test('a policy that is not one is refused, and never falls back to the P0 default', async () => {
+  const store = fresh();
+  await experimental_push(plain, 'app:1', { store });
+  const output = join(dir, 'never-null.holo');
+  for (const policy of [null, 7, ['P0']]) {
+    await assert.rejects(experimental_pull('app:1', { store, output, policy }), (error) => error instanceof VerificationError && error.check === 'policy.invalid');
+    assert.equal(existsSync(output), false);
+  }
+});
+
 test('a policy that carries evidence is refused: the level comes from the holo, never from an option', async () => {
   const store = fresh();
   await experimental_push(plain, 'app:1', { store });

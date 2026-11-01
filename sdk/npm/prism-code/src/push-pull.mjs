@@ -142,7 +142,7 @@ function verifyHolo(closure, reference) {
  */
 async function judge(parsed, options) {
   const env = options.env ?? process.env;
-  const policy = await policyOf(options.policy ?? { name: 'pull-default', minimum: env[MINIMUM_LEVEL_ENV] || 'P0' });
+  const policy = await policyOf(options.policy === undefined ? { name: 'pull-default', minimum: env[MINIMUM_LEVEL_ENV] || 'P0' } : options.policy);
   const { type, ...signer } = signerOptions(options);
   let verdict;
   try {
