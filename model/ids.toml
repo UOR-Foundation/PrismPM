@@ -1171,6 +1171,12 @@ level = "build"
 statement = "Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment."
 
 [[id]]
+id = "OC-11"
+suite = "oci"
+level = "build"
+statement = "The prism.images namespace of prism-code exposes build, pull, push, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, an option a verb does not have is refused, and list, tag and remove stay absent until the local image store exists."
+
+[[id]]
 id = "LC-01"
 suite = "lifecycle"
 level = "build"

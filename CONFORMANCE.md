@@ -173,6 +173,7 @@ The three honesty levels:
 | `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
 | `OC-09` | `build` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. |
 | `OC-10` | `build` | Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment. |
+| `OC-11` | `build` | The prism.images namespace of prism-code exposes build, pull, push, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, an option a verb does not have is refused, and list, tag and remove stay absent until the local image store exists. |
 
 ## operations
 
