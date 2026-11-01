@@ -377,13 +377,8 @@ export function createImages({ spawn } = {}) {
     allowText('pull', options, ['store', 'output']);
     if (options.maxSize !== undefined && (!Number.isSafeInteger(options.maxSize) || options.maxSize <= 0)) fail('PP1001', 'images.pull option maxSize must be a positive whole number of bytes');
     const { experimental_pull } = await import('./push-pull.mjs');
-    const { policyOf } = await import('./check.mjs');
-    const { tag, maxSize, policy, ...rest } = options;
-    const pulled = await experimental_pull(named(repository, tag), {
-      ...rest,
-      ...(maxSize === undefined ? {} : { maxHoloBytes: maxSize }),
-      ...(policy === undefined ? {} : { policy: await policyOf(policy) }),
-    });
+    const { tag, maxSize, ...rest } = options;
+    const pulled = await experimental_pull(named(repository, tag), { ...rest, ...(maxSize === undefined ? {} : { maxHoloBytes: maxSize }) });
     return {
       schema: IMAGE_PULL_SCHEMA,
       reference: pulled.reference,

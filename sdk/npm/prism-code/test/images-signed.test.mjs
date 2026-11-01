@@ -50,6 +50,17 @@ test('verify hands the signer to check: the same image is P2 with it, P0 without
   assert.equal((await images.verify(image, { key: strangerKey })).level, 'P0');
 });
 
+test('pull and verify give one signed image one verdict', needsSigstore, async () => {
+  const image = await signedImage();
+  const store = fresh('store');
+  await images.push('app:1', { source: image, store });
+  const policy = { name: 'strict', minimum: 'P2' };
+  const pulled = await images.pull('app:1', { store, policy, key });
+  assert.deepEqual([pulled.verdict.level, pulled.verdict.passed], ['P2', true]);
+  assert.deepEqual(pulled.verdict, await images.verify(image, { policy, key }));
+  assert.equal(pulled.digest, (await images.inspect(image)).digest);
+});
+
 test('a keyed push signs for the registry, and pull checks the signer before it writes', needsSigstore, async () => {
   const image = await signedImage();
   const store = fresh('store');
