@@ -4000,6 +4000,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SE-06` | `security` | Memory safety is enforced across all Rust crates with unsafe code forbidden. | §9 |
 | `SE-07` | `security` | Input parsing rejects excessively large inputs before memory exhaustion. | §9 |
 | `SE-08` | `security` | Dependency audits with cargo-deny enforce license and advisory policies. | §9 |
+| `SE-09` | `security` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. | §9 |
 | `AU-01` | `authorities` | Every standards claim uses a typed immutable authority binding distinct from its executable oracle. | §10 |
 | `AU-02` | `authorities` | Authority resolution writes a canonical reviewable lock and locked resolution rejects drift. | §10 |
 | `AU-03` | `authorities` | Fetch verifies signatures and digests before atomically publishing immutable cached inputs. | §10 |

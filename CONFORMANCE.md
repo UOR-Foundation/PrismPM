@@ -256,6 +256,7 @@ The three honesty levels:
 | `SE-06` | `build` | Memory safety is enforced across all Rust crates with unsafe code forbidden. |
 | `SE-07` | `build` | Input parsing rejects excessively large inputs before memory exhaustion. |
 | `SE-08` | `build` | Dependency audits with cargo-deny enforce license and advisory policies. |
+| `SE-09` | `build` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. |
 
 ## stdlib
 
