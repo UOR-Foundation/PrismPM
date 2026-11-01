@@ -17,9 +17,12 @@ delete globalThis.process;
 delete globalThis.Buffer;
 
 const fetched = [];
+const response = (bytes) => ({ ok: true, status: 200, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
 globalThis.fetch = async (url) => {
+  // A closure is a directory of files, read here; its glue is then imported from the same URL.
+  if (url.protocol === 'file:') return response(readFileSync(url));
   fetched.push(String(url));
-  return { ok: true, status: 200, arrayBuffer: async () => holo.buffer.slice(holo.byteOffset, holo.byteOffset + holo.byteLength) };
+  return response(holo);
 };
 const warnings = [];
 console.warn = (message) => warnings.push(message);
@@ -44,6 +47,10 @@ report.topBytes = await run(await top.load(new Uint8Array(holo)));
 report.topUrl = await run(await top.load('https://prism.test/Calculator.holo'));
 report.browserUrl = await run(await browser.load('https://prism.test/Calculator.holo'));
 report.fetched = fetched;
+
+const { model } = await top.load(new Uint8Array(holo));
+const closure = await browser.load(new URL('../fixtures/calculator-closure/', import.meta.url).href, { model });
+report.closure = { kind: closure.kind, verified: closure.identities.verified, response: decode(await closure.dispatch(encode('1\tadd\t20\t22'))), acceptance: await closure.acceptance() };
 
 report.hash = canonical.codeHash('const x = 1;  \r\n\r\n');
 report.describe = canonical.describe('﻿a\r\nb');

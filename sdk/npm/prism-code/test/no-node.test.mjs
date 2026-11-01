@@ -25,6 +25,7 @@ test('the entry points load and dispatch the reference archive with node: import
   }
   // A string reaches `prism-code/browser` from both entry points: fetched, never read as a path.
   assert.deepEqual(report.fetched, ['https://prism.test/Calculator.holo', 'https://prism.test/Calculator.holo']);
+  assert.deepEqual(report.closure, { kind: 'closure', verified: true, response: '1\tok\t42', acceptance: { total: 22, passed: 22, failed: [] } });
 
   // The 0.1.0 calls stay synchronous and hash the same; the top-level ones warn once.
   assert.equal(report.hash, HASH);
@@ -42,6 +43,7 @@ test('a bundler targeting the browser reaches no built-in and no optional depend
   const skipped = new Set(Object.entries(left).filter(([, target]) => target === false).map(([path]) => resolve(packageRoot, path)));
   const visited = new Set();
   const outside = [];
+  const rewritten = [];
   const walk = (file) => {
     if (visited.has(file) || skipped.has(file)) return;
     visited.add(file);
@@ -51,6 +53,10 @@ test('a bundler targeting the browser reaches no built-in and no optional depend
       ...text.matchAll(/(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g),
       ...text.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g),
     ].map((match) => match[1]);
+    // An import of a computed URL only reaches the network if webpack is told to leave it alone.
+    for (const [, argument] of text.matchAll(/\bimport\(\s*([^)]*)/g)) {
+      if (!/^['"]/.test(argument) && !argument.startsWith('/* webpackIgnore: true */')) rewritten.push(`${relative(packageRoot, file)}: import(${argument})`);
+    }
     for (const specifier of specifiers) {
       if (specifier.startsWith('.')) walk(resolve(dirname(file), specifier));
       else outside.push(`${relative(packageRoot, file)}: ${specifier}`);
@@ -59,6 +65,7 @@ test('a bundler targeting the browser reaches no built-in and no optional depend
   walk(here('../src/index.mjs'));
   walk(here('../src/browser.mjs'));
   assert.deepEqual(outside, []);
+  assert.deepEqual(rewritten, []);
   assert.ok(visited.has(here('../src/canonical/index.js')));
   assert.equal(visited.has(here('../src/node.mjs')), false);
 });

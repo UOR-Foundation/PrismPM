@@ -47,7 +47,8 @@ export async function load(source, options = {}) {
       }
     }),
   );
-  return loadClosure(files, (name) => import(new URL(name, directory).href), { model: options.model ?? null, ...grant });
+  // The glue is at a URL known only now; without the comment webpack looks it up among its own modules and fails.
+  return loadClosure(files, (name) => import(/* webpackIgnore: true */ new URL(name, directory).href), { model: options.model ?? null, ...grant });
 }
 
 /** Place a closure's `index.html` in an iframe inside `container`; the page's own wasm does the work. */
