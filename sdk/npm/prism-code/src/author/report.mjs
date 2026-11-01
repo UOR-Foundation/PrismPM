@@ -16,11 +16,9 @@ function proving(rows) {
   return lines;
 }
 
-const replayLine = (replay) => `  replay of examples/ waits for #${replay.issue}; the guest replayed the acceptance vectors instead`;
-
 /** A build that passed. */
-export function formatReport({ spec, rows, replayed, replay, source, holo }) {
-  const lines = [...proving(rows), '', 'Examples', `  ${replayed} of ${spec.examples.length} replayed through the guest`, replayLine(replay), ''];
+export function formatReport({ spec, rows, replayed, source, holo }) {
+  const lines = [...proving(rows), '', 'Examples', `  ${replayed} of ${spec.examples.length} replayed through the guest`, ''];
   const agent = `${source.agent.adapter}/${source.agent.model}`;
   lines.push(source.cached ? `Model: cached from spec blake3:${spec.digest}, no agent call (written by ${agent})` : `Model: written by ${agent} in ${source.attempts} attempt${source.attempts === 1 ? '' : 's'}${source.tokens ? `, ${source.tokens} tokens` : ''}`);
   lines.push(`Built ${holo}`);
@@ -59,11 +57,10 @@ export function formatFailure({ spec, falsified, unproved, agentError, gate, att
 }
 
 /** The authoring section of `check --unstable-author`. */
-export function formatAuthoring({ checks, rows, comparison, replay }) {
+export function formatAuthoring({ checks, rows, comparison }) {
   const lines = ['', 'Authoring:'];
   for (const check of checks) lines.push(`  ${check.passed ? 'ok    ' : 'FAILED'}  ${check.id}  ${check.message}`);
   if (rows) lines.push('', ...proving(rows));
-  lines.push('', replayLine(replay));
   if (comparison) {
     lines.push('', 'Against the reference:');
     for (const row of comparison) lines.push(`  ${row.same ? 'identical' : 'DIFFERENT'}  ${row.part}${row.same ? '' : `: ${row.why}`}`);

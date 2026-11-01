@@ -238,6 +238,7 @@ test('author.report.sentence: the report shows sentences and example counts, nev
     assert.equal(result.text.includes(row.theorem), false);
   }
   assert.match(result.text, /22 of 22 replayed through the guest/);
+  assert.doesNotMatch(result.text, /waits for/);
   rmSync(root, { recursive: true });
 });
 
@@ -485,8 +486,32 @@ test('author.examples.replay: a holo that disagrees with an example names the ex
   rmSync(root, { recursive: true });
 });
 
-test('author.replay.hook: the replay gate on examples/ is named and deferred to #284', () => {
-  assert.deepEqual(replayExamplesGate(), { status: 'deferred', issue: 284 });
+test('author.replay.hook: every example replays through the guest as a history', async () => {
+  const { examples } = loadSpec(join(FIXTURES, 'calculator'));
+  const replay = await replayExamplesGate(await fromFile(HOLO), examples);
+  assert.equal(replay.events, examples.length);
+  assert.deepEqual(replay.failed, []);
+});
+
+test('author.replay.hook: a guest that diverges fails by example file, and every divergence is reported', async () => {
+  const { examples } = loadSpec(join(FIXTURES, 'calculator'));
+  const app = await fromFile(HOLO);
+  const wrong = Object.create(app, { dispatch: { value: async () => new TextEncoder().encode('wrong') } });
+  const replay = await replayExamplesGate(wrong, examples);
+  assert.equal(replay.failed.length, examples.length);
+  assert.deepEqual(replay.failed.map((f) => f.example), examples.map((e) => e.path));
+  assert.match(replay.failed[0].reason, /and the guest returned "wrong"/);
+});
+
+test('author.replay.hook: a replay that cannot be carried out is a failure with no example', async () => {
+  const { examples } = loadSpec(join(FIXTURES, 'calculator'));
+  const app = await fromFile(HOLO);
+  const damaged = Object.create(app, { identities: { value: { ...app.identities, verified: false } } });
+  const replay = await replayExamplesGate(damaged, examples);
+  assert.equal(replay.events, 0);
+  assert.equal(replay.failed.length, 1);
+  assert.equal(replay.failed[0].example, null);
+  assert.match(replay.failed[0].reason, /integrity/);
 });
 
 test('author.holo.closed: the agent writes model sources only, so no weights, Lean or escapes reach the build', () => {
@@ -614,7 +639,8 @@ test('author.compare: the Calculator spec project reports against the reference 
   assert.match(run.stdout, /Authoring:/);
   assert.match(run.stdout, /ok {4} {2}author\.spec\.digest/);
   assert.match(run.stdout, /identical {2}guest/);
-  assert.match(run.stdout, /waits for #284/);
+  assert.match(run.stdout, /author.examples.replay  22 of 22 replayed through the guest/);
+  assert.doesNotMatch(run.stdout, /waits for/);
   const json = spawnSync(process.execPath, [BIN, 'check', HOLO, '--unstable-author', '--project', root, '--policy', policy, '--json'], { encoding: 'utf8' });
   const parsed = JSON.parse(json.stdout);
   assert.equal(parsed.verdict.schema, 'prism/verdict/1');

@@ -40,7 +40,7 @@ export async function compareHolos(referenceBytes, candidateBytes, referenceVect
 
 /**
  * Check a holo against the project that claims it. Resolves to
- * `{ passed, checks, rows, replay, comparison }`.
+ * `{ passed, checks, rows, comparison }`.
  *
  * @param {string} holo the holo's path
  * @param {{ root: string, reference?: string }} options
@@ -51,7 +51,7 @@ export async function checkAuthoring(holo, { root, reference = null }) {
   const record = (id, passed, message) => checks.push({ id, passed, message });
   if (spec.level === 3) {
     record('author.level3', true, 'no intent.md or examples/: a hand-written model, nothing to prove against a spec');
-    return { passed: true, checks, rows: null, replay: replayExamplesGate(), comparison: null, level: 3 };
+    return { passed: true, checks, rows: null, comparison: null, level: 3 };
   }
   const lock = readLock(root).value;
   const authoring = lock.authoring ?? null;
@@ -75,11 +75,11 @@ export async function checkAuthoring(holo, { root, reference = null }) {
 
   const mismatch = vectorMismatch(spec.examples, app.vectors);
   record('author.examples.vectors', mismatch === null, mismatch ? `${mismatch.example ?? 'examples/'}: ${mismatch.reason}` : `every file in examples/ is an acceptance vector of the holo, in order`);
-  const replay = await app.acceptance();
+  const replay = await replayExamplesGate(app, spec.examples);
   record(
     'author.examples.replay',
-    replay.failed.length === 0 && replay.total > 0,
-    replay.failed.length === 0 ? `${replay.passed} of ${replay.total} replayed through the guest` : `${spec.examples[replay.failed[0].index]?.path ?? `vector ${replay.failed[0].index}`} did not replay`,
+    replay.failed.length === 0 && replay.events > 0,
+    replay.failed.length === 0 ? `${replay.events} of ${replay.events} replayed through the guest` : `${replay.failed[0].example ?? 'examples/'}: ${replay.failed[0].reason}`,
   );
 
   const theorems = pinned ? readTheorems(root, pinned) : null;
@@ -93,5 +93,5 @@ export async function checkAuthoring(holo, { root, reference = null }) {
     const referenceApp = await fromFile(resolve(reference));
     comparison = await compareHolos(referenceBytes, bytes, referenceApp.vectors, app.vectors);
   }
-  return { passed: checks.every((check) => check.passed), checks, rows, replay: replayExamplesGate(), comparison };
+  return { passed: checks.every((check) => check.passed), checks, rows, comparison };
 }

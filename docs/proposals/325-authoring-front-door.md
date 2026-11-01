@@ -5,8 +5,8 @@
 | Issue | [#325](https://github.com/UOR-Foundation/PrismPM/issues/325) |
 | Milestone | M3 v0.6 Replay, capabilities, conformance |
 | Status | Experimental, behind `--unstable-author` |
-| Depends on | #264 (input lock), #266 (proof predicate), #280 (`prism.toml`) |
-| Waits for | #284 (replay of `examples/`), #267 (statements in the holo), `lexlean-mcp` v0.1 (a running gateway) |
+| Depends on | #264 (input lock), #266 (proof predicate), #280 (`prism.toml`), #284 (replay of `examples/`) |
+| Waits for | #267 (statements in the holo), `lexlean-mcp` v0.1 (a running gateway) |
 
 ## Summary
 
@@ -109,7 +109,7 @@ Every build passes all of them, with or without a new model.
 3. `prismpm build` publishes a holo, and the lock's spec digest equals ours.
 4. The holo matches its own digests and loads under the capabilities `prism.toml` grants.
 5. The holo's vectors equal `examples/`, byte for byte, in order.
-6. The guest replays every vector. A failure names the example file.
+6. The guest replays every vector as a history, through `experimental_replay`. A divergence names the example file.
 7. `prismpm verify` accepts the model, or its evidence for this model already exists.
 8. Each sentence has a theorem the kernel passed that does not lean on `sorry`.
 
@@ -117,8 +117,7 @@ A failing gate goes back to the agent as diagnostics, up to the budget.
 An agent that reports a sentence unproved stops the build at once: that sentence, its explanation and exit 1.
 A failed build restores `model/` and the lock's bytes, and keeps the attempt in `.prism-author/rejected/`.
 
-`replayExamplesGate` in `src/author/build.mjs` is the named hook for #284.
-Until `prism replay` lands, gate 6 replays through `Application.acceptance`, and every report says so.
+`replayExamplesGate` in `src/author/build.mjs` is gate 6, wired to #284. It does not yet keep the `prism/replay/v1` statement the replay produces.
 
 ## Decisions
 
@@ -183,7 +182,7 @@ Moving these into the conformance suite is left to #287.
 | An unproved sentence fails the build, names it, and offers the agent's explanation | `author.intent.unproved` |
 | A sentence false for the examples fails the build and is named | `author.intent.false` |
 | `examples/` are the holo's acceptance vectors | `author.examples.vectors` *, `author.examples.wire` |
-| A replay failure names the example file | `author.examples.replay` *; `author.replay.hook` for #284 |
+| A replay failure names the example file | `author.examples.replay` *, `author.replay.hook` |
 | The agent's output is checked, never accepted | `author.evidence.kernel`, `author.iterate`, `author.rollback` |
 | The holo embeds no weights or network access | `author.holo.closed` * |
 | Types map to stdlib records | `author.types.record` |

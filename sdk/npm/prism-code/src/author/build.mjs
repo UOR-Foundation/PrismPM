@@ -11,8 +11,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { canonicalJson } from '../archive.mjs';
-import { fail } from '../errors.mjs';
+import { fail, ReplayError } from '../errors.mjs';
 import { fromFile, readManifest } from '../node.mjs';
+import { acceptanceHistory, displayOutcome, experimental_replay } from '../replay.mjs';
 import { authorRequest, DEFAULT_MODEL, unmappedRecords, validateResponse } from './agent.mjs';
 import { formatFailure, formatReport } from './report.mjs';
 import { falsified, loadSpec, MODEL_DIR, modelDigest, readModel, SIDECAR_FILE } from './spec.mjs';
@@ -24,9 +25,25 @@ const SIDECAR_SCHEMA = 'prism/author-sidecar/1';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** Where a replay of `examples/` plugs in once `prism replay` lands (#284). Until then the guest replays the vectors. */
-export function replayExamplesGate() {
-  return { status: 'deferred', issue: 284 };
+/**
+ * Replay `examples/` through the holo's guest (#284). The holo's acceptance
+ * vectors are its first history, and the gate requires them to equal the
+ * examples, so each event is one file. Resolves to `{ events, failed }`, each
+ * failure `{ example, reason }`; a replay that cannot be carried out is a
+ * failure with no example.
+ */
+export async function replayExamplesGate(app, examples) {
+  try {
+    const { events, histories } = await experimental_replay(app, await acceptanceHistory(app), { throw: false });
+    const failed = histories[0].divergences.map(({ index, expected, actual }) => ({
+      example: examples[index]?.path ?? null,
+      reason: `vector ${index} expected ${displayOutcome(expected)}, and the guest returned ${displayOutcome(actual)}`,
+    }));
+    return { events, failed };
+  } catch (error) {
+    if (!(error instanceof ReplayError)) throw error;
+    return { events: 0, failed: [{ example: null, reason: error.message }] };
+  }
 }
 
 export function readLock(root) {
@@ -212,10 +229,9 @@ async function gate({ root, spec, toolchain, update }) {
   if (!app.identities.verified) return failed('holo', 'the holo does not match its own digests');
   const mismatch = vectorMismatch(spec.examples, app.vectors);
   if (mismatch) return failed('examples', mismatch.example ? `${mismatch.example}: ${mismatch.reason}` : mismatch.reason, { example: mismatch.example });
-  const replay = await app.acceptance();
+  const replay = await replayExamplesGate(app, spec.examples);
   if (replay.failed.length > 0) {
-    const first = replay.failed[0];
-    return failed('examples', replay.failed.map((f) => `${spec.examples[f.index].path}: the guest did not return its output`).join('\n'), { example: spec.examples[first.index].path });
+    return failed('examples', replay.failed.map((f) => `${f.example ?? 'examples/'}: ${f.reason}`).join('\n'), { example: replay.failed[0].example });
   }
 
   if (!readTheorems(root, modelSha256)) {
@@ -225,7 +241,7 @@ async function gate({ root, spec, toolchain, update }) {
   const rows = intentVerdicts(spec.intent, readTheorems(root, modelSha256));
   const unproved = rows.filter((row) => row.verdict !== 'checked');
   if (unproved.length > 0) return failed('proof', unproved.map((row) => `${row.sentence}: ${row.why}`).join('\n'), { rows });
-  return { ok: true, rows, replayed: replay.total, holo, lock };
+  return { ok: true, rows, replayed: replay.events, holo, lock };
 }
 
 /**
@@ -268,7 +284,7 @@ export async function authorBuild({ root, agent, toolchain, scaffold, scaffoldCo
       spec: { blake3: spec.digest },
     });
     commit(root);
-    return { code: 0, text: formatReport({ spec, rows: result.rows, replayed: result.replayed, replay: replayExamplesGate(), source, holo: result.holo }) };
+    return { code: 0, text: formatReport({ spec, rows: result.rows, replayed: result.replayed, source, holo: result.holo }) };
   };
 
   if (found.state === 'current') {
