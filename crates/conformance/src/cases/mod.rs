@@ -691,6 +691,13 @@ pub fn run_at(root: &Path, id: &str) {
             60,
             "120000",
         ),
+        // The `volumes` module of #440.
+        "DK-40" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/volumes.test.mjs", 25)],
+            "600000",
+        ),
         "DK-35" => verify_node_suite(
             root,
             id,

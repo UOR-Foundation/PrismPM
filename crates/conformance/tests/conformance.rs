@@ -205,6 +205,7 @@ test_case!(conformance_dk_32, "DK-32");
 test_case!(conformance_dk_37, "DK-37");
 test_case!(conformance_dk_38, "DK-38");
 test_case!(conformance_dk_35, "DK-35");
+test_case!(conformance_dk_40, "DK-40");
 test_case!(conformance_oc_01, "OC-01");
 test_case!(conformance_oc_02, "OC-02");
 test_case!(conformance_oc_03, "OC-03");

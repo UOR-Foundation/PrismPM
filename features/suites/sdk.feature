@@ -243,3 +243,10 @@ Feature: sdk
     Given the locked PrismPM production fixture
     When the DK-06 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @DK-40 @build
+  Scenario: The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code.
+    Given a capability file, provider declarations and a recording runner, and prism-provider-kv through providers.mjs
+    When prism.volumes creates, lists, inspects and removes stores, and a store is attached to a guest
+    Then a host folder or anything outside the grant, the declared world or the active policy is refused with a typed error and no provider runs
+    And attaching a store within all of them raises a typed error naming host effects #216 and #217, and never succeeds
