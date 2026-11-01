@@ -18,7 +18,7 @@ import { experimental_verify } from '../src/verify.mjs';
 import { inspect as inspectHolo } from '../src/inspect.mjs';
 import { experimental_pull, experimental_push } from '../src/push-pull.mjs';
 import { createPrism } from '../src/index.mjs';
-import { createImages, images, IMAGE_BUILD_SCHEMA, IMAGE_INSPECTION_SCHEMA, IMAGE_PULL_SCHEMA, IMAGE_PUSH_SCHEMA } from '../src/modules/images.mjs';
+import { createImages, images, IMAGE_BUILD_SCHEMA, IMAGE_INSPECTION_SCHEMA, IMAGE_PULL_SCHEMA, IMAGE_PUSH_SCHEMA } from '../src/images-namespace.mjs';
 import { startRegistry } from './support/registry.mjs';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
@@ -292,6 +292,8 @@ test('a policy that names evidence is refused: the level comes from the image, n
   await assert.rejects(images.pull('app:1', { store, output, policy: forged }), (error) => error instanceof VerificationError && error.check === 'policy.invalid' && /statements/.test(error.message));
   await assert.rejects(images.verify(plain, { policy: forged }), (error) => error instanceof VerificationError && error.check === 'policy.invalid');
   await assert.rejects(images.pull('app:1', { store, output, policy: ['P0'] }), (error) => error.check === 'policy.invalid');
+  await assert.rejects(images.pull('app:1', { store, output, policy: null }), (error) => error.check === 'policy.invalid');
+  await assert.rejects(images.verify(plain, { policy: null }), (error) => error.check === 'policy.invalid');
   await assert.rejects(images.pull('app:1', { store, output, policy: join(dir, 'no-such-policy.json') }), (error) => error.check === 'policy.unreadable');
   assert.equal(existsSync(output), false);
 });
@@ -548,7 +550,7 @@ test('a build that exits 0 must still have made the image it names', async () =>
 });
 
 test('the codes the namespace raises of its own are all registered', () => {
-  const source = readFileSync(new URL('../src/modules/images.mjs', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/images-namespace.mjs', import.meta.url), 'utf8');
   const raised = new Set([...source.matchAll(/\bfail\(\s*'([^']+)'/g)].map((match) => match[1]));
   const registered = readFileSync(new URL('../../../../model/errors.toml', import.meta.url), 'utf8');
   // `load.*`, `inspect.*`: the package's codes, reused with the meaning they already have.

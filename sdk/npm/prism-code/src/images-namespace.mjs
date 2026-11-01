@@ -27,11 +27,11 @@
  *
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
-import { asBytes, parseArchive } from '../archive.mjs';
-import { blake3Hex } from '../blake3.mjs';
-import { fail } from '../errors.mjs';
-import { inspect as inspectHolo } from '../inspect.mjs';
-import { sha256Hex } from '../sha256.mjs';
+import { asBytes, parseArchive } from './archive.mjs';
+import { blake3Hex } from './blake3.mjs';
+import { fail } from './errors.mjs';
+import { inspect as inspectHolo } from './inspect.mjs';
+import { sha256Hex } from './sha256.mjs';
 
 export const IMAGE_BUILD_SCHEMA = 'prism/image-build/1';
 export const IMAGE_PULL_SCHEMA = 'prism/image-pull/1';
@@ -123,7 +123,7 @@ function parseResult(stdout) {
 async function builtFiles(root, result) {
   const { join, dirname } = await import('node:path');
   if (typeof result.release_digest === 'string') {
-    const { openRelease } = await import('../export.mjs');
+    const { openRelease } = await import('./export.mjs');
     const release = openRelease(root, result.release_digest);
     return { manifestBytes: release.layerBytes('manifest.json', MAX_MANIFEST_BYTES), read: async (title) => release.layerBytes(title, MAX_IMAGE_BYTES), pathOf: () => null };
   }
@@ -141,7 +141,7 @@ async function builtFiles(root, result) {
 
 /** The one image a build manifest names, checked against its row. A build that names none did not build an image. */
 async function builtImage(root, result) {
-  const { BUILD_MANIFEST_SCHEMA, digestOf, parseDocument, rowsByPath } = await import('../export.mjs');
+  const { BUILD_MANIFEST_SCHEMA, digestOf, parseDocument, rowsByPath } = await import('./export.mjs');
   const { manifestBytes, read, pathOf } = await builtFiles(root, result);
   if (!manifestBytes) fail('PP4002', 'the release has no build manifest');
   const manifest = parseDocument(manifestBytes, 'build manifest');
@@ -255,7 +255,7 @@ export function createImages({ spawn } = {}) {
     allow('build', options, BUILD_OPTIONS);
     const { readFile } = await import('node:fs/promises');
     const { resolve, join } = await import('node:path');
-    const { hostDockerArguments, sdkImageFromLock } = await import('../docker.mjs');
+    const { hostDockerArguments, sdkImageFromLock } = await import('./docker.mjs');
     const root = resolve(options.path ?? '.');
     const lock = await readFile(join(root, 'prismpm.lock'), 'utf8').catch(() => fail('PP1101', `${root} has no prismpm.lock, which pins the builder image`));
     const builder = sdkImageFromLock(lock);
@@ -302,8 +302,8 @@ export function createImages({ spawn } = {}) {
    */
   async function pull(repository, options = {}) {
     allow('pull', options, PULL_OPTIONS);
-    const { experimental_pull } = await import('../push-pull.mjs');
-    const { policyOf } = await import('../check.mjs');
+    const { experimental_pull } = await import('./push-pull.mjs');
+    const { policyOf } = await import('./check.mjs');
     const { tag, maxSize, policy, ...rest } = options;
     const pulled = await experimental_pull(named(repository, tag), {
       ...rest,
@@ -340,7 +340,7 @@ export function createImages({ spawn } = {}) {
     allow('push', options, PUSH_OPTIONS);
     const { tag, source, ...rest } = options;
     if (source === undefined || source === null) fail('load.source', 'images.push needs the image as options.source: there is no local image store to find it in until #349');
-    const { experimental_push } = await import('../push-pull.mjs');
+    const { experimental_push } = await import('./push-pull.mjs');
     const pushed = await experimental_push(await sourceOf(source), named(repository, tag), rest);
     return {
       schema: IMAGE_PUSH_SCHEMA,
@@ -389,7 +389,7 @@ export function createImages({ spawn } = {}) {
    */
   async function verify(image, options = {}) {
     allow('verify', options, VERIFY_OPTIONS);
-    const { check } = await import('../check.mjs');
+    const { check } = await import('./check.mjs');
     const { policy, capabilities, replay, env, ...signer } = options;
     return check(await sourceOf(image), { policy, capabilities, replay, env, signer: Object.keys(signer).length > 0 ? signer : undefined });
   }

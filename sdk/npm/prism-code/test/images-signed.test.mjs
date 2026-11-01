@@ -11,7 +11,7 @@ import { experimental_attest } from '../src/attest.mjs';
 import { parseArchive, resolveArchive } from '../src/archive.mjs';
 import { check } from '../src/check.mjs';
 import { PullVerificationError } from '../src/errors.mjs';
-import { images } from '../src/modules/images.mjs';
+import { images } from '../src/images-namespace.mjs';
 
 const sigstore = await import('@sigstore/sign').then(() => true, () => false);
 const needsSigstore = { skip: sigstore ? false : 'the optional sigstore packages are not installed' };
