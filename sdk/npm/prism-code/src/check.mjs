@@ -74,6 +74,20 @@ export async function readPolicy(path) {
   return { name: path, ...policy };
 }
 
+/**
+ * A policy as the caller holds it: what `readPolicy` reads, or an object of the
+ * same members. A rule that names no member here cannot reach the verdict, so
+ * evidence such as `statements` stays the holo's to give and never the policy's.
+ */
+export async function policyOf(policy) {
+  if (typeof policy === 'string') return readPolicy(policy);
+  if (policy === null || typeof policy !== 'object' || Array.isArray(policy)) throw noVerdict('policy.invalid', 'a policy is a file path, a shipped name or an object');
+  const members = [...POLICY_MEMBERS, 'rego'];
+  const unknown = Object.keys(policy).filter((key) => !members.includes(key));
+  if (unknown.length > 0) throw noVerdict('policy.invalid', `the policy has unknown members ${unknown.join(', ')}; expected ${members.join(', ')}`);
+  return { ...policy };
+}
+
 /** The holo's bytes, or a no-verdict error for a path that is not a file. */
 async function holoBytes(path) {
   const info = await stat(resolve(path)).catch(() => null);
@@ -179,15 +193,15 @@ async function signatureOutcome(attestation, signer) {
  * P0, because an unchecked signature is no evidence. The verdict's `holo`
  * member is the fingerprint of the file as given, computed over its body.
  *
- * @param {string} path the holo
- * @param {{ policy?: string, capabilities?: object | null, replay?: string, env?: object, signer?: object }} [options] `policy` is a shipped policy's name or a file path; `capabilities` the granted set; `replay` the path of a `prism/replay/v1` statement; `signer` the signer policy of `experimental_verifyBundle` (`key`, or `certificateIdentity` or `certificateIdentityRegexp` with `certificateOidcIssuer`, and `trustedRoot`)
+ * @param {string | Uint8Array} path the holo, as a path or its bytes
+ * @param {{ policy?: string | object, capabilities?: object | null, replay?: string, env?: object, signer?: object }} [options] `policy` is a shipped policy's name, a file path or an object of the same members; `capabilities` the granted set; `replay` the path of a `prism/replay/v1` statement; `signer` the signer policy of `experimental_verifyBundle` (`key`, or `certificateIdentity` or `certificateIdentityRegexp` with `certificateOidcIssuer`, and `trustedRoot`)
  */
 export async function check(path, options = {}) {
-  const policy = options.policy === undefined ? {} : await readPolicy(options.policy);
+  const policy = options.policy === undefined ? {} : await policyOf(options.policy);
   // The capability set the caller grants (run, #282); a policy file never grants.
   if (options.capabilities !== undefined) policy.capabilities = options.capabilities;
   if (options.replay !== undefined) policy.replay = await readReplay(options.replay);
-  const bytes = await holoBytes(path);
+  const bytes = path instanceof Uint8Array ? path : await holoBytes(path);
   const attested = await attestedEvidence(bytes, options.signer);
   try {
     if (!attested) return await experimental_verify(bytes, { ...policy, env: options.env });
