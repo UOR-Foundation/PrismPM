@@ -4,10 +4,10 @@
 | --- | --- |
 | Issue | [#440](https://github.com/UOR-Foundation/PrismPM/issues/440) |
 | Milestone | M2 v0.5 Lock, check, proof |
-| Status | Agreed, Experimental. The owner agreed this design on 2026-11-01, [recorded on #440](https://github.com/UOR-Foundation/PrismPM/issues/440#issuecomment-6564002251). Phases 1 and 2 are done; see [Migration phases](#migration-phases). |
+| Status | Agreed, Experimental. The owner agreed this design on 2026-11-01, [recorded on #440](https://github.com/UOR-Foundation/PrismPM/issues/440#issuecomment-6564002251). See [Migration phases](#migration-phases) for what is done. |
 | Depends on | #346 (stakeholder views), #347 (developer view) |
 | Used by | #441 to #449 (one issue per module) |
-| Measured at | Commit `b5c83187`, unless a number names another. `check-modules` confirmed the baseline at `8b7d7f40`. |
+| Measured at | Commit `b5c83187`, unless a number names another. `check-modules` confirmed the 14 Rust baseline entries at `8b7d7f40`. |
 
 ## Summary
 
@@ -229,7 +229,7 @@ Paths are under `crates/prismpm/src` and `sdk/npm/prism-code/src`.
 | `networks` | None today | None today |
 | `volumes` | None today | `bin/prism-provider-kv` |
 | `system` | `sdk::verify_environment` | `plugins`, `bin/prism-doctor` |
-| `auth` | `SigningKey` in `attest/crypto.rs` | `oci-auth`, signing parts of `attest` |
+| `auth` | `SigningKey` in `attest/crypto.rs` | `auth`, `oci-auth`, signing parts of `attest` |
 | `errors` | `error`, `contracts` (schema table and closed-shape checks), `holo/canonical` (value encoding) | `errors`, `errors-namespace`, `version`, `vendor/spec/`, `canonicalJson` from `archive`, plus `@prism-code/spec` |
 | `verify` | `inspect`, `attest` (verification), `holo/archive` (reading), `holo/attestation`, `replay`, `authority`, `input_lock`, `sdk` (inventory, lock reading, pinned executables), `process_resources`, process helpers from `verification`, reference syntax from `oci`, `supply_chain` (trust and policy decisions) | `check`, `verify`, `attestations`, `archive`, `blake3`, `sha256`, `capabilities`, `replay*`, `attest` (verification), `vendor/verify`, plus `@prism-code/verify`, `@prism-code/conformance` |
 
@@ -341,7 +341,7 @@ It sees names and not generated code; `crates/prismpm/src` has two `macro_rules!
 The table is acyclic, so every cycle between the nine modules contains a forbidden edge, and rules 1 and 3 together forbid all of them.
 Rule 5 covers something different: the old 19-module cycle, most of which ends up inside one module.
 
-**The existing cycle during migration.** On day one the corrected table needs 14 `[[pending]]` Rust entries and none in JavaScript:
+**The existing cycle during migration.** On day one the corrected table needs 15 `[[pending]]` entries: 14 in Rust, and one in JavaScript that #451 added after the measurement:
 
 | Entries | Cut |
 |---|---|
@@ -350,6 +350,7 @@ Rule 5 covers something different: the old 19-module cycle, most of which ends u
 | `replay/mod.rs` to `verification.rs`, and `sdk.rs` to `verification.rs` | Process helpers move to `verify` |
 | `authority.rs` to `oci.rs`, and `sdk.rs` to `oci.rs` | Reference syntax moves to `verify` |
 | `sdk.rs` to `supply_chain.rs` | SDK bindings and advisory disposition move to `verify` |
+| `auth.mjs` to `attest.mjs` | `signStatement` and the other signing parts of `attest` move to `auth` |
 
 Simulating the cuts on the symbol graph gives a measure of the old cycle:
 
@@ -359,7 +360,8 @@ Simulating the cuts on the symbol graph gives a measure of the old cycle:
 | `contracts` up-calls removed | 17 | `contracts`, `workbench` |
 | Helpers and reference syntax moved | 13 | `authority`, `browser_oracle`, `input_lock`, `sdk` |
 
-All 13 that remain are in `images`, so the 14 cuts give the nine modules no cycle between them.
+All 13 that remain are in `images`, so the 14 Rust cuts give the nine modules no cycle between them.
+The JavaScript cut breaks no cycle: it removes a forbidden edge from `auth` to `verify`, and nothing in `verify` reaches `auth`.
 The 13-module tangle is real and stays measured by rule 5, but it does not block the goal.
 The simulation removes edges by name, and does not show that each function can be lifted out without its helpers.
 
@@ -369,11 +371,11 @@ When `[[pending]]` and `legacy_cycle` are both empty, the check deletes them and
 
 ### Migration phases
 
-1. **Contract (M2).** Done on 2026-11-01. This proposal is agreed, and the nine module issues carry the row corrections listed below.
+1. **Contract (M2).** This proposal was agreed on 2026-11-01. The nine module issues take the row corrections listed below.
 2. **Check.** Done. `model/modules.toml` and `check-modules` hold the baseline above. Nothing has moved, and nothing can get worse from here.
 3. **Developer surface.** Add the SDK namespaces and CLI groups through #347 and #349, with deprecated aliases. Existing exports keep working.
 4. **Modules outside the cycle.** Move `error`, `holo`, `attest` and `inspect` first. They already sit outside the cycle: `holo` imports only `error`, `attest` only `error` and `holo`, and `inspect` only `attest`, `error` and `holo`.
-5. **Clear the baseline.** Make the 14 cuts a piece at a time, with `just vv` passing after each one.
+5. **Clear the baseline.** Make the 15 cuts a piece at a time, with `just vv` passing after each one.
 6. **Untangle `images`.** Shrink `legacy_cycle` to nothing. This follows the goal but is not needed for it.
 7. **Shared core.** Move trust decisions to the verified core before the Python runtime (#307) adds another copy.
 
@@ -416,8 +418,7 @@ This was measured in Node with those imports refused, not in a browser or on an 
 
 ### Row corrections on agreement
 
-The owner agreed this proposal on 2026-11-01, and the bodies of #441 to #449 were corrected that day to match this file.
-#346 and #350 still need their change.
+The owner agreed this proposal on 2026-11-01, so these issues take the change listed here to match this file:
 
 | Issue | Change |
 |---|---|

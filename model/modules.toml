@@ -297,6 +297,10 @@ path = "sdk/npm/prism-code/src/attestations.mjs"
 module = "verify"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/auth.mjs"
+module = "auth"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/author/"
 module = "client"
 
@@ -557,6 +561,11 @@ cut = "SDK bindings and advisory disposition move to verify"
 from = "crates/prismpm/src/sdk.rs"
 to = "crates/prismpm/src/verification.rs"
 cut = "Process helpers move to verify"
+
+[[pending]]
+from = "sdk/npm/prism-code/src/auth.mjs"
+to = "sdk/npm/prism-code/src/attest.mjs"
+cut = "Signing parts of attest move to auth"
 
 # One member per line, so that removing one merges cleanly.
 [legacy_cycle]
