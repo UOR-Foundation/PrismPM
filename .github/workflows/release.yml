@@ -142,10 +142,90 @@ jobs:
           compression-level: 0
           retention-days: 30
 
-  images:
+  # Each platform is built on its own native runner: emulated arm64 builds
+  # exceed the hosted job limit. One job per platform builds every image in
+  # one Buildx builder, so the targets of sdk/Dockerfile share their stages.
+  image-platforms:
     needs: gate
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the source-bound publication policy before registry credentials
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
+        run: node scripts/release-phases.mjs policy
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: build
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir image-platforms
+          while read -r name dockerfile target repository; do
+            if [ "$dockerfile" = sdk/Dockerfile ]; then
+              build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$target")
+              context=()
+            else
+              test "$dockerfile" = sdk/runtime/Dockerfile
+              test "$target" = -
+              build=(docker buildx build --file "$dockerfile")
+              context=(.)
+            fi
+            "${build[@]}" --platform "linux/$ARCH" \
+              --output "type=registry,name=$repository,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true" \
+              --metadata-file "$RUNNER_TEMP/$name-build.json" \
+              --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
+              --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
+            node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/$name-build.json" > "image-platforms/$name-$ARCH.digest"
+          done <<'IMAGES'
+          sdk sdk/Dockerfile runtime ghcr.io/uor-foundation/prismpm-sdk
+          runtime sdk/runtime/Dockerfile - ghcr.io/uor-foundation/prismpm-runtime
+          adapter-compose sdk/Dockerfile adapter-compose ghcr.io/uor-foundation/prismpm-adapter-compose
+          adapter-kubernetes sdk/Dockerfile adapter-kubernetes ghcr.io/uor-foundation/prismpm-adapter-kubernetes
+          adapter-github-pages sdk/Dockerfile adapter-github-pages ghcr.io/uor-foundation/prismpm-adapter-github-pages
+          oracles sdk/Dockerfile oracles ghcr.io/uor-foundation/prismpm-oracles
+          IMAGES
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-platforms-${{ matrix.arch }}
+          path: image-platforms/
+          if-no-files-found: error
+          retention-days: 30
+
+  images:
+    needs: [gate, image-platforms]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -153,7 +233,6 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
-      max-parallel: 3
       matrix:
         include:
           - name: sdk
@@ -192,41 +271,47 @@ jobs:
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
           REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
           driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Install exact OCI transport and signature verifier tools
+        run: |
+          set -euo pipefail
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/release-tools"
+          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: image-platforms-*
+          merge-multiple: true
+          path: image-platforms
+      # The index names exactly the two platform manifests built natively
+      # above, and is pushed by digest: no tag moves.
       - id: build
         env:
-          DOCKERFILE: ${{ matrix.dockerfile }}
-          TARGET: ${{ matrix.target }}
+          IMAGE: ${{ matrix.name }}
           REPOSITORY: ${{ matrix.repository }}
-          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
-          if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
-            build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET")
-          else
-            test "$DOCKERFILE" = sdk/runtime/Dockerfile
-            build=(docker buildx build --file "$DOCKERFILE")
-          fi
-          context=()
-          if [ "$DOCKERFILE" = sdk/runtime/Dockerfile ]; then context=(.); fi
-          "${build[@]}" --platform linux/amd64,linux/arm64 \
-            --output "type=registry,name=$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true" \
-            --metadata-file "$RUNNER_TEMP/sdk-build.json" \
-            --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
-            --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
-          digest=$(node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/sdk-build.json")
+          platforms=()
+          for architecture in amd64 arm64; do
+            digest=$(cat "image-platforms/$IMAGE-$architecture.digest")
+            case "$digest" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 2 ;; esac
+            oras manifest fetch "$REPOSITORY@$digest" --output "$RUNNER_TEMP/$architecture.manifest.json"
+            platforms+=("$digest" "$RUNNER_TEMP/$architecture.manifest.json")
+          done
+          digest=$(node scripts/release-phases.mjs image-index "${platforms[@]}" "$RUNNER_TEMP/image-index.json")
+          oras manifest push --media-type application/vnd.oci.image.index.v1+json \
+            "$REPOSITORY@$digest" "$RUNNER_TEMP/image-index.json"
           printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
       - id: platforms
         shell: bash
@@ -274,15 +359,6 @@ jobs:
         run: |
           set -euo pipefail
           cp "$PROVENANCE" "${{ matrix.name }}-provenance.sigstore.json"
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.23.2
-      - name: Install exact OCI transport and signature verifier tools
-        run: |
-          set -euo pipefail
-          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/release-tools"
-          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/release-tools"
-          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
       # Large SPDX remains a complete blob, with its small OCI 1.1 manifest
       # keylessly signed. This is not an inline SPDX attestation.
       - name: Publish and verify both complete platform SBOM artifacts
@@ -742,20 +818,21 @@ jobs:
 
   native:
     needs: [gate, images]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
       contents: read
       packages: read
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         include:
-          - platform: linux/amd64
+          - os: ubuntu-24.04
+            platform: linux/amd64
             target: x86_64-unknown-linux-gnu
             arch: amd64
-          - platform: linux/arm64
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
             target: aarch64-unknown-linux-gnu
             arch: arm64
     steps:
@@ -764,7 +841,6 @@ jobs:
           submodules: false
           fetch-depth: 0
           persist-credentials: false
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0

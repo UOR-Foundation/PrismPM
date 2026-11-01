@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { parts as vvParts } from './vv-assemble.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
-import { assetNames, imageVerificationArguments, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
+import { assetNames, imageVerificationArguments, platformIndex, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
@@ -125,16 +125,30 @@ function validateWorkflow(value) {
   assert(retained.with.path.includes('!sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/'), 'private transport data must not be uploaded');
   const assembled = installed.steps.find(step => step.run?.includes('assemble-installed'));
   assert(assembled); assert.equal(assembled.if, undefined); assert.equal(assembled['continue-on-error'], undefined);
-  const builds = value.jobs.images.steps.find(step => step.id === 'build');
+  const platformJob = value.jobs['image-platforms'];
+  assert.deepEqual(platformJob.needs, 'gate');
+  assert.equal(platformJob['runs-on'], '${{ matrix.os }}');
+  assert.deepEqual(platformJob.strategy.matrix.include, [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}]);
+  assert.deepEqual(value.jobs.images.needs, ['gate', 'image-platforms']);
+  for (const job of Object.values(value.jobs))
+    assert.ok(!job.steps.some(step => step.uses?.startsWith('docker/setup-qemu-action')), 'every platform is built natively');
+  const builds = platformJob.steps.find(step => step.id === 'build');
   assert.equal(builds.uses, undefined);
   assert.equal(builds.with, undefined);
-  assert.equal(builds.env.REPOSITORY, '${{ matrix.repository }}');
-  assert.match(builds.run, /--output "type=registry,name=\$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
+  assert.match(builds.run, /--output "type=registry,name=\$repository,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
   assert.ok(!builds.run.includes('--tag'), 'unaccepted publication must not move discovery aliases');
-  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$TARGET"\)/);
-  assert.match(builds.run, /--platform linux\/amd64,linux\/arm64/);
+  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$target"\)/);
+  assert.match(builds.run, /--platform "linux\/\$ARCH"/);
   assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
-  assert.match(builds.run, /digest=\$\(node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/sdk-build\.json"\)/);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/\$name-build\.json" > "image-platforms\/\$name-\$ARCH\.digest"/);
+  const table = builds.run.slice(builds.run.indexOf("<<'IMAGES'\n") + 10, builds.run.indexOf('IMAGES\n', builds.run.indexOf("<<'IMAGES'\n") + 10))
+    .trim().split('\n').map(line => line.split(' '));
+  assert.deepEqual(table, value.jobs.images.strategy.matrix.include.map(image =>
+    [image.name, image.dockerfile, image.target || '-', image.repository]), 'every image is built on both platforms');
+  const assembly = value.jobs.images.steps.find(step => step.id === 'build');
+  assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
+  assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
+  assert.ok(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
   const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
   for (const key of ['created', 'revision', 'source', 'version']) {
     assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
@@ -157,7 +171,7 @@ function validateWorkflow(value) {
   assert.ok(!publication.some(step => step.run?.includes('imagetools create')));
   assert.ok(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
     'default overwrite-enabled release upload must not replace source-addressed bytes');
-  for (const name of ['images', 'oci-native', 'crates', 'release']) {
+  for (const name of ['image-platforms', 'images', 'oci-native', 'crates', 'release']) {
     const steps = value.jobs[name].steps;
     const policyStep = steps.findIndex(step => step.run?.includes('release-phases.mjs policy'));
     assert.ok(policyStep >= 0, `${name} must check its own publication policy`);
@@ -166,7 +180,7 @@ function validateWorkflow(value) {
       || step.uses?.startsWith('rust-lang/crates-io-auth-action') || step.env?.GH_TOKEN);
     assert.ok(firstCredential < 0 || policyStep < firstCredential);
   }
-  for (const name of ['images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
+  for (const name of ['image-platforms', 'images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
     const builder = value.jobs[name].steps.find(step => step.uses?.startsWith('docker/setup-buildx-action'));
     assert.equal(builder.with.version, 'v0.28.0');
     assert.equal(builder.with['driver-opts'], `image=${buildkit}`);
@@ -251,10 +265,15 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     ...[
       run => run + '\n--tag mutable:unaccepted\n',
       run => run.replace('push-by-digest=true', 'push-by-digest=false'),
-      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET"', 'docker buildx build'),
-      run => run.replace('--platform linux/amd64,linux/arm64', '--platform linux/amd64'),
+      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$target"', 'docker buildx build'),
+      run => run.replace('--platform "linux/$ARCH"', '--platform linux/amd64'),
       run => run.replace('--provenance=false', '--provenance=true'),
-    ].map(mutate => value => { const step = value.jobs.images.steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
+      run => run.replace('oracles sdk/Dockerfile oracles ghcr.io/uor-foundation/prismpm-oracles\n', ''),
+    ].map(mutate => value => { const step = value.jobs['image-platforms'].steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
+    value => { value.jobs['image-platforms'].strategy.matrix.include.pop(); },
+    value => { value.jobs['image-platforms'].steps.splice(1, 0, {uses: 'docker/setup-qemu-action@fixture'}); },
+    value => { const step = value.jobs.images.steps.find(step => step.id === 'build');
+      step.run = step.run.replace('"$REPOSITORY@$digest" "$RUNNER_TEMP/image-index.json"', '"$REPOSITORY:latest" "$RUNNER_TEMP/image-index.json"'); },
     value => { value.jobs.images.steps.push({uses: 'actions/attest-sbom@fixture'}); },
     value => { value.jobs.images.steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
@@ -267,7 +286,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
       step.run += '\ntrue || true\n'; },
   ]) {
     const changed = workflow(); mutate(changed);
-    assert.throws(() => validateWorkflow(changed));
+    assert.throws(() => validateWorkflow(changed), undefined, mutate.toString());
   }
 });
 
@@ -781,7 +800,22 @@ test('publication attempts have distinct discovery tags and invalid run contexts
   }
 });
 
-test('pinned Buildx pushes a genuine two-platform OCI index by digest without creating tags', {timeout: 240_000}, async () => {
+test('the platform index names exactly the two pushed manifests, canonically', () => {
+  const manifest = architecture => Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json',
+    config: {mediaType: 'application/vnd.oci.image.config.v1+json', digest: sha(architecture), size: architecture.length}, layers: []}));
+  const platforms = ['amd64', 'arm64'].map(architecture => ({architecture, digest: sha(manifest(architecture)), bytes: manifest(architecture)}));
+  const index = platformIndex(platforms);
+  assert.deepEqual(index, platformIndex(platforms.map(row => ({...row}))));
+  assert.deepEqual(JSON.parse(index), {schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json',
+    manifests: platforms.map(({architecture, digest, bytes}) => ({mediaType: 'application/vnd.oci.image.manifest.v1+json',
+      digest, size: bytes.length, platform: {architecture, os: 'linux'}}))});
+  for (const broken of [
+    platforms.slice(0, 1), [...platforms].reverse(), [platforms[0], {...platforms[1], digest: platforms[0].digest}],
+    [platforms[0], {...platforms[1], bytes: Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json'}))}],
+  ]) assert.throws(() => platformIndex(broken));
+});
+
+test('pinned Buildx pushes each platform by digest and the assembled two-platform OCI index creates no tags', {timeout: 240_000}, async () => {
   const directory = mkdtempSync(join(tmpdir(), 'prismpm-digest-export-'));
   const registry = `prismpm-digest-export-${process.pid}-${Date.now()}`;
   const docker = args => execFileSync('docker', args, {encoding: 'utf8', timeout: 90_000, maxBuffer: 8 * 1024 * 1024});
@@ -822,11 +856,22 @@ test('pinned Buildx pushes a genuine two-platform OCI index by digest without cr
       '--label', `org.opencontainers.image.revision=${revision}`, '--label',
       'org.opencontainers.image.source=https://github.com/UOR-Foundation/PrismPM',
       '--label', 'org.opencontainers.image.version=0.4.0'];
-    const metadata = join(directory, 'metadata.json');
-    docker([...args, '--platform', 'linux/amd64,linux/arm64', '--metadata-file', metadata, '--output',
-      `type=registry,name=${endpoint}/fixture/sdk,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true,registry.insecure=true`, context]);
-    const digest = JSON.parse(readFileSync(metadata))['containerimage.digest'];
-    assert.match(digest, /^sha256:[0-9a-f]{64}$/);
+    const platforms = [];
+    for (const architecture of ['amd64', 'arm64']) {
+      const metadata = join(directory, `${architecture}-metadata.json`);
+      docker([...args, '--platform', `linux/${architecture}`, '--metadata-file', metadata, '--output',
+        `type=registry,name=${endpoint}/fixture/sdk,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true,registry.insecure=true`, context]);
+      const platformDigest = JSON.parse(readFileSync(metadata))['containerimage.digest'];
+      assert.match(platformDigest, /^sha256:[0-9a-f]{64}$/);
+      const fetched = await fetch(`http://${endpoint}/v2/fixture/sdk/manifests/${platformDigest}`,
+        {headers: {Accept: 'application/vnd.oci.image.manifest.v1+json'}, signal: AbortSignal.timeout(5000)});
+      assert.equal(fetched.status, 200);
+      platforms.push({architecture, digest: platformDigest, bytes: Buffer.from(await fetched.arrayBuffer())});
+    }
+    const assembled = platformIndex(platforms), digest = sha(assembled);
+    const pushed = await fetch(`http://${endpoint}/v2/fixture/sdk/manifests/${digest}`, {method: 'PUT', body: assembled,
+      headers: {'Content-Type': 'application/vnd.oci.image.index.v1+json'}, signal: AbortSignal.timeout(5000)});
+    assert.equal(pushed.status, 201);
     const response = await fetch(`http://${endpoint}/v2/fixture/sdk/manifests/${digest}`,
       {headers: {Accept: 'application/vnd.oci.image.index.v1+json'}, signal: AbortSignal.timeout(5000)});
     assert.equal(response.status, 200);
