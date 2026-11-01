@@ -490,7 +490,7 @@ on the section set. The portable and browser profiles are constraints on this
 frame: a profile archive must first be canonical, so the profile encoders
 reject an empty Metadata section. A signed archive is outside this frame: it is
 a canonical profile archive with the attestation Extension appended as a ninth
-row after the content blobs, the bytes hologram's writer emits, and stripping
+row after the content blobs, a layout ADR-016 §4.2 replaces, and stripping
 that row must yield the canonical archive. Ordering inside a section's payload
 and the
 footer value are outside the frame; the footer remains 32 bytes checked by the
