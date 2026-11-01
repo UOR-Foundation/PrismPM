@@ -135,6 +135,18 @@ export class PullVerificationError extends PrismError {
 export class ReferenceInvalidError extends PrismError {
   static readonly code: 'reference_invalid';
 }
+/** `export_mismatch`: a browser export's bytes differ from the release. `check` is `export.manifest`, `export.layer`, `export.files` or `export.tree`. */
+export class ExportMismatchError extends PrismError {
+  static readonly code: 'export_mismatch';
+}
+/**
+ * `middleware_failed`: a middleware threw something that is not a `PrismError` (#295).
+ * `details` names it and `cause` is what it threw; a `PrismError` a middleware throws passes through as it is.
+ */
+export class MiddlewareError extends PrismError {
+  static readonly code: 'middleware_failed';
+  details: { name: string | null; step: MiddlewareStep; tags: string[] };
+}
 export const ERROR_CLASSES: Readonly<Record<string, typeof PrismError>>;
 /** The class a verdict reason's check id maps to. */
 export function classForCheck(check: string): typeof PrismError;
@@ -285,6 +297,11 @@ export interface VerifyOptions {
   capabilities?: CapabilitySet | null;
   /** The impure effects the policy allows the world (#282). Absent allows any; `[]` is the pure-world policy (`policy.effects`). */
   effects?: Array<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'>;
+  /**
+   * A decoded `prism/replay/v1` statement from beside the holo (#284). Its checks join the reasons as `replay.*`. It is
+   * unsigned, so it can withhold P3 and never support it. A signed statement inside the holo waits on #270.
+   */
+  replay?: unknown;
   /** Throw the typed error for a verdict that did not pass. Default false. */
   throw?: boolean;
   /** Where `PRISM_MINIMUM_LEVEL` is read. Default `process.env`. */
@@ -396,19 +413,211 @@ export interface Application {
   dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
   /** Replay every acceptance vector, comparing bytes. */
   acceptance(): Promise<AcceptanceResult>;
+  /** The acceptance vectors as a history, this application's first. Rejects with `replay.history` when it carries none. */
+  history(): Promise<History>;
+  /** Experimental. Record dispatches as they run. */
+  experimental_recorder(): Recorder;
+  /** Experimental. Re-execute histories against this build; see `experimental_replay`. */
+  experimental_replay(histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
   /** What the holo says about itself, without running the guest. Rejects with `inspect.kind` for a closure. */
   inspect(): Promise<Inspection>;
   /** Experimental. The verdict `prism check` returns for this holo. Rejects with `VerificationError` for a closure. */
   experimental_verify(options?: VerifyOptions): Promise<Verdict>;
   /** The bundles of the attestation section (#267), in order; empty without the section and for closures. Signatures are not verified. */
   attestations(): Attestation[];
+  /** Experimental. The middleware around this application's verify, instantiate, dispatch and record steps (#295). */
+  experimental_middleware: MiddlewareStack;
 }
+
+/** The steps the runtime performs, in order. A closure instantiates once at load and runs no `instantiate` step. */
+export type MiddlewareStep = 'verify' | 'instantiate' | 'dispatch' | 'record';
+export const MIDDLEWARE_STEPS: readonly ['verify', 'instantiate', 'dispatch', 'record'];
+
+/** What each step takes and returns. */
+export interface MiddlewareSteps {
+  verify: { args: { options: VerifyOptions | undefined }; result: Verdict };
+  instantiate: { args: { module: WebAssembly.Module; imports: WebAssembly.Imports }; result: WebAssembly.Instance };
+  /** `instance` is absent for a closure. */
+  dispatch: { args: { request: Uint8Array; instance?: WebAssembly.Instance }; result: Uint8Array };
+  record: { args: { request: Uint8Array; response: Uint8Array }; result: Uint8Array };
+}
+
+export interface MiddlewareContext {
+  step: MiddlewareStep;
+  application: Application;
+}
+
+export type MiddlewareHandler<S extends MiddlewareStep = MiddlewareStep> = (
+  args: MiddlewareSteps[S]['args'],
+) => Promise<MiddlewareSteps[S]['result']>;
+
+/** `(next, context) => handler`. Call `next(args)` to run the rest of the step; the first middleware of a step is the outermost. */
+export type Middleware<S extends MiddlewareStep = MiddlewareStep> = (next: MiddlewareHandler<S>, context: MiddlewareContext) => MiddlewareHandler<S>;
+
+export interface MiddlewareOptions {
+  /** Unique on the stack. Needed to place another middleware relative to this one, or to remove it by name. */
+  name?: string;
+  tags?: string[];
+  /** Replace a middleware of the same name instead of refusing with `middleware.name`. */
+  override?: boolean;
+}
+
+export interface AbsoluteMiddlewareOptions<S extends MiddlewareStep = MiddlewareStep> extends MiddlewareOptions {
+  step: S;
+  /** Within a step: `high` first, then `normal` (the default), then `low`; ties in the order added. */
+  priority?: 'high' | 'normal' | 'low';
+}
+
+export interface RelativeMiddlewareOptions extends MiddlewareOptions {
+  relation: 'before' | 'after';
+  /** The name of the middleware to sit next to, at its step. It must be on the stack when the step runs (`middleware.relative`). */
+  toMiddleware: string;
+}
+
+/** Anything that adds middleware: `stack.use(pluggable)`. */
+export interface Pluggable {
+  applyToStack(stack: MiddlewareStack): void;
+}
+
+export interface MiddlewareStack {
+  add<S extends MiddlewareStep>(middleware: Middleware<S>, options: AbsoluteMiddlewareOptions<S>): this;
+  addRelativeTo(middleware: Middleware, options: RelativeMiddlewareOptions): this;
+  /** By name or by the function itself; true when something was removed. */
+  remove(nameOrMiddleware: string | Middleware): boolean;
+  removeByTag(tag: string): boolean;
+  use(pluggable: Pluggable): this;
+  clone(): MiddlewareStack;
+  /** Every entry in the order it runs: by step, then outermost first. */
+  identify(): { step: MiddlewareStep; name: string | null; tags: string[] }[];
+  /** The handler for one step: every middleware at that step around `terminal`. */
+  resolve<S extends MiddlewareStep>(
+    step: S,
+    terminal: (args: MiddlewareSteps[S]['args']) => MiddlewareSteps[S]['result'] | Promise<MiddlewareSteps[S]['result']>,
+    context?: Partial<MiddlewareContext>,
+  ): MiddlewareHandler<S>;
+}
+
+/** The part of an OpenTelemetry `Tracer` tracing uses; `trace.getTracer()` from `@opentelemetry/api` is one. */
+export interface TracerLike {
+  startActiveSpan<T>(name: string, options: { kind?: number; attributes?: Record<string, unknown> }, fn: (span: SpanLike) => T): T;
+}
+export interface SpanLike {
+  setAttribute(key: string, value: unknown): unknown;
+  setAttributes(attributes: Record<string, unknown>): unknown;
+  recordException(exception: unknown): unknown;
+  setStatus(status: { code: number; message?: string }): unknown;
+  end(): void;
+}
+
+/**
+ * Experimental. One span per step, named `prism.<step>`, from the tracer you pass; the package depends on no tracing library.
+ * Adds `tracing.<step>` middleware, tagged `tracing`, first in each step.
+ */
+export function experimental_tracing(options: { tracer: TracerLike; steps?: MiddlewareStep[] }): Pluggable;
 
 /** sha256 and BLAKE3, lowercase hex, over the same bytes (ADR-015). */
 export interface DigestSet {
   sha256: string;
   blake3: string;
 }
+
+/** One recorded dispatch. Bytes are lowercase hex; `error` is a stable code such as `core.allocation`. */
+export type HistoryEvent = { request: string; response: string; error?: never } | { request: string; error: string; response?: never };
+
+/** A history, `prism/history/1`: the dispatches of one application, in order. */
+export interface History {
+  schema: 'prism/history/1';
+  /** The name of the application when it was recorded. Replay never compares it. */
+  application: string | null;
+  /** The build it was recorded from; absent for a closure. Replay never compares it. */
+  recordedFrom?: { guest: DigestSet; model: DigestSet };
+  events: HistoryEvent[];
+}
+
+/** A history as text, UTF-8 bytes or a parsed value. */
+export type HistorySource = string | Uint8Array | ArrayBuffer | History;
+
+export declare const HISTORY_SCHEMA: 'prism/history/1';
+export declare const REPLAY_PREDICATE_TYPE: 'https://uor.foundation/prism/replay/v1';
+/** Read a history. Rejects with `ReplayError` (`replay.history`) for anything the schema rejects. */
+export function parseHistory(source: HistorySource): History;
+/** The bytes both digests of a history cover: its canonical JSON, with no trailing newline. */
+export function historyBytes(history: HistorySource): Uint8Array;
+/** Both digests of a history, as `prism/replay/v1` names it. */
+export function historyDigest(history: HistorySource): Promise<DigestSet>;
+/** A history as a file: canonical JSON and one LF. */
+export function historyJson(history: HistorySource): string;
+/** The acceptance vectors of an application as a history. */
+export function acceptanceHistory(app: Application): Promise<History>;
+
+export interface Recorder {
+  /** Behaves as `app.dispatch` does, a refusal included, and records the outcome. */
+  dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
+  /** What has finished, in call order. Rejects with `replay.history` when nothing has. */
+  history(): Promise<History>;
+  /** How many dispatches have finished. */
+  events(): number;
+}
+
+/** Experimental. Record dispatches as they run. */
+export function experimental_recorder(app: Application): Recorder;
+
+export type ReplayOutcome = { response: string; error?: never } | { error: string; response?: never };
+
+/** One event whose outcome differs from the recording. */
+export interface ReplayDivergence {
+  /** The event's position in its history. */
+  index: number;
+  /** The request, lowercase hex. */
+  request: string;
+  expected: ReplayOutcome;
+  actual: ReplayOutcome;
+}
+
+export interface ReplayedHistoryResult {
+  digest: DigestSet;
+  application: string | null;
+  events: number;
+  divergences: ReplayDivergence[];
+}
+
+/** An in-toto Statement v1 with predicate type `https://uor.foundation/prism/replay/v1` and the guest blob as its one subject. */
+export interface ReplayStatement {
+  _type: 'https://in-toto.io/Statement/v1';
+  subject: [{ name: string; digest: DigestSet }];
+  predicateType: 'https://uor.foundation/prism/replay/v1';
+  predicate: {
+    runtime: { name: string; version: string };
+    model: DigestSet;
+    histories: Array<{ digest: DigestSet; events: number; divergences: number }>;
+    divergenceCount: number;
+  };
+}
+
+export interface ReplayResult {
+  application: string | null;
+  runtime: { name: string; version: string };
+  /** Events re-executed, across every history. */
+  events: number;
+  divergenceCount: number;
+  histories: ReplayedHistoryResult[];
+  /** Null for a closure, which has no guest blob to name. */
+  statement: ReplayStatement | null;
+}
+
+export interface ReplayOptions {
+  /** False resolves to the result on a divergence, instead of rejecting. Default true. */
+  throw?: boolean;
+  /** The runtime the statement names. Default this package. */
+  runtime?: { name: string; version: string };
+}
+
+/**
+ * Experimental. Re-execute histories against an opened application; every event runs. On a divergence it rejects with
+ * `DeterminismViolationError` (`replay.divergence`), whose `details` is the result, unless `throw` is false. A replay
+ * that cannot be carried out always rejects with `ReplayError`.
+ */
+export function experimental_replay(app: Application, histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
 
 export type SectionRole =
   | 'app-manifest'

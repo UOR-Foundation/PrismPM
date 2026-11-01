@@ -227,6 +227,48 @@ An attestation bundle is not a Sigstore bundle v0.3 with a DSSE envelope over an
 
 Class: `holo`. Exit code: 1.
 
+## `PP3101` --- Attestation signing failure
+
+An attestation could not be signed: the key, the predicate, its type or a subject cannot be used.
+
+Class: `attestation`. Exit code: 3.
+
+## `PP3102` --- Attestation signature invalid
+
+The DSSE signature of an attestation bundle does not verify under the signing certificate or the given key, or the certificate does not chain to the pinned root at a signed time with a verified signed certificate timestamp.
+
+Class: `attestation`. Exit code: 1.
+
+## `PP3103` --- Attestation identity mismatch
+
+The signer of an attestation is not the certificate identity or OIDC issuer the policy names; identities are compared exactly.
+
+Class: `attestation`. Exit code: 1.
+
+## `PP3104` --- Attestation transparency failure
+
+A log entry or timestamp of an attestation bundle is missing, is not about this bundle, or does not verify against the pinned trusted root.
+
+Class: `attestation`. Exit code: 1.
+
+## `PP3105` --- Attestation subject mismatch
+
+A statement subject names a blob that is not in the holo, or its digests are not the blob's.
+
+Class: `attestation`. Exit code: 1.
+
+## `PP3106` --- Attestation not found
+
+The holo has no attestation section, or none of its attestations has the requested predicate type.
+
+Class: `attestation`. Exit code: 1.
+
+## `PP3107` --- Trusted root invalid
+
+The Sigstore trusted root cannot be read, is not pinned, or pins none of what the policy relies on.
+
+Class: `attestation`. Exit code: 1.
+
 ## `PP4001` --- Artifact checksum mismatch
 
 An artifact does not match its manifest digest.
@@ -389,11 +431,107 @@ The pinned independent Hologram loader, planner, executor, or View encoder disag
 
 Class: `oracle`. Exit code: 1.
 
+## `PP5501` --- Proof statement signature failure
+
+The DSSE signature of a proof statement does not verify against the trust root, or no trust root is available to verify it.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5502` --- Proof statement shape failure
+
+A proof statement is not an in-toto Statement v1 with one subject and a prism/proof/v1 predicate whose verifiedLevels is exactly P2.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5503` --- Proof subject disagreement
+
+The subject of a proof statement is not the guest blob of the holo it travels in.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5504` --- Proof model disagreement
+
+The model a proof statement describes is not the model document and provenance of the holo.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5505` --- Proof verifier disagreement
+
+The verifier pins of a proof statement differ from the pins of the project lock.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5506` --- Proof verdict failure
+
+A proof statement reports a failed verification result, a failed theorem, or a theorem whose observed axioms are outside its policy.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5507` --- Proof TCB incomplete
+
+The named trusted computing base of a proof statement lacks one of its seven components.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5601` --- Assurance level below the policy minimum
+
+The level computed from the evidence in the holo is below the minimum the policy requires.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5602` --- Declared world exceeds the granted capabilities
+
+The world the holo declares imports a capability kind the granted capability set grants nothing of.
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5603` --- No verdict reached
+
+check could not judge the holo: the file is not a readable archive, its layout matches no format revision, or the policy file is unreadable or invalid.
+
+Class: `acceptance`. Exit code: 2.
+
 ## `PP6001` --- Reference model identity drift
 
 The reference repository model or lock is not byte-identical to the authoritative PrismPM getting-started source closure.
 
 Class: `acceptance`. Exit code: 1.
+
+## `PP5701` --- Replay diverged from its history
+
+Re-executing a recorded history against this build produced an outcome that differs from the recording, or a replay statement records a divergence (replay.divergence, DeterminismViolationError).
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5702` --- Replay statement signature invalid
+
+A prism/replay/v1 statement is not signed by a key or identity the trust root accepts (replay.envelope).
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5703` --- Replay statement absent or malformed
+
+A holo carries no prism/replay/v1 statement, or its statement has the wrong shape or a divergence count its histories do not sum to (replay.statement).
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5704` --- Replay statement names another guest
+
+The subject of a prism/replay/v1 statement is not the guest blob of this holo, by either digest (replay.subject).
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5705` --- Replay statement names another model
+
+The model of a prism/replay/v1 statement is not the model blob of this holo, by either digest (replay.model).
+
+Class: `acceptance`. Exit code: 1.
+
+## `PP5706` --- Replay could not be carried out
+
+A history is not prism/history/1, is repeated or cannot be read, or the holo cannot be read or fails its own integrity checks, so nothing was compared.
+
+Class: `configuration`. Exit code: 2.
 
 ## `PP6002` --- Incomplete application acceptance
 
