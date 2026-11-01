@@ -15,16 +15,38 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 
 | Feature | Checks | JavaScript | Rust | Python |
 | --- | --- | --- | --- | --- |
+| Registry logins and signing identities (`auth`) | 16 | + | N/A | N/A |
 | Capabilities, deny by default (`capabilities`) | 25 | + | N/A | N/A |
 | Dual digests (`digests`) | 18 | + | N/A | N/A |
 | Dispatch through the guest (`dispatch`) | 7 | + | N/A | N/A |
 | Typed errors (`errors`) | 8 | + | N/A | N/A |
 | Load a holo (`load`) | 19 | + | N/A | N/A |
 | Histories and replay (`replay`) | 5 | - | N/A | N/A |
-| Verify a holo (`verify`) | 23 | + | N/A | N/A |
+| Verify a holo (`verify`) | 24 | + | N/A | N/A |
 | The world contract (`world`) | 16 | + | N/A | N/A |
 
 ## Checks
+
+### Registry logins and signing identities
+
+| Check | Asks | JavaScript | Rust | Python |
+| --- | --- | --- | --- | --- |
+| `auth.login.docker-config-entry` | A login with no helper configured writes the entry Docker writes. | + | N/A | N/A |
+| `auth.login.keeps-the-config` | A login keeps everything else in the config and replaces older spellings of the registry. | + | N/A | N/A |
+| `auth.login.docker-hub-by-default` | A login that names no registry is to Docker Hub, under Docker's key. | + | N/A | N/A |
+| `auth.login.username-with-colon` | A username with a colon is refused: Docker's entry could not be read back. | + | N/A | N/A |
+| `auth.login.registry-with-a-scheme` | A registry is a host name, not a URL. | + | N/A | N/A |
+| `auth.login.config-not-json` | A config that does not parse is refused, not overwritten. | + | N/A | N/A |
+| `auth.login.helper-not-installed` | A login that a configured helper cannot store fails: it never appears to work. | + | N/A | N/A |
+| `auth.logout.removes-every-spelling` | A logout removes the registry under every key Docker may file it by, and leaves the others. | + | N/A | N/A |
+| `auth.logout.nothing-there` | A logout with nothing to remove says so and is not an error. | + | N/A | N/A |
+| `auth.logout.names-the-ambient-token` | A logout says which variable still gives ghcr.io a token, because it cannot clear one. | + | N/A | N/A |
+| `auth.inspect.password` | Inspect reports a password credential's type, username and store. | + | N/A | N/A |
+| `auth.inspect.identity-token` | Inspect reports an identity token by its type alone. | + | N/A | N/A |
+| `auth.inspect.nothing-there` | Inspect of a registry with no credential is null. | + | N/A | N/A |
+| `auth.stores.helper-for-a-registry` | A login goes to the registry's helper before the default one, and to the config when there is neither. | + | N/A | N/A |
+| `auth.identities.unreadable-key` | A signing key that cannot be read is a signing error about the key. | + | N/A | N/A |
+| `auth.identities.empty-token` | An empty identity token is a signing error about the identity. | + | N/A | N/A |
 
 ### Capabilities, deny by default
 
@@ -162,6 +184,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.no-verdict.unknown-revision` | A layout that matches no known format revision gets no verdict. | + | N/A | N/A |
 | `verify.policy.unknown-level` | A minimum level that does not exist is an invalid policy, not a verdict. | + | N/A | N/A |
 | `verify.policy.unknown-member` | A policy member nobody defined is an invalid policy, not ignored. | + | N/A | N/A |
+| `verify.policy.statements-refused` | A policy cannot carry statements or claim their signature was checked: a level comes from the holo, never from an option. | + | N/A | N/A |
 | `verify.env.sets-minimum` | PRISM_MINIMUM_LEVEL sets the minimum when the call names none. | + | N/A | N/A |
 | `verify.env.call-wins` | A minimum named by the call replaces PRISM_MINIMUM_LEVEL. | + | N/A | N/A |
 | `verify.env.invalid` | A PRISM_MINIMUM_LEVEL that names no level is an invalid policy. | + | N/A | N/A |

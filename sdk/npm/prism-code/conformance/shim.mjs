@@ -8,10 +8,14 @@
  * runtime writes the same thing in its own language. It is not in the published
  * package.
  */
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { experimental_verify, grantOf, inspect, load, parseCapabilities, PrismError } from '../src/index.mjs';
 import { FORMAT_REVISIONS } from '../src/inspect.mjs';
+// `prism.auth` has no package export until #441 connects the modules.
+import { createAuth } from '../src/auth.mjs';
 
 const CONTRACT = 'prism/conformance-shim/1';
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -80,6 +84,26 @@ const OPERATIONS = {
     const answers = (input.queries ?? []).map(({ kind, resource }) => grant.allows(kind, resource));
     for (const { kind, resource } of input.asserts ?? []) grant.assert(kind, resource);
     return { set: grant.set, answers };
+  },
+  auth: async ({ input }) => {
+    const directory = await mkdtemp(join(tmpdir(), 'prism-shim-auth-'));
+    try {
+      const path = join(directory, 'config.json');
+      if (input.config !== undefined) await writeFile(path, typeof input.config === 'string' ? input.config : JSON.stringify(input.config));
+      const auth = createAuth({ env: { DOCKER_CONFIG: directory, PATH: '', ...input.env } });
+      const calls = {
+        login: () => auth.login(input.request),
+        logout: () => auth.logout(input.request),
+        inspect: () => auth.inspect(input.registry),
+        'stores.get': () => auth.stores.get(input.registry),
+        'identities.fromKey': () => auth.identities.fromKey(input.key),
+        'identities.keyless': () => auth.identities.keyless({ identityToken: input.identityToken }),
+      };
+      const value = await calls[input.call]();
+      return { value, config: JSON.parse(await readFile(path, 'utf8').catch(() => 'null')) };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   },
 };
 

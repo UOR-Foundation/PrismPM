@@ -255,6 +255,9 @@ RUN cargo build --locked --release --package prismpm \
     && cargo fetch --locked \
     && cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
     && bash scripts/fetch-oracle-cargo.sh \
+    && cargo build --locked --offline --release --manifest-path sdk/oracles/oscal/Cargo.toml --target-dir /tmp/oscal-oracle-target \
+    && install -m 0755 /tmp/oscal-oracle-target/release/prismpm-oscal-oracle /usr/local/bin/oscal-validator \
+    && rm -rf /tmp/oscal-oracle-target \
     && mkdir -p /opt/prismpm/share \
     && node sdk/generate-account-genesis.mjs install \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
