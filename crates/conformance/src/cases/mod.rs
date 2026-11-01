@@ -405,6 +405,14 @@ pub fn run_at(root: &Path, id: &str) {
         // Assurance levels (#269) as `prismpm check` computes them (#270): the Rust
         // regressions hold the verdict against the spec fixtures and the JavaScript goldens.
         "AL-03" | "AL-05" | "AL-06" => verify_assurance(root, id),
+        // prism.verify (#449) is the existing checks under one namespace; its complete
+        // owning file holds it to them on the conformance corpus and the signed fixtures.
+        "AL-07" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/verify-namespace.test.mjs", 15)],
+            "600000",
+        ),
         // The JavaScript runtime reads the composed archive, the HOLOVIEW
         // bundle and the exported closure without the Rust SDK; its complete
         // owning suite is the acceptance, file by file.
