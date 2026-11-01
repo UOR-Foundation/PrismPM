@@ -8,10 +8,11 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJson } from '../src/archive.mjs';
+import { canonicalJson, parseArchive, resolveArchive } from '../src/archive.mjs';
 import { appendAttestations, BUNDLE_MEDIA_TYPE, readAttestations } from '../src/attestations.mjs';
 import { experimental_attest } from '../src/attest.mjs';
 import { blake3Hex } from '../src/blake3.mjs';
+import { check } from '../src/check.mjs';
 import { DigestMismatchError, ManifestNotFoundError, PullVerificationError, RegistryError, SubjectMismatchError, VerificationError } from '../src/errors.mjs';
 import { ANNOTATION, EMPTY_BYTES, EMPTY_DESCRIPTOR, canonicalBytes, digestOf, holoManifest, HOLO_MEDIA_TYPE, referrerManifest } from '../src/oci-manifest.mjs';
 import { openStore } from '../src/oci-store.mjs';
@@ -236,13 +237,22 @@ test('a policy that pins a digest is judged as check judges it, and an invalid p
   assert.equal(existsSync(output), false);
 });
 
-test('a holo with an attestation section still reaches a verdict: the unsigned archive is what is judged', async () => {
+test('a holo with an attestation section reaches the verdict of check, and unsigned statements count for nothing', async () => {
   const store = fresh();
   await experimental_push(placeholders, 'app:1', { store });
   const pulled = await experimental_pull('app:1', { store });
   assert.equal(pulled.verdict.level, 'P0');
-  assert.equal(pulled.verdict.holo, `blake3:${blake3Hex(plain.subarray(0, plain.length - 32))}`);
-  assert.notEqual(pulled.fingerprint, pulled.verdict.holo);
+  assert.equal(pulled.verdict.holo, pulled.fingerprint);
+  assert.deepEqual(pulled.verdict, await check(placeholders, { policy: { name: 'pull-default', minimum: 'P0' } }));
+});
+
+test('a policy that carries evidence is refused: the level comes from the holo, never from an option', async () => {
+  const store = fresh();
+  await experimental_push(plain, 'app:1', { store });
+  const output = join(dir, 'never-forged.holo');
+  const forged = { minimum: 'P2', statements: { proof: { statement: {}, envelope: { verified: true } } } };
+  await assert.rejects(experimental_pull('app:1', { store, output, policy: forged }), (error) => error instanceof VerificationError && error.check === 'policy.invalid' && /statements/.test(error.message));
+  assert.equal(existsSync(output), false);
 });
 
 test('a statement that lies about its subject is refused by push and by pull', async () => {
@@ -292,6 +302,89 @@ test('a keyed push signs one statement naming the manifest, and pull checks it a
   const pass = await experimental_pull('app:1', { store, key: publicKey, type: PROOF });
   assert.equal(pass.attestations.signatures, 'verified');
   assert.deepEqual(pass.attestations.verified.map((v) => v.source), ['holo', 'referrer']);
+});
+
+/** The Calculator with a signed provenance statement and a signed proof statement about its guest, which check takes to P2. */
+async function reachesP2() {
+  const { provenance, identities } = resolveArchive(parseArchive(plain));
+  const predicate = structuredClone(JSON.parse(readFileSync(new URL('../../spec/test/fixtures/attestation/statement/calculator.json', import.meta.url), 'utf8')).predicate);
+  predicate.model.document = { sha256: provenance.model_id, blake3: identities.modelKappa.slice('blake3:'.length) };
+  Object.assign(predicate.model, { sourceId: provenance.source_id, semanticId: provenance.semantic_id, snapshotId: provenance.snapshot_id, compilerSemanticsId: provenance.compiler_semantics_id, leanManifestSha256: provenance.lean_manifest_sha256 });
+  const { holo } = await experimental_attest(plain, { type: 'https://slsa.dev/provenance/v1', predicate: { buildDefinition: { buildType: 'https://uor.foundation/prism/holo-build/v1' } }, subjects: ['guest', 'view', 'model', 'capabilities'], key: privateKey });
+  return (await experimental_attest(holo, { type: PROOF, predicate, subjects: ['guest'], key: privateKey })).holo;
+}
+
+test('one signed holo and one signer give one verdict: a pull equals check, at the level the signature supports', needsSigstore, async () => {
+  const holo = await reachesP2();
+  const store = fresh();
+  await experimental_push(holo, 'app:1', { store });
+  const output = join(dir, 'reached-p2.holo');
+  for (const policy of [{ name: 'strict', minimum: 'P2' }, 'default']) {
+    const pulled = await experimental_pull('app:1', { store, output, policy, key: publicKey });
+    assert.deepEqual([pulled.verdict.level, pulled.verdict.passed], ['P2', true]);
+    assert.deepEqual(pulled.verdict, await check(holo, { policy, signer: { key: publicKey } }));
+    assert.ok(same(readFileSync(output), holo));
+    rmSync(output);
+  }
+  const narrowed = await experimental_pull('app:1', { store, policy: { minimum: 'P0' }, key: publicKey, type: PROOF });
+  assert.equal(narrowed.verdict.level, 'P2', '--type narrows the signer check, not the level');
+});
+
+test('the same holo with no signer or the wrong one is P0: a policy above that refuses it and nothing is written', needsSigstore, async () => {
+  const holo = await reachesP2();
+  const store = fresh();
+  await experimental_push(holo, 'app:1', { store });
+  const output = join(dir, 'never-g.holo');
+  const into = join(dir, 'never-g-store');
+  const policy = { name: 'strict', minimum: 'P2' };
+  for (const options of [{}, { key: otherPublic }]) {
+    await assert.rejects(experimental_pull('app:1', { store, output, policy, ...options }), (error) => {
+      assert.ok(error instanceof PullVerificationError);
+      assert.equal(error.check, 'pull.verdict');
+      assert.equal(error.verdict.level, 'P0');
+      return true;
+    });
+    assert.equal(existsSync(output), false);
+    await assert.rejects(experimental_pull('app:1', { store, output: `dir://${into}:x`, policy, ...options }), PullVerificationError);
+    assert.equal(existsSync(into), false);
+  }
+  assert.equal((await check(holo, { policy, signer: { key: otherPublic } })).level, 'P0');
+  assert.equal((await check(holo, { policy })).level, 'P0');
+});
+
+test('a proof statement that does not hold keeps the level down, whoever signed it', needsSigstore, async () => {
+  const { holo } = await experimental_attest(plain, { type: PROOF, predicate: { accepted: true }, subjects: ['guest'], key: privateKey });
+  const store = fresh();
+  await experimental_push(holo, 'app:1', { store });
+  const output = join(dir, 'never-h.holo');
+  await assert.rejects(experimental_pull('app:1', { store, output, policy: { minimum: 'P2' }, key: publicKey }), (error) => error.check === 'pull.verdict' && error.verdict.level === 'P0');
+  assert.equal(existsSync(output), false);
+});
+
+test('a registry bundle satisfies the signer check and does not raise the level', needsSigstore, async () => {
+  const store = fresh();
+  await experimental_push(placeholders, 'app:1', { store, key: privateKey });
+  const pulled = await experimental_pull('app:1', { store, key: publicKey });
+  assert.equal(pulled.attestations.signatures, 'verified');
+  assert.equal(pulled.verdict.level, 'P0');
+});
+
+test('the command line reaches P2 with --key and --policy, and refuses without the key', needsSigstore, async () => {
+  const holo = await reachesP2();
+  const store = fresh();
+  await experimental_push(holo, 'app:1', { store });
+  const cwd = mkdtempSync(join(dir, 'cwd-'));
+  writeFileSync(join(cwd, 'signer.pem'), publicKey);
+  writeFileSync(join(cwd, 'strict.json'), JSON.stringify({ name: 'strict', minimum: 'P2' }));
+  const run = (...args) => spawnSync(process.execPath, [bin, 'pull', 'app:1', 'out.holo', '--store', store, '--policy', 'strict.json', ...args], { encoding: 'utf8', cwd });
+  const refused = run();
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /^check: pull\.verdict$/m);
+  assert.equal(existsSync(join(cwd, 'out.holo')), false);
+  const passed = run('--key', 'signer.pem');
+  assert.equal(passed.status, 0, passed.stderr);
+  assert.match(passed.stdout, /^Verdict: P2, policy strict requires P2$/m);
+  assert.ok(same(readFileSync(join(cwd, 'out.holo')), holo));
 });
 
 test('a referrer alone can satisfy the signer policy', needsSigstore, async () => {

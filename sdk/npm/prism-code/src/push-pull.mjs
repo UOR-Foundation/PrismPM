@@ -12,10 +12,10 @@ import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArchive, asBytes } from './archive.mjs';
 import { blake3Hex } from './blake3.mjs';
-import { readAttestations, stripAttestations, OCI_MANIFEST_SUBJECT, DSSE_PAYLOAD_TYPE, BUNDLE_MEDIA_TYPE } from './attestations.mjs';
+import { readAttestations, OCI_MANIFEST_SUBJECT, DSSE_PAYLOAD_TYPE, BUNDLE_MEDIA_TYPE } from './attestations.mjs';
 import { checkSubjects, experimental_verifyAttestations, experimental_verifyBundle, signStatement } from './attest.mjs';
-import { readPolicy } from './check.mjs';
-import { experimental_verify, MINIMUM_LEVEL_ENV } from './verify.mjs';
+import { check, policyOf } from './check.mjs';
+import { MINIMUM_LEVEL_ENV } from './verify.mjs';
 import { errorFromVerdict, AttestationNotFoundError, DigestMismatchError, PrismCodeError, PrismError, PullVerificationError, ReferenceInvalidError, VerificationError } from './errors.mjs';
 import { ASSURANCE } from './vendor/verify.mjs';
 import {
@@ -135,16 +135,18 @@ function verifyHolo(closure, reference) {
 }
 
 /**
- * Step 6: the verdict. `experimental_verify` refuses an attestation section until
- * a format revision admits it, so it judges the unsigned archive, which #267
- * guarantees is byte for byte what was signed. The section is judged on its own.
+ * Step 7: the verdict, which is `check`'s, so one holo and one signer have one
+ * verdict. The signed statements in the holo count when the signer named here
+ * vouches for them. Bundles in the registry do not raise the level: they are about
+ * the manifest, and step 8 judges them.
  */
 async function judge(parsed, options) {
   const env = options.env ?? process.env;
-  const policy = options.policy !== undefined ? (typeof options.policy === 'string' ? await readPolicy(options.policy) : options.policy) : { name: 'pull-default', minimum: env[MINIMUM_LEVEL_ENV] || 'P0' };
+  const policy = await policyOf(options.policy ?? { name: 'pull-default', minimum: env[MINIMUM_LEVEL_ENV] || 'P0' });
+  const { type, ...signer } = signerOptions(options);
   let verdict;
   try {
-    verdict = await experimental_verify(stripAttestations(parsed), { ...policy, env });
+    verdict = await check(parsed.bytes, { policy, env, signer: SIGNER_OPTIONS.some((name) => signer[name] !== undefined) ? signer : undefined });
   } catch (cause) {
     if (!(cause instanceof VerificationError)) throw cause;
     if (cause.check === 'policy.invalid' || cause.check === 'policy.unreadable') throw cause;
@@ -157,7 +159,7 @@ async function judge(parsed, options) {
   return verdict;
 }
 
-/** Step 7: every line decodes, and every subject is a blob of this holo with both digests equal. */
+/** Step 6: every line decodes, and every subject is a blob of this holo with both digests equal. The verdict reads these lines, so they come first. */
 function checkAttestations(parsed) {
   let attestations;
   try {
@@ -274,7 +276,8 @@ async function atomicWrite(target, bytes) {
  * is a policy file path or a policy object, as `check` takes; the default accepts
  * P0, unless `PRISM_MINIMUM_LEVEL` says otherwise. The signer options are those of
  * `experimental_verifyAttestations`: with any of them, at least one bundle in the
- * holo or in the registry must pass.
+ * holo or in the registry must pass, and the signed statements in the holo count
+ * toward the level as they do in `check`. Without a signer a signed holo is P0.
  *
  * @param {string | object} source the reference
  * @param {object} [options] `{ store, output, policy, key, certificateIdentity, certificateIdentityRegexp, certificateOidcIssuer, type, trustedRoot, entries, timestamps, plainHttp, credentials, fetch, env, maxHoloBytes, referrersFallback }`
@@ -285,8 +288,8 @@ export async function experimental_pull(source, options = {}) {
   const endpoint = openEndpoint(reference, options);
   const closure = await fetchClosure(endpoint, reference, options);
   const { parsed, fingerprint } = verifyHolo(closure, reference);
-  const verdict = await judge(parsed, options);
   const attestations = checkAttestations(parsed);
+  const verdict = await judge(parsed, options);
   const signers = await checkSigner(parsed, closure, options);
 
   let output = null;
