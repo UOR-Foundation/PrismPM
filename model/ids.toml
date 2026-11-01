@@ -763,6 +763,12 @@ level = "build"
 statement = "Dependency audits with cargo-deny enforce license and advisory policies."
 
 [[id]]
+id = "SE-09"
+suite = "security"
+level = "build"
+statement = "The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision."
+
+[[id]]
 id = "AU-01"
 suite = "authorities"
 level = "build"

@@ -566,6 +566,14 @@ pub fn run_at(root: &Path, id: &str) {
             verify_verification(root, id);
         }
 
+        // prism.auth (#447): login, logout and the no-secret rule; its complete owning
+        // file needs no optional package, and what really signs runs in the npm workflow.
+        "SE-09" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/auth.test.mjs", 20)],
+            "600000",
+        ),
         "SE-01" | "SE-02" | "SE-03" | "SE-04" | "SE-05" | "SE-06" | "SE-07" | "SE-08" => {
             verify_security(root, id);
         }

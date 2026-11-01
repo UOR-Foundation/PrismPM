@@ -1,22 +1,21 @@
 // `prism.auth` (#447): login and logout through Docker's stores, signing identities, and the rule that holds over all of
-// it: no return value, error or log line holds a secret. Every value here is a test value.
+// it: no return value, error or log line holds a secret. Every value here is a test value. It needs no sigstore package, so
+// the conformance id runs it whole; what really signs is in auth-signed.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { createServer } from 'node:http';
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { generateKeyPairSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { inspect } from 'node:util';
 import { auth, createAuth } from '../src/auth.mjs';
-import { experimental_verifyBundle } from '../src/attest.mjs';
 import { RegistryAuthError, RegistryError, SigningError } from '../src/errors.mjs';
 import { dockerCredentials } from '../src/oci-auth.mjs';
 import { createRegistryClient } from '../src/oci-registry.mjs';
 import { experimental_push } from '../src/push-pull.mjs';
 import { startRegistry } from './support/registry.mjs';
+import { assertHidden, refusalOf } from './support/secrets.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const plain = new Uint8Array(readFileSync(here('../fixtures/Calculator.holo')));
@@ -26,9 +25,9 @@ test.after(() => rmSync(root, { recursive: true, force: true }));
 const USERNAME = 'test-user';
 const PASSWORD = 'test-password-0f3a9c';
 const BASIC = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
-const STATEMENT = new TextEncoder().encode(JSON.stringify({ _type: 'https://in-toto.io/Statement/v1', subject: [], predicateType: 'https://example.test/p', predicate: {} }));
-// A token with the shape Fulcio's client needs: three parts, the middle a JSON object with an issuer and a subject.
-const TOKEN = `headerpart.${Buffer.from(JSON.stringify({ iss: 'https://oidc.test', sub: 'tester' })).toString('base64url')}.signaturepart`;
+
+const assertClean = (value, secrets = [PASSWORD, BASIC]) => assertHidden(value, secrets);
+const refusal = (promise, Class, check, secrets = [PASSWORD, BASIC]) => refusalOf(promise, Class, check, secrets);
 
 let directories = 0;
 function config(contents) {
@@ -37,31 +36,6 @@ function config(contents) {
   if (contents !== undefined) writeFileSync(join(directory, 'config.json'), typeof contents === 'string' ? contents : JSON.stringify(contents));
   const env = { DOCKER_CONFIG: directory, PATH: '' };
   return { env, path: join(directory, 'config.json'), read: () => JSON.parse(readFileSync(join(directory, 'config.json'), 'utf8')), text: () => readFileSync(join(directory, 'config.json'), 'utf8') };
-}
-
-/** Everything a caller could see of a value or an error, however it looks. */
-function visible(value) {
-  const parts = [inspect(value, { depth: null, showHidden: true })];
-  for (let error = value; error instanceof Error; error = error.cause) parts.push(error.message, error.stack ?? '');
-  parts.push(JSON.stringify(value) ?? '');
-  return parts.join('\n');
-}
-
-function assertClean(value, secrets = [PASSWORD, BASIC]) {
-  const seen = visible(value);
-  for (const secret of secrets) assert.equal(seen.includes(secret), false, `a secret is visible in: ${seen}`);
-}
-
-async function refusal(promise, Class, check, secrets) {
-  const error = await promise.then(
-    () => assert.fail('expected a refusal'),
-    (caught) => caught,
-  );
-  assert.ok(error instanceof Class, `${error?.name}: ${error?.message}`);
-  assert.equal(error.check, check);
-  assert.equal(error.cause, undefined);
-  assertClean(error, secrets);
-  return error;
 }
 
 /** A credential helper the spawn in oci-auth.mjs can run on this platform. */
@@ -272,23 +246,25 @@ test('a check that throws anything, quoting the secret, is a typed error with th
 // --- signing identities
 
 const keys = () => generateKeyPairSync('ec', { namedCurve: 'P-256' });
-const pemBody = (pem) => pem.split('\n').filter((line) => line && !line.startsWith('-----'));
 
-test('a key identity signs a bundle a verifier accepts, names the key, and shows nothing of the private key', async () => {
+test('an identity shows its kind and public facts and nothing of its key or token', () => {
   const { privateKey, publicKey } = keys();
   const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const body = pem.split('\n').filter((line) => line && !line.startsWith('-----'));
   for (const key of [pem, Buffer.from(pem), privateKey]) {
     const identity = auth.identities.fromKey(key);
     assert.equal(identity.kind, 'key');
     assert.equal(identity.publicKey, publicKey.export({ type: 'spki', format: 'pem' }));
     assert.ok(Object.isFrozen(identity));
-    const bundle = await identity.sign(STATEMENT);
-    assert.equal(bundle.verificationMaterial.publicKey.hint, identity.keyId);
-    const outcome = await experimental_verifyBundle(bundle, { key: publicKey });
-    assert.equal(outcome.keyId, identity.keyId);
-    assertClean(identity, pemBody(pem));
-    assertClean(bundle, pemBody(pem));
+    assertClean(identity, body);
   }
+  const token = 'test-identity-token-a4b7c2';
+  const keyless = auth.identities.keyless({ identityToken: token });
+  assert.equal(keyless.kind, 'keyless');
+  assert.equal(keyless.ambient, false);
+  assertClean(keyless, [token]);
+  assert.throws(() => auth.identities.keyless({ identityToken: '' }), (e) => e instanceof SigningError && e.check === 'sign.identity');
+  assert.equal(auth.identities.keyless().ambient, true);
 });
 
 test('a key that cannot be read is sign.key, and what was passed is not quoted', async () => {
@@ -312,42 +288,6 @@ test('a key that cannot be read is sign.key, and what was passed is not quoted',
 test('sign takes statement bytes and nothing else', async () => {
   const identity = auth.identities.fromKey(keys().privateKey);
   await refusal(identity.sign('a string'), SigningError, 'sign.predicate');
-});
-
-const FULCIO_ONLY = {
-  mediaType: 'application/vnd.dev.sigstore.signingconfig.v0.2+json',
-  caUrls: [{ url: 'http://127.0.0.1:1', majorApiVersion: 1, validFor: { start: '2020-01-01T00:00:00Z' }, operator: 'test' }],
-  oidcUrls: [],
-  rekorTlogUrls: [],
-  tsaUrls: [],
-};
-
-test('a keyless identity shows nothing of its token, and an unusable token is replaced in the error sigstore writes', async () => {
-  const malformed = 'test-malformed-token-a4b7c2';
-  const identity = auth.identities.keyless({ identityToken: malformed, signingConfig: FULCIO_ONLY });
-  assert.equal(identity.kind, 'keyless');
-  assert.equal(identity.ambient, false);
-  assertClean(identity, [malformed]);
-  const error = await refusal(identity.sign(STATEMENT), SigningError, 'sign.identity', [malformed]);
-  // sigstore's own message quotes the token, so this proves the replacement ran.
-  assert.match(error.message, /\[redacted\]/);
-  assert.throws(() => auth.identities.keyless({ identityToken: '' }), (e) => e instanceof SigningError && e.check === 'sign.identity');
-  assert.equal(auth.identities.keyless().ambient, true);
-});
-
-test('a service that echoes the token gets no further than the error', async () => {
-  const server = createServer((request, response) => {
-    request.resume();
-    response.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ code: 400, message: `bad token ${TOKEN} ${TOKEN.split('.')[1]}` }));
-  });
-  await new Promise((done) => server.listen(0, '127.0.0.1', done));
-  try {
-    const signingConfig = { ...FULCIO_ONLY, caUrls: [{ ...FULCIO_ONLY.caUrls[0], url: `http://127.0.0.1:${server.address().port}` }] };
-    const error = await refusal(auth.identities.keyless({ identityToken: TOKEN, signingConfig }).sign(STATEMENT), SigningError, 'sign.service', [TOKEN, TOKEN.split('.')[1]]);
-    assert.match(error.message, /\[redacted\]/);
-  } finally {
-    await new Promise((done) => server.close(done));
-  }
 });
 
 // --- nothing logged, and the module's boundary
