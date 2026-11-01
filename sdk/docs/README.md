@@ -18,6 +18,8 @@ node sdk/docs/publish.mjs <site> --commit <sha> [--previous <dir>]
 node sdk/docs/lint.mjs [path...]           vocabulary lint; default: docs/ minus the engineering records
 node sdk/docs/coverage.mjs [--owed]        which public items have a reference entry and an example; exit 1 when an entry is missing
 node --test "sdk/docs/test/*.test.mjs"     the generator's own tests
+node sdk/docs/changelog.mjs [path]         check CHANGELOG.md against STABILITY.md section 2: the four headers and the pre-1.0 bump rule
+node sdk/docs/changelog.mjs --normalize <path>   finish a changelog release-please just wrote, as the release workflow does
 node sdk/docs/skill.mjs                    rebuild the generated blocks of skills/prism/SKILL.md
 node sdk/docs/skill.mjs --check            fail when a block is stale or the skill names a command that does not ship
 node sdk/docs/skill.mjs smoke              install prism-code from npm and run every command the skill tells an agent to try
@@ -93,6 +95,7 @@ A `.sh` example is command lines a reader types, each a `prism-code` command wit
 | `load.mjs` | api/load | `prism-code` 0.2.0, `Calculator.holo` |
 | `dispatch.mjs` | api/dispatch | same |
 | `acceptance.mjs` | api/history-and-replay, examples/replay-examples | same |
+| `replay.mjs` | api/history-and-replay | `prism-code` source, `Calculator.holo` |
 | `three-calls.mjs` | api/index, sdks/typescript, examples/call-a-holo | same |
 | `verify.mjs` | api/verify, examples/check-a-holo | `prism-code` source, `Calculator.holo` |
 | `spec-constants.mjs` | api/spec-package, examples/read-the-spec | the spec in this checkout |

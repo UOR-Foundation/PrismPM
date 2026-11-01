@@ -38,6 +38,14 @@ export interface Policy {
    * `PP5602`: it withholds P3 and fails the policy at every level. Default null.
    */
   capabilities?: CapabilitySet | null;
+  /** A decoded `prism/replay/v1` statement from beside the holo. Unsigned, so it can withhold P3 and never support it. */
+  replay?: unknown;
+  /**
+   * Statements from the holo's attestation section whose signatures the caller has already checked (#270). `verify`
+   * verifies no signature: an `envelope.verified` that is not true fails `provenance.envelope` or `proof.envelope`
+   * and the statement supports nothing. A provenance statement that checks supports P1, a proof statement P2.
+   */
+  statements?: { provenance?: { statement: unknown; envelope: { verified: boolean; message?: string } }; proof?: { statement: unknown; envelope: { verified: boolean; message?: string } } };
   /**
    * The impure effects the policy allows the world (issue #282). Absent, the default, allows any. `[]` is the
    * pure-world policy: a world importing a clock, random, socket, filesystem or unknown interface fails it with a
@@ -92,7 +100,7 @@ export function parsePolicy(source: string): ParsedPolicy;
 /** Evaluate a parsed policy. Throws `VerifyError` `policy.evaluation`, naming the rule. */
 export function evaluatePolicy(policy: ParsedPolicy, input: PolicyInput): PolicyDecision;
 /** The document a policy judges for this holo. Rejects like `verify`. */
-export function policyInput(source: Uint8Array | ArrayBuffer, options?: { capabilities?: CapabilitySet | null }): Promise<PolicyInput>;
+export function policyInput(source: Uint8Array | ArrayBuffer, options?: { capabilities?: CapabilitySet | null; replay?: unknown; statements?: Policy['statements'] }): Promise<PolicyInput>;
 
 /** One set of a `prism/capabilities/1` file (issue #279). */
 export interface CapabilitySet {
