@@ -2,6 +2,8 @@
 sdk/npm/prism-code/test/fixtures/Calculator.provenance-min.bundle.jsonl text eol=lf
 sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json text eol=lf
 # The npm packages are size-capped on bytes; a CRLF checkout on Windows must not change what is packed.
+# The spec digest of an authoring fixture is over its exact bytes (#325).
+sdk/npm/prism-code/test/fixtures/authoring/** text eol=lf
 sdk/npm/**/*.js text eol=lf
 sdk/npm/**/*.mjs text eol=lf
 sdk/npm/**/*.rego text eol=lf
