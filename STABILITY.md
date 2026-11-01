@@ -36,7 +36,14 @@ Each version entry uses these four headers, in this order:
 ```
 
 The Breaking Changes list is the per-version breaking log.
-If it is empty, the release breaks nothing.
+It is always present; if it is empty it says `None.` and the release breaks nothing.
+The other three headers appear only when they have lines.
+The 0.1.0 entry predates this rule and keeps the headers it was published with.
+
+release-please is configured for this rule (`bump-minor-pre-major`, in `release-please-config.json`): it proposes the next version in a pull request, and merging that pull request cuts the tag.
+Publishing is a separate step, as [RELEASES.md](RELEASES.md) says.
+`node sdk/docs/changelog.mjs` enforces the headers and the bump on every pull request: a version with breaking changes is a minor bump, any other version is a patch bump.
+[docs/release/versioning.md](docs/release/versioning.md) says how a version is cut.
 
 ## 3. Format versions
 
@@ -107,6 +114,8 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code check <holo>`, `--policy <file>`, `--json` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `--policy` on `prism-code check` and `run` taking a Rego file or the name of a shipped policy (`default`, `pure-only`, `provenance-only`) | [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) | On main |
 | `prism-code build --check` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
+| `prism-code check` signer flags: `--key <public.pem>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--trusted-root <file>`, and the `statements` option of `@prism-code/verify` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
+| `prismpm check <path.holo>` signer flags: `--key <public.pem>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--trusted-root <file>` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `check <path.holo>` as a typed verdict in the Rust CLI, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | Planned |
 | `prism-code attest <holo> --predicate <file> --type <uri>`, `--subject`, `--key`, `--output`, `--signing-config` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
@@ -138,7 +147,7 @@ Today `prismpm check` validates the model, `prismpm check <path.holo>` judges a 
 In the JavaScript CLI `check` judges a holo and the model check is `prism-code build --check`.
 Both CLIs name the attestation verb `verify-attestation`, because `prism-code verify` already runs `prismpm verify`, which is build verification (`docs/proposals/272-attest-verify.md`).
 `prismpm verify-attestation` checks a holo's attestations against a signer policy and returns `prismpm/attestation-verification-result/1`, on exit 0 and 1 alike.
-The `check` verdict reads the attestation section (#267) and checks each statement's shape and subjects, but does not yet run the signature verification of `verify-attestation`, so no holo reaches P2 through `check` in either CLI.
+`prism-code check` verifies the signatures of the provenance and proof statements in the attestation section against the signer the caller names (`--key`, or `--certificate-identity` or `--certificate-identity-regexp` with `--certificate-oidc-issuer`, and `--trusted-root`), and with a signer a holo reaches P1 and P2. Without one a signed holo is P0. `prismpm check` takes the same signer flags and reaches the same verdict on the same holo; the two CLIs are held to the committed signed fixtures in `sdk/npm/prism-code/test/fixtures/signed`. Wiring signature verification into the verdict is breaking and gets its changelog line; the holo form of `check` was additive and is not.
 Wiring that verification into the verdict is breaking and gets its changelog line; the holo form of `check` was additive and is not.
 
 ### 6.1.1 Deprecated

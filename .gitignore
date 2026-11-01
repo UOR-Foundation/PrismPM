@@ -29,6 +29,7 @@
 
 # Editor and OS
 /sdk/oracles/node_modules/
+/scripts/release-please-dry-run/node_modules/
 .DS_Store
 *.swp
 *~
