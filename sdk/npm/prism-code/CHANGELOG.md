@@ -19,6 +19,9 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `prism-code run <holo>` no longer exits 1 for every failed verdict (#348): it exits with the code of the error that explains the verdict. A provenance, document or policy reason, which is every holo today, stays 1; a proof reason is 10; a world outside the grant is 2.
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
+### Bugs Fixed
+- `prism-code`, `prism-code/browser` and `prism-code/canonical` load where `node:` imports are unavailable, as the README always said: `prism-code/canonical` no longer imports `node:crypto`, and a bundler targeting the browser leaves out `prism-code/node`. The canonical API stays synchronous and its hashes do not change. Without `node:crypto`, `codeHash` computes SHA-256 in JavaScript and any other `algorithm` throws `canonical.algorithm`; Node 22.0 to 22.2 have no `process.getBuiltinModule` and count as such a host.
+
 ## [0.3.0] - 2026-10-27
 
 ### Features Added
