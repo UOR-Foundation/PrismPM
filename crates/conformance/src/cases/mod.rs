@@ -705,6 +705,13 @@ pub fn run_at(root: &Path, id: &str) {
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),
+        // The `networks` module of #440, a view over a capability file.
+        "DK-39" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/networks.test.mjs", 18)],
+            "600000",
+        ),
         "DK-32" => verify_node_suite(
             root,
             id,
