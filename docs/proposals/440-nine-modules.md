@@ -4,7 +4,7 @@
 | --- | --- |
 | Issue | [#440](https://github.com/UOR-Foundation/PrismPM/issues/440) |
 | Milestone | M2 v0.5 Lock, check, proof |
-| Status | Agreed, Experimental. The owner agreed this design on 2026-11-01, [recorded on #440](https://github.com/UOR-Foundation/PrismPM/issues/440#issuecomment-6564002251). See [Migration phases](#migration-phases) for what is done. |
+| Status | Agreed, Experimental. The owner agreed this design on 2026-11-01, [recorded on #440](https://github.com/UOR-Foundation/PrismPM/issues/440#issuecomment-6564002251). Phases 1 and 2 are done; see [Migration phases](#migration-phases). |
 | Depends on | #346 (stakeholder views), #347 (developer view) |
 | Used by | #441 to #449 (one issue per module) |
 | Measured at | Commit `b5c83187`, unless a number names another. `check-modules` confirmed the 14 Rust baseline entries at `8b7d7f40`. |
@@ -371,7 +371,7 @@ When `[[pending]]` and `legacy_cycle` are both empty, the check deletes them and
 
 ### Migration phases
 
-1. **Contract (M2).** This proposal was agreed on 2026-11-01. The nine module issues take the row corrections listed below.
+1. **Contract (M2).** Done on 2026-11-01. This proposal is agreed, and the nine module issues carry the row corrections listed below.
 2. **Check.** Done. `model/modules.toml` and `check-modules` hold the baseline above. Nothing has moved, and nothing can get worse from here.
 3. **Developer surface.** Add the SDK namespaces and CLI groups through #347 and #349, with deprecated aliases. Existing exports keep working.
 4. **Modules outside the cycle.** Move `error`, `holo`, `attest` and `inspect` first. They already sit outside the cycle: `holo` imports only `error`, `attest` only `error` and `holo`, and `inspect` only `attest`, `error` and `holo`.
@@ -418,7 +418,8 @@ This was measured in Node with those imports refused, not in a browser or on an 
 
 ### Row corrections on agreement
 
-The owner agreed this proposal on 2026-11-01, so these issues take the change listed here to match this file:
+The owner agreed this proposal on 2026-11-01, and the bodies of #441 to #449 were corrected that day to match this file.
+#346 and #350 still need their change.
 
 | Issue | Change |
 |---|---|
