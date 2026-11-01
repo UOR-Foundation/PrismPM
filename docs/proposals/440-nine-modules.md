@@ -4,10 +4,10 @@
 | --- | --- |
 | Issue | [#440](https://github.com/UOR-Foundation/PrismPM/issues/440) |
 | Milestone | M2 v0.5 Lock, check, proof |
-| Status | Proposed, Experimental. Maintainers decide; nothing here is agreed yet. |
+| Status | Agreed, Experimental. The owner agreed this design on 2026-11-01, [recorded on #440](https://github.com/UOR-Foundation/PrismPM/issues/440#issuecomment-6564002251). Phases 1 and 2 are done; see [Migration phases](#migration-phases). |
 | Depends on | #346 (stakeholder views), #347 (developer view) |
 | Used by | #441 to #449 (one issue per module) |
-| Measured at | Commit `b5c83187`. Every number below comes from that tree. |
+| Measured at | Commit `b5c83187`, unless a number names another. `check-modules` confirmed the 14 Rust baseline entries at `8b7d7f40`. |
 
 ## Summary
 
@@ -223,17 +223,21 @@ Paths are under `crates/prismpm/src` and `sdk/npm/prism-code/src`.
 
 | Module | Rust today | JavaScript today |
 |---|---|---|
-| `client` | `cli`, `template`, `diagnostics` | `index`, `node`, `browser`, `manifest`, `toml`, `init*`, `dev*`, `providers`, `middleware`, `tracing`, `generate/`, `studio/`, `author/`, `canonical/`, `bin/prism-code`, plus `create-prism-code` |
-| `images` | `controller`, `config`, `holo` (model document, projection, composition), `application_build`, `library_build`, `browser_build`, `browser_oracle`, `lean_project`, `exporter`, `verification` (export chain), `release_verification`, `library_verification`, `acceptance`, `supply_chain` (evidence, scanning, promotion), `upstream_conformance`, `system` (rename below), `deployment`, `design`, `features`, `workbench`, `lock_command`, `oci`, `text_cli`, `binary_cli`, `sdk` (project inputs, lock proposals), `attest` (the command that writes the section) | `closure`, `view`, `inspect`, `export`, `docker`, `oci-manifest`, `oci-reference`, `oci-registry`, `oci-store`, `push-pull*`, `provenance`, `attest-cli` |
+| `client` | `lib`, `main`, `cli`, `template`, `diagnostics` | `index`, `node`, `browser`, `manifest`, `toml`, `init*`, `dev*`, `providers`, `middleware`, `tracing`, `generate/`, `studio/`, `author/`, `canonical/`, `bin/prism-code`, plus `create-prism-code` |
+| `images` | `controller`, `config`, `holo` (model document, projection, composition), `application_build`, `library_build`, `browser_build`, `browser_oracle`, `lean_project`, `exporter`, `verification` (export chain), `release_verification`, `library_verification`, `acceptance`, `supply_chain` (evidence, scanning, promotion), `upstream_conformance`, `system` (rename below), `deployment`, `design`, `features`, `workbench`, `threat_model`, `lock_command`, `oci`, `text_cli`, `binary_cli`, `sdk` (project inputs, lock proposals), `attest` (the command that writes the section) | `closure`, `view`, `inspect`, `export`, `docker`, `oci-manifest`, `oci-reference`, `oci-registry`, `oci-store`, `push-pull*`, `provenance`, `attest-cli` |
 | `containers` | `lifecycle`, `operations` | `containers`, `core` |
 | `networks` | None today | None today |
 | `volumes` | None today | `bin/prism-provider-kv` |
 | `system` | `sdk::verify_environment` | `plugins`, `bin/prism-doctor` |
-| `auth` | `attest/crypto.rs` (`SigningKey`) | `oci-auth`, signing parts of `attest` |
-| `errors` | `error`, `contracts` (schema table and closed-shape checks), `holo/canonical` (value encoding) | `errors`, `version`, `canonicalJson` from `archive`, plus `@prism-code/spec` |
-| `verify` | `inspect`, `attest` (verification), `holo/archive` (reading), `holo/attestation`, `replay`, `authority`, `input_lock`, `sdk` (inventory, lock reading, pinned executables), `process_resources`, process helpers from `verification`, reference syntax from `oci`, `supply_chain` (trust and policy decisions) | `check`, `verify`, `attestations`, `archive`, `blake3`, `sha256`, `capabilities`, `replay*`, `attest` (verification), `vendor/`, plus `@prism-code/verify`, `@prism-code/conformance` |
+| `auth` | `SigningKey` in `attest/crypto.rs` | `auth`, `oci-auth`, signing parts of `attest` |
+| `errors` | `error`, `contracts` (schema table and closed-shape checks), `holo/canonical` (value encoding) | `errors`, `errors-namespace`, `version`, `vendor/spec/`, `canonicalJson` from `archive`, plus `@prism-code/spec` |
+| `verify` | `inspect`, `attest` (verification), `holo/archive` (reading), `holo/attestation`, `replay`, `authority`, `input_lock`, `sdk` (inventory, lock reading, pinned executables), `process_resources`, process helpers from `verification`, reference syntax from `oci`, `supply_chain` (trust and policy decisions) | `check`, `verify`, `attestations`, `archive`, `blake3`, `sha256`, `capabilities`, `replay*`, `attest` (verification), `vendor/verify`, plus `@prism-code/verify`, `@prism-code/conformance` |
 
 Test code follows its directory and needs no row; that covers `test_compiler`, which `lib.rs` declares under `#[cfg(test)]`.
+
+`attest/crypto.rs` stays with `verify` until `SigningKey` splits out, because the rest of the file checks signatures and `certificate.rs` and `transparency.rs` call it.
+`SigningKey` itself reaches nothing in `der.rs`, but its one caller is the signing command in `attest/mod.rs`, and `verify` may not depend on `auth`, so the two move together.
+Until then, `auth` owns no Rust file in `model/modules.toml`.
 
 `crates/prismpm/src/holo/provenance.rs` is not on `main` or on any fetched branch at the measured commit, so it has no row.
 When it lands, it follows `provenance.mjs`: writing a statement is `images`, and any reading used by the verdict is `verify`.
@@ -256,6 +260,8 @@ What changed from #440, and why:
 | `version` goes to `errors` | `replay.mjs` imports it, and `verify` may not depend on `system`. `system.version` reads it from there. |
 | `plugins` goes to `system` | `bin/prism-doctor` imports it, and `system` may not depend on `client`. `docker info` also lists plugins. |
 | New rows | `author/`, `attest-cli`, `blake3`, `sha256`, `vendor/`, `bin/prism-code`, `bin/prism-provider-kv` and `create-prism-code` had no owner. |
+| `vendor/` splits by source | Each vendored file belongs to the package it was copied from, so `vendor/spec/` is `errors` and `vendor/verify.mjs` is `verify`. `errors-namespace.mjs` imports `vendor/spec/constants.mjs`. |
+| Rows added after `b5c83187` | `threat_model` (#209) is `images`: it reads the model document through `holo`. `errors-namespace` (#448) is `errors`. `lib` and `main` are `client`: they hold declarations and the entry point. |
 
 Points that still need care:
 
@@ -268,7 +274,7 @@ Points that still need care:
 ### The dependency check
 
 A CI check fails on a dependency the table forbids and on any cycle.
-This section specifies it; a later change implements it.
+This section specifies it, and `xtask/src/modules.rs` implements it.
 
 **Where it runs.** It is `cargo xtask check-modules`, called from `cargo xtask validate`.
 The Model & Audits job in `ci-parallel.yml` already runs `validate` on every pull request, with full history.
@@ -304,15 +310,15 @@ A file that will split keeps its current owner until it does, and its forbidden 
 
 | Language | Files | What counts as an edge |
 |---|---|---|
-| Rust | Every file reached from `crates/prismpm/src/lib.rs` through `mod` declarations, following `#[path]`, plus `main.rs` | After removing comments and string literals, every path starting with `crate::`, `super::` or `self::`, including nested `use` groups. It resolves to the longest matching module file. |
-| JavaScript | `sdk/npm/prism-code/{src,bin}`, and `sdk/npm/{spec,verify,conformance,create-prism-code}` | `import`, `export ... from`, and `import()` with a literal specifier. A non-literal `import()` is not an edge: `browser.mjs:50` and `node.mjs:63` load a closure's own files. A package has one owner, and a vendored copy (`src/vendor/`) belongs to the package it was copied from. |
+| Rust | Every file reached from `crates/prismpm/src/lib.rs` through `mod` declarations, following `#[path]`, plus `main.rs` | After removing comments and string literals, every path starting with `crate::`, `super::` or `self::`, including nested `use` groups. It resolves to the longest matching module file, and a path that stops at the crate root follows the root's `pub use` to the module it names. A bare `use child::x` is not read: it can reach only a module that this file declares. |
+| JavaScript | `sdk/npm/prism-code/{src,bin}`, and `sdk/npm/{spec,verify,conformance,create-prism-code}` | `import`, `export ... from`, and `import()` with a literal specifier. A non-literal `import()` is not an edge: `browser.mjs:50` and `node.mjs:63` load a closure's own files. A literal specifier that names no file is reported and is not an edge: `studio/studio.mjs:10` imports `./verify.mjs`, a path `dev-server.mjs` serves from `vendor/verify.mjs`. A package has one owner, and a vendored copy (`src/vendor/`) belongs to the package it was copied from. |
 
 It does not scan `xtask`, `crates/conformance`, `crates/model`, `scripts/`, `sdk/*.mjs`, `stdlib/` or `vendor/`, which are tooling and dependencies, or external crates and packages.
 Files embedded as data, such as `replay/runner.mjs`, belong to the Rust file that embeds them.
 Rust and JavaScript are never linked by an edge, since neither imports the other.
 
 The scan is textual on purpose.
-`xtask` has no parser dependency, and a throwaway scan of this design walks the 121 files reached from `lib.rs`, finds 398 file edges, and finds the 19-module cycle.
+`xtask` has no parser dependency. At `8b7d7f40` the check walks 125 Rust files, 94 of them production, and 105 JavaScript files. It finds 394 Rust and 268 JavaScript file edges, and the 19-module cycle.
 It sees names and not generated code; `crates/prismpm/src` has two `macro_rules!` definitions, so that gap is small and stays visible.
 
 **How it treats tests.**
@@ -330,12 +336,12 @@ It sees names and not generated code; `crates/prismpm/src` has two `macro_rules!
 3. A production edge between files with different owners must be allowed by the table or listed in `[[pending]]`.
 4. A `[[pending]]` entry that no longer occurs fails. Entries are deleted as cuts land.
 5. The cycle in the old top-level Rust modules must be a subset of `legacy_cycle.members`. A member that has left must be removed from the list, so the list only shrinks.
-6. On a pull request, `[[pending]]` may not hold more entries than at the merge base. A move that renames paths keeps the count, and a new edge cannot be added to get past rule 3.
+6. `[[pending]]` and `legacy_cycle.members` may not hold more entries than at the merge base with `origin/main`. A move that renames paths keeps the count, a new edge cannot be added to get past rule 3, and a new cycle cannot be listed to get past rule 5. A checkout with no `origin/main` prints that this rule did not run. Model & Audits fetches full history so that it always runs there, and `ci-capacity.test.mjs` holds that setting.
 
 The table is acyclic, so every cycle between the nine modules contains a forbidden edge, and rules 1 and 3 together forbid all of them.
 Rule 5 covers something different: the old 19-module cycle, most of which ends up inside one module.
 
-**The existing cycle during migration.** On day one the corrected table needs 14 `[[pending]]` Rust entries and none in JavaScript:
+**The existing cycle during migration.** On day one the corrected table needs 15 `[[pending]]` entries: 14 in Rust, and one in JavaScript that #451 added after the measurement:
 
 | Entries | Cut |
 |---|---|
@@ -344,6 +350,7 @@ Rule 5 covers something different: the old 19-module cycle, most of which ends u
 | `replay/mod.rs` to `verification.rs`, and `sdk.rs` to `verification.rs` | Process helpers move to `verify` |
 | `authority.rs` to `oci.rs`, and `sdk.rs` to `oci.rs` | Reference syntax moves to `verify` |
 | `sdk.rs` to `supply_chain.rs` | SDK bindings and advisory disposition move to `verify` |
+| `auth.mjs` to `attest.mjs` | `signStatement` and the other signing parts of `attest` move to `auth` |
 
 Simulating the cuts on the symbol graph gives a measure of the old cycle:
 
@@ -353,7 +360,8 @@ Simulating the cuts on the symbol graph gives a measure of the old cycle:
 | `contracts` up-calls removed | 17 | `contracts`, `workbench` |
 | Helpers and reference syntax moved | 13 | `authority`, `browser_oracle`, `input_lock`, `sdk` |
 
-All 13 that remain are in `images`, so the 14 cuts give the nine modules no cycle between them.
+All 13 that remain are in `images`, so the 14 Rust cuts give the nine modules no cycle between them.
+The JavaScript cut breaks no cycle: it removes a forbidden edge from `auth` to `verify`, and nothing in `verify` reaches `auth`.
 The 13-module tangle is real and stays measured by rule 5, but it does not block the goal.
 The simulation removes edges by name, and does not show that each function can be lifted out without its helpers.
 
@@ -363,11 +371,11 @@ When `[[pending]]` and `legacy_cycle` are both empty, the check deletes them and
 
 ### Migration phases
 
-1. **Contract (M2).** Agree on this proposal and on the nine module issues, with the row corrections listed below.
-2. **Check.** Add `model/modules.toml` and `check-modules`, with the baseline above. Nothing moves yet, and nothing can get worse from here.
+1. **Contract (M2).** Done on 2026-11-01. This proposal is agreed, and the nine module issues carry the row corrections listed below.
+2. **Check.** Done. `model/modules.toml` and `check-modules` hold the baseline above. Nothing has moved, and nothing can get worse from here.
 3. **Developer surface.** Add the SDK namespaces and CLI groups through #347 and #349, with deprecated aliases. Existing exports keep working.
 4. **Modules outside the cycle.** Move `error`, `holo`, `attest` and `inspect` first. They already sit outside the cycle: `holo` imports only `error`, `attest` only `error` and `holo`, and `inspect` only `attest`, `error` and `holo`.
-5. **Clear the baseline.** Make the 14 cuts a piece at a time, with `just vv` passing after each one.
+5. **Clear the baseline.** Make the 15 cuts a piece at a time, with `just vv` passing after each one.
 6. **Untangle `images`.** Shrink `legacy_cycle` to nothing. This follows the goal but is not needed for it.
 7. **Shared core.** Move trust decisions to the verified core before the Python runtime (#307) adds another copy.
 
@@ -410,8 +418,8 @@ This was measured in Node with those imports refused, not in a browser or on an 
 
 ### Row corrections on agreement
 
-This pull request edits only this file and the body of #440.
-If this proposal is agreed, these need the same change:
+The owner agreed this proposal on 2026-11-01, and the bodies of #441 to #449 were corrected that day to match this file.
+#346 and #350 still need their change.
 
 | Issue | Change |
 |---|---|
@@ -419,10 +427,10 @@ If this proposal is agreed, these need the same change:
 | #350 | Replace `exec` with `dispatch` in the title, shape and done criteria. |
 | #441 | Apply the `client` row: add `diagnostics`, `providers`, `author/`, `canonical/` and `bin/prism-code`; remove `config`, `controller` and `plugins`. |
 | #442 | Apply the `images` row, including `system`, `deployment` and release acceptance. Remove `inspect` (reader) and `input_lock`. |
-| #443 | Reduce to `lifecycle` and `operations`. |
+| #443 | Reduce to `lifecycle` and `operations`. Add `dispatch` to the surface. |
 | #444, #445 | Remove `system/host_effect`. Move `providers` out of #445 and add `bin/prism-provider-kv`. |
-| #446 | Remove `sdk`, `process_resources`, `test_compiler` and the process helpers. Add `plugins`. |
-| #447 | Name `attest/crypto.rs` (`SigningKey`). |
+| #446 | Remove `sdk`, `process_resources`, `test_compiler` and the process helpers. Add `plugins`. Allow a dependency on `verify`. |
+| #447 | Name `SigningKey` in `attest/crypto.rs`, which stays with `verify` until it splits. |
 | #448 | Remove `diagnostics`, `archive`, `canonical/` and `holo` format reading. Add `version` and value encoding. Split `contracts`. |
 | #449 | Apply the `verify` row, and narrow "all trust decisions" to decisions about an image. |
 
@@ -482,4 +490,4 @@ There is no row for this yet in the roadmap's feature-to-precedent table.
 
 - #347's familiarity test has ten tasks. `logs` and "list containers" need #350 (M7), and `tag` and "list images" need #349 (M4), while #347 itself is in M3. `containers.mjs` has no `list` or `logs` today.
 - `networks` and `volumes` depend on #216 and #217, so real traffic and stores come after 1.0 on the dates above. Those modules would stay Experimental at 1.0 under the graduation criteria.
-- Phases 2 to 7 are not scheduled.
+- Phases 3 to 7 are not scheduled.
