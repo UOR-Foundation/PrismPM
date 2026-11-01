@@ -82,6 +82,19 @@ test('no option raises the level: a tampered guest stays below P1 and a policy t
   const tampered = await verify.verdict(archiveBytes('guest-data-flipped'), { minimum: 'P0', ...none });
   assert.equal(tampered.level, 'P0');
   assert.ok(tampered.reasons.some((r) => r.withholds === 'P1'));
+
+  // The statements of a signed holo, read by anyone, with a self-written envelope: no signature is checked anywhere.
+  const signed = new Uint8Array(readFileSync(signedPath));
+  const unsigned = stripAttestations(signed);
+  const statement = (type) => verify.attestations.read(signed).find((a) => a.predicateType === type).statement;
+  const statements = {
+    provenance: { statement: statement('https://slsa.dev/provenance/v1'), envelope: { verified: true } },
+    proof: { statement: statement('https://uor.foundation/prism/proof/v1'), envelope: { verified: true } },
+  };
+  const refused = (error) => error instanceof VerificationError && error.check === 'policy.invalid' && /statements/.test(error.message);
+  await assert.rejects(verify.verdict(unsigned, { statements, ...none }), refused);
+  await assert.rejects(verify.policy.input(unsigned, { statements }), refused);
+  assert.equal((await verify.verdict(unsigned, none)).level, 'P0');
 });
 
 test('a signed holo reaches its level only when check is told the signer that signed it', async () => {

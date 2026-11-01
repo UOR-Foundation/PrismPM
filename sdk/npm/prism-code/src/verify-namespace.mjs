@@ -3,10 +3,10 @@
  * (issue #449, design proposal #440). Every trust decision is meant to live in
  * this module, and in no other.
  *
- * This file decides nothing. Each member is the existing code under a Docker-SDK
- * shaped name, so a verdict from here equals the one `experimental_verify`,
- * `check` and `@prism-code/verify` return. Nothing that exists is renamed; that
- * is #347. `createPrism` does not expose this yet; that is #441.
+ * Each member is the existing code under a Docker-SDK shaped name, so a verdict
+ * from here equals the one `experimental_verify`, `check` and `@prism-code/verify`
+ * return. The one rule this file adds is `withoutEvidence`. Nothing that exists is
+ * renamed; that is #347. `createPrism` does not expose this yet; that is #441.
  *
  * P2 means the Lean kernel accepted the listed theorems about the model, not that
  * the shipped program is proven; `limits` names what such a verdict trusts.
@@ -46,6 +46,18 @@ function nodeOnly(member, load) {
 const checkModule = (member) => nodeOnly(member, () => import('./check.mjs'));
 const attestModule = (member) => nodeOnly(member, () => import('./attest.mjs'));
 
+/**
+ * Refuse `statements`, whose `envelope.verified` is the caller's own claim of a
+ * signature check: it would raise the level with no signature anywhere. Evidence
+ * comes from the holo, and `check` is what verifies it against a signer.
+ */
+function withoutEvidence(options) {
+  if (options?.statements !== undefined) {
+    throw new VerificationError('statements are not an option: a level comes from the signed statements in the holo; use verify.check with a signer', { check: 'policy.invalid' });
+  }
+  return options;
+}
+
 /** The typed error `experimental_verify` raises for the same failure, so `policy` refuses as a verdict does. */
 function typed(error) {
   if (error instanceof VerifyError) return new (classForCheck(error.code))(error.message, { check: error.code, cause: error });
@@ -81,7 +93,7 @@ const policy = Object.freeze({
   /** The `prism/policy-input/1` document a policy judges for a holo. */
   input: async (source, options = undefined) => {
     try {
-      return await policyInput(source, options);
+      return await policyInput(source, withoutEvidence(options));
     } catch (error) {
       throw typed(error);
     }
@@ -136,7 +148,7 @@ export const verify = Object.freeze({
    * @param {Uint8Array | ArrayBuffer | Blob | object} source
    * @param {object} [options]
    */
-  verdict: (source, options = undefined) => experimental_verify(source, options),
+  verdict: async (source, options = undefined) => experimental_verify(source, withoutEvidence(options)),
   /** A verdict as text for a person. A message is never part of the contract. Node only. */
   format: async (verdict, path = undefined) => (await checkModule('format')).formatVerdict(verdict, path),
   /** What a verdict at P2 or above trusts the signer for, because no check can know it. Node only. */
