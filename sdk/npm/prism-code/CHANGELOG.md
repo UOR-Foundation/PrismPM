@@ -16,6 +16,7 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `EXIT_CODES` and `exitCodeFor(error)` in `prism-code` (#348): 0 on success and a non-zero code for each `PrismError` subclass, the single table containers and the command line share. New codes: 10 `ProofMismatchError`, 11 `WorldMismatchError`, 12 `DeterminismViolationError`, 13 `ReplayError`.
 
 ### Breaking Changes
+- `experimental_verify`, `experimental_createClient` and `Application.experimental_verify` no longer take `statements` (experimental). Self-written statements with `envelope: { verified: true }` raised a holo from P0 to a passing P2 with no signature checked. They are now refused as an unknown option, `policy.invalid`. `check` with a signer still reaches P1 and P2 from the signed statements in the holo. `@prism-code/verify` keeps the option, for callers that check signatures against a trust root they hold.
 - `prism-code run <holo>` no longer exits 1 for every failed verdict (#348): it exits with the code of the error that explains the verdict. A provenance, document or policy reason, which is every holo today, stays 1; a proof reason is 10; a world outside the grant is 2.
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
