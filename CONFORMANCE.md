@@ -66,6 +66,7 @@ The three honesty levels:
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
 | `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
+| `CT-12` | `build` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. |
 
 ## deployment
 
@@ -255,6 +256,7 @@ The three honesty levels:
 | `SE-06` | `build` | Memory safety is enforced across all Rust crates with unsafe code forbidden. |
 | `SE-07` | `build` | Input parsing rejects excessively large inputs before memory exhaustion. |
 | `SE-08` | `build` | Dependency audits with cargo-deny enforce license and advisory policies. |
+| `SE-09` | `build` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. |
 
 ## stdlib
 

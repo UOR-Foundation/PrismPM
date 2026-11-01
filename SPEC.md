@@ -3960,6 +3960,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
+| `CT-12` | `controller` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |
@@ -4019,6 +4020,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SE-06` | `security` | Memory safety is enforced across all Rust crates with unsafe code forbidden. | §9 |
 | `SE-07` | `security` | Input parsing rejects excessively large inputs before memory exhaustion. | §9 |
 | `SE-08` | `security` | Dependency audits with cargo-deny enforce license and advisory policies. | §9 |
+| `SE-09` | `security` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. | §9 |
 | `AU-01` | `authorities` | Every standards claim uses a typed immutable authority binding distinct from its executable oracle. | §10 |
 | `AU-02` | `authorities` | Authority resolution writes a canonical reviewable lock and locked resolution rejects drift. | §10 |
 | `AU-03` | `authorities` | Fetch verifies signatures and digests before atomically publishing immutable cached inputs. | §10 |
