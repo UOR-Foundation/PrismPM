@@ -10,7 +10,6 @@ mod browser_system;
 mod cbor_primitive;
 mod design_views;
 mod feature_journeys;
-mod threat_model;
 mod holo_browser;
 mod host_effect_system;
 mod mailbox_admission;
@@ -22,6 +21,7 @@ mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
 mod text_cli;
+mod threat_model;
 mod workbench;
 
 use node_suite::verify as verify_node_suite;
