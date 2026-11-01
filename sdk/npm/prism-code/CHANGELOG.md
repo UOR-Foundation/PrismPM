@@ -19,6 +19,9 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `prism-code run <holo>` no longer exits 1 for every failed verdict (#348): it exits with the code of the error that explains the verdict. A provenance, document or policy reason, which is every holo today, stays 1; a proof reason is 10; a world outside the grant is 2.
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
+### Bugs Fixed
+- Keyless `attest` and `push` no longer put the OIDC identity token in an error (#272). `@sigstore/sign` quotes a token it cannot parse, so a malformed `identityToken` or `SIGSTORE_ID_TOKEN` reached the message and stderr, and a service that quoted the token back did the same. The token and its JWT parts are now replaced with `[redacted]`. The class, `code` and `check` are unchanged, and a `SigningError` raised after a token was read has no `cause`.
+
 ## [0.3.0] - 2026-10-27
 
 ### Features Added
