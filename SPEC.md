@@ -3940,6 +3940,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
+| `CT-12` | `controller` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |

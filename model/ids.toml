@@ -421,6 +421,12 @@ level = "build"
 statement = "Controller cleanup removes only the configured real output directory and rejects a symlink target."
 
 [[id]]
+id = "CT-12"
+suite = "controller"
+level = "build"
+statement = "The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes."
+
+[[id]]
 id = "ST-01"
 suite = "stdlib"
 level = "build"
