@@ -613,7 +613,9 @@ impl Controller {
             (None, None) => project_snapshot(model_snapshot)?,
         };
         let model_bytes = encode_canonical(&model)?;
-        let design_views = crate::design::render_snapshot(model_snapshot, &model)?;
+        let mut design_views = crate::design::render_snapshot(model_snapshot, &model)?;
+        // A threat model usually sits outside the application roots.
+        design_views.extend(crate::threat_model::render_snapshot(&snapshot, &model)?);
         if let Some(system) = &system {
             let expected = format!("sha256:{}", content_id(&model_bytes));
             if system.value()["application_profile"]["application_model_digest"] != expected {
