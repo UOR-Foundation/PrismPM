@@ -9,6 +9,7 @@ mod browser_view_diagnostics;
 pub mod codegen;
 pub mod registry;
 pub mod release;
+mod sdk_diagnostics;
 mod stdlib_exports;
 mod stdlib_package;
 
@@ -17,6 +18,7 @@ pub use browser_adapter_diagnostics::{
 };
 pub use browser_diagnostics::{BrowserDiagnostic, BrowserDiagnostics};
 pub use browser_view_diagnostics::BrowserViewDiagnostics;
+pub use sdk_diagnostics::{SdkDiagnostic, SdkDiagnostics};
 pub use stdlib_exports::{StdlibExport, StdlibExports};
 pub use stdlib_package::StdlibPackage;
 
@@ -62,6 +64,8 @@ pub struct Model {
     pub browser_adapter_diagnostics: BrowserAdapterDiagnostics,
     /// model/browser-view-diagnostics.toml
     pub browser_view_diagnostics: BrowserViewDiagnostics,
+    /// model/sdk-diagnostics.toml
+    pub sdk_diagnostics: SdkDiagnostics,
 }
 
 /// Model load/check failure.
@@ -106,6 +110,7 @@ impl Model {
             browser_diagnostics: read(dir, "browser-diagnostics.toml")?,
             browser_adapter_diagnostics: read(dir, "browser-adapter-diagnostics.toml")?,
             browser_view_diagnostics: read(dir, "browser-view-diagnostics.toml")?,
+            sdk_diagnostics: read(dir, "sdk-diagnostics.toml")?,
         })
     }
 
@@ -120,6 +125,8 @@ impl Model {
         self.browser_diagnostics.check()?;
         self.browser_adapter_diagnostics.check()?;
         self.browser_view_diagnostics.check()?;
+        self.sdk_diagnostics
+            .check(|id| self.ids.get(id).is_some())?;
         self.ledger.check()?;
         self.check_ids()?;
         self.check_authorities()?;
