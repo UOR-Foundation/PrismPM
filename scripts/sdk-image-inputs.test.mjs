@@ -846,7 +846,7 @@ else throw Error('unexpected caller invocation');\n`;
   writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec '${process.execPath}' '${join(bin, 'node-shim.mjs')}' "$@"\n`, { mode: 0o755 });
   const output = join(f.work, 'github-output');
   const environment = { ...env(), GITHUB_SHA: f.revision, GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM',
-    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
+    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, ARCH: 'amd64', ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
     TARGET: 'runtime', DOCKERFILE: 'sdk/Dockerfile', REPOSITORY: 'fixture-registry.invalid/sdk', VERSION: '0.3.0' };
   return { record, output, run: (script, cwd = f.source) => spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
     cwd, env: environment, encoding: 'utf8', timeout: 180000, maxBuffer: 1024 * 1024 }) };
@@ -871,7 +871,8 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     .split('\n  archive=')[0].split('\narchive=')[0];
   const rows = [
     ['candidate', runBlock(candidate, '      - name: Build the production image recipe'), 'runtime', 'type=oci,'],
-    ['release', runBlock(release, '      - id: build'), 'runtime', 'type=registry,'],
+    // The platform job builds every image; the SDK row is the wrapper caller.
+    ['release', runBlock(release, '      - id: build').replace(/^(?!sdk )[a-z-]+ sdk(?:\/runtime)?\/Dockerfile .*\n/gm, ''), 'runtime', 'type=registry,'],
     ['native', native, 'cli-archive', 'type=local,'],
     ['local-vv', local, 'runtime', null],
   ];
@@ -897,7 +898,10 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
       assert.match(secondTag, /^prismpm-vv-sdk:gate-[0-9]+-[0-9]+$/);
       assert.notEqual(secondTag, firstTag, 'separate sessions must not share a mutable SDK tag');
     }
-    if (name === 'release') assert.equal(readFileSync(transport.output, 'utf8'), `digest=sha256:${'a'.repeat(64)}\n`);
+    if (name === 'release') {
+      assert.equal(readFileSync(join(f.work, 'image-platforms/sdk-amd64.digest'), 'utf8'), `sha256:${'a'.repeat(64)}\n`);
+      rmSync(join(f.work, 'image-platforms'), {recursive: true});
+    }
     rmSync(transport.record);
     // A successful skipped command is not a successful test of the caller.
     const skipped = transport.run(`if false; then\n${command}\nfi`);

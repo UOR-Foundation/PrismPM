@@ -140,7 +140,7 @@ function validateWorkflow(value) {
   assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$target"\)/);
   assert.match(builds.run, /--platform "linux\/\$ARCH"/);
   assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
-  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/\$name-build\.json" > "image-platforms\/\$name-\$ARCH\.digest"/);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/\$name-build\.json" > "\$RUNNER_TEMP\/image-platforms\/\$name-\$ARCH\.digest"/);
   const table = builds.run.slice(builds.run.indexOf("<<'IMAGES'\n") + 10, builds.run.indexOf('IMAGES\n', builds.run.indexOf("<<'IMAGES'\n") + 10))
     .trim().split('\n').map(line => line.split(' '));
   assert.deepEqual(table, value.jobs.images.strategy.matrix.include.map(image =>

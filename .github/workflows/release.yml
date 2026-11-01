@@ -187,7 +187,7 @@ jobs:
           VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir image-platforms
+          mkdir "$RUNNER_TEMP/image-platforms"
           while read -r name dockerfile target repository; do
             if [ "$dockerfile" = sdk/Dockerfile ]; then
               build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$target")
@@ -206,7 +206,7 @@ jobs:
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
               --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
-            node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/$name-build.json" > "image-platforms/$name-$ARCH.digest"
+            node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/$name-build.json" > "$RUNNER_TEMP/image-platforms/$name-$ARCH.digest"
           done <<'IMAGES'
           sdk sdk/Dockerfile runtime ghcr.io/uor-foundation/prismpm-sdk
           runtime sdk/runtime/Dockerfile - ghcr.io/uor-foundation/prismpm-runtime
@@ -218,7 +218,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: image-platforms-${{ matrix.arch }}
-          path: image-platforms/
+          path: ${{ runner.temp }}/image-platforms/
           if-no-files-found: error
           retention-days: 30
 
