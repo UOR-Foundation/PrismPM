@@ -57,6 +57,9 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/evidence-signature-result/1` | `schemas/evidence-signature-result.schema.json` | `application/vnd.prismpm.evidence-signature-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/fetch-result/1` | `schemas/fetch-result.schema.json` | `application/vnd.prismpm.fetch-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/inspect-result/1` | `schemas/inspect-result.schema.json` | `application/vnd.prismpm.inspect-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/replay-result/1` | `schemas/replay-result.schema.json` | `application/vnd.prismpm.replay-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/attest-result/1` | `schemas/attest-result.schema.json` | `application/vnd.prismpm.attest-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/attestation-verification-result/1` | `schemas/attestation-verification-result.schema.json` | `application/vnd.prismpm.attestation-verification-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/promotion-policy/1` | `schemas/promotion-policy.schema.json` | `application/vnd.prismpm.promotion-policy.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/promotion-result/1` | `schemas/promotion-result.schema.json` | `application/vnd.prismpm.promotion-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/pull-result/1` | `schemas/pull-result.schema.json` | `application/vnd.prismpm.pull-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
@@ -79,6 +82,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | Command | Mutation boundary | Digest required | Result schema |
 | --- | --- | --- | --- |
 | `backup` | `local-backup-state` | `true` | `prismpm/backup-snapshot/1` |
+| `attest` | `attested-holo-file` | `false` | `prismpm/attest-result/1` |
 | `authority` | `resolve-and-fetch-only` | `false` | `prismpm/authority-result/1` |
 | `build` | `local-content-store` | `false` | `prismpm/product-release-result/1` |
 | `check` | `never` | `false` | `prismpm/check-result/1` |
@@ -100,6 +104,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `promote` | `signed-local-evidence` | `true` | `prismpm/promotion-result/1` |
 | `pull` | `immutable-cache` | `true` | `prismpm/pull-result/1` |
 | `push` | `registry-content` | `true` | `prismpm/push-result/1` |
+| `replay` | `local-evidence` | `false` | `prismpm/replay-result/1` |
 | `rollback` | `authorized-target` | `true` | `prismpm/deployment-evidence/1` |
 | `restore` | `authorized-clean-target` | `true` | `prismpm/restore-result/1` |
 | `run` | `ephemeral-runtime` | `true` | `prismpm/run-result/1` |
@@ -109,6 +114,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `template` | `explicit-update-only` | `false` | `prismpm/template-result/1` |
 | `update` | `explicit-update-only` | `false` | `prismpm/sdk-lock-change/1` |
 | `verify` | `local-evidence` | `false` | `prismpm/verify-result/1` |
+| `verify-attestation` | `never` | `false` | `prismpm/attestation-verification-result/1` |
 | `verify-browser-publication` | `never` | `true` | `prismpm/browser-publication-integrity/1` |
 | `verify-release` | `never` | `true` | `prismpm/signature-closure-result/1` |
 | `verify-signature` | `verified-local-evidence` | `true` | `prismpm/signature-result/1` |

@@ -394,6 +394,14 @@ pub fn run_at(root: &Path, id: &str) {
             verify_holo(root, id);
         }
         "HO-13" => holo_browser::verify(root),
+        // The attestation section (#267): the Rust reader and writer over the modeled
+        // wire codec, bound to the JavaScript appender by the committed signed archive.
+        "HO-23" | "HO-24" | "HO-25" | "HO-26" | "HO-27" | "HO-28" | "HO-29" | "HO-30" => {
+            verify_attestation(root, id)
+        }
+        // Assurance levels (#269) as `prismpm check` computes them (#270): the Rust
+        // regressions hold the verdict against the spec fixtures and the JavaScript goldens.
+        "AL-03" | "AL-05" | "AL-06" => verify_assurance(root, id),
         // The JavaScript runtime reads the composed archive, the HOLOVIEW
         // bundle and the exported closure without the Rust SDK; its complete
         // owning suite is the acceptance, file by file.
@@ -407,6 +415,17 @@ pub fn run_at(root: &Path, id: &str) {
                 ("sdk/npm/prism-code/test/cli.test.mjs", 8),
                 ("sdk/npm/prism-code/test/closure.test.mjs", 4),
                 ("sdk/npm/prism-code/test/node.test.mjs", 2),
+            ],
+            "600000",
+        ),
+        // A history replays unchanged and a changed model cannot reach P3; the
+        // Rust half holds the same fixtures in crates/prismpm/src/replay/tests.rs.
+        "HO-31" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("sdk/npm/prism-code/test/replay.test.mjs", 32),
+                ("sdk/npm/verify/test/replay-statement.test.mjs", 8),
             ],
             "600000",
         ),
@@ -3463,6 +3482,86 @@ fn verify_portable_view_report(root: &Path) {
                 .to_string()
                 .contains("application bounds exceed pinned portable View"));
         }
+    }
+}
+
+/// AL-03, AL-05 and AL-06: the named Rust regressions of the verdict reader, each with its
+/// exact inventory. AL-06 reads the goldens `prism-code check --json` printed.
+fn verify_assurance(root: &Path, id: &str) {
+    let (filter, expected) = match id {
+        "AL-03" => ("inspect::verdict::tests::al_03_", 2),
+        "AL-05" => ("inspect::verdict::tests::al_05_", 2),
+        "AL-06" => ("inspect::verdict::tests::al_06_", 1),
+        _ => unreachable!("AL-03, AL-05 and AL-06 only"),
+    };
+    rust_regressions(root, id, filter, expected, "target/conformance-assurance");
+}
+
+/// HO-23 to HO-30: run the named Rust regressions with their exact inventory and, where the
+/// JavaScript reference implementation owns the same rule, its complete Node file.
+fn verify_attestation(root: &Path, id: &str) {
+    let (filter, expected) = match id {
+        "HO-23" => ("holo::attestation::tests::ho_23_", 2),
+        "HO-24" => ("holo::attestation::tests::ho_24_", 4),
+        "HO-25" => ("holo::attestation::tests::ho_25_", 3),
+        "HO-26" => ("holo::attestation::tests::ho_26_", 2),
+        "HO-27" => ("holo::attestation::tests::ho_27_", 3),
+        "HO-28" => ("attest::tests::ho_28_", 6),
+        "HO-29" => ("attest::tests::ho_29_", 2),
+        "HO-30" => ("attest::tests::ho_30_", 2),
+        _ => unreachable!("HO-23 to HO-30 only"),
+    };
+    rust_regressions(root, id, filter, expected, "target/conformance-attestation");
+}
+
+/// Run the `prismpm` library tests `filter` names and require exactly `expected` of them to pass.
+fn rust_regressions(root: &Path, id: &str, filter: &str, expected: usize, target_dir: &str) {
+    let output = Command::new("cargo")
+        .args([
+            "test",
+            "--locked",
+            "--offline",
+            "-p",
+            "prismpm",
+            "--lib",
+            filter,
+            "--",
+            "--nocapture",
+        ])
+        .env("CARGO_TARGET_DIR", root.join(target_dir))
+        .current_dir(root)
+        .output()
+        .unwrap_or_else(|error| panic!("{id} executes its Rust regressions: {error}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{id} Rust regressions: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summaries = stdout
+        .lines()
+        .filter(|line| line.starts_with("test result: ok. "))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        summaries.len(),
+        1,
+        "{id} requires one complete summary: {stdout}"
+    );
+    assert!(
+        summaries[0].starts_with(&format!(
+            "test result: ok. {expected} passed; 0 failed; 0 ignored; 0 measured; "
+        )),
+        "{id} requires every registered regression without omissions: {stdout}"
+    );
+    let owned: &[(&str, usize)] = match id {
+        "HO-24" => &[("sdk/npm/prism-code/test/attestations.test.mjs", 11)],
+        "HO-25" => &[("sdk/npm/prism-code/test/attestation-interop.test.mjs", 2)],
+        "HO-26" => &[("sdk/npm/spec/test/attestation-bundle.test.mjs", 6)],
+        "HO-28" => &[("sdk/npm/verify/test/entry-kinds.test.mjs", 5)],
+        _ => &[],
+    };
+    if !owned.is_empty() {
+        node_suite::verify_exact(root, id, owned, "600000");
     }
 }
 

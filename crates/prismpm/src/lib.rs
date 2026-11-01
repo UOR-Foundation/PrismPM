@@ -9,6 +9,7 @@
 
 pub mod acceptance;
 mod application_build;
+pub mod attest;
 pub mod authority;
 mod binary_cli;
 mod browser_build;
@@ -35,6 +36,7 @@ pub mod oci;
 pub mod operations;
 mod process_resources;
 mod release_verification;
+pub mod replay;
 pub mod sdk;
 pub mod supply_chain;
 pub mod system;
