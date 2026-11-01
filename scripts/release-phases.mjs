@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { constants, closeSync, createReadStream, fstatSync, lstatSync, mkdtempSync, openSync,
-  readFileSync, readSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+  readFileSync, readSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -190,6 +190,24 @@ function publishedPlatform(image, indexBytes, architecture) {
   return index.manifests.find(row => row.platform.architecture === architecture);
 }
 
+// The two platform manifests were pushed by digest from native builds; the
+// index that names them is the published identity. Its bytes are canonical
+// so that the same two manifests always give the same index digest.
+export function platformIndex(platforms) {
+  assert.equal(platforms.length, 2);
+  const manifests = platforms.map(({architecture, digest, bytes}, position) => {
+    assert.equal(architecture, ['amd64', 'arm64'][position]);
+    assert.match(digest, /^sha256:[0-9a-f]{64}$/);
+    assert.equal(sha(bytes), digest, 'platform manifest differs from its pushed digest');
+    const manifest = JSON.parse(bytes);
+    assert.equal(manifest.schemaVersion, 2);
+    assert.equal(manifest.mediaType, 'application/vnd.oci.image.manifest.v1+json');
+    assert.equal(manifest.config?.mediaType, 'application/vnd.oci.image.config.v1+json');
+    return {mediaType: manifest.mediaType, digest, size: bytes.length, platform: {architecture, os: 'linux'}};
+  });
+  return Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests}));
+}
+
 export function verifyReproducibility(image, indexBytes, architecture, revision, first, second) {
   assert.match(revision, /^[0-9a-f]{40}$/);
   const published = publishedPlatform(image, indexBytes, architecture);
@@ -365,6 +383,13 @@ async function main([command, ...args]) {
     const image = readFileSync(reference, 'utf8').trim();
     const digest = verifyReproducibility(image, readFileSync(index), architecture, revision, first, second);
     process.stdout.write(`${revision} linux/${architecture} ${image} ${digest}\n`);
+  } else if (command === 'image-index') {
+    assert.equal(args.length, 5);
+    const [amd64, amd64Manifest, arm64, arm64Manifest, output] = args;
+    const index = platformIndex([{architecture: 'amd64', digest: amd64, bytes: readFileSync(amd64Manifest)},
+      {architecture: 'arm64', digest: arm64, bytes: readFileSync(arm64Manifest)}]);
+    writeFileSync(output, index, {flag: 'wx'});
+    process.stdout.write(`${sha(index)}\n`);
   } else if (command === 'publish-oci') {
     assert.equal(args.length, 1);
     requirePrerequisites('oci-native', JSON.parse(process.env.RELEASE_NEEDS));

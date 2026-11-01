@@ -444,9 +444,10 @@ function workflowContract(value) {
   assert.equal(nativeUpload.if, 'always()'); assert.equal(nativeUpload.with.path, '.native-equivalence/');
   assert.equal(nativeUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.native.strategy.matrix.include, [
-    {platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'},
-    {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'},
+    {os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'},
+    {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'},
   ]);
+  assert.equal(value.jobs.native['runs-on'], '${{ matrix.os }}', 'each native archive is built on its own platform');
 }
 test('actual workflow retains every source part and complete native failure originals', () => {
   const value = load(readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8')); workflowContract(value);

@@ -319,7 +319,8 @@ const expectedMatrices = {
     'installed-sdk': platforms,
     'source-vv': vvStartOrder.map(part => ({part})),
     'installed-vv': vvStartOrder.flatMap(part => platforms.map(({os, arch}) => ({os, arch, part}))),
-    native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
+    'image-platforms': platforms,
+    native: [{os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
   'sdk-candidate': {
     build: platforms.map(({os, arch}) => ({runner: os, architecture: arch})),
