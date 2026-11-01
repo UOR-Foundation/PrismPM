@@ -185,7 +185,16 @@ const KEYLESS_FETCH = Object.freeze({ timeout: 30_000, retry: Object.freeze({ re
  */
 const isLogConflict = (error) => error?.code === 'TLOG_CREATE_ENTRY_ERROR' && error.cause?.statusCode === 409;
 
-async function keylessBuilder(m, options) {
+/**
+ * The text with each token replaced, whole and part by part, because a service may quote only a JWT's payload.
+ * `@sigstore/sign` writes a token it cannot parse into its own message, and that message is printed.
+ */
+function withoutTokens(text, tokens) {
+  const parts = tokens.flatMap((token) => [token, ...token.split('.').filter((part) => part.length >= 8)]);
+  return parts.reduce((out, part) => out.split(part).join('[redacted]'), text);
+}
+
+async function keylessBuilder(m, options, tokens) {
   let signingConfig = options.signingConfig;
   try {
     if (typeof signingConfig === 'string') signingConfig = await readJsonFile(signingConfig, 'the signing configuration');
@@ -194,7 +203,15 @@ async function keylessBuilder(m, options) {
       signingConfig = JSON.parse(await tuf.getTarget(SIGNING_CONFIG_TARGET));
     }
     signingConfig = m.specs.SigningConfig.fromJSON(signingConfig);
-    const identityProvider = options.identityToken ? { getToken: async () => options.identityToken } : new m.sign.CIContextProvider('sigstore');
+    const source = options.identityToken ? { getToken: async () => options.identityToken } : new m.sign.CIContextProvider('sigstore');
+    // Every token passes here, whichever source it came from, so a failure can be cleaned of it.
+    const identityProvider = {
+      getToken: async () => {
+        const token = await source.getToken();
+        tokens.push(String(token));
+        return token;
+      },
+    };
     return m.sign.bundleBuilderFromSigningConfig({ signingConfig, identityProvider, bundleType: 'dsseEnvelope', fetchOptions: KEYLESS_FETCH });
   } catch (cause) {
     if (cause instanceof SigningError) throw cause;
@@ -213,7 +230,8 @@ async function keylessBuilder(m, options) {
  */
 export async function signStatement(bytes, options = {}) {
   const m = await sigstore();
-  const builder = options.key !== undefined ? await keyedBuilder(m, options.key) : await keylessBuilder(m, options);
+  const tokens = [];
+  const builder = options.key !== undefined ? await keyedBuilder(m, options.key) : await keylessBuilder(m, options, tokens);
   try {
     const artifact = { data: Buffer.from(bytes), type: DSSE_PAYLOAD_TYPE };
     const signed = await builder.create(artifact).catch((error) => {
@@ -227,7 +245,7 @@ export async function signStatement(bytes, options = {}) {
     return bundle;
   } catch (cause) {
     if (cause instanceof PrismError) throw cause;
-    const message = cause?.message ?? String(cause);
+    const message = withoutTokens(cause?.message ?? String(cause), tokens);
     // The CI identity provider rejects with a plain string; sigstore's own errors carry a code.
     const identity = typeof cause === 'string' || /^IDENTITY_TOKEN/.test(cause?.code ?? '');
     throw new SigningError(
@@ -236,7 +254,8 @@ export async function signStatement(bytes, options = {}) {
         : identity
           ? `the OIDC identity token cannot be used: ${message}`
           : `signing failed: ${message}`,
-      { check: identity ? 'sign.identity' : 'sign.service', cause },
+      // Once a token was read, the original error may hold it anywhere, so it is not passed on.
+      { check: identity ? 'sign.identity' : 'sign.service', cause: tokens.length === 0 ? cause : undefined },
     );
   }
 }

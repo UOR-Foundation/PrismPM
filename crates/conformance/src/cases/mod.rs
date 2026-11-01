@@ -21,6 +21,7 @@ mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
 mod text_cli;
+mod threat_model;
 mod workbench;
 
 use node_suite::verify as verify_node_suite;
@@ -388,6 +389,8 @@ pub fn run_at(root: &Path, id: &str) {
         "FT-11" => design_views::verify_entries(root),
         "FT-12" => feature_journeys::verify_entries(root),
         "FT-13" => feature_journeys::verify_check(root),
+        "FT-14" => threat_model::verify_declarations(root),
+        "FT-15" => threat_model::verify_check(root),
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
         | "HO-10" | "HO-11" | "HO-12" => {
@@ -581,6 +584,7 @@ pub fn run_at(root: &Path, id: &str) {
             9,
             "1200000",
         ),
+        "AU-08" => threat_model::verify_emission(root),
         "SY-08" => browser_system::verify(root),
         "SY-09" => host_effect_system::verify(root),
         "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" | "SY-07" => {
