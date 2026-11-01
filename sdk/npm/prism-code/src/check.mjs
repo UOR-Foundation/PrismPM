@@ -17,7 +17,7 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { experimental_verify } from './verify.mjs';
+import { experimental_verify, verifyWithStatements } from './verify.mjs';
 import { ASSURANCE, POLICIES } from './vendor/verify.mjs';
 import { canonicalJson, parseArchive } from './archive.mjs';
 import { attestationSection, readAttestations, stripAttestations } from './attestations.mjs';
@@ -191,7 +191,7 @@ export async function check(path, options = {}) {
   const attested = await attestedEvidence(bytes, options.signer);
   try {
     if (!attested) return await experimental_verify(bytes, { ...policy, env: options.env });
-    const verdict = await experimental_verify(attested.unsigned, { ...policy, statements: attested.statements, env: options.env });
+    const verdict = await verifyWithStatements(attested.unsigned, { ...policy, env: options.env }, attested.statements);
     return { ...verdict, ...(attested.footerMatches ? {} : withoutIntegrity(verdict, { footer: attested.footer, fingerprint: attested.computed })), holo: attested.fingerprint };
   } catch (error) {
     if (error instanceof PrismError) throw error;

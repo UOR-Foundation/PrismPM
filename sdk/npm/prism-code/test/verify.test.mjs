@@ -2,10 +2,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verify as verifyPackage } from '../../verify/src/index.mjs';
-import { appendAttestations } from '../src/attestations.mjs';
+import { appendAttestations, readAttestations, stripAttestations } from '../src/attestations.mjs';
+import { check } from '../src/check.mjs';
+import { experimental_pull, experimental_push } from '../src/push-pull.mjs';
+import { verifyWithStatements } from '../src/verify.mjs';
 import { parseArchive } from '../src/archive.mjs';
 import {
   load,
@@ -151,4 +156,67 @@ test('the environment variable is read from process.env when no env is given', a
     if (saved === undefined) delete process.env[MINIMUM_LEVEL_ENV];
     else process.env[MINIMUM_LEVEL_ENV] = saved;
   }
+});
+
+// The statements of a signed holo, read by anyone, with a self-written envelope: no signature is checked anywhere.
+const signedPath = fileURLToPath(new URL('./fixtures/signed/Calculator.signed.holo', import.meta.url));
+const signed = new Uint8Array(readFileSync(signedPath));
+const unsigned = stripAttestations(signed);
+const statementOf = (type) => readAttestations(signed).find((a) => a.predicateType === type).statement;
+const statements = {
+  provenance: { statement: statementOf('https://slsa.dev/provenance/v1'), envelope: { verified: true } },
+  proof: { statement: statementOf('https://uor.foundation/prism/proof/v1'), envelope: { verified: true } },
+};
+const forged = { statements, env: {} };
+const refused = (error) => error instanceof VerificationError && error.check === 'policy.invalid' && /statements/.test(error.message);
+
+test('the forgery is real: @prism-code/verify, which trusts its caller for the signature, reaches P2 on these statements', async () => {
+  const verdict = await verifyPackage(unsigned, { statements });
+  assert.deepEqual([verdict.level, verdict.passed], ['P2', true]);
+});
+
+test('no public verdict call takes statements: the level comes from the holo, never from an option', async () => {
+  await assert.rejects(experimental_verify(unsigned, forged), refused);
+  await assert.rejects(experimental_verify(unsigned, undefined, forged), refused);
+  assert.throws(() => experimental_createClient(forged), refused);
+  await assert.rejects(experimental_createClient({ env: {} }).verify(unsigned, { statements }), refused);
+  const app = await load(unsigned);
+  await assert.rejects(app.experimental_verify(forged), refused);
+  assert.equal((await experimental_verify(unsigned, none)).level, 'P0');
+});
+
+test('a pull and a policy file cannot carry statements either', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'prism-verify-forged-'));
+  await experimental_push(unsigned, 'app:1', { store: dir, env: {} });
+  await assert.rejects(experimental_pull('app:1', { store: dir, env: {}, policy: { minimum: 'P2', statements } }), refused);
+  const path = join(dir, 'policy.json');
+  writeFileSync(path, JSON.stringify({ minimum: 'P0', statements }));
+  await assert.rejects(check(signedPath, { policy: path, env: {} }), refused);
+});
+
+test('the route check takes counts the statements it is handed, and a signed holo with no signer is P0', async () => {
+  const verdict = await verifyWithStatements(unsigned, { env: {} }, statements);
+  assert.deepEqual([verdict.level, verdict.passed], ['P2', true]);
+  assert.equal((await check(signedPath, { env: {} })).level, 'P0');
+});
+
+// Checking a signature needs the optional sigstore packages, which need Node 22.22.2 or newer.
+const sigstore = await import('@sigstore/sign').then(() => true, () => false);
+const pem = (name) => readFileSync(new URL(`./fixtures/signed/${name}.pub.pem`, import.meta.url), 'utf8');
+
+test('check counts statements only under the signer that signed them', { skip: sigstore ? false : 'the optional sigstore packages are not installed' }, async () => {
+  assert.equal((await check(signedPath, { signer: { key: pem('signer') }, env: {} })).level, 'P2');
+  assert.equal((await check(signedPath, { signer: { key: pem('stranger') }, env: {} })).level, 'P0');
+});
+
+test('without the sigstore packages a named signer vouches for nothing: the holo stays P0', { skip: sigstore ? 'the optional sigstore packages are installed' : false }, async () => {
+  const verdict = await check(signedPath, { signer: { key: pem('signer') }, env: {} });
+  assert.deepEqual([verdict.level, verdict.passed], ['P0', false]);
+});
+
+test('the route that counts statements is not exported from the package', async () => {
+  assert.equal((await import('../src/index.mjs')).verifyWithStatements, undefined);
+  assert.equal((await import('../src/node.mjs')).verifyWithStatements, undefined);
+  const { exports: map } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(map), ['.', './node', './browser', './init', './canonical', './package.json']);
 });
