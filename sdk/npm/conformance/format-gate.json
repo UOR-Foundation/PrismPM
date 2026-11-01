@@ -54,5 +54,10 @@
       "scenarios": ["capabilities"]
     }
   ],
-  "exemptions": []
+  "exemptions": [
+    {
+      "files": ["sdk/npm/spec/schemas/documents/sdk-lock-v3.schema.json"],
+      "reason": "prismpm.lock is a project file and is never written into a holo; the optional authoring record (#325) changes no holo byte."
+    }
+  ]
 }

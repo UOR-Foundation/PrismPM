@@ -1,0 +1,9 @@
+[application]
+name = "calculator"
+version = "0.1.0"
+description = "A Lean-verified, Prism-generated checked i64 calculator."
+
+[model]
+source = "model"
+
+[capabilities]
