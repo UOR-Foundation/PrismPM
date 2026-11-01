@@ -28,8 +28,9 @@
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
 import { asBytes, parseArchive } from './archive.mjs';
+import { readAttestations } from './attestations.mjs';
 import { blake3Hex } from './blake3.mjs';
-import { fail } from './errors.mjs';
+import { fail, PrismError, ReferenceInvalidError } from './errors.mjs';
 import { inspect as inspectHolo } from './inspect.mjs';
 import { sha256Hex } from './sha256.mjs';
 
@@ -53,23 +54,54 @@ const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 256 * 1024 * 1024;
 // `schemas/product-release-result.schema.json`: `evidence_path`. A path the builder names stays in the project.
 const RELATIVE_PATH = /^(?!\/)(?!.*(?:^|\/)[.][.]?(\/|$))[A-Za-z0-9._/-]+$/;
+// `export.mjs`: a portable name at the top of a build, with no separator of any platform.
+const FILE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,255}$/;
+// Docker's own: the daemon failed, or the command could not be run or found. The builder never started.
+const DOCKER_EXITS = new Set([125, 126, 127]);
 
+/** Options are a plain object of known names. An inherited member would pass every check here and still reach the code below, or be dropped by a copy. */
 function allow(verb, options, names) {
-  if (options === null || typeof options !== 'object') fail('PP1001', `images.${verb} options must be an object`);
+  const prototype = options === null || typeof options !== 'object' ? undefined : Object.getPrototypeOf(options);
+  if (prototype !== Object.prototype && prototype !== null) fail('PP1001', `images.${verb} options must be a plain object`);
   const unknown = Object.keys(options).filter((name) => !names.includes(name));
   if (unknown.length > 0) fail('PP1001', `images.${verb} has no option ${unknown.join(', ')}; it takes ${names.join(', ')}`);
 }
 
-/** The reference text, always a string for the grammar to judge. A name that already has a tag or digest beside `tag` is refused there. */
-const named = (repository, tag) => (tag === undefined ? String(repository) : `${repository}:${tag}`);
+/** An option that is text is text: a value of another type must not be ignored, or be written into a name as `null`. */
+function allowText(verb, options, names) {
+  for (const name of names) {
+    if (options[name] !== undefined && (typeof options[name] !== 'string' || options[name] === '')) fail('PP1001', `images.${verb} option ${name} must be non-empty text`);
+  }
+}
+
+/**
+ * The reference text. Anything but text is refused here, or `null` would name a
+ * store's image `null:latest`. A `dir://` name holds its own tag, and its path may
+ * hold a colon, so `tag` beside it is refused. Any other name that already has a
+ * tag or digest beside `tag` is refused by the grammar.
+ */
+function named(repository, tag) {
+  const refuse = (why, check = 'reference.syntax') => {
+    throw new ReferenceInvalidError(`this is not a valid image name: ${why}`, { check });
+  };
+  if (typeof repository !== 'string' || repository === '') refuse(`it must be non-empty text, not ${typeof repository === 'string' ? 'empty' : typeof repository}`);
+  if (tag === undefined) return repository;
+  if (typeof tag !== 'string' || tag === '') refuse('the tag must be non-empty text');
+  if (repository.startsWith('dir://')) refuse('a dir:// name holds its own tag, as dir://store:tag', 'reference.store');
+  return `${repository}:${tag}`;
+}
 
 /** A path stays a path, so the code it reaches reads it and reports it; anything else becomes bytes. */
 async function sourceOf(image) {
   if (typeof image === 'string') return image;
   if (image instanceof URL) {
-    if (image.protocol !== 'file:') fail('load.path', `${image} is not a file; pull an image from a registry with images.pull`);
+    if (image.protocol !== 'file:' || image.hostname !== '') fail('load.path', `${image} is not a local file; pull an image from a registry with images.pull`);
     const { fileURLToPath } = await import('node:url');
-    return fileURLToPath(image);
+    try {
+      return fileURLToPath(image);
+    } catch (cause) {
+      return fail('load.path', `${image} is not a path: ${cause.message}`);
+    }
   }
   if (typeof Blob !== 'undefined' && image instanceof Blob) return new Uint8Array(await image.arrayBuffer());
   return asBytes(image);
@@ -77,17 +109,20 @@ async function sourceOf(image) {
 
 const digestsOf = async (bytes) => ({ sha256: await sha256Hex(bytes), blake3: blake3Hex(bytes) });
 
-/** The last `limit` bytes of a stream. */
+/** The last `limit` bytes of a stream, and whether anything before them was dropped. */
 function tail(limit) {
   const chunks = [];
   let size = 0;
+  let total = 0;
   return {
     add(chunk) {
       chunks.push(chunk);
       size += chunk.length;
+      total += chunk.length;
       while (size - chunks[0].length >= limit) size -= chunks.shift().length;
     },
     text: () => Buffer.concat(chunks).subarray(-limit).toString('utf8'),
+    overflowed: () => total > limit,
   };
 }
 
@@ -100,13 +135,13 @@ function runBuilder(spawn, args, { cwd, env }) {
     try {
       child = spawn('docker', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     } catch (error) {
-      done({ error, code: null, stdout: '', logs: '' });
+      done({ error, code: null, stdout: '', overflowed: false, logs: '' });
       return;
     }
     child.stdout.on('data', (chunk) => stdout.add(chunk));
     child.stderr.on('data', (chunk) => logs.add(chunk));
-    child.on('error', (error) => done({ error, code: null, stdout: stdout.text(), logs: logs.text() }));
-    child.on('close', (code, signal) => done({ error: null, code: code ?? (signal ? 1 : 0), stdout: stdout.text(), logs: logs.text() }));
+    child.on('error', (error) => done({ error, code: null, stdout: stdout.text(), overflowed: stdout.overflowed(), logs: logs.text() }));
+    child.on('close', (code, signal) => done({ error: null, code: code ?? (signal ? 1 : 0), stdout: stdout.text(), overflowed: stdout.overflowed(), logs: logs.text() }));
   });
 }
 
@@ -119,6 +154,18 @@ function parseResult(stdout) {
   }
 }
 
+/** A file a build result names: a regular file that is really inside the project, within `limit`. A link, or a path that leaves the project, is refused. */
+async function readInside(root, path, limit, what) {
+  const { lstat, readFile, realpath } = await import('node:fs/promises');
+  const { relative } = await import('node:path');
+  const missing = (cause) => fail('PP4002', `${what} cannot be read: ${cause.code ?? cause.message}`);
+  const info = await lstat(path).catch(missing);
+  const inside = relative(await realpath(root), await realpath(path).catch(missing));
+  if (/^\.\.([\\/]|$)/.test(inside) || /^[A-Za-z]:|^[\\/]/.test(inside) || !info.isFile()) fail('PP8001', `${what} is a link or leaves the project`);
+  if (info.size > limit) fail('PP4004', `${what} is ${info.size} bytes, over the ${limit} byte bound`);
+  return readFile(path).catch(missing);
+}
+
 /** Where a build left its build manifest, and how to read a file it names. */
 async function builtFiles(root, result) {
   const { join, dirname } = await import('node:path');
@@ -128,13 +175,11 @@ async function builtFiles(root, result) {
     return { manifestBytes: release.layerBytes('manifest.json', MAX_MANIFEST_BYTES), read: async (title) => release.layerBytes(title, MAX_IMAGE_BYTES), pathOf: () => null };
   }
   if (typeof result.manifest_path !== 'string' || !RELATIVE_PATH.test(result.manifest_path)) fail('PP4004', 'the build result names no build manifest inside the project');
-  const { readFile } = await import('node:fs/promises');
   const path = join(root, result.manifest_path);
   const folder = dirname(path);
-  const manifestBytes = await readFile(path).catch((cause) => fail('PP4002', `the build result names ${result.manifest_path}, which cannot be read: ${cause.code ?? cause.message}`));
   return {
-    manifestBytes,
-    read: (title) => readFile(join(folder, title)).catch((cause) => fail('PP4002', `the build manifest names ${title}, which cannot be read: ${cause.code ?? cause.message}`)),
+    manifestBytes: await readInside(root, path, MAX_MANIFEST_BYTES, `the build manifest ${result.manifest_path}`),
+    read: (title) => readInside(root, join(folder, title), MAX_IMAGE_BYTES, `the image ${title}`),
     pathOf: (title) => join(folder, title),
   };
 }
@@ -150,11 +195,13 @@ async function builtImage(root, result) {
   const titles = [...rows.keys()].filter((path) => !path.includes('/') && path.endsWith('.holo'));
   if (titles.length !== 1) fail('PP4002', `the build names ${titles.length} images, and images.build returns one: ${titles.join(', ') || 'none'}`);
   const [title] = titles;
+  if (!FILE_NAME.test(title)) fail('PP8001', `the build manifest names ${JSON.stringify(title)}, which is not a portable name in the build`);
   const row = rows.get(title);
   const bytes = new Uint8Array(await read(title) ?? fail('PP4002', `the release has no layer ${title}`));
   if (digestOf(bytes) !== `sha256:${row.sha256}` || bytes.length !== row.byte_length) fail('PP4001', `${title} differs from its build manifest row`);
   const parsed = parseArchive(bytes);
   if (!parsed.verification.footer) fail('PP3004', `${title} does not match its own digest: its footer is ${parsed.footer}, its body gives ${parsed.fingerprint}`);
+  if (!parsed.verification.labels) fail('PP3008', `a layer of ${title} does not match its digest: ${parsed.verification.labelMismatches.map((m) => m.label).join(', ')}`);
   return { bytes, digest: `blake3:${parsed.footer}`, path: pathOf(title) };
 }
 
@@ -187,9 +234,24 @@ function layerOf(section) {
   return layer;
 }
 
-/** `prismpm/holo-inspection/1` in the developer's words (#346). Every value is the one the inspection reported. */
-function inspectionView(inspection) {
+/** The statements an image carries, and null when one cannot be read. `signed` says a signature is present, not that anyone checked it. */
+function statementsOf(parsed) {
+  try {
+    return readAttestations(parsed).map(({ predicateType, signed, subjects }) => ({ predicateType, signed, subjects: subjects.map(({ name, digest }) => ({ name, digest })) }));
+  } catch (cause) {
+    if (cause instanceof PrismError) return null;
+    throw cause;
+  }
+}
+
+/**
+ * `prismpm/holo-inspection/1` in the developer's words (#346), with what it does
+ * not read yet: the statements in the image, and the digest its bytes really have.
+ * A damaged image's footer is a claim, so it is reported as `claimedDigest`.
+ */
+function inspectionView(inspection, parsed) {
   const { manifest, model, provenance, world, verification } = inspection;
+  const statements = statementsOf(parsed);
   let worldView = null;
   if (world) {
     const { capability_set: capabilitySet, ...rest } = world;
@@ -198,7 +260,7 @@ function inspectionView(inspection) {
   return {
     schema: IMAGE_INSPECTION_SCHEMA,
     name: inspection.name,
-    digest: `blake3:${inspection.footer}`,
+    digest: `blake3:${parsed.fingerprint}`,
     fileDigest: inspection.digest,
     size: inspection.size,
     format: { revision: inspection.revision, version: inspection.physical_version, flags: inspection.flags },
@@ -231,8 +293,14 @@ function inspectionView(inspection) {
       lexleanCommit: provenance.lexlean_commit,
     },
     world: worldView,
-    attestations: inspection.attestations,
-    verification: { digest: verification.footer, layers: verification.labels, crossReferences: verification.cross_references },
+    attestations: statements ?? [],
+    verification: {
+      digest: verification.footer,
+      claimedDigest: `blake3:${inspection.footer}`,
+      layers: verification.labels,
+      crossReferences: verification.cross_references,
+      attestations: statements !== null,
+    },
   };
 }
 
@@ -253,6 +321,7 @@ export function createImages({ spawn } = {}) {
    */
   async function build(options = {}) {
     allow('build', options, BUILD_OPTIONS);
+    allowText('build', options, ['path', 'tag', 'file', 'release']);
     const { readFile } = await import('node:fs/promises');
     const { resolve, join } = await import('node:path');
     const { hostDockerArguments, sdkImageFromLock } = await import('./docker.mjs');
@@ -264,14 +333,17 @@ export function createImages({ spawn } = {}) {
     if (options.locked) args.push('--locked');
     if (options.update) args.push('--update');
     const run = spawn ?? (await import('node:child_process')).spawn;
-    const { error, code, stdout, logs } = await runBuilder(run, hostDockerArguments({ image: builder, cwd: root, command: 'build', args }), { cwd: root, env: options.env ?? process.env });
+    const { error, code, stdout, overflowed, logs } = await runBuilder(run, hostDockerArguments({ image: builder, cwd: root, command: 'build', args }), { cwd: root, env: options.env ?? process.env });
     if (error) fail('PP5008', error.code === 'ENOENT' ? 'docker is not installed or not on PATH; images.build runs the builder image in Docker' : `docker could not start: ${error.message}`);
+    // The end of too much output could still parse, and it is not the one value `prismpm --json` prints.
+    if (overflowed) fail('PP4004', `the build printed more than ${MAX_RESULT_BYTES} bytes, and its result is one JSON value`, { exitCode: code, logs });
     const result = parseResult(stdout);
     if (code !== 0) {
-      // `prismpm --json` reports its own failure on stdout. Anything else means the builder never ran, such as a stopped daemon.
+      // `prismpm --json` reports its own failure on stdout.
       const diagnostic = result?.diagnostic;
       if (typeof diagnostic?.code === 'string') fail(diagnostic.code, diagnostic.message ?? `the build exited ${code}`, { exitCode: code, logs });
-      fail('PP5008', `the builder image did not run: docker exited ${code}`, { exitCode: code, logs });
+      if (DOCKER_EXITS.has(code)) fail('PP5008', `the builder image did not run: docker exited ${code}`, { exitCode: code, logs });
+      fail('PP9001', `the build stopped with exit ${code} and reported no diagnostic`, { exitCode: code, logs });
     }
     if (result === null) fail('PP4004', 'the build exited 0 and printed no JSON result', { logs });
     const { bytes, digest, path } = await builtImage(root, result);
@@ -302,6 +374,8 @@ export function createImages({ spawn } = {}) {
    */
   async function pull(repository, options = {}) {
     allow('pull', options, PULL_OPTIONS);
+    allowText('pull', options, ['store', 'output']);
+    if (options.maxSize !== undefined && (!Number.isSafeInteger(options.maxSize) || options.maxSize <= 0)) fail('PP1001', 'images.pull option maxSize must be a positive whole number of bytes');
     const { experimental_pull } = await import('./push-pull.mjs');
     const { policyOf } = await import('./check.mjs');
     const { tag, maxSize, policy, ...rest } = options;
@@ -338,6 +412,7 @@ export function createImages({ spawn } = {}) {
    */
   async function push(repository, options = {}) {
     allow('push', options, PUSH_OPTIONS);
+    allowText('push', options, ['store']);
     const { tag, source, ...rest } = options;
     if (source === undefined || source === null) fail('load.source', 'images.push needs the image as options.source: there is no local image store to find it in until #349');
     const { experimental_push } = await import('./push-pull.mjs');
@@ -374,7 +449,8 @@ export function createImages({ spawn } = {}) {
         return fail('load.path', `${path} cannot be read: ${cause.code ?? cause.message}`);
       });
     }
-    return inspectionView(await inspectHolo(source));
+    const bytes = asBytes(source);
+    return inspectionView(await inspectHolo(bytes), parseArchive(bytes));
   }
 
   /**

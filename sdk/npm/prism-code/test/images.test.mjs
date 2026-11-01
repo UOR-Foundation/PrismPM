@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn as realSpawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -99,7 +99,7 @@ test('an option a verb does not have is refused, so a misspelling cannot weaken 
   const calls = [
     ['pull', () => images.pull('app:1', { store, output, polcy: { minimum: 'P3' } }), /polcy/],
     ['pull', () => images.pull('app:1', { store, output, credentials: { username: 'a', password: 'b' } }), /credentials/],
-    ['pull', () => images.pull('app:1', null), /must be an object/],
+    ['pull', () => images.pull('app:1', null), /must be a plain object/],
     ['push', () => images.push('app:2', { source: plain, store, sign: true }), /sign/],
     ['verify', () => images.verify(plain, { minimum: 'P0' }), /minimum/],
     ['build', () => images.build({ dockerfile: 'x' }), /dockerfile/],
@@ -109,6 +109,67 @@ test('an option a verb does not have is refused, so a misspelling cannot weaken 
   }
   assert.equal(existsSync(output), false);
   assert.deepEqual((await openStore(store).list()).map((item) => item.name), ['app:1'], 'the refused push wrote nothing');
+});
+
+test('options must be a plain object, because an inherited key would skip every check here', async () => {
+  const store = fresh('store');
+  await images.push('app:1', { source: plain, store });
+  const output = fresh('never.holo');
+  const inherited = Object.create({ key: 'not a key', output });
+  inherited.store = store;
+  class Options {
+    store = store;
+  }
+  for (const options of [inherited, new Options(), [store], new Map()]) {
+    await assert.rejects(images.pull('app:1', options), (error) => error.code === 'PP1001' && /plain object/.test(error.message));
+  }
+  assert.equal(existsSync(output), false);
+  assert.ok((await images.pull('app:1', Object.assign(Object.create(null), { store }))).bytes);
+});
+
+test('an option of the wrong type is refused, never ignored', async () => {
+  const store = fresh('store');
+  await images.push('app:1', { source: plain, store });
+  const sandbox = fresh('sandbox');
+  mkdirSync(sandbox);
+  for (const output of [pathToFileURL(join(sandbox, 'a.holo')), 123, null, '']) {
+    await assert.rejects(images.pull('app:1', { store, output }), (error) => error.code === 'PP1001' && /output/.test(error.message));
+  }
+  for (const maxSize of [Number.NaN, 'abc', 0, -1, 1.5]) {
+    await assert.rejects(images.pull('app:1', { store, maxSize }), (error) => error.code === 'PP1001' && /maxSize/.test(error.message));
+  }
+  await assert.rejects(images.pull('app:1', { store: null }), (error) => error.code === 'PP1001');
+  await assert.rejects(images.push('app:1', { source: plain, store: 5 }), (error) => error.code === 'PP1001');
+  for (const options of [{ path: 5 }, { tag: null }, { file: 5 }, { release: true }]) {
+    await assert.rejects(images.build(options), (error) => error.code === 'PP1001');
+  }
+  assert.deepEqual(snapshot(sandbox), []);
+  await assert.rejects(images.pull('app:1', { store, maxSize: 10 }), (error) => error.check === 'pull.size');
+});
+
+test('a name that is not text never becomes one: nothing is written to a store under null', async () => {
+  const store = fresh('store');
+  for (const name of [null, undefined, 5, '']) {
+    await assert.rejects(images.push(name, { source: plain, store }), ReferenceInvalidError);
+    await assert.rejects(images.pull(name, { store }), ReferenceInvalidError);
+  }
+  for (const tag of [null, 5, '']) await assert.rejects(images.push('app', { tag, source: plain, store }), ReferenceInvalidError);
+  assert.equal(existsSync(store), false);
+});
+
+test('a dir:// name holds its own tag, so the tag option beside it is refused', async () => {
+  const store = fresh('store');
+  await images.push(`dir://${store}:v1`, { source: plain });
+  await assert.rejects(images.pull(`dir://${store}:v1`, { tag: 'v2' }), (error) => error instanceof ReferenceInvalidError && error.check === 'reference.store');
+  await assert.rejects(images.push(`dir://${store}`, { tag: 'v2', source: plain }), (error) => error instanceof ReferenceInvalidError && error.check === 'reference.store');
+  assert.deepEqual((await openStore(store).list()).map((item) => item.name.split(':').pop()), ['v1']);
+});
+
+test('a file URL must be a local path, and anything else is a typed refusal before any read', async () => {
+  for (const url of [new URL('file://host/share/a.holo'), new URL('file:///a%2fb'), new URL('https://example.invalid/a.holo')]) {
+    await assert.rejects(images.inspect(url), (error) => error instanceof PrismError && error.code === 'load.path', String(url));
+    await assert.rejects(images.verify(url), (error) => error instanceof PrismError && error.code === 'load.path', String(url));
+  }
 });
 
 // pull and push
@@ -347,7 +408,8 @@ test('inspect reports every value of the canonical inspection, in developer-view
   assert.equal(view.provenance.applicationKappa, canonical.provenance.application_kappa);
   assert.deepEqual([view.world.contract, view.world.imports, view.world.exports], [canonical.world.contract, canonical.world.imports, canonical.world.exports]);
   assert.deepEqual(view.world.capabilitySet, { digest: canonical.world.capability_set.label, empty: canonical.world.capability_set.empty });
-  assert.deepEqual(view.verification, { digest: true, layers: true, crossReferences: true });
+  assert.deepEqual(view.verification, { digest: true, claimedDigest: `blake3:${canonical.footer}`, layers: true, crossReferences: true, attestations: true });
+  assert.deepEqual(view.attestations, []);
   const { world: _world, ...named } = view;
   assertDeveloperTerms(named);
 });
@@ -364,7 +426,33 @@ test('a damaged image can still be looked at: inspect reports it and throws noth
   damaged[damaged.length - 1] ^= 1;
   const view = await images.inspect(damaged);
   assert.equal(view.verification.digest, false);
+  assert.equal(view.digest, FINGERPRINT, 'the digest is what the bytes give');
+  assert.notEqual(view.verification.claimedDigest, view.digest);
+  assert.equal((await images.verify(damaged, { policy: { minimum: 'P0' } })).holo, view.digest);
   await assert.rejects(images.inspect(new TextEncoder().encode('not an image')), (error) => error instanceof PrismCodeError && error.code.startsWith('archive.'));
+});
+
+test('inspect reports the statements an image carries, and says when one cannot be read', async () => {
+  const store = fresh('store');
+  await images.push('app:1', { source: placeholders, store });
+  const pulled = await images.pull('app:1', { store });
+  const view = await images.inspect(placeholders);
+  assert.equal(view.digest, pulled.digest);
+  assert.equal(view.attestations.length, pulled.attestations.image);
+  assert.ok(view.attestations.length > 0);
+  const lines = readAttestations(placeholders);
+  view.attestations.forEach((attestation, i) => {
+    assert.deepEqual([attestation.predicateType, attestation.signed], [lines[i].predicateType, lines[i].signed]);
+    assert.deepEqual(attestation.subjects.map((subject) => subject.name), lines[i].subjects.map((subject) => subject.name));
+  });
+  assertDeveloperTerms(view.attestations);
+  assert.equal(view.verification.attestations, true);
+
+  // A byte changed inside a statement line: the archive still parses, and the line no longer decodes.
+  const unreadable = placeholders.slice();
+  unreadable[Buffer.from(unreadable).indexOf('dsseEnvelope')] ^= 1;
+  const damaged = await images.inspect(unreadable);
+  assert.deepEqual([damaged.attestations, damaged.verification.attestations], [[], false]);
 });
 
 test('inspect says why it has nothing to read', async () => {
@@ -413,7 +501,7 @@ test('verify judges a damaged image as check does, and a statement in it counts 
 const IMAGE = `ghcr.io/uor-foundation/prismpm@sha256:${'a'.repeat(64)}`;
 
 /** A project with a lock, and a docker that runs a child printing what the test says. It returns the calls it saw. */
-function project({ result, exit = 0, logs = '', lock = JSON.stringify({ sdk_image: IMAGE }), write = () => {} } = {}) {
+function project({ result, exit = 0, logs = '', pad = 0, lock = JSON.stringify({ sdk_image: IMAGE }), write = () => {} } = {}) {
   const root = fresh('project');
   mkdirSync(root);
   if (lock !== null) writeFileSync(join(root, 'prismpm.lock'), lock);
@@ -421,8 +509,8 @@ function project({ result, exit = 0, logs = '', lock = JSON.stringify({ sdk_imag
   const calls = [];
   const spawn = (command, args, options) => {
     calls.push({ command, args, options });
-    const script = 'process.stderr.write(process.env.FAKE_LOGS);process.stdout.write(process.env.FAKE_RESULT);process.exitCode=Number(process.env.FAKE_EXIT)';
-    return realSpawn(process.execPath, ['-e', script], { ...options, env: { ...process.env, FAKE_LOGS: logs, FAKE_RESULT: typeof result === 'string' ? result : JSON.stringify(result ?? null), FAKE_EXIT: String(exit) } });
+    const script = "process.stderr.write(process.env.FAKE_LOGS);process.stdout.write(' '.repeat(Number(process.env.FAKE_PAD)));process.stdout.write(process.env.FAKE_RESULT);process.exitCode=Number(process.env.FAKE_EXIT)";
+    return realSpawn(process.execPath, ['-e', script], { ...options, env: { ...process.env, FAKE_LOGS: logs, FAKE_RESULT: typeof result === 'string' ? result : JSON.stringify(result ?? null), FAKE_EXIT: String(exit), FAKE_PAD: String(pad) } });
   };
   return { root, calls, images: createImages({ spawn }) };
 }
@@ -507,6 +595,31 @@ test('a failed build rejects with the code prismpm gave and the logs that explai
   });
 });
 
+test('a build that stopped with no diagnostic is not reported as one that never ran', async () => {
+  for (const exit of [101, 137, 1]) {
+    const { root, images: built } = project({ exit, result: '{"truncat', logs: 'panicked\n' });
+    await assert.rejects(built.build({ path: root }), (error) => error.code === 'PP9001' && error.details.exitCode === exit && /panicked/.test(error.details.logs), String(exit));
+  }
+  for (const exit of [125, 126, 127]) {
+    const { root, images: built } = project({ exit, result: '' });
+    await assert.rejects(built.build({ path: root }), (error) => error.code === 'PP5008' && error.details.exitCode === exit, String(exit));
+  }
+});
+
+test('a build cannot read outside the project: not through a name, not through a link', async () => {
+  const outside = fresh('outside');
+  mkdirSync(join(outside, BUILD_ID), { recursive: true });
+  writeFileSync(join(outside, BUILD_ID, 'Calculator.holo'), plain);
+  writeFileSync(join(outside, BUILD_ID, 'manifest.json'), JSON.stringify({ schema: 'prismpm/build-manifest/1', files: [{ path: 'Calculator.holo', sha256: sha(plain), byte_length: plain.length }] }));
+  const linked = project({ result: BUILD_RESULT, write: (at) => { mkdirSync(join(at, '.prism')); symlinkSync(outside, join(at, '.prism', 'build'), 'junction'); } });
+  await assert.rejects(linked.images.build({ path: linked.root }), (error) => error.code === 'PP8001');
+  for (const title of ['..\\..\\..\\secret.holo', 'a\\b.holo', '.hidden.holo', '-x.holo']) {
+    const row = [{ path: title, sha256: sha(plain), byte_length: plain.length }];
+    const { root, images: built } = project({ result: BUILD_RESULT, write: (at) => buildDirectory(at, { rows: row }) });
+    await assert.rejects(built.build({ path: root }), (error) => error.code === 'PP8001', title);
+  }
+});
+
 test('a builder that never ran is PP5008, whether docker is missing or its daemon is down', async () => {
   const stopped = project({ exit: 125, result: '', logs: 'Cannot connect to the Docker daemon\n' });
   await assert.rejects(stopped.images.build({ path: stopped.root }), (error) => error.code === 'PP5008' && error.details.exitCode === 125 && /daemon/.test(error.details.logs));
@@ -530,6 +643,10 @@ test('no lock is PP1101 and a mutable builder image is refused, and neither star
 test('a build that exits 0 must still have made the image it names', async () => {
   const damaged = plain.slice();
   damaged[damaged.length - 1] ^= 1;
+  // A changed byte in the last layer, with the footer recomputed: the file agrees with itself and not with its labels.
+  const refootered = plain.slice();
+  refootered[refootered.length - 100] ^= 1;
+  refootered.set(Buffer.from(blake3Hex(refootered.subarray(0, refootered.length - 32)), 'hex'), refootered.length - 32);
   const cases = [
     ['no JSON', { result: 'built!' }, 'PP4004'],
     ['a result with no manifest', { result: { schema: 'prismpm/build-result/1' } }, 'PP4004'],
@@ -542,6 +659,9 @@ test('a build that exits 0 must still have made the image it names', async () =>
     ['an image file that is gone', { result: BUILD_RESULT, write: (at) => buildDirectory(at, { rows: [{ path: 'gone.holo', sha256: sha(plain), byte_length: plain.length }] }) }, 'PP4002'],
     ['bytes other than the row', { result: BUILD_RESULT, write: (at) => buildDirectory(at, { rows: [{ path: 'Calculator.holo', sha256: '0'.repeat(64), byte_length: plain.length }] }) }, 'PP4001'],
     ['a footer that does not match', { result: BUILD_RESULT, write: (at) => buildDirectory(at, { holo: damaged }) }, 'PP3004'],
+    ['a changed layer under a footer that matches', { result: BUILD_RESULT, write: (at) => buildDirectory(at, { holo: refootered }) }, 'PP3008'],
+    ['more output than one result', { result: BUILD_RESULT, pad: 17 * 1024 * 1024, write: (at) => buildDirectory(at) }, 'PP4004'],
+    ['a manifest over its bound', { result: BUILD_RESULT, write: (at) => writeFileSync(join(buildDirectory(at), 'manifest.json'), ' '.repeat(17 * 1024 * 1024)) }, 'PP4004'],
   ];
   for (const [name, setup, code] of cases) {
     const { root, images: built } = project(setup);
