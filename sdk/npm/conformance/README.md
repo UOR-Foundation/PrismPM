@@ -23,7 +23,7 @@ pass            capabilities.none.denies-everything
 ...
 xfail           replay.history.unchanged  #284: Histories and replay are not on main yet; ...
 
-121 checks: 116 pass, 0 fail, 5 xfail, 0 unexpected pass, 0 n/a
+122 checks: 117 pass, 0 fail, 5 xfail, 0 unexpected pass, 0 n/a
 PASSED
 ```
 

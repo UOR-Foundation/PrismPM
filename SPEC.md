@@ -219,6 +219,66 @@ not decide that a call is an interface call or that an acceptance row is
 executed: the name must resolve to a definition, and what the definition is
 remains the consuming model's statement.
 
+### 2.3 Threat models
+
+FT-14 and FT-15 admit a threat model and its control mapping. `Foundation.Sec`
+records stay the identity of every asset, threat and control. The stdlib module
+`Production.ThreatModel` declares the facts they lack, as definitions whose
+result type is one of its row types and whose body is a closed literal record:
+
+| Row | States |
+| --- | --- |
+| `ControlSet` | the `title`, `text`, `version` and `lastModified` of the document |
+| `ModeledAsset` | the `name` and `text` of the `Foundation.Sec::Asset` named by `asset` |
+| `ModeledThreat` | the `name`, `text` and `Stride` `category` of the `Foundation.Sec::Threat` named by `threat` |
+| `ModeledControl` | the `name`, `text` and `Evidence` list of the `Foundation.Sec::ApplicationSecurityControl` named by `control` |
+| `ThreatMapping` | the `controls` that answer the threat named by `threat` |
+| `AcceptedRisk` | the `rationale` for accepting the threat named by `threat` |
+
+Each reference is the qualified `<module>::<declaration>` identifier the model
+document gives the record. `Stride` is `spoofing`, `tampering`, `repudiation`,
+`informationDisclosure`, `denialOfService` or `elevationOfPrivilege`. An
+`Evidence` value carries an `EvidenceKind` of `gate`, `proof` or `review` and a
+`reference`. A model declares exactly one `ControlSet`. Its `lastModified` is
+stated by the model, in the form `YYYY-MM-DDThh:mm:ssZ`, because a build reads
+no clock. Threat models are checked, not projected: they are not part of
+`prismpm/model-document`, so no model-document schema, standards profile or
+emitter digest depends on them.
+
+`check` and `build` run the check over the snapshot of every entrypoint, because
+a threat model usually sits outside the application roots. A model with no row
+is unaffected. A model with any row is held to the whole rule: every asset,
+threat and control of the model document must have its row. The check is the
+executable form of `Production.ThreatModel.validateNormalizedThreatModel`, whose
+soundness and completeness theorem holds with an empty axiom set and whose
+finite theorems prove the verdict on the accepted vector and on each refused
+one. Failures are reported in a fixed order, one diagnostic at a time: the rows,
+each asset, then by threat identifier and then by control identifier.
+
+| Code | Failure |
+| --- | --- |
+| `PP2019` | a threat has no mapped control and no accepted risk |
+| `PP2020` | a control names no evidence |
+| `PP2021` | a threat has no `ModeledThreat` row, so it has no STRIDE category |
+| `PP2022` | a row is not a closed literal record, is repeated, is blank or out of bounds, or names no record of the model document; the model does not declare exactly one control set with a valid time; or an asset has no row |
+
+A name, title, version or evidence reference has no control character and no
+edge whitespace, is not blank and has at most 256 characters. A text or rationale
+is not blank, has no control character other than line feed and has at most 4096
+characters. The check does not decide that named evidence exists or is true.
+
+AU-08 makes `build` emit `oscal/component-definition.json` for a checked model:
+one OSCAL 1.1.0 component definition with one component and, when the model has
+controls, one control implementation. Each control is an implemented requirement
+whose `control-id` is its identifier with `::` replaced by `.`, and whose
+properties state its evidence, with the kind as `class`, and the threats mapped
+to it, with the category as `class`. The asset names are properties of the
+component and the accepted risks are stated in its `remarks`, so that they cannot
+be read as mitigated. The implementation's `source` names a back-matter resource,
+because these controls are declared by the model and not by a published catalog.
+The document is reproducible: every UUID has the version 5 form and is derived by
+SHA-256 from identifiers and, for the document itself, from its content.
+
 ## 3. Canonical Holo contract
 
 Holo/1 is the Prism application profile defined by the generated declarations
@@ -1500,6 +1560,16 @@ locked engine execution, exact upstream inventory, actual CLI boundaries and
 compiled defects for invalid acceptance, wrong editions and unstable capture.
 Changed compiled schema bytes must produce an unavailable-oracle refusal.
 Source-only registration or a locally overridden engine cannot accept it.
+
+The validator is bound as the `oscal-1.1.0-structural` oracle through
+`standards.lock`, with the `OSCAL-1-1-0`, `OSCAL-COMPONENT-SCHEMA-1-1-0` and
+`JSONSCHEMA-ENGINE-0-58-2` authorities, is installed in the SDK image as
+`oscal-validator`, and runs as the `oscal` profile of `prismpm oracle` under the
+isolation of §10. AU-08 validates the component definition of §2.3 with it. A
+build does not run it, as a build runs no other oracle. Rejected subjects exit 4
+and map to `PP5404`. Invocation, resource and unavailable outcomes map to
+`PP5403`. Acceptance carries the limits of the previous paragraph: the emitted
+document is structurally valid, not an established control implementation.
 
 ## 11. Production system model and projections
 
@@ -3825,6 +3895,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `FT-11` | `facets` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. | §2 |
 | `FT-12` | `facets` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. | §2 |
 | `FT-13` | `facets` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. | §2 |
+| `FT-14` | `facets` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. | §2 |
+| `FT-15` | `facets` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. | §2 |
 | `HO-01` | `holo` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. | §3 |
 | `HO-02` | `holo` | Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
 | `HO-03` | `holo` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. | §3 |
@@ -3868,6 +3940,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
+| `CT-12` | `controller` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |
@@ -3935,6 +4008,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
 | `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
+| `AU-08` | `authorities` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |
