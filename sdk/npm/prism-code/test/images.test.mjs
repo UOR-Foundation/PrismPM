@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn as realSpawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -28,7 +28,8 @@ const placeholders = new Uint8Array(readFileSync(new URL('./fixtures/attestation
 const FINGERPRINT = `blake3:${blake3Hex(plain.subarray(0, plain.length - 32))}`;
 const same = (a, b) => Buffer.from(a).equals(Buffer.from(b));
 
-const dir = mkdtempSync(join(tmpdir(), 'prism-images-'));
+// The real path: macOS links its temp folder, and the CLI's working directory is always resolved.
+const dir = realpathSync(mkdtempSync(join(tmpdir(), 'prism-images-')));
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 let counter = 0;
 const fresh = (name = 'x') => join(dir, `${name}-${counter++}`);
