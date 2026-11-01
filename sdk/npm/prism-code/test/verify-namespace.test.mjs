@@ -1,5 +1,6 @@
 // prism.verify (#449): the same verdicts and refusals as the code under it, on the conformance corpus and the signed
-// fixtures, and an import graph that stays within what #440 lets the module depend on.
+// fixtures, and an import graph that stays within what #440 lets the module depend on. AL-07 owns this file whole and
+// allows no skip, so nothing here needs the optional sigstore packages; verify-namespace-signed.test.mjs is what does.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,13 +10,12 @@ import { fileURLToPath } from 'node:url';
 import { verify as verifyPackage, VerifyError } from '../../verify/src/index.mjs';
 import { archiveBytes, archiveNames } from '../../conformance/src/corpus.mjs';
 import { check as checkDirect, formatVerdict, LIMITS, readPolicy } from '../src/check.mjs';
-import { experimental_verifyAttestations } from '../src/attest.mjs';
+import { experimental_verifyAttestations, experimental_verifyBundle } from '../src/attest.mjs';
 import {
   DeterminismViolationError,
   PolicyEvaluationError,
   PolicyParseError,
   ReplayError,
-  SubjectMismatchError,
   VerificationError,
   experimental_verify,
   historyJson,
@@ -29,7 +29,6 @@ const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const calculatorPath = here('../fixtures/Calculator.holo');
 const calculator = new Uint8Array(readFileSync(calculatorPath));
 const signedPath = here('./fixtures/signed/Calculator.signed.holo');
-const mismatchPath = here('./fixtures/signed/PaymentApproval.mismatch.holo');
 const signer = { key: readFileSync(here('./fixtures/signed/signer.pub.pem'), 'utf8') };
 const stranger = { key: readFileSync(here('./fixtures/signed/stranger.pub.pem'), 'utf8') };
 const none = { env: {} };
@@ -97,10 +96,10 @@ test('no option raises the level: a tampered guest stays below P1 and a policy t
   assert.equal((await verify.verdict(unsigned, none)).level, 'P0');
 });
 
-test('a signed holo reaches its level only when check is told the signer that signed it', async () => {
-  const trusted = await verify.check(signedPath, { signer, ...none });
-  assert.deepEqual(trusted, await checkDirect(signedPath, { signer, ...none }));
-  assert.equal(trusted.level, 'P2');
+test('check agrees with check.mjs under any signer, and no signer or another signer leaves a signed holo at P0', async () => {
+  for (const options of [none, { signer, ...none }, { signer: stranger, ...none }]) {
+    assert.deepEqual(await verify.check(signedPath, options), await checkDirect(signedPath, options));
+  }
   assert.equal((await verify.check(signedPath, none)).level, 'P0', 'an unchecked signature is no evidence');
   assert.equal((await verify.check(signedPath, { signer: stranger, ...none })).level, 'P0', 'the wrong signer is no evidence');
 });
@@ -110,7 +109,8 @@ test('verdict refuses a holo with an attestation section instead of judging it u
 });
 
 test('format and limits name what a verdict at P2 trusts', async () => {
-  const trusted = await verify.check(signedPath, { signer, ...none });
+  const trusted = JSON.parse(readFileSync(here('./fixtures/signed/calculator.trusted.json'), 'utf8'));
+  assert.equal(trusted.level, 'P2');
   assert.equal(await verify.format(trusted), formatVerdict(trusted));
   assert.deepEqual(await verify.limits(), LIMITS);
   for (const limit of await verify.limits()) assert.ok((await verify.format(trusted)).includes(limit));
@@ -143,7 +143,7 @@ test('policy.parse, evaluate and input decide as a verdict does, and refuse with
   await assert.rejects(verify.policy.input('not bytes'), (error) => error instanceof VerificationError && !(error instanceof VerifyError));
 });
 
-test('attestations reads statements without trusting them; verify is what decides, and it follows the signer and the subjects', async () => {
+test('attestations reads statements without trusting them; verify and verifyBundle answer as the code under them does', async () => {
   const signed = new Uint8Array(readFileSync(signedPath));
   assert.deepEqual(verify.attestations.read(signed), readAttestations(signed));
   assert.equal(verify.attestations.read(calculator).length, 0);
@@ -152,17 +152,11 @@ test('attestations reads statements without trusting them; verify is what decide
   assert.equal(provenance[0].signed, true);
   assert.deepEqual(verify.attestations.strip(signed), stripAttestations(signed));
 
-  const passed = await verify.attestations.verify(signed, signer);
-  assert.equal(passed.passed, true);
-  assert.deepEqual(passed.results.map((r) => r.passed), (await experimental_verifyAttestations(signed, signer)).results.map((r) => r.passed));
-  assert.equal((await verify.attestations.verify(signed, stranger)).passed, false);
-  await assert.rejects(verify.attestations.verify(mismatchPath, { ...signer, type: 'https://in-toto.io/nothing', throw: true }), (error) => error.check === 'attestation.type');
-  const mismatch = await verify.attestations.verify(mismatchPath, { ...signer, type: verify.attestations.read(new Uint8Array(readFileSync(mismatchPath))).at(-1).predicateType });
-  assert.ok(mismatch.results.some((r) => r.error instanceof SubjectMismatchError));
-
   const [bundle] = verify.attestations.read(signed);
-  assert.equal((await verify.attestations.verifyBundle(bundle.bundle, signer)).identity, null, 'a keyed bundle names no identity');
-  await assert.rejects(verify.attestations.verifyBundle(bundle.bundle, stranger));
+  for (const key of [signer, stranger]) {
+    assert.deepEqual(await outcome(() => verify.attestations.verify(signed, key)), await outcome(() => experimental_verifyAttestations(signed, key)));
+    assert.deepEqual(await outcome(() => verify.attestations.verifyBundle(bundle.bundle, key)), await outcome(() => experimental_verifyBundle(bundle.bundle, key)));
+  }
 });
 
 test('replay re-executes against an opened application: green when unchanged, typed when it diverges or cannot run', async () => {
