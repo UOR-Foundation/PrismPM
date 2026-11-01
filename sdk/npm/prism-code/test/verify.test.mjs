@@ -10,6 +10,7 @@ import { verify as verifyPackage } from '../../verify/src/index.mjs';
 import { appendAttestations, readAttestations, stripAttestations } from '../src/attestations.mjs';
 import { check } from '../src/check.mjs';
 import { experimental_pull, experimental_push } from '../src/push-pull.mjs';
+import { verifyWithStatements } from '../src/verify.mjs';
 import { parseArchive } from '../src/archive.mjs';
 import {
   load,
@@ -193,11 +194,24 @@ test('a pull and a policy file cannot carry statements either', async () => {
   await assert.rejects(check(signedPath, { policy: path, env: {} }), refused);
 });
 
-test('check is the route that counts statements, and only under the signer that signed them', async () => {
-  const pem = (name) => readFileSync(new URL(`./fixtures/signed/${name}.pub.pem`, import.meta.url), 'utf8');
+test('the route check takes counts the statements it is handed, and a signed holo with no signer is P0', async () => {
+  const verdict = await verifyWithStatements(unsigned, { env: {} }, statements);
+  assert.deepEqual([verdict.level, verdict.passed], ['P2', true]);
+  assert.equal((await check(signedPath, { env: {} })).level, 'P0');
+});
+
+// Checking a signature needs the optional sigstore packages, which need Node 22.22.2 or newer.
+const sigstore = await import('@sigstore/sign').then(() => true, () => false);
+const pem = (name) => readFileSync(new URL(`./fixtures/signed/${name}.pub.pem`, import.meta.url), 'utf8');
+
+test('check counts statements only under the signer that signed them', { skip: sigstore ? false : 'the optional sigstore packages are not installed' }, async () => {
   assert.equal((await check(signedPath, { signer: { key: pem('signer') }, env: {} })).level, 'P2');
   assert.equal((await check(signedPath, { signer: { key: pem('stranger') }, env: {} })).level, 'P0');
-  assert.equal((await check(signedPath, { env: {} })).level, 'P0');
+});
+
+test('without the sigstore packages a named signer vouches for nothing: the holo stays P0', { skip: sigstore ? 'the optional sigstore packages are installed' : false }, async () => {
+  const verdict = await check(signedPath, { signer: { key: pem('signer') }, env: {} });
+  assert.deepEqual([verdict.level, verdict.passed], ['P0', false]);
 });
 
 test('the route that counts statements is not exported from the package', async () => {
