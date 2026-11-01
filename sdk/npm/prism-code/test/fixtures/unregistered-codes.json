@@ -62,6 +62,7 @@
     "author.model",
     "author.spec",
     "author.types",
+    "canonical.algorithm",
     "capabilities.invalid",
     "capabilities.kind",
     "capabilities.path",
