@@ -20,6 +20,7 @@ const WRAPPER_SOURCE: &[u8] = include_bytes!("authority.rs");
 const UPSTREAM_CONFORMANCE_SOURCE: &[u8] = include_bytes!("upstream_conformance.rs");
 const ASYNCAPI_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/asyncapi-parser.mjs");
 const KUBERNETES_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/kubernetes-validator.mjs");
+const OSCAL_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/oscal/src/main.rs");
 const INTOTO_WRAPPER_SOURCE: &[u8] =
     include_bytes!("../sdk/oracles/go/intoto-statement-validator/main.go");
 const OPENAPI_SCHEMA: &[u8] =
@@ -335,6 +336,7 @@ fn wrapper_sha256(row: &OracleRow) -> Result<String, PrismError> {
         "crates/prismpm/src/upstream_conformance.rs" => UPSTREAM_CONFORMANCE_SOURCE,
         "sdk/oracles/asyncapi-parser.mjs" => ASYNCAPI_WRAPPER_SOURCE,
         "sdk/oracles/kubernetes-validator.mjs" => KUBERNETES_WRAPPER_SOURCE,
+        "sdk/oracles/oscal/src/main.rs" => OSCAL_WRAPPER_SOURCE,
         "sdk/oracles/go/intoto-statement-validator/main.go" => INTOTO_WRAPPER_SOURCE,
         _ => {
             return Err(PrismError::new(
@@ -2227,6 +2229,7 @@ fn run_oracle_inner(
         "devcontainer" => "devcontainer-c95ffeed",
         "compose" => "compose-fee041b3",
         "kubernetes" => "kubernetes-1.36.4",
+        "oscal" => "oscal-1.1.0-structural",
         _ => {
             return Err(PrismError::new(
                 "PP5403",
@@ -3294,6 +3297,21 @@ mod tests {
         .unwrap();
         assert_eq!(
             run_oracle_in_project(root.path(), "devcontainer", &workspace)
+                .unwrap_err()
+                .code,
+            "PP5404"
+        );
+
+        let oscal = root.path().join("component-definition.json");
+        let component_definition: &[u8] =
+            include_bytes!("../../../tests/fixtures/threat-model/oscal-subjects/complete.json");
+        std::fs::write(&oscal, component_definition).unwrap();
+        run_oracle_in_project(root.path(), "oscal", &oscal).unwrap();
+        let mut planted: Value = serde_json::from_slice(component_definition).unwrap();
+        planted["component-definition"]["metadata"]["oscal-version"] = json!("1.1.1");
+        std::fs::write(&oscal, serde_json::to_vec(&planted).unwrap()).unwrap();
+        assert_eq!(
+            run_oracle_in_project(root.path(), "oscal", &oscal)
                 .unwrap_err()
                 .code,
             "PP5404"

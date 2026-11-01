@@ -21,7 +21,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Typed errors (`errors`) | 8 | + | N/A | N/A |
 | Load a holo (`load`) | 19 | + | N/A | N/A |
 | Histories and replay (`replay`) | 5 | - | N/A | N/A |
-| Verify a holo (`verify`) | 23 | + | N/A | N/A |
+| Verify a holo (`verify`) | 24 | + | N/A | N/A |
 | The world contract (`world`) | 16 | + | N/A | N/A |
 
 ## Checks
@@ -162,6 +162,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.no-verdict.unknown-revision` | A layout that matches no known format revision gets no verdict. | + | N/A | N/A |
 | `verify.policy.unknown-level` | A minimum level that does not exist is an invalid policy, not a verdict. | + | N/A | N/A |
 | `verify.policy.unknown-member` | A policy member nobody defined is an invalid policy, not ignored. | + | N/A | N/A |
+| `verify.policy.statements-refused` | A policy cannot carry statements or claim their signature was checked: a level comes from the holo, never from an option. | + | N/A | N/A |
 | `verify.env.sets-minimum` | PRISM_MINIMUM_LEVEL sets the minimum when the call names none. | + | N/A | N/A |
 | `verify.env.call-wins` | A minimum named by the call replaces PRISM_MINIMUM_LEVEL. | + | N/A | N/A |
 | `verify.env.invalid` | A PRISM_MINIMUM_LEVEL that names no level is an invalid policy. | + | N/A | N/A |
