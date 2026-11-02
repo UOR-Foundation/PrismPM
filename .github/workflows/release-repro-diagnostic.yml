@@ -1,10 +1,10 @@
 name: Focused release image reproducibility
 
-# One diagnostic launch when a PR introduces/changes this workflow; subsequent
-# executions are explicitly requested. This is not release acceptance evidence.
+# Only PRs changing this diagnostic workflow launch it automatically.
+# New heads replace older runs. This is not release acceptance evidence.
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
     paths: ['.github/workflows/release-repro-diagnostic.yml']
   workflow_dispatch:
 
@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 210
     env:
+      BUILDKIT_PROGRESS: plain
       SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Free space for two independent OCI builds
@@ -56,7 +57,7 @@ jobs:
           for root in root-a root-b; do
             test "$(git -C "$root" rev-parse HEAD)" = "$SOURCE_REVISION"
             node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$SOURCE_REVISION" adapter-compose \
-              --no-cache --provenance=false --sbom=false --progress=plain \
+              --no-cache --provenance=false --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
               --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
               --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
