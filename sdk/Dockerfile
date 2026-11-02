@@ -350,6 +350,8 @@ COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/fixt
 # Downstream template gates compile their small repository-specific policy
 # crates inside the SDK. Resolve the native linker exclusively from one
 # immutable Ubuntu archive snapshot; no consumer reaches a floating apt mirror.
+# Discard installation logs in this same layer: their contents contain wall
+# clock times that OCI rewrite-timestamp cannot normalize. Keep the package lock.
 RUN set -eu; \
     test "$(wc -l < /tmp/prismpm-runtime-os.lock)" -eq 5; \
     snapshot=$(sed -n 's/^snapshot=//p' /tmp/prismpm-runtime-os.lock); \
@@ -367,7 +369,8 @@ RUN set -eu; \
     && dpkg-query -W -f='${binary:Package}\t${Version}\n' \
       | LC_ALL=C sort > /usr/local/share/prismpm-runtime-dpkg.lock \
     && install -m 0444 /tmp/prismpm-runtime-os.lock /usr/local/share/prismpm-runtime-os.lock \
-    && rm -rf /var/lib/apt/lists/* /tmp/prismpm-runtime-os.lock
+    && rm -rf /var/lib/apt/lists/* /tmp/prismpm-runtime-os.lock \
+    && rm -f /var/log/dpkg.log /var/log/apt/history.log /var/log/apt/term.log /var/log/apt/eipp.log.xz
 
 COPY --from=build /usr/local/ /usr/local/
 COPY --from=build /opt/prismpm/ /opt/prismpm/

@@ -452,6 +452,21 @@ jobs:
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
             root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      - name: Diagnose differing OCI layers without changing acceptance
+        if: failure()
+        timeout-minutes: 5
+        run: |
+          if [ -f root-a.oci/index.json ] && [ -f root-b.oci/index.json ]; then
+            python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
+          fi
+      - name: Retain bounded reproducibility diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reproducibility-diagnostics-${{ matrix.name }}
+          path: reproducibility-diagnostics.*
+          if-no-files-found: warn
+          retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: reproducibility-${{ matrix.name }}
