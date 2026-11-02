@@ -81,6 +81,10 @@ consumer lock is changed by this workflow split.
 Regression tests: `node --test scripts/release-phases.test.mjs` in the PrismPM
 devcontainer. They reject missing/failed/skipped gates, Cargo coupling,
 unshipped reproducible bytes, source/ref drift and changed existing releases.
+The dependency-free `node --test scripts/release-native-contract.test.mjs` runs
+in the release policy job before source verification or image construction. It
+checks native smoke expectations against the registered diagnostic exit and
+workspace release version; its synthetic records are never release evidence.
 Publication tests use an isolated GitHub command fixture, not live publication.
 The planted self-comparison defect in the shipped-digest check failed the real
 reproducibility regression; restoring the comparison restored the passing gate.
