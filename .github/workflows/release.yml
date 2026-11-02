@@ -47,6 +47,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Check native release contracts before building
+        run: node --test scripts/release-native-contract.test.mjs
       - id: version
         shell: bash
         env:
@@ -90,9 +95,14 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+      # Reuse the construction layers populated by PR Fast Checks. Each shard
+      # still executes its complete source verification on this commit.
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
           runCmd: |
             set -euo pipefail
             bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
