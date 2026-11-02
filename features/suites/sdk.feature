@@ -243,3 +243,10 @@ Feature: sdk
     Given the locked PrismPM production fixture
     When the DK-06 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @DK-39 @build
+  Scenario: The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify.
+    Given a capability file, an active policy and an image's declared world
+    When the owning Node suite calls each verb inside and outside them
+    Then a grant outside the world or the policy is refused with a typed error that can be recorded, and nothing is written
+    And a call that needs host effects raises a typed error naming #216 and #217 and never appears to succeed
