@@ -397,6 +397,10 @@ path = "sdk/npm/prism-code/src/middleware.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/networks.mjs"
+module = "networks"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/node.mjs"
 module = "client"
 
@@ -477,12 +481,20 @@ path = "sdk/npm/prism-code/src/verify.mjs"
 module = "verify"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/verify-namespace.mjs"
+module = "verify"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/version.mjs"
 module = "errors"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/view.mjs"
 module = "images"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/volumes.mjs"
+module = "volumes"
 
 [[owner]]
 path = "sdk/npm/spec/"
