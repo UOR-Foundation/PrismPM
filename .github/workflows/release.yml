@@ -95,9 +95,14 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+      # Reuse the construction layers populated by PR Fast Checks. Each shard
+      # still executes its complete source verification on this commit.
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
           runCmd: |
             set -euo pipefail
             bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
