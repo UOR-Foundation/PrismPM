@@ -16,6 +16,22 @@ const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
 const source = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
 const workflow = () => load(source);
+
+test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
+  execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
+  const steps = workflow().jobs.reproducibility.steps;
+  const compare = steps.find(step => step.env?.DOCKERFILE);
+  assert.match(compare.run, /cmp root-a.digest root-b.digest\n/);
+  assert.match(compare.run, /cmp root-a.oci\/index.json root-b.oci\/index.json\n/);
+  const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
+  assert.equal(diagnostic.if, 'failure()');
+  assert.equal(diagnostic['timeout-minutes'], 5);
+  assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
+  const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
+  assert.equal(retained.if, 'failure()');
+  assert.equal(retained.with.path, 'reproducibility-diagnostics.*');
+});
+
 const revision = 'a'.repeat(40);
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/release/v0.4',

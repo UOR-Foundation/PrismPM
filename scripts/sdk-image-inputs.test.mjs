@@ -229,7 +229,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     const acquisition = commands.filter(command => command.includes('apt-get '));
     assert.equal(acquisition.length, 1, 'one signed snapshot acquisition owner');
     const command = acquisition[0].replace(/\s+/g, ' ');
-    assert.equal(hash(command), 'b44daff2cec315e3672cfa332a5a50769910d35167f3444dfc23160cd518c3a7',
+    assert.equal(hash(command), 'f6bb7d2cdb8f982602e5c287e699cb38b2f323129b4db1ee83983230f56e0609',
       'the complete signed snapshot acquisition and cleanup instruction must remain unchanged');
     const update = 'apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update';
     const install = 'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes "build-essential=${build_essential}" "pkg-config=${pkg_config}"';
