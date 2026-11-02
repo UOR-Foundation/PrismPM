@@ -55,6 +55,7 @@ jobs:
           mkdir diagnostics
           printf '%s\n' "$SOURCE_REVISION" > diagnostics/source-revision.txt
           for root in root-a root-b; do
+            printf 'Starting independent build %s at %s\n' "$root" "$(date -u +%FT%TZ)"
             test "$(git -C "$root" rev-parse HEAD)" = "$SOURCE_REVISION"
             node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$SOURCE_REVISION" adapter-compose \
               --no-cache --provenance=false --sbom=false \
@@ -73,6 +74,8 @@ jobs:
             rm "$root.oci.tar"
             cp "$root.oci/index.json" "diagnostics/$root-index.json"
             jq -r '.manifests[0].digest' "$root.oci/index.json" > "diagnostics/$root.digest"
+            printf 'Completed %s: ' "$root"
+            cat "diagnostics/$root.digest"
             df -h /
           done
           cmp diagnostics/root-a.digest diagnostics/root-b.digest
@@ -82,7 +85,10 @@ jobs:
         timeout-minutes: 5
         run: |
           if [ -f root-a.oci/index.json ] && [ -f root-b.oci/index.json ]; then
-            python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > diagnostics/differences.json 2> diagnostics/differences.log
+            status=0
+            python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > diagnostics/differences.json 2> diagnostics/differences.log || status=$?
+            cat diagnostics/differences.json diagnostics/differences.log
+            exit "$status"
           fi
       - name: Retain selected-target diagnostic results
         if: always()
