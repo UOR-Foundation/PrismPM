@@ -16,6 +16,11 @@ const { load } = require('js-yaml');
 const source = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
 const workflow = () => load(source);
 
+test('canonical Cargo Git caches retain every object and real locked offline submodule builds', () => {
+  execFileSync('python3', ['-I', '-B', new URL('./normalize-cargo-git_test.py', import.meta.url).pathname],
+    {timeout: 120000});
+});
+
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
