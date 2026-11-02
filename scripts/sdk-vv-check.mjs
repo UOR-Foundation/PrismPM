@@ -384,7 +384,7 @@ export async function runOuter({image, revision, arch, part, destination, source
     phases.push('exact-native-images-acquired');
     await own('container', names.control, ['create', '--name', names.control, '--label', `${owner}=${nonce}`, '--network', names.network,
       '--tmpfs', '/var/lib/docker:rw,nosuid,nodev,size=16777216,mode=0700',
-      '--entrypoint', '/bin/sh', lock.images.dind.reference, '-ec', 'mkdir /tmp/control; printf prismpm-network-control >/tmp/control/index.html; exec httpd -f -p 8080 -h /tmp/control']);
+      '--entrypoint', '/bin/sh', lock.images.dind.reference, '-ec', 'while :; do printf \'HTTP/1.0 200 OK\\r\\n\\r\\nprismpm-network-control\' | nc -l -p 8080; done']);
     await outer(['start', names.control]);
     const control = JSON.parse(await outer(['inspect', names.control]))[0].NetworkSettings.Networks[names.network].IPAddress;
     assert.match(control, /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/);
