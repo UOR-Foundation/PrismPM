@@ -36,6 +36,11 @@ function parallelContract(value) {
   assert.equal(image.steps.at(-1).uses, 'devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6');
   assert.equal(image.steps.at(-1).with.push, 'never');
   assert.equal(image.steps.at(-1).with.runCmd, 'true');
+  for (const job of Object.values(value.jobs)) {
+    const cleanup = job.steps.findIndex(step => step.uses === './.github/actions/prepare-devcontainer-runner');
+    const cache = job.steps.findIndex(step => step.uses === './.github/actions/devcontainer-cache');
+    assert(cleanup > 0 && cleanup < cache, 'prepare disk before importing construction layers');
+  }
   for (const [id, name, timeout, command] of jobs) {
     const job = value.jobs[id];
     assert.equal(job.needs, 'devcontainer-image', id);
