@@ -11,6 +11,10 @@ vv:
 validate:
     cargo run --package xtask -- validate
 
+# Check the nine-module dependency table and its baseline
+check-modules:
+    cargo run --package xtask -- check-modules
+
 # Run conformance test suite by category (contracts, core, holo-stdlib, desktop-browser, system-oci, verification-schemas, or all)
 conformance category="all":
     cargo run --package xtask -- conformance {{category}}

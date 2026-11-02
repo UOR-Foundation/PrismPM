@@ -536,6 +536,26 @@ directory and Prism provenance), four content blobs, and one footer. Unknown,
 duplicate, missing, reordered, overlapping, truncated, trailing, over-limit,
 or cross-reference-invalid content is rejected.
 
+`Foundation.Holo.V1.Format` numbers every section kind by its physical
+discriminant, KernelCalls 1 through ContentBlob 16, and
+`Foundation.Holo.V1.Manifest` numbers every layer kind, Wasm code module 0
+through inference model 4. A closed theorem fixes each code table. Wire also
+defines the general canonical physical-v4 frame of ADR-016: any section count;
+AppManifest first, then ascending kind; only Extension and ContentBlob repeat,
+strictly ordered by extension key bytes or κ label, so a duplicate is rejected;
+no zero-length section; valid UTF-8 extension keys and valid κ labels; zero
+flags and padding; contiguous payloads and no trailing bytes. Its encoder
+sorts an unordered section list into that order, so its output depends only
+on the section set. The portable and browser profiles are constraints on this
+frame: a profile archive must first be canonical, so the profile encoders
+reject an empty Metadata section. A signed archive is outside this frame: it is
+a canonical profile archive with the attestation Extension appended as a ninth
+row after the content blobs, a layout ADR-016 §4.2 replaces, and stripping
+that row must yield the canonical archive. Ordering inside a section's payload
+and the
+footer value are outside the frame; the footer remains 32 bytes checked by the
+host BLAKE3 adapter.
+
 Portable View bytes start with `HOLOVIEW`, use big-endian bundle version 1,
 have entry `index.html`, and encode lexically ordered portable paths with u32
 path/count fields and u64 content lengths. The fixed limits are 4,096 files,
@@ -3929,6 +3949,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AL-03` | `assurance` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. | §8 |
 | `AL-05` | `assurance` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. | §8 |
 | `AL-06` | `assurance` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. | §8 |
+| `AL-07` | `assurance` | The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors. | §8 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
@@ -4055,6 +4076,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-37` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-38` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-35` | `sdk` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. | §12 |
+| `DK-39` | `sdk` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. | §12 |
 | `DK-40` | `sdk` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |

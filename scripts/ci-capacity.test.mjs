@@ -50,6 +50,8 @@ function parallelContract(value) {
     assert(!run.with.runCmd.includes('|| true'), id);
     assert.equal(job.steps[0].uses, 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683');
   }
+  // Rule 6 of check-modules reads the merge base, and skips with no origin/main.
+  assert.equal(value.jobs['model-and-audits'].steps[0].with['fetch-depth'], 0);
 }
 
 test('three capped jobs preserve every pull request gate name and complete command', () => {

@@ -37,6 +37,7 @@ The three honesty levels:
 | `AL-03` | `build` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. |
 | `AL-05` | `build` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. |
 | `AL-06` | `build` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. |
+| `AL-07` | `build` | The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors. |
 
 ## authorities
 
@@ -243,6 +244,7 @@ The three honesty levels:
 | `DK-37` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
 | `DK-38` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 | `DK-35` | `build` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. |
+| `DK-39` | `build` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. |
 | `DK-40` | `build` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. |
 
 ## security

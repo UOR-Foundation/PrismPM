@@ -1,0 +1,31 @@
+spec = "prismpm/sdk-diagnostics/1"
+
+[[error]]
+code = "networks.exists"
+capability = "DK-39"
+statement = "prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again."
+
+[[error]]
+code = "networks.not-found"
+capability = "DK-39"
+statement = "The capability file has no network of that name: no set with an outbound-hosts member."
+
+[[error]]
+code = "networks.option"
+capability = "DK-39"
+statement = "prism.networks was given an option it does not have, or a policy of the wrong shape; a Docker network option is refused and never ignored."
+
+[[error]]
+code = "networks.protected"
+capability = "DK-39"
+statement = "prism.networks.remove named the default set, which a capability file must have."
+
+[[error]]
+code = "networks.store"
+capability = "DK-39"
+statement = "prism.networks has no store to read the capability file from, or none to write it to, so nothing changed."
+
+[[error]]
+code = "networks.unavailable"
+capability = "DK-39"
+statement = "The call needs host effects (#216, #217), which this version does not have; nothing changed and no traffic can flow."
