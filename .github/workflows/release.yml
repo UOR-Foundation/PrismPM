@@ -706,9 +706,13 @@ jobs:
             arch: arm64
             part: source
     steps:
+      # The isolated image closure needs four times the 5.9 GB of compressed SDK, daemon and
+      # registry layers plus a 12 GiB reserve; the shorter list left 35 GB on amd64.
       - name: Free runner disk
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft \
+            /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
           df -h /
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
