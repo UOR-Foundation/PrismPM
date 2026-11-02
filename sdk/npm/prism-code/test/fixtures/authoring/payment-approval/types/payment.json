@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaymentRequest",
+  "description": "On the wire: version, amount, limit, requester and approver, separated by tabs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "amount",
+    "limit",
+    "requester",
+    "approver"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "amount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "requester": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approver": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

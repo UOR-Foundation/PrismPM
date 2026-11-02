@@ -19,6 +19,10 @@ packages, which need Node 22.22.2 or newer; nothing else loads them.
 npm install prism-code
 ```
 
+## Write from examples (experimental)
+
+`prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See `docs/proposals/325-authoring-front-door.md`.
+
 ## Three calls
 
 ```js
@@ -857,6 +861,11 @@ mount(document.querySelector('#app'), '/apps/calculator/');   // a closure in an
 Mounting a HOLOVIEW page in a browser needs a service worker for the intent
 endpoint and is not in this release.
 
+`prism-code`, `prism-code/browser` and `prism-code/canonical` import no `node:`
+module, so they load in a browser or an edge host as they are. A bundler
+targeting the browser leaves `prism-code/node` out through the package's `browser`
+field; a path passed to `load` there is fetched as a URL.
+
 ## Canonical source hashing (formerly 0.1.0)
 
 `prism-code@0.1.0` was a source-canonicalization library. It is unchanged at
@@ -865,6 +874,10 @@ endpoint and is not in this release.
 ```js
 import { canonicalize, codeHash, describe, differs } from 'prism-code/canonical';
 ```
+
+The hashes are the same on every host. Without `node:crypto` the default SHA-256
+is computed in JavaScript and any other `algorithm` throws `canonical.algorithm`,
+because this API is synchronous and WebCrypto is not.
 
 The top-level re-exports still work in 0.2.x with a one-time deprecation
 warning and are removed in 0.3.0.

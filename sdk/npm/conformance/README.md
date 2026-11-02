@@ -23,7 +23,7 @@ pass            capabilities.none.denies-everything
 ...
 xfail           replay.history.unchanged  #284: Histories and replay are not on main yet; ...
 
-121 checks: 116 pass, 0 fail, 5 xfail, 0 unexpected pass, 0 n/a
+122 checks: 117 pass, 0 fail, 5 xfail, 0 unexpected pass, 0 n/a
 PASSED
 ```
 
@@ -116,6 +116,7 @@ The checks compare what they name and ignore the rest.
 | `dispatch` | yes | `requests`, an array of hex | `responses`, one per request, in order: `{ "hex": "..." }`, or `{ "error": { "code": "..." } }` when that request was refused |
 | `acceptance` | yes | none | `total`, `passed` |
 | `capabilities` | no | `capabilities`, `capabilitySet`, `queries` and `asserts`, each a list of `{ kind, resource }`; all optional | `set`, and `answers`, one boolean per query. An assert that is denied is the error. |
+| `auth` | no | `call`: `login` or `logout` with `request`, `inspect` or `stores.get` with `registry`, `identities.fromKey` with `key`, `identities.keyless` with `identityToken`. Optional: `config`, the Docker config to start from, as a JSON value or as text, and `env`, variables beside `DOCKER_CONFIG`. | `value`, what the call returned, and `config`, the Docker config afterwards, null when there is none. Every value in these checks is a test value. |
 
 `capabilities` in an input is the capability file, as a JSON value or as text.
 Text lets a check hand a runtime a file that is not JSON.
