@@ -16,6 +16,11 @@ const { load } = require('js-yaml');
 const source = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
 const workflow = () => load(source);
 
+test('canonical Cargo Git caches retain every object and real locked offline submodule builds', () => {
+  execFileSync('python3', ['-I', '-B', new URL('./normalize-cargo-git_test.py', import.meta.url).pathname],
+    {timeout: 120000});
+});
+
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
@@ -100,6 +105,13 @@ function validateWorkflow(value) {
   execFileSync('bash', ['-n'], {input: publicationStep.run, stdio: ['pipe', 'pipe', 'pipe']});
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
+  const sourceSteps = value.jobs.gate.steps;
+  const preflight = sourceSteps.findIndex(step => step.run === 'node --test scripts/release-native-contract.test.mjs');
+  assert(preflight >= 0 && preflight < sourceSteps.findIndex(step => step.with?.runCmd));
+  assert(sourceSteps.some(step => step.id === 'cache' && step.uses === './.github/actions/devcontainer-cache'));
+  const sourceBuild = sourceSteps.find(step => step.with?.runCmd).with;
+  assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
+  assert.equal(sourceBuild.cacheTo, undefined);
   const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
   assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
     `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');

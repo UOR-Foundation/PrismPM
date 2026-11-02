@@ -163,8 +163,8 @@ export function nativeInvocations(root, image, architecture, uid, gid) {
   const sdk = [...common, ...workspace, image, 'prismpm'];
   return [['native-check', [...native, '--project', '/workspace', '--json', 'check'], 0],
     ['container-check', [...sdk, '--project', '/workspace', '--json', 'check'], 0],
-    ['native-error', [...native, '--project', '/workspace', '--json', 'inspect', 'ghcr.io/uor-foundation/calculator:mutable'], 6],
-    ['container-error', [...sdk, '--project', '/workspace', '--json', 'inspect', 'ghcr.io/uor-foundation/calculator:mutable'], 6]];
+    ['native-error', [...native, '--project', '/workspace', '--json', 'inspect', 'ghcr.io/uor-foundation/calculator:mutable'], 5],
+    ['container-error', [...sdk, '--project', '/workspace', '--json', 'inspect', 'ghcr.io/uor-foundation/calculator:mutable'], 5]];
 }
 export function validateNative(files, context) {
   const result = JSON.parse(files.get('native-result.json'));
@@ -173,7 +173,7 @@ export function validateNative(files, context) {
   assert.equal(result.schema, 'prismpm/native-equivalence-retention/1'); assert.equal(result.scope, 'original-native-sdk-comparison-only');
   assert.equal(resolve(result.root), result.root); assert(!result.root.includes(','));
   assert.deepEqual(Object.keys(result.archive).sort(), ['byte_length', 'path', 'sha256']);
-  assert.match(result.archive.path, /^prismpm-0\.3\.0-(?:aarch64|x86_64)-unknown-linux-gnu\.tar\.gz$/);
+  assert.match(result.archive.path, /^prismpm-0\.4\.0-(?:aarch64|x86_64)-unknown-linux-gnu\.tar\.gz$/);
   assert.equal(result.archive.path.includes('aarch64'), context.architecture === 'arm64');
   assert(Number.isSafeInteger(result.archive.byte_length) && result.archive.byte_length > 0);
   assert.match(result.archive.sha256, /^[0-9a-f]{64}$/);
