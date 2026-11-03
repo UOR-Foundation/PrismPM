@@ -30,10 +30,14 @@ export function publicationPolicy(value) {
     assert(!(rehearsal && publishCrates), 'a rehearsal cannot publish crates');
   } else {
     assert.equal(value.event, 'push');
-    assert.equal(value.ref, 'refs/tags/v0.4.0');
     assert.equal(value.publishCrates, null);
     assert.equal(value.rehearsal, null);
-    publishCrates = true;
+    if (value.ref === 'refs/heads/release/v0.4') {
+      publishCrates = false; rehearsal = true;
+    } else {
+      assert.equal(value.ref, 'refs/tags/v0.4.0');
+      publishCrates = true;
+    }
   }
   return {version: value.version, publishCrates, rehearsal};
 }
@@ -41,7 +45,8 @@ export function publicationPolicy(value) {
 function policyFromEnvironment(environment) {
   const event = environment.GITHUB_EVENT_NAME;
   return publicationPolicy({repository: environment.GITHUB_REPOSITORY, ref: environment.GITHUB_REF,
-    event, version: environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
+    event, version: event === 'push' && environment.GITHUB_REF === 'refs/heads/release/v0.4'
+      ? '0.4.0' : environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
     publishCrates: event === 'push' ? null : JSON.parse(environment.PUBLISH_CRATES),
     rehearsal: event === 'push' ? null : JSON.parse(environment.REHEARSAL), revision: environment.GITHUB_SHA});
 }
@@ -236,11 +241,11 @@ export function releaseSbomRecord(image, indexBytes, childBytes, configBytes, sp
     spdx: describeSpdx(spdxBytes), production_accepted: false};
 }
 
-export function imageVerificationArguments(image, revision, ref, trustedRoot) {
+export function imageVerificationArguments(image, revision, ref, trustedRoot, event) {
   const [name, digest, extra] = image.split('@');
   assert.equal(extra, undefined);
   return verificationArguments({source_revision: revision}, digest, trustedRoot,
-    releaseTransportPolicy(name, ref));
+    releaseTransportPolicy(name, ref, event));
 }
 
 export function verifyExistingRelease(release, expected, downloaded, tagCommit, draft = false) {
@@ -396,7 +401,7 @@ async function main([command, ...args]) {
     process.stdout.write(`${await publishOci(resolve(args[0]), process.env.GITHUB_SHA)}\n`);
   } else if (command === 'image-verify') {
     assert.equal(args.length, 4);
-    const verification = imageVerificationArguments(...args);
+    const verification = imageVerificationArguments(...args, process.env.GITHUB_EVENT_NAME);
     assert.equal(sha(readFileSync(args[3])), trustRootDigest);
     process.stdout.write(execFileSync('cosign', verification,
       {stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 8 * 1024 * 1024, timeout: 300_000}));
@@ -406,7 +411,7 @@ async function main([command, ...args]) {
     const read = name => readFileSync(join(directory, name));
     const record = releaseSbomRecord(image, read('index.json'), read('manifest.json'), read('config.json'),
       read('sbom.spdx.json'), architecture, revision);
-    const options = releaseTransportPolicy(image.split('@')[0], ref);
+    const options = releaseTransportPolicy(image.split('@')[0], ref, process.env.GITHUB_EVENT_NAME);
     if (command === 'sbom-publish') policyFromEnvironment(process.env);
     transportSbom(command, directory, record, trustedRoot, options);
   } else throw new Error('unsupported release phase operation');
