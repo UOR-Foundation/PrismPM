@@ -1,5 +1,29 @@
 # Publication phases
 
+## v0.4 release branch
+
+The authoritative v0.4 pipeline is the copy of `release.yml` on `release/v0.4`,
+not the older workflow described below on `main`. Every push to `release/v0.4`
+runs its complete existing qualification pipeline as a forced rehearsal:
+`version=0.4.0`, `rehearsal=true`, `publish-crates=false`. Use the last release
+fix's merge SHA and its automatic run; do not launch a duplicate dispatch or
+change that source during qualification.
+
+Rehearsals retain every source, installed SDK, native, image and reproducibility
+gate. They push images by digest and write public signatures/attestations, while
+skipping release assets, discovery aliases, crates, native archive provenance
+and the final release. Follow `docs/release/v0.4.0-runbook.md` for qualification
+and publication. Tag ownership does not delay a qualified release.
+
+Image/SBOM verification can consume release-branch `push` or `workflow_dispatch`
+signatures, requiring the exact actual event, ref, source SHA and workflow.
+When independently verifying a push run, set `GITHUB_EVENT_NAME=push`; a
+dispatch matcher cannot authenticate a push-produced signature. The retained
+main workflow supports only its historical dispatch identity; main push
+signatures are not admitted by this addition.
+
+## Retained main workflow
+
 `release.yml` accepts an exact `main` dispatch or the `v0.4.0` tag. Source
 verification runs `just vv` twice without cleanup. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
