@@ -3535,36 +3535,54 @@ Node preparation suite passes 10/10 locally; it is not Rust-gate evidence.
 
 ## Host-effect service systems (SY-09)
 
-`prismpm/system-model/3` (`Production.HostEffectSystem`) was run on the branch
-head in WSL, with `PRISMPM_TEST_SDK_IMAGE` unset. Six of the seven owning
-tests passed: contract registration and closure, the mcp-loopback example and
-its manifest, the loopback-only Compose projection, every non-loopback
-binding, a table of open or inconsistent declarations, and the named
-release built from Lean source. The seventh runs the locked Compose and SPDX
-oracles in the SDK image and was not run locally. `lexlean verify` accepts the
-module with an empty axiom set: the soundness theorem and 25 decided theorems. The projection
-was also read by Docker Compose 2.40.3 (`config --quiet`), which is not the
-locked oracle.
+`prismpm/system-model/3` (`Production.HostEffectSystem`) puts each `api`
+component on the host network. A served application listens on `127.0.0.1`
+only, and Docker forwards a port published from a bridge network to the
+container's interface, so the first projection, with `ports` bound to
+`127.0.0.1`, could not reach the listener it published. Measured on Docker
+29.1.3 (Linux) with a process listening on `127.0.0.1:P` in its container:
+
+| Network | From the host's `127.0.0.1` | From the host's LAN address |
+| --- | --- | --- |
+| bridge, published `127.0.0.1:P:P` | no answer | not published |
+| host | answers | no answer |
+
+Run on the branch head in WSL:
+
+- The seven owning tests pass, the locked Compose and SPDX oracles included,
+  with `PRISMPM_TEST_SDK_IMAGE` set to the SDK candidate
+  `sha256:0519fe6e2f1d731fc0d475c70ad21d00396d9089051f0c703d477e1ffe39a11c`.
+- `lexlean verify` (LexLean 0.4.0 from that image) with the module added as an
+  entrypoint verifies 61 modules. The module states the soundness theorem and
+  26 decided theorems, each with an empty axiom set.
+- `cargo xtask validate-model` reports the documents current.
 
 Planted defects, each applied alone and reverted afterwards:
 
 | Defect | Rejected by |
 | --- | --- |
-| Lean validator ignores the bind address | `wildcardBindingIsRefused` and the other binding theorems |
-| Lean validator ignores the `api` owner | `listenerOnAWorkerIsRefused` |
-| Lean validator ignores dependency order | `dependencyOnALaterComponentIsRefused` |
-| Lean validator ignores the manifest listeners | `manifestMustNameThePublishedListeners` |
-| Rust validator ignores the bind address | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Projection copies a non-loopback address | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Emitted-bytes audit ignores `host_ip` | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Schema constant for `bind_address` removed | the same test and the named release |
-| Rust validator ignores dependency order | `host_effect_system_refuses_open_or_inconsistent_declarations` |
-| Rust validator ignores the `api` owner | the named release (the unit case is also refused by the network rule) |
-| Manifest binding not compared | the example test and the named release |
-| Adapter policy names `0.0.0.0` | all six owning tests |
+| Lean network rule admits every component | `lexlean verify`: `LLV7002`, `decide` refutes two refusal theorems |
+| Lean network rule lets an `api` component declare a network | `lexlean verify`: `LLV7002`, `apiComponentOnANetworkIsRefused` |
+| Lean listener rule ignores the `api` owner | `lexlean verify`: `LLV7002`, the worker and unknown-component theorems |
+| Rust validator ignores the network rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Rust validator ignores the `api` owner | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Projection leaves the `api` on its declared networks | four owning tests, the oracle test and the named release among them |
+| Projection keeps the `api`'s networks beside the host network | `host_effect_system_compose_puts_each_api_on_the_host_network`, the oracle test, the named release |
+| Projection also publishes the listener's port | the same three tests |
+| Projection no longer refuses a non-loopback listener | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits any network mode | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits a published port | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits the host network beside another | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Schema requires a network of every component again | every owning test but the manifest one |
 
-Not established here: the oracle test, the server application binding that
-issue 216 will supply, and any OCI release, replay or deployment of
+The named release does not check the module's theorems: with the listener
+rule's `api` owner removed it still passed. The Lean planted defects are
+therefore held by `lexlean verify` alone.
+
+Not established here: the server application binding that issue 216 will
+supply, which would tie a listener to the address the application declares;
+that the listener is reached on a Docker Desktop engine, where host networking
+means something else; and any OCI release, replay or deployment of
 `system-model/3`.
 
 ## crates.io readiness (#214)
