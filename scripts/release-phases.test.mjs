@@ -709,7 +709,8 @@ test('release SBOM input binds exact index, child, config, platform, source and 
       ['sbom.spdx.json', spdx]]) writeFileSync(join(directory, name), bytes);
     const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
     const invoke = (command, ...extra) => execFileSync(process.execPath,
-      [helper, command, directory, 'amd64', revision, image, 'refs/heads/release/v0.4', ...extra], {stdio: 'pipe'});
+      [helper, command, directory, 'amd64', revision, image, 'refs/heads/release/v0.4', ...extra],
+      {stdio: 'pipe', env: {...process.env, GITHUB_EVENT_NAME: 'workflow_dispatch'}});
     invoke('sbom-record');
     assert.deepEqual(JSON.parse(readFileSync(join(directory, 'sbom-record.json'))), record);
     const trust = new URL('../standards/trust/sigstore-trusted-root-cosign-3.1.3.json', import.meta.url).pathname;
