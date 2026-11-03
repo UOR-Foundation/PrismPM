@@ -10,6 +10,7 @@ mod browser_system;
 mod cbor_primitive;
 mod design_views;
 mod feature_journeys;
+mod file_session;
 mod holo_browser;
 mod host_effect_system;
 mod mailbox_admission;
@@ -23,7 +24,6 @@ mod scoped_administration;
 mod text_cli;
 mod threat_model;
 mod workbench;
-mod file_session;
 
 use node_suite::verify as verify_node_suite;
 use repo_model::repo_root;

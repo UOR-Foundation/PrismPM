@@ -206,7 +206,7 @@ An expectation is a subset, so members it does not name are free. Arrays match w
 Pin a fact from its source, such as ADR-015 for a digest, not from what a runtime printed.
 
 A new archive is a recipe in `src/corpus.mjs` plus `corpus --update-lock`.
-Every archive derives from `corpus/Calculator.holo`, the same bytes as the `prism-code` fixture, and the lock pins each result.
+Baseline mutations derive from `corpus/Calculator.holo`, the same bytes as the `prism-code` fixture. `corpus/FileSession.holo` is compiled from `tests/fixtures/holo/ho-32-file-session/project` (build `8b8c9f26be361e26344e57046243b869d13f41054f1f9536d0ebbe91517c2dee`); its inspection check exercises model-document/7. The lock pins every archive. The inspection witness is not a production attestation. The current npm runtime refuses the compiled guest’s SDK stack-bound exports at `core.exports`; dispatch remains covered by the SDK’s native/Wasm tests and is not claimed by this format scenario.
 
 A placeholder names work that is not on main yet. It has an issue and a reason, reports `xfail` for every runtime, and never runs:
 

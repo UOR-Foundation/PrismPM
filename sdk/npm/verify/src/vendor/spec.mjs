@@ -220,6 +220,7 @@ export const FORMAT_REVISIONS = freeze({
       'prismpm/model-document/2',
       'prismpm/model-document/5',
       'prismpm/model-document/6',
+      'prismpm/model-document/7',
     ]),
   }),
 });
@@ -290,6 +291,7 @@ export const SCHEMAS = freeze({
   "prismpm/model-document/2": "schemas/documents/model-document-v2.schema.json",
   "prismpm/model-document/5": "schemas/documents/model-document-v5.schema.json",
   "prismpm/model-document/6": "schemas/documents/model-document-v6.schema.json",
+  "prismpm/model-document/7": "schemas/documents/model-document-v7.schema.json",
   "prismpm/model-provenance/1": "schemas/documents/model-provenance-v1.schema.json",
 });
 
