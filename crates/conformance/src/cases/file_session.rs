@@ -35,12 +35,12 @@ fn rust(root: &Path, target: Option<&str>, expected: usize) {
 }
 
 pub(super) fn verify(root: &Path) {
-    rust(root, Some("file_session_application"), 4);
-    rust(root, None, 2);
+    rust(root, Some("file_session_application"), 5);
+    rust(root, None, 3);
     super::node_suite::verify_exact(
         root,
         "HO-32",
-        &[("scripts/file-session.test.mjs", 8)],
+        &[("scripts/file-session.test.mjs", 10)],
         "240000",
     );
     let work = tempfile::tempdir().expect("private workbench source root");

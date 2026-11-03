@@ -197,7 +197,7 @@ try {
   if (name === 'positive' || name === 'delayed-completion') {
     assert.equal(result.status, 0);
     const report = JSON.parse(result.stdout.trim());
-    assert.equal(report.schema, 'prismpm/hologram-oracle/2');
+    assert.equal(report.schema, 'prismpm/hologram-oracle/3');
     assert.equal(report.portable_browser.status, 'passed');
     assert.equal(report.portable_browser.retries, 0);
     assert.equal(report.portable_browser.skipped, 0);

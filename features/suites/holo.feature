@@ -192,7 +192,7 @@ Feature: holo
     Then every disagreement is rejected before acceptance
 
   @HO-32 @build
-  Scenario: The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, and downloads exact accepted state only on user action.
+  Scenario: The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, offers validated guest-selected forms without executing them, and enforces explicit bounded portable session transport with separately evidenced over-limit refusals.
     Given a closed Text V4 finite-state source fixture with declared file inputs and canonical framed acceptance vectors
     When the source compiler, native and portable owners execute together with browser file and lifecycle tests
     Then accepted state survives refused or retired work and explicit save and validated restoration preserve exact UTF-8 state

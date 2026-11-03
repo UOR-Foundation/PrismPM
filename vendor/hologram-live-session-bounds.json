@@ -1,0 +1,10 @@
+{
+  "schema": "prismpm/carried-source-fix/1",
+  "issue": "https://github.com/UOR-Foundation/PrismPM/issues/496",
+  "upstream_repository": "https://github.com/Hologram-Technologies/hologram-live",
+  "upstream_revision": "d8208266d8abdc2445b7bbc0cef412a566adfaf1",
+  "upstream_archive_sha256": "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66",
+  "patch_sha256": "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a",
+  "patched_archive_sha256": "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f",
+  "reproduce": "python3 scripts/rebuild-hologram-session-source.py ORIGINAL_ARCHIVE OUTPUT"
+}

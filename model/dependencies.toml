@@ -59,7 +59,14 @@ role = "validation-oracle"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/hologram-live.tar"
-sha256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
+sha256 = "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f"
+
+# Carried dependency fix: upstream base revision above plus this exact patch.
+# The source tarball hash identifies the patched runtime, not unmodified upstream.
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/hologram-live-session-bounds.patch"
+sha256 = "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"
 
 [[dependency]]
 id = "uor-hologram"

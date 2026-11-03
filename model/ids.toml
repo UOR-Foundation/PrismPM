@@ -1372,4 +1372,4 @@ statement = "All in-scope UOR and Prism repositories use the common SDK bootstra
 id = "HO-32"
 suite = "holo"
 level = "build"
-statement = "The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, and offers validated guest-selected forms without executing them."
+statement = "The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, offers validated guest-selected forms without executing them, and enforces explicit bounded portable session transport with separately evidenced over-limit refusals."

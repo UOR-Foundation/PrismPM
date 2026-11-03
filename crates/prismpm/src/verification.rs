@@ -27,7 +27,7 @@ const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.to
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
 const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../vendor/hologram-live.tar");
 const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
-    "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66";
+    "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f";
 const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.toml");
 const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.lock");
 const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("embedded/hologram-oracle.main.rs");
@@ -598,6 +598,7 @@ fn run_hologram_oracle(
     validate_portable_target_bounds(
         application.request_maximum(),
         application.response_maximum(),
+        matches!(application, crate::holo::model_document::Application::Text(text) if text.profile == "prismpm/text-application/4"),
     )?;
     crate::holo::browser_application::require_runtime(application)?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
@@ -701,18 +702,26 @@ fn run_hologram_oracle(
     Ok([node_version, build, run])
 }
 
-// These are the pinned hologram-view-surface transport limits, not a new model
-// range. The embedded harness asserts equality against the upstream constants
-// and rechecks them before invoking any guest or allocating boundary probes.
+// Earlier profiles retain upstream defaults. Text/4 selects explicit finite
+// session bounds in the patched broker; these verifier ceilings match the
+// browser oracle and prevent unbounded model-sized probes before allocation.
 fn validate_portable_target_bounds(
     request_maximum: u32,
     response_maximum: u32,
+    file_session: bool,
 ) -> Result<(), PrismError> {
-    if request_maximum > 64 * 1024 || response_maximum > 1024 * 1024 {
-        return Err(PrismError::new(
-            "PP5301",
-            "application bounds exceed pinned portable View transport limits (request: 65536 bytes; response: 1048576 bytes)",
-        ));
+    let (request_limit, response_limit) = if file_session {
+        (8 * 1024 * 1024, 16 * 1024 * 1024)
+    } else {
+        (64 * 1024, 1024 * 1024)
+    };
+    if request_maximum == 0
+        || response_maximum == 0
+        || request_maximum > request_limit
+        || response_maximum > response_limit
+    {
+        return Err(PrismError::new("PP5301", format!(
+            "application bounds exceed pinned portable View transport limits (request: {request_limit} bytes; response: {response_limit} bytes)")));
     }
     Ok(())
 }
@@ -726,6 +735,7 @@ pub(crate) fn validate_hologram_oracle_report(
     validate_portable_target_bounds(
         application.request_maximum(),
         application.response_maximum(),
+        matches!(application, crate::holo::model_document::Application::Text(text) if text.profile == "prismpm/text-application/4"),
     )?;
     let invalid = || {
         PrismError::new(
@@ -740,9 +750,11 @@ pub(crate) fn validate_hologram_oracle_report(
         "direct_vectors",
         "footer_verified",
         "guest_allocation_boundary",
+        "intent_rejected_vectors",
         "intent_vectors",
         "portable_browser",
         "resident_vectors",
+        "runtime_source",
         "schema",
         "view_attached",
         "view_detached",
@@ -774,6 +786,16 @@ pub(crate) fn validate_hologram_oracle_report(
         }
     }
     let vectors = application.acceptance_vectors();
+    let file_session = matches!(application, Application::Text(text) if text.profile == "prismpm/text-application/4");
+    let rejected_intents = vectors
+        .iter()
+        .filter(|vector| {
+            file_session
+                && vector.request.len() > application.request_maximum() as usize
+                && std::str::from_utf8(&vector.request).is_ok()
+                && std::str::from_utf8(&vector.response).is_ok()
+        })
+        .count();
     let intents = vectors
         .iter()
         .filter(|vector| {
@@ -781,14 +803,17 @@ pub(crate) fn validate_hologram_oracle_report(
                 && std::str::from_utf8(&vector.response).is_ok()
         })
         .count();
-    if report["schema"] != "prismpm/hologram-oracle/2"
+    if report["runtime_source"]
+        != json!({"archive_sha256": "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f", "base_revision": "d8208266d8abdc2445b7bbc0cef412a566adfaf1", "patch_sha256": "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"})
+        || report["schema"] != "prismpm/hologram-oracle/3"
         || report["footer_verified"] != true
         || report["guest_allocation_boundary"] != "verified"
         || report["view_attached"] != 1
         || report["view_detached"] != 1
         || report["direct_vectors"] != vectors.len()
         || report["resident_vectors"] != vectors.len()
-        || report["intent_vectors"] != intents
+        || report["intent_vectors"] != intents - rejected_intents
+        || report["intent_rejected_vectors"] != rejected_intents
     {
         return Err(invalid());
     }
@@ -875,6 +900,7 @@ pub(crate) fn validate_hologram_oracle_report(
             "file-session-refusal-preserves-state",
             "file-session-file-inputs",
             "file-session-next-form",
+            "file-session-intent-boundaries",
             "file-session-privacy",
             "detached-session",
         ];
@@ -1064,15 +1090,35 @@ mod portable_oracle_tests {
     }
 
     #[test]
+    fn file_session_transport_has_explicit_finite_bounds() {
+        assert!(validate_portable_target_bounds(8_388_608, 16_777_216, true).is_ok());
+        assert!(validate_portable_target_bounds(2_097_152, 8_388_608, true).is_ok());
+        for (request, response) in [
+            (0, 1),
+            (1, 0),
+            (8_388_609, 1),
+            (1, 16_777_217),
+            (u32::MAX, 1),
+        ] {
+            assert_eq!(
+                validate_portable_target_bounds(request, response, true)
+                    .unwrap_err()
+                    .code,
+                "PP5301"
+            );
+        }
+    }
+
+    #[test]
     fn portable_transport_bounds_fail_before_any_boundary_allocation() {
-        assert!(validate_portable_target_bounds(64 * 1024, 1024 * 1024).is_ok());
+        assert!(validate_portable_target_bounds(64 * 1024, 1024 * 1024, false).is_ok());
         for (request, response) in [
             (65537, 1048576),
             (65536, 1048577),
             (u32::MAX, 1),
             (1, u32::MAX),
         ] {
-            let error = validate_portable_target_bounds(request, response).unwrap_err();
+            let error = validate_portable_target_bounds(request, response, false).unwrap_err();
             assert_eq!(error.code, "PP5301");
             assert!(error.message.contains("transport limits"));
         }
@@ -4335,7 +4381,7 @@ mod tests {
             exit_code: 0,
             stdout: format!(
                 "{}\n",
-                json!({"schema":"prismpm/hologram-oracle/2","portable_browser":{
+                json!({"schema":"prismpm/hologram-oracle/3","portable_browser":{
                     "skipped":skipped,
                     "browser_timing":[{"vector_index":0,"duration_milliseconds":duration}]}})
             ),

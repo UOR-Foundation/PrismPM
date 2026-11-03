@@ -427,6 +427,19 @@ unsaved copy, a safe download filename, a byte cap, and optional operation/field
 file-input bindings. Earlier profiles refuse this metadata; V4 requires it.
 The complete presentation identity includes the session record.
 
+Portable Text/4 execution uses explicit host-selected session limits equal to
+its modeled request and response maxima, bounded by the verifier to 8 MiB and
+16 MiB respectively. The broker checks decoded UTF-8 bytes before guest
+invocation and aggregate output bytes after invocation; the HTTP adapter admits
+at most six times the request maximum plus 256 bytes for JSON escaping. Other
+profiles retain the 64 KiB request / 1 MiB response transport defaults. Guests
+cannot select or change transport limits. The carried Hologram dependency fix
+is registered with exact archive and patch digests; execution report version 3
+identifies the upstream base revision, patch digest, and patched source digest.
+Oversized modeled vectors must be refused by the intent boundary and counted
+separately from accepted intent vectors; direct execution still checks their
+modeled guest response. Text/4 uses its explicit allocation-boundary vector.
+
 V4 framing is the operation prefix, U+001F, and a sequence of canonical UTF-8
 byte-length fields `N:value`. Zero is written `0`; other lengths have no leading
 zero and at most ten digits. The request bound still applies. Embedded separators,
@@ -3929,10 +3942,10 @@ are not extended in place, and `/1` evidence cannot satisfy these `/2`
 acceptance checks. This does not change Holo/1, `prismpm/verify-result/1`,
 or `prismpm/application-verification-manifest/1`.
 
-Required portable-browser execution evidence uses `prismpm/hologram-oracle/2`.
-The prior recording-only `/1` report cannot satisfy current application
-verification; its archived records remain historical evidence, not a browser
-execution claim.
+Required portable-browser execution evidence uses `prismpm/hologram-oracle/3`.
+Reports `/1` and `/2` cannot satisfy current application verification. Version 3
+requires separate accepted/rejected intent counts and the exact carried runtime
+source identity; archived earlier reports remain historical evidence.
 
 ## Appendix A. Conformance ID Registry
 
@@ -4168,4 +4181,4 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
 | `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
 | `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |
-| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, and offers validated guest-selected forms without executing them. | §3 |
+| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, offers validated guest-selected forms without executing them, and enforces explicit bounded portable session transport with separately evidenced over-limit refusals. | §3 |

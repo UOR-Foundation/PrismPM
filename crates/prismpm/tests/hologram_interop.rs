@@ -2,8 +2,8 @@
 //!
 //! Validates:
 //! 1. Pinned independent Hologram Live and Holo codec oracle source/cargo inputs.
-//! 2. Execution and acceptance of Calculator against `prismpm/hologram-oracle/2`.
-//! 3. Execution and acceptance of Text application against `prismpm/hologram-oracle/2`.
+//! 2. Execution and acceptance of Calculator against `prismpm/hologram-oracle/3`.
+//! 3. Execution and acceptance of Text application against `prismpm/hologram-oracle/3`.
 //! 4. Non-vacuous failure probes for wrong-subject, wrong-edition, and tampered reports.
 //! 5. Isolated validation oracle status (not application authority).
 
@@ -43,7 +43,7 @@ fn test_hologram_oracle_pinned_source_identities() {
     // 1. Pinned Hologram Live source archive checksum
     assert_eq!(
         sha256_file(&r.join("crates/prismpm/vendor/hologram-live.tar")),
-        "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66",
+        "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f",
         "pinned Hologram Live vendor tarball checksum changed"
     );
 
@@ -65,7 +65,7 @@ fn test_hologram_oracle_pinned_source_identities() {
     );
     assert_eq!(
         sha256_file(&r.join("crates/prismpm/src/embedded/hologram-oracle.browser.mjs")),
-        "03e885c723e0365a87171caae58c221973e51cf840a7cb888e875887df962f46",
+        "16ee6b94c9dfa22f16037b1f3f495bdae4e9d17cf3ad0539d042b0001a86810d",
         "hologram-oracle browser.mjs checksum changed"
     );
 
@@ -160,7 +160,7 @@ fn calculator_hologram_oracle_interoperability_acceptance() -> VerifiedSubject {
     )
     .expect("parse Calculator hologram-oracle report");
 
-    assert_eq!(report["schema"], "prismpm/hologram-oracle/2");
+    assert_eq!(report["schema"], "prismpm/hologram-oracle/3");
     assert_eq!(report["footer_verified"], true);
     assert_eq!(report["guest_allocation_boundary"], "verified");
     assert_eq!(report["view_attached"], 1);
@@ -277,7 +277,7 @@ fn text_application_hologram_oracle_interoperability_acceptance() -> VerifiedSub
     )
     .expect("parse Text hologram-oracle report");
 
-    assert_eq!(report["schema"], "prismpm/hologram-oracle/2");
+    assert_eq!(report["schema"], "prismpm/hologram-oracle/3");
     assert_eq!(report["footer_verified"], true);
     assert_eq!(report["guest_allocation_boundary"], "verified");
     assert_eq!(report["view_attached"], 1);
@@ -406,6 +406,7 @@ fn test_hologram_oracle_negative_probes_reject_wrong_subject_edition_and_mutatio
         "direct_vectors": 6,
         "footer_verified": true,
         "guest_allocation_boundary": "verified",
+        "intent_rejected_vectors": 0,
         "intent_vectors": 5,
         "portable_browser": {
             "browser_version": "157.0.8099.0",
@@ -420,7 +421,8 @@ fn test_hologram_oracle_negative_probes_reject_wrong_subject_edition_and_mutatio
             "vector_indexes": [0, 2, 3],
         },
         "resident_vectors": 6,
-        "schema": "prismpm/hologram-oracle/2",
+        "runtime_source": {"archive_sha256": "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f", "base_revision": "d8208266d8abdc2445b7bbc0cef412a566adfaf1", "patch_sha256": "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"},
+        "schema": "prismpm/hologram-oracle/3",
         "view_attached": 1,
         "view_detached": 1,
     });
@@ -441,7 +443,7 @@ fn test_hologram_oracle_negative_probes_reject_wrong_subject_edition_and_mutatio
     reject(&bad_edition);
 
     let mut bad_edition_unknown = valid_report.clone();
-    bad_edition_unknown["schema"] = json!("prismpm/hologram-oracle/3");
+    bad_edition_unknown["schema"] = json!("prismpm/hologram-oracle/4");
     reject(&bad_edition_unknown);
 
     // 2. Wrong subject / substituted identities
@@ -477,6 +479,15 @@ fn test_hologram_oracle_negative_probes_reject_wrong_subject_edition_and_mutatio
     let mut bad_intent = valid_report.clone();
     bad_intent["intent_vectors"] = json!(4);
     reject(&bad_intent);
+
+    let mut bad_rejected = valid_report.clone();
+    bad_rejected["intent_rejected_vectors"] = json!(1);
+    reject(&bad_rejected);
+    for field in ["archive_sha256", "base_revision", "patch_sha256"] {
+        let mut bad_source = valid_report.clone();
+        bad_source["runtime_source"][field] = json!("0".repeat(64));
+        reject(&bad_source);
+    }
 
     // 5. Attached / detached count != 1
     let mut bad_attach = valid_report.clone();
@@ -519,6 +530,8 @@ fn test_hologram_oracle_negative_probes_reject_wrong_subject_edition_and_mutatio
         "footer_verified",
         "guest_allocation_boundary",
         "intent_vectors",
+        "intent_rejected_vectors",
+        "runtime_source",
         "portable_browser",
         "resident_vectors",
         "view_attached",

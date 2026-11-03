@@ -296,7 +296,7 @@ const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnost
 const hash=value=>createHash('sha256').update(value).digest('hex');
 test('live observation qualification transforms only diagnostics and retains all original acceptance predicates',()=>{
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
- const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
+ const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup, transportRequestMaximum);';
  for(const mode of ['observed','unobserved','ordinary'])for(const trigger of ['click','keyboard']){
   const driver=observationDriver(source,mode,trigger);
   assert.equal(driver.includes(call),mode!=='unobserved');
@@ -327,7 +327,7 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes("for (const mode of ['observed', 'unobserved', 'ordinary'])"));
  assert(owner.includes('assert.deepEqual(acceptanceReport(pair[2].report),acceptanceReport(pair[1].report)'));
  // Only the per-run timing samples are exempt; every other report field stays strict.
- const timed=(duration,status='passed')=>({schema:'prismpm/hologram-oracle/2',direct_vectors:22,
+ const timed=(duration,status='passed')=>({schema:'prismpm/hologram-oracle/3',direct_vectors:22,
   portable_browser:{status,cases:[{name:'modeled-vectors',status:'passed',attempts:1}],
    browser_timing:[{vector_index:0,duration_milliseconds:duration,engine:'chromium',engine_version:'157.0.8099.0'}]}});
  assert.deepEqual(acceptanceReport(timed(54.86)),acceptanceReport(timed(54.29)));

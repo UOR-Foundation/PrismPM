@@ -128,7 +128,7 @@ function diagnosticRetirementRegistry() {
 }
 // CDP observations are diagnostic only: no body retrieval, request interception,
 // cache overrides, or enlarged retention buffers can alter the acceptance path.
-function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
+function submissionNetworkRecorder(session, endpoint, expectedRequest, record, requestMaximum = 65_536) {
   const requests = new Map();
   let ordinal = 0;
   let overflow = false;
@@ -142,7 +142,7 @@ function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
         requests.set(value.requestId, ++ordinal);
       }
       let payloadMatches = null;
-      const payloadOversized = typeof value.request.postData === 'string' && value.request.postData.length > 65_536 * 6 + 256;
+      const payloadOversized = typeof value.request.postData === 'string' && value.request.postData.length > requestMaximum * 6 + 256;
       if (typeof value.request.postData === 'string' && !payloadOversized) {
         try { assert.deepEqual(JSON.parse(value.request.postData), expectedRequest); payloadMatches = true; }
         catch { payloadMatches = false; }
@@ -185,7 +185,7 @@ function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
   };
 }
 async function submissionNetworkOwner(target, endpoint, expectedRequest, record,
-  registry = diagnosticRetirementRegistry()) {
+  registry = diagnosticRetirementRegistry(), requestMaximum = 65_536) {
   const unavailable = () => ({summary: () => ({state: 'unavailable'}), stop() {}});
   let network = unavailable();
   let session;
@@ -218,7 +218,7 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record,
     });
     const acquired = await bounded(acquisition, true);
     if (acquired && !retired) {
-      network = submissionNetworkRecorder(acquired, endpoint, expectedRequest, record);
+      network = submissionNetworkRecorder(acquired, endpoint, expectedRequest, record, requestMaximum);
       await bounded(acquired.send('Network.enable'), true);
     }
   } catch {
@@ -251,6 +251,7 @@ assert.ok(Number.isInteger(app.request_maximum) && app.request_maximum > 0 && ap
   'request bound exceeds pinned portable View transport');
 assert.ok(Number.isInteger(app.response_maximum) && app.response_maximum > 0 && app.response_maximum <= (app.profile === 'prismpm/text-application/4' ? 16_777_216 : 1_048_576),
   'response bound exceeds pinned portable View transport');
+const transportRequestMaximum = app.profile === 'prismpm/text-application/4' ? app.request_maximum : 65_536;
 const url = new URL(origin);
 assert.equal(url.hostname, '127.0.0.1');
 assert.equal(url.protocol, 'http:');
@@ -476,7 +477,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   target.on('crash', onCrash);
   target.on('close', onClose);
   try {
-    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);
+    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup, transportRequestMaximum);
     if (workbench) await target.waitForFunction(ready, {...prepared, button: triggerSelector ?? prepared.button});
     else await target.waitForFunction(ready);
     phase = 'fill';
@@ -628,6 +629,18 @@ if (app.session) {
         if(expected.response)assert.equal(await saved(),expected.response);assert.equal(requests,0);
       }finally{page.off('request',observe);}
     }
+  });
+  await step('file-session-intent-boundaries',async()=>{
+    const body={version:1,name:'application.invoke',payload:successful.request};
+    const headers={'content-type':'application/json',origin};
+    const request=(value,options={})=>fetch(origin+'/_hologram/intent',{method:'POST',headers,body:JSON.stringify(value),...options});
+    for(const value of [{...body,extra:true},{...body,version:2},{...body,name:'host.exec'},
+      {...body,payload:'x'.repeat(transportRequestMaximum+1)}])assert.equal((await request(value)).status,400);
+    assert.equal((await request(body,{headers:{...headers,origin:'https://untrusted.invalid'}})).status,403);
+    assert.equal((await request(body,{headers:{'content-type':'application/json'}})).status,403);
+    assert.equal((await request(body,{headers:{...headers,'content-type':'text/plain'}})).status,415);
+    assert.equal((await request(body,{body:'x'.repeat(transportRequestMaximum*6+257)})).status,413);
+    await submitRow(successful);
   });
   await step('file-session-privacy',async()=>{await openPage();assert.deepEqual(await page.evaluate(async()=>({local:localStorage.length,session:sessionStorage.length,registrations:(await navigator.serviceWorker.getRegistrations()).length})),{local:0,session:0,registrations:0});assert.deepEqual(unexpected,[]);});
   process.stdout.write(`${JSON.stringify({stage:'live'})}\n`);const stopped=await input.next();assert.equal(stopped.done,false);assert.deepEqual(JSON.parse(stopped.value),{stage:'stopped'});
@@ -805,11 +818,11 @@ if (app.session) {
       method: 'POST', headers, body: JSON.stringify(value), ...options,
     });
     for (const value of [{...body, extra: true}, {...body, version: 2}, {...body, name: 'host.exec'},
-      {...body, payload: 'x'.repeat(65_537)}]) assert.equal((await request(value)).status, 400);
+      {...body, payload: 'x'.repeat(transportRequestMaximum + 1)}]) assert.equal((await request(value)).status, 400);
     assert.equal((await request(body, {headers: {...headers, origin: 'https://untrusted.invalid'}})).status, 403);
     assert.equal((await request(body, {headers: {'content-type': 'application/json'}})).status, 403);
     assert.equal((await request(body, {headers: {...headers, 'content-type': 'text/plain'}})).status, 415);
-    assert.equal((await request(body, {body: 'x'.repeat(65_536 * 6 + 257)})).status, 413);
+    assert.equal((await request(body, {body: 'x'.repeat(transportRequestMaximum * 6 + 257)})).status, 413);
     assert.equal((await fetch(`${origin}/_hologram/intent`)).status, 405);
     assert.equal((await fetch(`${origin}/?draft=private`)).status, 400);
     assert.equal((await fetch(`${origin}/%2e%2e/secrets`)).status, 404);

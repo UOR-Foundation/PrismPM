@@ -6,7 +6,7 @@ import stat
 import sys
 import tarfile
 
-ARCHIVE_SHA256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
+ARCHIVE_SHA256 = "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f"
 
 
 def identity(value):
