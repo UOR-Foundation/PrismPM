@@ -1,5 +1,6 @@
 """Real Git/Cargo regression for reproducible, fully offline source caches."""
 
+import errno
 import hashlib
 import importlib.util
 import os
@@ -10,6 +11,7 @@ import subprocess
 import struct
 import tempfile
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("normalizer", Path(__file__).with_name("normalize-cargo-git.py"))
 normalizer = importlib.util.module_from_spec(spec)
@@ -108,7 +110,14 @@ class CargoGitTest(unittest.TestCase):
             for ids, dangling_id in zip(objects, dangling):
                 self.assertIn(dangling_id.encode(), ids)
         for number, home in enumerate(homes):
-            self.assertGreaterEqual(normalizer.normalize(home), 3, "include bare DB, checkout and nested submodule")
+            original_rename = Path.rename
+            def overlay_rename(path, destination):
+                if number == 1 and path.name == "objects" and Path(destination).name == "original-objects":
+                    raise OSError(errno.EXDEV, "Invalid cross-device link")
+                return original_rename(path, destination)
+            with mock.patch.object(Path, "rename", overlay_rename):
+                self.assertGreaterEqual(normalizer.normalize(home), 3, "include bare DB, checkout and nested submodule")
+            self.assertFalse(list(home.rglob(".prismpm-recovery-*")))
             self.assertEqual([normalizer.object_ids(store) for store in repositories[number]], original_objects[number])
             self.assertEqual([normalizer.git(store, "for-each-ref") for store in repositories[number]], original_refs[number])
             self.assertEqual({path: row for path, row in files(home / "git/checkouts").items()
@@ -142,6 +151,51 @@ class CargoGitTest(unittest.TestCase):
             checkout = next((home / "git/checkouts").glob("*/*"))
             self.assertEqual(self.command("git", "rev-parse", "HEAD", cwd=checkout), revision)
             self.assertEqual(self.command("git", "rev-parse", "HEAD", cwd=checkout / "vendor/nested"), nested_revision)
+
+    def test_overlay_install_failure_restores_objects_and_retains_backup_if_rollback_fails(self):
+        for rollback_fails in (False, True):
+            with self.subTest(rollback_fails=rollback_fails):
+                repo = self.repository("rollback-" + str(rollback_fails))
+                (repo / "source").write_text("source preserved")
+                self.commit(repo)
+                directory = repo / ".git"
+                before = files(directory / "objects")
+                ids = normalizer.object_ids(directory)
+                rename = Path.rename
+                copytree = shutil.copytree
+                def failing_rename(path, destination):
+                    if path == directory / "objects":
+                        raise OSError(errno.EXDEV, "Invalid cross-device link")
+                    if Path(destination) == directory / "objects":
+                        raise OSError(errno.EIO, "injected install failure")
+                    return rename(path, destination)
+                def failing_copytree(source, destination, *args, **kwargs):
+                    if rollback_fails and Path(destination) == directory / "objects":
+                        raise OSError(errno.EIO, "injected rollback failure")
+                    return copytree(source, destination, *args, **kwargs)
+                with mock.patch.object(Path, "rename", failing_rename), mock.patch.object(shutil, "copytree", failing_copytree):
+                    with self.assertRaises(RuntimeError if rollback_fails else OSError):
+                        normalizer.normalize_repository(directory)
+                self.assertEqual((repo / "source").read_text(), "source preserved")
+                if rollback_fails:
+                    recovery, = directory.glob(".prismpm-recovery-*/original-objects")
+                    self.assertEqual(files(recovery), before)
+                    self.assertEqual(normalizer.object_ids(directory, recovery), ids)
+                else:
+                    self.assertEqual(files(directory / "objects"), before)
+                    self.assertEqual(normalizer.object_ids(directory), ids)
+                    self.assertFalse(list(directory.glob(".prismpm-recovery-*")))
+
+    def test_non_overlay_rename_error_does_not_replace_objects(self):
+        repo = self.repository("permission-error")
+        (repo / "source").write_text("source preserved")
+        self.commit(repo)
+        before = files(repo)
+        with mock.patch.object(Path, "rename", side_effect=OSError(errno.EACCES, "injected permission error")):
+            with self.assertRaises(OSError) as raised:
+                normalizer.normalize_repository(repo / ".git")
+        self.assertEqual(raised.exception.errno, errno.EACCES)
+        self.assertEqual(files(repo), before)
 
     def test_absent_git_cache_is_valid_and_aliases_are_refused(self):
         home = self.root / "home"
