@@ -902,14 +902,13 @@ pub(crate) fn oracle_vectors(application: &WorkbenchApplication) -> OracleVector
                     field.kind == FieldKind::Choice
                         && !field.choices.iter().any(|choice| choice.value == *value)
                 })
+                || application.session.as_ref().is_some_and(|session| {
+                    operation.id != session.restore_operation
+                        && values.iter().zip(&operation.fields).any(|(value, field)| {
+                            field.id == session.state_field && *value != session.initial_state
+                        })
+                })
             {
-                selected.unrepresentable.push(index);
-            } else if application.session.as_ref().is_some_and(|session| {
-                operation.id != session.restore_operation
-                    && values.iter().zip(&operation.fields).any(|(value, field)| {
-                        field.id == session.state_field && *value != session.initial_state
-                    })
-            }) {
                 selected.unrepresentable.push(index);
             } else if values
                 .iter()
