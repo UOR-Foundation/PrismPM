@@ -736,9 +736,10 @@ async function forcedColorsProbe(source, style) {
       };
       const colors = {canvas:system('Canvas'), canvasText:system('CanvasText'), field:system('Field'),
         fieldText:system('FieldText'), grayText:system('GrayText'), linkText:system('LinkText'), highlight:system('Highlight')};
-      const read = (node, disabled) => {
+      const read = (node, disabled, ariaDisabled = false) => {
         const copy = node.cloneNode(true); copy.removeAttribute('id');
         if (disabled !== undefined) copy.disabled = disabled;
+        if (ariaDisabled) copy.setAttribute('aria-disabled', 'true');
         copy.style.forcedColorAdjust = 'none';
         node.parentNode.append(copy);
         const computed = getComputedStyle(copy);
@@ -749,6 +750,7 @@ async function forcedColorsProbe(source, style) {
       return {colors,
         controls:[...document.querySelectorAll('button,input,textarea,select,a')].filter(node => !node.hidden).map(node => read(node)),
         status:read(document.querySelector('#status')), disabled:read(document.querySelector('#submit'), true),
+        busy:read(document.querySelector('#submit'), false, true),
         header:read(document.querySelector('.site-header')), panel:read(document.querySelector('.panel'))};
     });
     const {colors} = observed;
@@ -763,6 +765,7 @@ async function forcedColorsProbe(source, style) {
       assert.equal(control.borderTopColor, border, 'every control border must use its system color when forced');
     }
     assert.deepEqual(observed.disabled, {tag:'BUTTON', disabled:true, color:colors.grayText, backgroundColor:colors.canvas, borderTopColor:colors.grayText, borderBottomColor:colors.grayText}, 'the disabled submit must use GrayText when forced');
+    assert.deepEqual(observed.busy, {tag:'BUTTON', disabled:false, color:colors.grayText, backgroundColor:colors.canvas, borderTopColor:colors.grayText, borderBottomColor:colors.grayText}, 'the focusable busy submit must retain inactive system colors');
     assert.equal(observed.header.borderBottomColor, colors.canvasText, 'the header border must use CanvasText when forced');
     assert.equal(observed.panel.backgroundColor, colors.canvas, 'the panel background must use Canvas when forced');
     assert.equal(observed.panel.borderTopColor, colors.canvasText, 'the panel border must use CanvasText when forced');
@@ -774,6 +777,9 @@ async function forcedColorsProbe(source, style) {
 }
 test('text_v3_workbench forced-colors palette colors controls and the focus ring', async () => {
   await forcedColorsProbe(template, styleSource);
+  const busy = styleSource.replace('button:disabled,button[aria-disabled="true"]{background:Canvas', 'button:disabled{background:Canvas');
+  assert.notEqual(busy, styleSource);
+  await assert.rejects(forcedColorsProbe(template, busy), error => error instanceof assert.AssertionError);
   const broken = styleSource.replace(/\/\* forced-colors[\s\S]*$/, '');
   assert.notEqual(broken, styleSource);
   await assert.rejects(forcedColorsProbe(template, broken), error => error instanceof assert.AssertionError);
