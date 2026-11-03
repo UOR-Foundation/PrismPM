@@ -1,9 +1,10 @@
 # Host-effect system source fixture
 
 `Release.lex.tex` models the `mcp-loopback` service in the shape of
-UOR-Foundation/lexlean-mcp#17: a gateway (`api`) that publishes one port on
-`127.0.0.1`, an engine host and a signer (`worker`), a verifier (`job`) and a
-telemetry collector. Image names and digests, effect names and the port are
+UOR-Foundation/lexlean-mcp#17: a gateway (`api`) on the host network that
+listens on `127.0.0.1`, the host's loopback, an engine host and a signer
+(`worker`), a verifier (`job`) and a telemetry collector on an internal
+network. Image names and digests, effect names and the port are
 illustrative; the real values come from lexlean-mcp's own declaration.
 
 The fixture is imported by the Calculator application of `tests/browser-system`

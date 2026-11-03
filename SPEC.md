@@ -1704,12 +1704,24 @@ The application profile names the server application contract
 and lists the effects that application declares: at least one, each once, each
 a dotted lowercase name. The effect vocabulary belongs to the application, not
 to this profile. Components are `api`, `worker`, `job` or `telemetry-collector`,
-each with one declared image, parameters, secret references, volumes, networks
-and resources. A component depends only on components declared before it, so
-the dependency order is its own acyclicity witness. Listeners are the only
-published ports. A listener belongs to an `api` component that sits on at least
-one non-internal network, binds `127.0.0.1`, uses TCP and publishes a port no
-other listener publishes. The single target is the pinned Compose adapter.
+each with one declared image, parameters, secret references, volumes and
+resources. A component depends only on components declared before it, so the
+dependency order is its own acyclicity witness. An `api` component declares no
+network, because it runs on the host network, and every other component declares
+at least one. A listener belongs to an `api` component, binds `127.0.0.1`, uses
+TCP and takes a port no other listener takes. The single target is the pinned
+Compose adapter.
+
+The `api` component is on the host network because a served application
+listens on `127.0.0.1` only, and Docker forwards a port published from a bridge
+network to the container's interface, never to its loopback: such a listener is
+unreachable however the port is published. On the host network the container's
+loopback is the host's, so the listener is reached from the host's `127.0.0.1`
+and from no other interface. The loopback-only guarantee then rests on the
+address the application binds, which is the listener's `bind_address`; this
+profile states that address but does not yet tie it to the serving declaration
+of the selected server application (see the last paragraph). A Linux engine is
+assumed: Docker Desktop gives host networking another meaning.
 
 An authored `SystemManifest` and the generated empty-axiom theorem
 `manifestValidation_sound_complete`, with `validateManifest model manifest =
@@ -1717,23 +1729,26 @@ true` decided for the selected model and manifest, bind the application model
 digest, the product identity, the declared effects and the published listener
 identities. Planted defects are decided theorems: a wildcard, hostname or other
 loopback address, a missing, zero or out-of-range port, a listener on a worker
-or on an unknown component or on internal networks only, two listeners on one
-port, a wrong contract or protocol, no declared effect, a repeated effect, an
-unknown kind, a forward or unknown dependency, an unknown image or network, a
-repeated identity and each manifest mismatch.
+or on an unknown component, an `api` component on a network, a worker on none,
+two listeners on one port, a wrong contract or protocol, no declared effect, a
+repeated effect, an unknown kind, a forward or unknown dependency, an unknown
+image or network, a repeated identity and each manifest mismatch.
 
 The Compose adapter descriptor lists the profiles it projects in
-`model_schemas` and names the one address a published port may bind in its
-projection policy as `loopback_address`. The projection copies each listener
-as `host_ip`, `published`, `target` and `protocol`, and refuses a listener that
-does not name that address instead of rewriting it. The closed schema carries
+`model_schemas` and names the one address a listener may bind in its
+projection policy as `loopback_address`. The projection gives each `api`
+service `network_mode: host` and no networks, gives every other service its
+declared networks, and publishes no port; it refuses a listener that does not
+name the loopback address instead of rewriting it. The closed schema carries
 the same constant, so a wildcard binding is refused three times: by the
 contract, by the validator and by the projection. A Compose project is also
-audited as emitted bytes: every service port is long-form and names the
-loopback address, and no service uses the host network. The locked Compose
-oracle accepts any host address, so that audit is the check a wildcard cannot
-pass. The projection set is the Compose project and SPDX, both validated by
-their locked oracles.
+audited as emitted bytes: no service publishes or exposes a port, no service
+names a network mode other than `host`, and a service on the host network is
+on no other network. The locked Compose oracle accepts any published port and
+any network mode, so that audit is the check a published wildcard cannot pass.
+It cannot see which address a process binds, which is why the address is held
+by the contract, the validator and the projection. The projection set is the
+Compose project and SPDX, both validated by their locked oracles.
 
 This profile does not claim that the declared effects equal the host protocol
 of the selected application: the server application model that issue 216
