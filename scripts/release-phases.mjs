@@ -30,10 +30,14 @@ export function publicationPolicy(value) {
     assert(!(rehearsal && publishCrates), 'a rehearsal cannot publish crates');
   } else {
     assert.equal(value.event, 'push');
-    assert.equal(value.ref, 'refs/tags/v0.4.0');
     assert.equal(value.publishCrates, null);
     assert.equal(value.rehearsal, null);
-    publishCrates = true;
+    if (value.ref === 'refs/heads/release/v0.4') {
+      publishCrates = false; rehearsal = true;
+    } else {
+      assert.equal(value.ref, 'refs/tags/v0.4.0');
+      publishCrates = true;
+    }
   }
   return {version: value.version, publishCrates, rehearsal};
 }
@@ -41,7 +45,8 @@ export function publicationPolicy(value) {
 function policyFromEnvironment(environment) {
   const event = environment.GITHUB_EVENT_NAME;
   return publicationPolicy({repository: environment.GITHUB_REPOSITORY, ref: environment.GITHUB_REF,
-    event, version: environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
+    event, version: event === 'push' && environment.GITHUB_REF === 'refs/heads/release/v0.4'
+      ? '0.4.0' : environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
     publishCrates: event === 'push' ? null : JSON.parse(environment.PUBLISH_CRATES),
     rehearsal: event === 'push' ? null : JSON.parse(environment.REHEARSAL), revision: environment.GITHUB_SHA});
 }

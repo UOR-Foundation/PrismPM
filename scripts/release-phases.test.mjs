@@ -50,6 +50,7 @@ const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_
 const publicationTag = `sdk-oci-${revision}-123456789-1`;
 
 function validateWorkflow(value) {
+  assert.deepEqual(value.on.push, {branches: ['release/v0.4'], tags: ['v0.4.0']});
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
   assert.equal(value.jobs['oci-native'].if, undefined, 'normal success gating must not be bypassed');
   assert.deepEqual(value.jobs.release.needs, [...ociNeeds, 'oci-native', 'crates']);
@@ -237,6 +238,7 @@ function validateWorkflow(value) {
 test('publication phases preserve all gates and decouple OCI/native from optional Cargo', () => {
   validateWorkflow(workflow());
   for (const mutate of [
+    value => { value.on.push.branches = ['main']; },
     value => value.jobs['oci-native'].needs.push('crates'),
     value => value.jobs['oci-native'].needs.pop(),
     value => { delete value.jobs['installed-sdk']; },
@@ -382,6 +384,22 @@ test('explicit OCI-only dispatch is distinct from Cargo publication and rejects 
     {version: '0.5.0'}, {revision: 'main'}, {extra: true}]) {
     assert.throws(() => publicationPolicy({...policy(), ...change}));
   }
+});
+
+test('release branch pushes force rehearsal and preserve tag publication policy', () => {
+  const pushed = {...policy(), event: 'push', publishCrates: null, rehearsal: null};
+  assert.deepEqual(publicationPolicy(pushed), {version: '0.4.0', publishCrates: false, rehearsal: true});
+  for (const ref of ['refs/heads/main', 'refs/heads/feature', 'refs/heads/release/v0.5', 'refs/tags/v0.3.0']) {
+    assert.throws(() => publicationPolicy({...pushed, ref}));
+  }
+  for (const change of [{publishCrates: true}, {rehearsal: false}, {version: '0.5.0'}]) {
+    assert.throws(() => publicationPolicy({...pushed, ...change}));
+  }
+  const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
+  const output = execFileSync(process.execPath, [helper, 'policy'], {encoding: 'utf8',
+    env: {...process.env, ...environment(), GITHUB_EVENT_NAME: 'push', GITHUB_REF_NAME: 'release/v0.4',
+      DISPATCH_VERSION: '9.9.9', PUBLISH_CRATES: 'true', REHEARSAL: 'false'}});
+  assert.equal(output, 'version=0.4.0\npublish-crates=false\nrehearsal=true\n');
 });
 
 test('image-index signatures require the exact current source, ref, trigger, name, issuer and repository', () => {

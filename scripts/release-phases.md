@@ -1,6 +1,6 @@
 # Publication phases
 
-`release.yml` accepts an exact `release/v0.4` dispatch or the `v0.4.0` tag. Source
+`release.yml` accepts a push or dispatch on `release/v0.4`, or the `v0.4.0` tag. Source
 verification runs one pass as the eight `just vv-part` jobs listed in
 `scripts/vv-assemble.mjs`. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
@@ -8,6 +8,12 @@ package, oracle, bootstrap and reproducibility gates remain required.
 A dispatch with `rehearsal=true`, the default, runs every check and publishes no GitHub
 release assets, discovery aliases, crates or native-archive provenance. It still pushes
 images by digest and signs them, because later checks read those exact images.
+
+Every push to `release/v0.4` forces version `0.4.0`, `rehearsal=true` and
+`publish-crates=false`, independently of dispatch inputs. Merging release fixes
+therefore qualifies the exact merge commit without manual Actions dispatch.
+Branch-push signatures bind the actual `push` trigger; explicit dispatch signatures
+continue to bind `workflow_dispatch`. Freeze that merge SHA through qualification.
 
 With `publish-crates=false`, OCI images are pushed by digest without discovery aliases.
 The `sdk-oci-<source SHA>-<run ID>-<attempt>` GitHub prerelease publishes their immutable references,

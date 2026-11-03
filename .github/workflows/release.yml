@@ -19,6 +19,10 @@ on:
         default: true
         type: boolean
   push:
+    # Every release-branch update qualifies its exact merge commit. Branch
+    # pushes are always rehearsals; only the release tag can publish by push.
+    branches:
+      - release/v0.4
     tags:
       - v0.4.0
 
