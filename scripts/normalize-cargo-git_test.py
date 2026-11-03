@@ -31,7 +31,7 @@ class CargoGitTest(unittest.TestCase):
                                 GIT_AUTHOR_NAME="Cache fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
                                 GIT_COMMITTER_NAME="Cache fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid",
                                 GIT_AUTHOR_DATE="2020-01-01T00:00:00Z", GIT_COMMITTER_DATE="2020-01-01T00:00:00Z",
-                                CARGO_NET_GIT_FETCH_WITH_CLI="true")
+                                CARGO_NET_GIT_FETCH_WITH_CLI="true", CARGO_NET_OFFLINE="true")
         self.project = self.root / "project"
         self.project.mkdir()
         (self.project / "src").mkdir()
@@ -73,8 +73,11 @@ class CargoGitTest(unittest.TestCase):
         (self.project / "Cargo.toml").write_text('[package]\nname="cache-consumer"\nversion="0.1.0"\nedition="2021"\n'
             + '[dependencies]\ncache-fixture={git="' + upstream.as_uri() + '",rev="' + revision + '"}\n')
         live = self.root / "live-cargo-home"
-        self.command("cargo", "generate-lockfile", cwd=self.project, cargo_home=live)
-        self.command("cargo", "fetch", "--locked", cwd=self.project, cargo_home=live)
+        # Offline CI defaults must not prevent acquiring our file:// fixtures.
+        # Only these two local acquisition calls opt out; the proof below keeps
+        # --locked --offline and runs after both source remotes are removed.
+        self.command("cargo", "generate-lockfile", "--config", "net.offline=false", cwd=self.project, cargo_home=live)
+        self.command("cargo", "fetch", "--locked", "--config", "net.offline=false", cwd=self.project, cargo_home=live)
         live_stores = list((live / "git/db").iterdir()) + list((live / "git/checkouts").rglob(".git"))
         dangling = []
         for store in live_stores:
