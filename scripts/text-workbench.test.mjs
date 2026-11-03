@@ -625,8 +625,63 @@ async function focusRetainedProbe(source) {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'guided-submit', 'focus must remain on the submit control after the report renders');
   }, {source});
 }
+// Hold the actual intent response until focus and duplicate-submit assertions
+// finish. Rendering opportunities make native-disabled blur observable without
+// relying on a fast worker response or an arbitrary sleep.
+async function busyFocusProbe(source, rawMode=false, moveFocus=false) {
+  let releaseResponse, receivedRequest;
+  const held=new Promise(resolve=>{releaseResponse=resolve;});
+  const received=new Promise(resolve=>{receivedRequest=resolve;});
+  const view=viewData();view.execution.timeout_milliseconds=10000;
+  await withPage(async ({page,invocations}) => {
+    try {
+      await enabled(page);
+      if(rawMode)await page.locator('#raw-editor').evaluate(node=>{node.open=true;});
+      await page.locator(rawMode?'#request':'#field-message').fill('focus input');
+      await page.evaluate(()=>{
+        window.__intentFetches=0;const fetch=window.fetch;
+        window.fetch=function(input,...rest){if(input==='/_hologram/intent')window.__intentFetches++;return fetch.call(this,input,...rest);};
+      });
+      const id=rawMode?'submit':'guided-submit';
+      await page.locator('#'+id).focus();await page.keyboard.press('Enter');
+      await received;await state(page,'running');
+      const render=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await render();
+      assert.equal(await page.evaluate(()=>document.activeElement?.id),id,'busy computation must preserve submit focus');
+      for(const selector of ['#guided-submit','#submit']) {
+        assert.equal(await page.locator(selector).evaluate(node=>node.disabled),false,'busy submit remains natively focusable');
+        assert.equal(await page.locator(selector).getAttribute('aria-disabled'),'true');
+      }
+      for(const selector of ['#guided-form','#application-form','#result-table-region'])
+        assert.equal(await page.locator(selector).getAttribute('aria-busy'),'true');
+      await page.keyboard.press('Enter');await render();
+      assert.equal(await page.evaluate(()=>window.__intentFetches),1,'repeated keyboard submission must not dispatch another intent');
+      assert.equal(invocations.length,1);
+      if(moveFocus)await page.locator('#operation').focus();
+      releaseResponse();await expectCell(page,'FOCUS INPUT',3000);await state(page,'ready');
+      assert.equal(await page.evaluate(()=>document.activeElement?.id),moveFocus?'operation':id,
+        'completion must preserve the current focus, including intentional navigation');
+      for(const selector of ['#guided-submit','#submit']) {
+        assert.equal(await page.locator(selector).evaluate(node=>node.disabled),false);
+        assert.equal(await page.locator(selector).getAttribute('aria-disabled'),null);
+      }
+      for(const selector of ['#guided-form','#application-form','#result-table-region'])
+        assert.equal(await page.locator(selector).getAttribute('aria-busy'),null);
+      assert.equal(await page.evaluate(()=>window.__intentFetches),1);
+      assert.equal(invocations.length,1);
+    } finally {releaseResponse();}
+  },{source,view,transport:'hologram',hologram:async(invocation,response)=>{
+    receivedRequest();await held;
+    response.end(JSON.stringify({version:1,outputs:[JSON.stringify(intentReply(invocation,'FOCUS INPUT'))]}));
+  }});
+}
 test('text_v3_workbench focus stays on the submit control after rendering', async () => {
   await focusRetainedProbe(template);
+  for(const rawMode of [false,true])for(const moveFocus of [false,true])
+    await busyFocusProbe(template,rawMode,moveFocus);
+  const disabled=template.replace('compute.disabled=submit.disabled=!ready;', 'compute.disabled=submit.disabled=!ready||busy;');
+  assert.notEqual(disabled,template);
+  await assert.rejects(busyFocusProbe(disabled),error=>error instanceof assert.AssertionError);
   const broken = template.replace("if(answer.status==='error'){", "byId('operation').focus();if(answer.status==='error'){");
   assert.notEqual(broken, template);
   await assert.rejects(focusRetainedProbe(broken), error => error instanceof assert.AssertionError);
