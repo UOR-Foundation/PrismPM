@@ -649,7 +649,13 @@ async function busyFocusProbe(source, rawMode=false, moveFocus=false) {
       });
       const id=rawMode?'submit':'guided-submit';
       await page.locator('#'+id).focus();await page.keyboard.press('Enter');
-      await received;await state(page,'running');
+      let receiptTimer;
+      try {
+        await Promise.race([received,new Promise((_,reject)=>{
+          receiptTimer=setTimeout(()=>reject(new Error('intent request did not reach the fixture')),5000);
+        })]);
+      } finally {clearTimeout(receiptTimer);}
+      await state(page,'running');
       const render=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       await render();
       assert.equal(await page.evaluate(()=>document.activeElement?.id),id,'busy computation must preserve submit focus');
