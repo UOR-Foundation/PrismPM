@@ -4053,7 +4053,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
 | `SY-07` | `system` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. | §11 |
 | `SY-08` | `system` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. | §11 |
-| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services whose published ports bind loopback only and pass the locked Compose oracle. | §11 |
+| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. | §11 |
 | `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
 | `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
 | `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |
