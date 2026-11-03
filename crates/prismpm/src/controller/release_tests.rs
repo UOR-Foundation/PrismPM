@@ -396,8 +396,8 @@ fn host_effect_system_named_release_selects_and_binds_its_source() {
     let compose: Value = serde_json::from_slice(&projections[0].bytes).unwrap();
     assert_eq!(projections[0].path, "projections/compose.json");
     assert_eq!(
-        compose["services"]["gateway"]["ports"][0]["host_ip"],
-        "127.0.0.1"
+        compose["services"]["gateway"]["network_mode"],
+        "host"
     );
     drop(prepared);
 

@@ -5,8 +5,10 @@
 //! contract and the effects that application declares, the components that
 //! run it (`api`, `worker`, `job`, `telemetry-collector`), their parameters,
 //! secret references, volumes and networks, and the listeners it publishes.
-//! The only target is the Compose adapter, which publishes every listener on
-//! the loopback address the adapter's projection policy names and nowhere else.
+//! The only target is the Compose adapter. A served application listens on
+//! `127.0.0.1` only, and a port Docker publishes from a bridge network reaches
+//! the container's interface, never its loopback, so an `api` component runs on
+//! the host network and declares none: there its loopback is the host's.
 
 use super::{secret_file_environment, spdx, CanonicalDocument, PrismError, Projection};
 use crate::holo::canonical::encode_value;
@@ -121,6 +123,13 @@ pub(super) fn validate(system: &Value, manifest: &Value) -> Result<(), PrismErro
                 "host-effect component references an undeclared artifact, parameter, secret, volume or network",
             ));
         }
+        // An api component runs on the host network, so it declares none; every
+        // other component is on at least one declared network.
+        if (kind == "api") != strings(component, "networks").is_empty() {
+            return Err(invalid(
+                "host-effect api component declares no network, and every other component at least one",
+            ));
+        }
         if !subset(&strings(component, "depends_on"), &earlier) {
             return Err(invalid(
                 "host-effect component depends on a component not declared before it",
@@ -148,11 +157,6 @@ pub(super) fn validate(system: &Value, manifest: &Value) -> Result<(), PrismErro
             "host-effect secret reference names an undeclared consumer",
         ));
     }
-    let open = rows(system, "networks")
-        .iter()
-        .filter(|row| row["internal"] == false)
-        .map(|row| text(row, "id"))
-        .collect::<BTreeSet<_>>();
     let address = loopback()?;
     let mut ports = BTreeSet::new();
     for listener in listeners {
@@ -160,16 +164,11 @@ pub(super) fn validate(system: &Value, manifest: &Value) -> Result<(), PrismErro
             .iter()
             .find(|component| component["id"] == listener["component"]);
         if listener["bind_address"] != address.as_str()
-            || !owner.is_some_and(|component| {
-                component["kind"] == "api"
-                    && strings(component, "networks")
-                        .iter()
-                        .any(|network| open.contains(network))
-            })
+            || !owner.is_some_and(|component| component["kind"] == "api")
             || !ports.insert(listener["port"].as_u64())
         {
             return Err(invalid(
-                "host-effect listener must bind the loopback address, publish a distinct port, and belong to an api component on an open network",
+                "host-effect listener must bind the loopback address, use a distinct port, and belong to an api component",
             ));
         }
     }
@@ -195,34 +194,24 @@ pub(super) fn validate(system: &Value, manifest: &Value) -> Result<(), PrismErro
     Ok(())
 }
 
-fn listener_ports(
-    system: &Value,
-    component: &str,
-    address: &str,
-) -> Result<Vec<Value>, PrismError> {
-    rows(system, "listeners")
+/// The projection never widens a binding: a listener of `component` that does
+/// not name the adapter's loopback address is refused, not rewritten.
+fn listeners_bind(system: &Value, component: &str, address: &str) -> Result<(), PrismError> {
+    if rows(system, "listeners")
         .iter()
-        .filter(|listener| listener["component"] == component)
-        .map(|listener| {
-            // The projection never widens a binding: a listener that does not
-            // name the adapter's loopback address is refused, not rewritten.
-            if listener["bind_address"] != address {
-                return Err(invalid(
-                    "host-effect listener does not bind the loopback address",
-                ));
-            }
-            Ok(json!({
-                "host_ip": address,
-                "protocol": listener["protocol"],
-                "published": listener["port"],
-                "target": listener["port"]
-            }))
-        })
-        .collect()
+        .any(|listener| listener["component"] == component && listener["bind_address"] != address)
+    {
+        return Err(invalid(
+            "host-effect listener does not bind the loopback address",
+        ));
+    }
+    Ok(())
 }
 
-/// The Compose project: one service per component, every published port bound
-/// to the adapter's loopback address, hardened by the adapter's policy.
+/// The Compose project: one service per component, hardened by the adapter's
+/// policy. No service publishes a port: an api service is on the host network,
+/// where its listeners bind the host's loopback, and every other service is on
+/// its declared networks only.
 pub(super) fn compose(system: &Value) -> Result<Value, PrismError> {
     let policy = crate::deployment::projection_policy("compose")?;
     let address = loopback()?;
@@ -303,6 +292,7 @@ pub(super) fn compose(system: &Value) -> Result<Value, PrismError> {
                 .as_u64()
                 .unwrap_or_default()
         );
+        listeners_bind(system, id, &address)?;
         let mut service = json!({
             "cap_drop": policy["cap_drop"],
             "command": component["command"],
@@ -316,8 +306,6 @@ pub(super) fn compose(system: &Value) -> Result<Value, PrismError> {
             },
             "environment": environment,
             "image": format!("{}@{}", text(artifact, "path"), text(artifact, "digest")),
-            "networks": component["networks"],
-            "ports": listener_ports(system, id, &address)?,
             "read_only": policy["read_only"],
             "restart": if kind == "job" { policy["restart_job"].clone() } else { policy["restart_service"].clone() },
             "secrets": secrets,
@@ -325,6 +313,11 @@ pub(super) fn compose(system: &Value) -> Result<Value, PrismError> {
             "tmpfs": if kind == "telemetry-collector" { policy["tmpfs_telemetry"].clone() } else { policy["tmpfs_default"].clone() },
             "volumes": mounts
         });
+        if kind == "api" {
+            service["network_mode"] = json!("host");
+        } else {
+            service["networks"] = component["networks"].clone();
+        }
         if kind != "job" {
             service["healthcheck"] = json!({
                 "interval": policy["healthcheck"]["interval"],
@@ -368,20 +361,27 @@ pub(super) fn compose(system: &Value) -> Result<Value, PrismError> {
 }
 
 /// Audit an emitted Compose project, independently of the model it came from:
-/// every service port is long-form and names the adapter's loopback address,
-/// and no service shares the host network or exposes a port outside Compose.
-/// The locked Compose oracle accepts any host address, so this is the check
-/// that a wildcard binding cannot pass.
+/// no service publishes or exposes a port, no service names a network mode but
+/// the host's, and a service on the host network is on no other. The locked
+/// Compose oracle accepts any published port and any network mode, so this is
+/// the check that a published wildcard cannot pass.
 pub(crate) fn audit_compose(compose: &Value) -> Result<(), PrismError> {
-    let address = loopback()?;
     for (name, service) in compose["services"].as_object().into_iter().flatten() {
-        let ports = service["ports"].as_array().map_or(&[][..], Vec::as_slice);
-        let bound = ports.iter().all(|port| {
-            port.is_object() && port["host_ip"] == address.as_str() && port["published"].is_u64()
-        });
-        if !bound || service.get("network_mode").is_some() || service.get("expose").is_some() {
+        let host = match service.get("network_mode") {
+            None => false,
+            Some(mode) if mode == "host" => true,
+            Some(_) => {
+                return Err(invalid(&format!(
+                    "compose service {name} names a network mode other than the host network"
+                )))
+            }
+        };
+        if service.get("ports").is_some()
+            || service.get("expose").is_some()
+            || (host && service.get("networks").is_some())
+        {
             return Err(invalid(&format!(
-                "compose service {name} publishes a port that is not bound to the loopback address"
+                "compose service {name} publishes a port, or is on the host network and another"
             )));
         }
     }
@@ -517,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn host_effect_system_compose_publishes_loopback_only() {
+    fn host_effect_system_compose_puts_each_api_on_the_host_network() {
         let (document, _) = example();
         let compose = compose(document.value()).unwrap();
         audit_compose(&compose).unwrap();
@@ -535,13 +535,17 @@ mod tests {
                 "verifier"
             ]
         );
-        assert_eq!(
-            services["gateway"]["ports"],
-            json!([{"host_ip":"127.0.0.1","protocol":"tcp","published":8765,"target":8765}])
-        );
+        // The gateway listens on 127.0.0.1, which on the host network is the
+        // host's loopback; a port published from a bridge network would reach
+        // the container's interface and never that listener.
+        assert_eq!(services["gateway"]["network_mode"], "host");
+        assert_eq!(services["gateway"].get("networks"), None);
         for (name, service) in services {
+            assert_eq!(service.get("ports"), None, "{name} publishes nothing");
+            assert_eq!(service.get("expose"), None, "{name} exposes nothing");
             if name != "gateway" {
-                assert_eq!(service["ports"], json!([]), "{name} publishes nothing");
+                assert_eq!(service.get("network_mode"), None, "{name}");
+                assert_eq!(service["networks"], json!(["backend"]), "{name}");
             }
             assert_eq!(service["cap_drop"], json!(["ALL"]));
             assert_eq!(service["read_only"], true);
@@ -575,9 +579,7 @@ mod tests {
             services["verifier"]["volumes"],
             json!([{"source":"toolchain-cache","target":"/var/cache/lexlean","type":"volume"}])
         );
-        assert_eq!(compose["networks"]["edge"], json!({"internal":false}));
-        assert_eq!(compose["networks"]["backend"], json!({"internal":true}));
-        assert_eq!(services["gateway"]["networks"], json!(["backend", "edge"]));
+        assert_eq!(compose["networks"], json!({"backend":{"internal":true}}));
         assert_eq!(
             services["telemetry-collector"]["tmpfs"],
             crate::deployment::projection_policy("compose").unwrap()["tmpfs_telemetry"]
@@ -628,20 +630,44 @@ mod tests {
         }
         let (document, _) = example();
         let projected = compose(document.value()).unwrap();
-        for ports in [
-            json!([{"host_ip":"0.0.0.0","protocol":"tcp","published":8765,"target":8765}]),
-            json!([{"protocol":"tcp","published":8765,"target":8765}]),
-            json!(["8765:8765"]),
-            json!(["127.0.0.1:8765:8765"]),
+        // No published port passes, the loopback long form included: under the
+        // host network nothing needs publishing, and from a bridge network a
+        // published port cannot reach a listener on the container's loopback.
+        for service in ["gateway", "signer"] {
+            for ports in [
+                json!([{"host_ip":"0.0.0.0","protocol":"tcp","published":8765,"target":8765}]),
+                json!([{"host_ip":"127.0.0.1","protocol":"tcp","published":8765,"target":8765}]),
+                json!([{"protocol":"tcp","published":8765,"target":8765}]),
+                json!(["8765:8765"]),
+                json!(["127.0.0.1:8765:8765"]),
+                json!([]),
+            ] {
+                let mut changed = projected.clone();
+                changed["services"][service]["ports"] = ports.clone();
+                assert_eq!(
+                    audit_compose(&changed).unwrap_err().code,
+                    "PP2101",
+                    "{service} {ports}"
+                );
+            }
+        }
+        for (service, field, value) in [
+            ("signer", "network_mode", json!("host")),
+            ("signer", "expose", json!([8765])),
+            ("gateway", "expose", json!([8765])),
+            ("gateway", "network_mode", json!("bridge")),
+            ("gateway", "network_mode", json!("none")),
+            ("gateway", "network_mode", json!("service:signer")),
+            ("gateway", "networks", json!(["backend"])),
+            ("gateway", "networks", json!([])),
         ] {
             let mut changed = projected.clone();
-            changed["services"]["gateway"]["ports"] = ports;
-            assert_eq!(audit_compose(&changed).unwrap_err().code, "PP2101");
-        }
-        for (field, value) in [("network_mode", json!("host")), ("expose", json!([8765]))] {
-            let mut changed = projected.clone();
-            changed["services"]["signer"][field] = value;
-            assert_eq!(audit_compose(&changed).unwrap_err().code, "PP2101");
+            changed["services"][service][field] = value.clone();
+            assert_eq!(
+                audit_compose(&changed).unwrap_err().code,
+                "PP2101",
+                "{service} {field} {value}"
+            );
         }
     }
 
@@ -731,7 +757,12 @@ mod tests {
             ),
             (
                 "network absent",
-                Box::new(|m| m["components"][3]["networks"] = json!(["backend", "absent"])),
+                Box::new(|m| m["components"][1]["networks"] = json!(["backend", "absent"])),
+                "PP2101",
+            ),
+            (
+                "worker without a network",
+                Box::new(|m| m["components"][1]["networks"] = json!([])),
                 "PP2101",
             ),
             (
@@ -760,7 +791,7 @@ mod tests {
                 "PP2101",
             ),
             (
-                "api on internal networks only",
+                "api on a network",
                 Box::new(|m| m["components"][3]["networks"] = json!(["backend"])),
                 "PP2101",
             ),
