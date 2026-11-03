@@ -300,10 +300,13 @@ RUN set -eu; \
 
 RUN chmod -R a+rX,a-w /opt/prismpm/share
 
-RUN mkdir -p /opt/prismpm/cargo-home \
+# Keep the offline dependency content, not Cargo's access-time/GC database.
+RUN /usr/bin/python3 -I -B scripts/normalize-cargo-git.py /usr/local/cargo \
+    && mkdir -p /opt/prismpm/cargo-home \
     && cp -a /usr/local/cargo/registry /opt/prismpm/cargo-home/ \
     && if [ -d /usr/local/cargo/git ]; then cp -a /usr/local/cargo/git /opt/prismpm/cargo-home/; fi \
-    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /opt/prismpm/source
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /opt/prismpm/source \
+    && rm -f /usr/local/cargo/.global-cache /usr/local/cargo/.global-cache-journal /usr/local/cargo/.global-cache-wal /usr/local/cargo/.global-cache-shm
 
 FROM build AS cli-archive-package
 ARG SDK_VERSION=0.4.0
@@ -367,7 +370,7 @@ RUN set -eu; \
       | LC_ALL=C sort > /usr/local/share/prismpm-runtime-dpkg.lock \
     && install -m 0444 /tmp/prismpm-runtime-os.lock /usr/local/share/prismpm-runtime-os.lock \
     && rm -rf /var/lib/apt/lists/* /tmp/prismpm-runtime-os.lock \
-    && rm -f /var/log/dpkg.log /var/log/apt/history.log /var/log/apt/term.log /var/log/apt/eipp.log.xz
+    && rm -f /var/log/dpkg.log /var/log/apt/history.log /var/log/apt/term.log /var/log/apt/eipp.log.xz /var/log/alternatives.log /var/cache/ldconfig/aux-cache
 
 COPY --from=build /usr/local/ /usr/local/
 COPY --from=build /opt/prismpm/ /opt/prismpm/
