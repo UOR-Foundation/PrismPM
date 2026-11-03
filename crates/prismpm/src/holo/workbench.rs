@@ -577,6 +577,42 @@ pub(crate) fn presentation(
 }
 
 /// Decode and validate a bounded result without interpreting domain values.
+fn valid_next_form(application: &WorkbenchApplication, request: &str) -> bool {
+    let Some(session) = &application.session else {
+        return true;
+    };
+    if request.is_empty() {
+        return true;
+    }
+    if request.len() > application.request_maximum as usize {
+        return false;
+    }
+    let Some((prefix, payload)) = request.split_once('\u{1f}') else {
+        return false;
+    };
+    let Some(operation) = application
+        .view
+        .operations
+        .iter()
+        .find(|op| op.request_prefix == prefix && op.id != session.restore_operation)
+    else {
+        return false;
+    };
+    let Some(values) = framed_values(payload, true) else {
+        return false;
+    };
+    values.len() == operation.fields.len()
+        && operation.fields.iter().zip(values).all(|(field, value)| {
+            if field.id == session.state_field {
+                value.is_empty()
+            } else {
+                field.kind != FieldKind::Choice
+                    || field.choices.iter().any(|choice| choice.value == value)
+            }
+        })
+}
+
+/// Validate a bounded response against its declared operation and session contract.
 pub fn result(
     application: &WorkbenchApplication,
     operation: &str,
@@ -601,7 +637,9 @@ pub fn result(
         || result.details.len() > application.view.response.maximum_details as usize
         || result.cells.iter().chain(&result.details).any(|v| !copy(v))
         || match result.status {
-            ResultStatus::Ok => !result.error.is_empty(),
+            ResultStatus::Ok => {
+                !result.error.is_empty() || !valid_next_form(application, &result.request)
+            }
             ResultStatus::Error => {
                 !application
                     .view

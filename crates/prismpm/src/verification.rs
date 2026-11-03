@@ -874,6 +874,7 @@ pub(crate) fn validate_hologram_oracle_report(
             "file-session-roundtrip",
             "file-session-refusal-preserves-state",
             "file-session-file-inputs",
+            "file-session-next-form",
             "file-session-privacy",
             "detached-session",
         ];

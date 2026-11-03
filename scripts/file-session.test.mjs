@@ -15,7 +15,7 @@ after(async()=>{await browser?.close();});
 function fields(text){let bytes=Buffer.from(text),values=[];while(bytes.length){const at=bytes.indexOf(58);assert(at>=1);const header=bytes.subarray(0,at).toString();assert.match(header,/^(0|[1-9][0-9]*)$/);const n=Number(header);assert(n<=bytes.length-at-1);values.push(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes.subarray(at+1,at+1+n)));bytes=bytes.subarray(at+1+n);}return values;}
 const ready=page=>page.waitForFunction(()=>document.querySelector('#guided-submit')?.disabled===false);
 const result=page=>page.waitForFunction(()=>document.querySelector('#result-empty')?.hidden===true);
-async function withPage(run,{delay=0}={}){
+async function withPage(run,{delay=0,nextRequest=()=>''}={}){
  const view=structuredClone(fixture.workbench);view.session=structuredClone(fixture.session);view.execution.timeout_milliseconds=1000;
  const script=template.replace('__VIEW__',JSON.stringify(view)).replace('__INPUT_LIMIT__','4096').replace('__OUTPUT_LIMIT__','16384').replace('__BINDING__','"./unused.js"').replace('__TRANSPORT__','"hologram"');
  const invocations=[];
@@ -28,7 +28,7 @@ async function withPage(run,{delay=0}={}){
    const restore=prefix==='restore',raw=prefix===view.raw.request_prefix,operation=restore?'restore':raw?'raw':'echo';
    const value=restore||raw?values[0]:values[0]+values[1];
    const reject=values.at(-1)==='invalid';
-   const answer={version:1,status:reject?'error':'ok',operation,message:'The transport fixture completed.',rows:0,columns:0,cells:[],details:[],request:'',response:reject?'forged-state':value,error:reject?'invalid':''};
+   const answer={version:1,status:reject?'error':'ok',operation,message:'The transport fixture completed.',rows:0,columns:0,cells:[],details:[],request:nextRequest(values),response:reject?'forged-state':value,error:reject?'invalid':''};
    if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
    res.setHeader('content-type','application/json');res.end(JSON.stringify({version:1,outputs:[values.at(-1)==='bad-json'?'{':JSON.stringify(answer)]}));return;
   }
@@ -73,3 +73,19 @@ test('file session oversized successful responses preserve prior state',async()=
 test('file session changes remain visibly unsaved after requesting a download',async()=>withPage(async({page,view})=>{
  await invoke(page,'kept');assert.equal(await page.locator('#session-unsaved').textContent(),view.session.unsaved_label);await saved(page);assert.equal(await page.locator('#session-unsaved').textContent(),view.session.unsaved_label);await page.locator('#reset').click();assert.equal((await saved(page)).toString(),'kept');
 }));
+
+test('file session next form prepares exact draft values without dispatching or changing state',async()=>withPage(async({page,invocations,view})=>{
+ await invoke(page,'kept');await result(page);
+ assert.equal(await page.locator('#next-form').textContent(),view.operations[0].label);
+ assert.equal(invocations.length,1);await page.locator('#next-form').click();
+ assert.equal(invocations.length,1);assert.equal((await saved(page)).toString(),'kept');
+ assert.equal(await page.locator('#field-message').inputValue(),'é\n\0\x1f:');
+ await page.locator('#guided-submit').click();await result(page);
+ assert.deepEqual(fields(invocations[1].slice(invocations[1].indexOf('\x1f')+1)),['kept','é\r\n\0\x1f:']);
+ await page.locator('#field-message').fill('edited');assert.equal(await page.locator('#next-form').isVisible(),false);
+},{nextRequest:()=> 'ui-echo-v1\x1f0:7:é\r\n\0\x1f:'}));
+test('file session invalid continuation refuses the entire response before replacing state',async()=>withPage(async({page})=>{
+ await invoke(page,'kept');await result(page);
+ await invoke(page,'bad-next');await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='response_error');
+ assert.equal((await saved(page)).toString(),'kept');assert.equal(await page.locator('#next-form').isVisible(),false);
+},{nextRequest:values=>values.at(-1)==='bad-next'?'restore\x1f0:':''}));

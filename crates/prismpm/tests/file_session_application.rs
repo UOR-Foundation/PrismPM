@@ -112,3 +112,35 @@ fn file_session_only_bounded_success_can_replace_state() {
     answer["operation"] = json!("restore");
     assert!(workbench::result(&app, "echo", &serde_json::to_vec(&answer).unwrap()).is_err());
 }
+
+#[test]
+fn file_session_continuations_are_bounded_declared_drafts_without_state() {
+    let doc: ModelDocument = serde_json::from_value(fixture()).unwrap();
+    let app = doc.application.unwrap().workbench().unwrap();
+    let mut answer = json!({"version":1,"status":"ok","operation":"echo","message":"Choose a next step.","rows":0,"columns":0,"cells":[],"details":[],"request":"","response":"accepted","error":""});
+    for request in ["ui-echo-v1\u{1f}0:0:", "ui-echo-v1\u{1f}0:7:é\r\n\0\u{1f}:"] {
+        answer["request"] = json!(request);
+        assert!(
+            workbench::result(&app, "echo", &serde_json::to_vec(&answer).unwrap()).is_ok(),
+            "{request:?}"
+        );
+    }
+    for request in [
+        "missing\u{1f}0:0:",
+        "restore\u{1f}0:",
+        "ui-echo-v1\u{1f}1:x0:",
+        "ui-echo-v1\u{1f}00:0:",
+        "ui-echo-v1\u{1f}0:1:é",
+        "ui-echo-v1\u{1f}0:",
+        "ui-echo-v1\u{1f}0:0:0:",
+        "ui-echo-v1\u{1f}0:99999999999:x",
+    ] {
+        answer["request"] = json!(request);
+        assert!(
+            workbench::result(&app, "echo", &serde_json::to_vec(&answer).unwrap()).is_err(),
+            "{request:?}"
+        );
+    }
+    answer["request"] = json!(format!("ui-echo-v1\u{1f}0:4096:{}", "a".repeat(4096)));
+    assert!(workbench::result(&app, "echo", &serde_json::to_vec(&answer).unwrap()).is_err());
+}

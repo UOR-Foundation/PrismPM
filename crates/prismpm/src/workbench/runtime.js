@@ -12,6 +12,25 @@ const decoder = new TextDecoder('utf-8', {fatal:true, ignoreBOM:true});
 function scalarText(value){for(let i=0;i<value.length;i++){const ch=value.charCodeAt(i);if(ch>=0xd800&&ch<=0xdbff){const next=value.charCodeAt(++i);if(!(next>=0xdc00&&next<=0xdfff))return false;}else if(ch>=0xdc00&&ch<=0xdfff)return false;}return true;}
 function utf8Length(value){if(!scalarText(value))return null;let bytes=0;for(const ch of value){const code=ch.codePointAt(0);bytes+=code<=0x7f?1:code<=0x7ff?2:code<=0xffff?3:4;if(bytes>INPUT_LIMIT)return bytes;}return bytes;}
 
+// A successful session result may prepare one source-declared form. It never
+// dispatches that form or supplies accepted state through the draft.
+export function nextForm(request) {
+  if(!SESSION||request==='')return null;
+  if(typeof request!=='string'||!scalarText(request)||encoder.encode(request).length>INPUT_LIMIT)throw new Error('next form bound');
+  const separator=request.indexOf(US),prefix=request.slice(0,separator);
+  const operation=VIEW.operations.find(item=>item.request_prefix===prefix&&item.id!==SESSION.restore_operation);
+  if(separator<0||!operation)throw new Error('next form operation');
+  let bytes=encoder.encode(request.slice(separator+1));const values=[];
+  while(bytes.length){
+    const colon=bytes.indexOf(58);if(colon<1||colon>10||values.length>=32)throw new Error('next form framing');
+    const header=decoder.decode(bytes.slice(0,colon));if(!/^(0|[1-9][0-9]*)$/.test(header))throw new Error('next form length');
+    const length=Number(header);if(length>bytes.length-colon-1)throw new Error('next form length');
+    values.push(decoder.decode(bytes.slice(colon+1,colon+1+length)));bytes=bytes.slice(colon+1+length);
+  }
+  if(values.length!==operation.fields.length||operation.fields.some((field,index)=>field.id===SESSION.state_field?values[index]!=='':field.kind==='choice'&&!field.choices.some(choice=>choice.value===values[index])))throw new Error('next form fields');
+  return {operation,values};
+}
+
 // Parse the closed JSON object directly so duplicate keys cannot be hidden by
 // JSON.parse's last-key-wins behavior. Arrays contain strings only; the model
 // bounds the whole byte response before parsing and every display collection.
@@ -52,6 +71,7 @@ export function parseResult(text, operation) {
   if(result.version!==1||!['ok','error'].includes(result.status)||result.operation!==operation||!plain(result.message)
     ||!shape||!result.cells.every(plain)||!result.details.every(plain)
     ||(result.status==='ok'?result.error!=='' : !VIEW.errors.some(hint=>hint.code===result.error)||!empty))throw new Error('result contract');
+  if(SESSION&&result.status==='ok')nextForm(result.request);
   return result;
 }
 
@@ -112,6 +132,7 @@ export function mount(root=document.body) {
   const shape=append(element('dl',undefined,{id:'result-shape',class:'result-shape',hidden:''}),element('dt',VIEW.labels.row),element('dd','',{id:'result-rows'}),element('dt',VIEW.labels.column),element('dd','',{id:'result-columns'}));results.append(shape);
   const tableRegion=element('div',undefined,{id:'result-table-region',class:'table-scroll',tabindex:'0',role:'region','aria-label':VIEW.labels.result_table,hidden:''});
   const table=element('table',undefined,{id:'result-table'});tableRegion.append(table);results.append(tableRegion);
+  const next=SESSION?element('button','',{id:'next-form',type:'button',hidden:''}):null;let continuation=null;if(next)results.append(next);
   const details=element('ul',undefined,{id:'result-details'});results.append(element('h3',VIEW.labels.details,{id:'details-heading',hidden:''}),details);
   const rawOutput=append(element('details',undefined,{id:'raw-output'}),element('summary',VIEW.response.raw_label),element('h3',VIEW.labels.request),element('pre','',{id:'result-request'}),element('h3',VIEW.raw.response_label),element('pre','',{id:'result'}));results.append(rawOutput);
   workspace.append(inputs,results);main.append(workspace);
@@ -123,7 +144,7 @@ export function mount(root=document.body) {
   const setStatus=key=>{status.textContent=VIEW.statuses[key];status.dataset.state=key;};
   const updateControls=()=>{compute.disabled=submit.disabled=!ready||busy;cancel.hidden=!busy;for(const node of [form,rawForm,tableRegion]){if(busy)node.setAttribute('aria-busy','true');else node.removeAttribute('aria-busy');}};
   const clearErrors=()=>{byId('result-error').replaceChildren();byId('result-error').hidden=true;for(const [id,node]of fieldNodes){node.removeAttribute('aria-invalid');node.setAttribute('aria-describedby','field-'+id+'-help');}request.removeAttribute('aria-invalid');request.setAttribute('aria-describedby','raw-help');};
-  const clearOutput=()=>{clearErrors();byId('result').textContent='';byId('result-request').textContent='';byId('result-message').textContent='';shape.hidden=true;byId('result-rows').textContent='';byId('result-columns').textContent='';byId('result-empty').hidden=false;table.replaceChildren();tableRegion.hidden=true;details.replaceChildren();byId('details-heading').hidden=true;};
+  const clearOutput=()=>{continuation=null;if(next)next.hidden=true;clearErrors();byId('result').textContent='';byId('result-request').textContent='';byId('result-message').textContent='';shape.hidden=true;byId('result-rows').textContent='';byId('result-columns').textContent='';byId('result-empty').hidden=false;table.replaceChildren();tableRegion.hidden=true;details.replaceChildren();byId('details-heading').hidden=true;};
   const clearTimer=()=>{if(timer!==null){clearTimeout(timer);timer=null;}};
   const retire=()=>{clearTimer();epoch++;generation++;pending=null;ready=false;worker?.terminate();worker=null;controller?.abort();controller=null;};
   const failure=(key,rawMode=false,node=null)=>{if(key!=='input_error'){engineFailed=!ready;busy=false;clearTimer();}setStatus(key);retry.hidden=key==='input_error'?!engineFailed:false;if(key==='input_error'){const target=node??(rawMode?request:fieldNodes.values().next().value);if(target){target.setAttribute('aria-invalid','true');target.setAttribute('aria-describedby',(target.getAttribute('aria-describedby')??'')+' status');target.focus();}}updateControls();};
@@ -135,7 +156,9 @@ export function mount(root=document.body) {
   const complete=(text,token)=>{if(!pending||token!==generation)return;const invocation=pending;pending=null;busy=false;clearTimer();try{
     const answer=parseResult(text,invocation.operation);
     if(SESSION&&answer.status==='ok'&&encoder.encode(answer.response).length>SESSION.maximum_state_bytes)throw new Error('state bound');
+    const proposed=SESSION&&answer.status==='ok'?nextForm(answer.request):null;
     display(answer,invocation.rawMode);
+    continuation=proposed;if(next){next.hidden=proposed===null;next.textContent=proposed?.operation.label??'';}
     if(SESSION&&answer.status==='ok'){
       dirty=invocation.restore?false:dirty||answer.response!==sessionState;sessionState=answer.response;
       const stateNode=fieldNodes.get(SESSION.state_field);if(stateNode)stateNode.value=sessionState;
@@ -198,6 +221,7 @@ export function mount(root=document.body) {
   }
   const renderOperation=initial=>{fileEpoch++;if(busy)boot(null,'cancelled');active=VIEW.operations.find(item=>item.id===operation.value);fieldNodes.clear();fileCaptures.clear();fields.replaceChildren();for(const field of active.fields){const id='field-'+field.id;const node=field.kind==='multiline'?element('textarea',undefined,{rows:4}):field.kind==='choice'?element('select'):element('input',undefined,{type:'text',...(field.kind==='natural'?{inputmode:'numeric'}:{})});node.id=id;node.setAttribute('aria-describedby',id+'-help');node.setAttribute('autocomplete','off');if(field.required)node.setAttribute('required','');if(field.kind==='choice')for(const choice of field.choices)node.append(element('option',choice.label,{value:choice.value}));else{node.setAttribute('placeholder',field.placeholder);node.setAttribute('spellcheck','false');}node.value=SESSION&&field.id===SESSION.state_field?sessionState:field.initial_value;fieldNodes.set(field.id,node);const group=append(element('div',undefined,{class:field.kind==='multiline'?'field multiline':'field'}),element('label',field.label,{for:id}),node,element('p',field.help,{id:id+'-help',class:'help'}));if(SESSION&&field.id===SESSION.state_field)group.hidden=true;fields.append(group);if(SESSION)attachFileInput(group,node,field);node.addEventListener('input',()=>{fileCaptures.delete(field.id);clearExample();draftChanged();});}
     byId('operation-summary').textContent=active.summary;byId('operation-help').textContent=active.help;example.replaceChildren(element('option',VIEW.labels.examples,{value:''}),...active.examples.map(item=>element('option',item.label,{value:item.id})));example.value=initial?VIEW.initial_example:active.examples[0].id;loadExample.disabled=example.value==='';clearOutput();load();};
+  next?.addEventListener('click',()=>{if(busy||!continuation)return;const selected=continuation;operation.value=selected.operation.id;renderOperation(false);clearExample();for(let index=0;index<active.fields.length;index++){const field=active.fields[index];if(field.id===SESSION.state_field)continue;const node=fieldNodes.get(field.id),value=selected.values[index];node.value=value;fileCaptures.set(field.id,{node,value,display:node.value});}const editable=active.fields.find(field=>field.id!==SESSION.state_field);if(editable)fieldNodes.get(editable.id).focus();});
   request.addEventListener('input',draftChanged);example.addEventListener('change',()=>{loadExample.disabled=example.value==='';draftChanged();byId('example-description').textContent='';byId('example-explanation').textContent='';byId('expected-response-json').textContent='';expected.open=false;});
   operation.addEventListener('change',()=>renderOperation(false));loadExample.addEventListener('click',load);form.addEventListener('submit',event=>{event.preventDefault();invoke();});rawForm.addEventListener('submit',event=>{event.preventDefault();invoke(true);});request.addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();invoke(true);}});
   cancel.addEventListener('click',()=>{setStatus('cancelling');retire();busy=false;boot(null,'cancelled');retry.hidden=last===null;});retry.addEventListener('click',()=>{fileEpoch++;const invocation=last;boot(invocation);retry.hidden=true;});reset.addEventListener('click',()=>{fileEpoch++;fileCaptures.clear();if(busy)boot(null,'cancelled');for(const field of active.fields)fieldNodes.get(field.id).value=SESSION&&field.id===SESSION.state_field?sessionState:field.initial_value;clearExample();clearOutput();last=null;retry.hidden=!engineFailed;if(ready)setStatus('ready');else if(!engineFailed)setStatus('initializing');});

@@ -447,6 +447,18 @@ state; initiating a download is not proof of a completed save, so unsaved copy
 remains. Closing a modified window invokes the browser's unsaved-change prompt.
 There is no ambient storage, authentication, synchronization or host inference.
 
+A successful V4 result may use its `request` string to propose the next form.
+An empty string offers no form; a nonempty string must be a bounded canonical V4
+frame for a declared operation other than restore. Field arity and choice values
+must match; its state field must be empty. Required draft fields may be empty.
+An invalid proposal invalidates the entire response before state is accepted.
+The View offers a button labeled with the declared operation label. Activating
+it fills that form and focuses its first visible field, preserving exact UTF-8
+draft values and injecting accepted state. It does not dispatch or change state.
+Draft edits, task changes and new invocations retire the proposal. Refusals never
+offer a form. This meaning of `request` is exclusive to V4; earlier profiles retain
+their raw request display contract. The guest owns all next-step decisions.
+
 HO-32 runs source/schema mutation and canonical framing tests, browser lifecycle
 and file preservation tests, and a compiled finite-state source fixture against
 the actual portable session. V4's portable corpus retains direct vectors and
@@ -4156,4 +4168,4 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
 | `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
 | `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |
-| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, and downloads exact accepted state only on user action. | §3 |
+| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, and offers validated guest-selected forms without executing them. | §3 |
