@@ -7,6 +7,7 @@ Object packs are rebuilt from the complete object set, never a reachable subset.
 """
 
 import argparse
+import errno
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +29,48 @@ def git(directory, *args, object_directory=None, input=None):
 def object_ids(directory, object_directory=None):
     return sorted(git(directory, "cat-file", "--batch-all-objects", "--batch-check=%(objectname)",
                       object_directory=object_directory).splitlines())
+
+
+def replace_objects(directory, staged, expected):
+    objects = directory / "objects"
+    # This backup lives outside the caller's staging cleanup so a failed
+    # rollback leaves a complete recovery copy, even after an exception.
+    recovery = Path(tempfile.mkdtemp(prefix=".prismpm-recovery-", dir=directory))
+    backup = recovery / "original-objects"
+    copied = False
+    try:
+        try:
+            objects.rename(backup)
+        except OSError as error:
+            if error.errno != errno.EXDEV:
+                raise
+            # OverlayFS refuses renames of lower-layer directories. Copy and
+            # verify before removing the original; never hide unrelated errors.
+            shutil.copytree(objects, backup, symlinks=True)
+            if object_ids(directory, backup) != expected:
+                raise ValueError("backup changed the Git object set")
+            copied = True
+    except BaseException:
+        shutil.rmtree(recovery)
+        raise
+    try:
+        if copied:
+            shutil.rmtree(objects)
+        staged.rename(objects)
+    except BaseException:
+        try:
+            if objects.exists():
+                shutil.rmtree(objects)
+            if copied:
+                shutil.copytree(backup, objects, symlinks=True)
+            else:
+                backup.rename(objects)
+        except BaseException as rollback_error:
+            raise RuntimeError("Git object rollback failed; complete backup retained at "
+                               + str(backup)) from rollback_error
+        shutil.rmtree(recovery)
+        raise
+    shutil.rmtree(recovery)
 
 
 def normalize_repository(directory):
@@ -60,15 +103,9 @@ def normalize_repository(directory):
                 (staged / "info" / "packs").write_text("P pack-" + pack + ".pack\n\n")
         if object_ids(directory, staged) != before:
             raise ValueError("canonical packing changed the Git object set")
-        backup = temporary / "original-objects"
-        objects.rename(backup)
-        try:
-            staged.rename(objects)
-        except BaseException:
-            backup.rename(objects)
-            raise
-        # TemporaryDirectory retires the old store, including only obsolete
-        # pack acceleration indexes; every original Git object survives above.
+        replace_objects(directory, staged, before)
+        # The replacement retires obsolete pack acceleration indexes; every
+        # original Git object survives in the verified canonical pack above.
     logs = directory / "logs"
     if logs.exists():
         if logs.is_symlink() or not logs.is_dir():
