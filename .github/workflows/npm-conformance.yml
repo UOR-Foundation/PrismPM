@@ -82,7 +82,8 @@ jobs:
           node -e '
             const pack = JSON.parse(require("fs").readFileSync("pack.json", "utf8"))[0];
             console.log(`unpacked size: ${pack.unpackedSize} bytes, ${pack.entryCount} files`);
-            if (pack.unpackedSize > 262144) throw new Error("package exceeds 256 KiB");
+            // Includes the 87097-byte compiled Text/4 fixture; 266453 bytes on Linux, plus CRLF margin.
+            if (pack.unpackedSize > 294912) throw new Error("package exceeds 288 KiB");
             const paths = pack.files.map((f) => f.path);
             const stray = paths.filter((p) => /^(test|scripts)\//.test(p) || p === "runtimes.json" || p === "format-gate.json");
             if (stray.length) throw new Error(`repository files in the package: ${stray}`);
