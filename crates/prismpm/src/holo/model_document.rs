@@ -349,6 +349,13 @@ pub struct TextApplicationModel {
         deserialize_with = "present_workbench"
     )]
     pub workbench: Option<super::workbench::WorkbenchView>,
+    /// File-backed session metadata, required only by text/4.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_session"
+    )]
+    pub session: Option<super::workbench::SessionWorkbench>,
 }
 
 impl TextApplicationModel {
@@ -378,6 +385,7 @@ impl TextApplicationModel {
             primary_layer: self.primary_layer,
             view_layer: self.view_layer,
             view,
+            session: self.session.clone(),
         })
     }
 
@@ -385,9 +393,17 @@ impl TextApplicationModel {
     pub fn has_resource_bounds(&self) -> bool {
         matches!(
             self.profile.as_str(),
-            "prismpm/text-application/2" | "prismpm/text-application/3"
+            "prismpm/text-application/2"
+                | "prismpm/text-application/3"
+                | "prismpm/text-application/4"
         )
     }
+}
+
+fn present_session<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<super::workbench::SessionWorkbench>, D::Error> {
+    super::workbench::SessionWorkbench::deserialize(deserializer).map(Some)
 }
 
 fn present_workbench<'de, D: serde::Deserializer<'de>>(

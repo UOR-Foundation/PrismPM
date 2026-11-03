@@ -23,6 +23,7 @@ mod scoped_administration;
 mod text_cli;
 mod threat_model;
 mod workbench;
+mod file_session;
 
 use node_suite::verify as verify_node_suite;
 use repo_model::repo_root;
@@ -465,6 +466,7 @@ pub fn run_at(root: &Path, id: &str) {
         ),
 
         "HO-19" => workbench::verify(root),
+        "HO-32" => file_session::verify(root),
 
         "HO-16" => {
             let browser = Command::new("timeout")

@@ -4,6 +4,24 @@ use crate::holo::workbench::WorkbenchView;
 
 fn source_shape(name: &str) -> Option<&'static [(&'static str, &'static str)]> {
     match name {
+        "SessionWorkbench" => Some(&[
+            ("stateField", "String"),
+            ("initialState", "String"),
+            ("restoreOperation", "String"),
+            ("saveLabel", "String"),
+            ("openLabel", "String"),
+            ("replaceLabel", "String"),
+            ("unsavedLabel", "String"),
+            ("fileName", "String"),
+            ("maximumStateBytes", "UInt32"),
+            ("fileInputs", "List FileInput"),
+        ]),
+        "FileInput" => Some(&[
+            ("operation", "String"),
+            ("field", "String"),
+            ("label", "String"),
+            ("accept", "String"),
+        ]),
         "Choice" => Some(&[("value", "String"), ("label", "String")]),
         "Field" => Some(&[
             ("id", "String"),
@@ -229,7 +247,11 @@ fn metadata(
     }
     let shape = source_shape(kind).ok_or_else(|| invalid("workbench metadata type is unknown"))?;
     if value.pointer("/type/module").and_then(Value::as_str)
-        != Some("Foundation.View.Text.V3.Model")
+        != Some(if matches!(kind, "SessionWorkbench" | "FileInput") {
+            "Foundation.View.Text.V4.Model"
+        } else {
+            "Foundation.View.Text.V3.Model"
+        })
         || value.pointer("/type/name").and_then(Value::as_str) != Some(kind)
     {
         return Err(invalid(
@@ -288,4 +310,21 @@ pub(super) fn project_view(
         .map_err(|_| invalid("workbench metadata does not match its closed projection")),
         _ => Err(invalid("text/3 workbench must be Option WorkbenchView")),
     }
+}
+
+/// Project exact Text/4 session metadata; no application state is interpreted here.
+pub(super) fn project_session(
+    definitions: &Definitions<'_>,
+    fields: &BTreeMap<&str, (&str, &Value)>,
+) -> Result<crate::holo::workbench::SessionWorkbench, PrismError> {
+    let (owner, value) = field(fields, "session")?;
+    serde_json::from_value(metadata(
+        definitions,
+        owner,
+        value,
+        "SessionWorkbench",
+        &mut 65_536,
+        0,
+    )?)
+    .map_err(|_| invalid("session metadata does not match its closed projection"))
 }

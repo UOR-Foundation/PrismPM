@@ -831,6 +831,9 @@ pub(crate) fn validate_hologram_oracle_report(
     if indexes.is_empty() {
         return Err(invalid());
     }
+    let file_session = workbench
+        .as_ref()
+        .is_some_and(|value| value.session.is_some());
     let mut names = vec!["attachment-assets", "modeled-vectors"];
     if workbench.is_some() {
         names.extend(["workbench-direct-vectors", "workbench-ui-input-boundaries"]);
@@ -864,6 +867,20 @@ pub(crate) fn validate_hologram_oracle_report(
         Application::Legacy(_) => "legacy-numeric",
     };
     names.push("detached-session");
+    let profile = if file_session {
+        names = vec![
+            "attachment-assets",
+            "file-session-vectors",
+            "file-session-roundtrip",
+            "file-session-refusal-preserves-state",
+            "file-session-file-inputs",
+            "file-session-privacy",
+            "detached-session",
+        ];
+        "utf8-file-session"
+    } else {
+        profile
+    };
     let cases = names
         .into_iter()
         .map(|name| json!({"name":name,"status":"passed","attempts":1}))

@@ -417,6 +417,44 @@ extra, reordered or forged journey/index evidence cannot satisfy verification.
 Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
 source-fixture verification supplement model/projection/schema mutation checks.
 
+The separate `Foundation.View.Text.V4.Model.TextApplication` (HO-32) declares
+`prismpm/text-application/4` in closed `prismpm/model-document/7`. It retains
+Text/3's typed command line and workbench, requires a `SessionWorkbench`, and
+keeps all application interpretation in the compiled byte guest. The session
+record declares one hidden multiline state field in every operation, an initial
+state, a single-field restore operation, source-owned save/open/replacement and
+unsaved copy, a safe download filename, a byte cap, and optional operation/field
+file-input bindings. Earlier profiles refuse this metadata; V4 requires it.
+The complete presentation identity includes the session record.
+
+V4 framing is the operation prefix, U+001F, and a sequence of canonical UTF-8
+byte-length fields `N:value`. Zero is written `0`; other lengths have no leading
+zero and at most ten digits. The request bound still applies. Embedded separators,
+NULs, line endings and Unicode scalars are data. Up to 32 fields are admitted.
+V1 through V3 framing is unchanged.
+
+The View holds only the last bounded, validated successful response's `response`
+string as accepted state. Typed refusals, malformed or oversized results, failures,
+cancellation and retired work cannot replace it. The guest validates and replays
+state; the host does not interpret its contents. Reset and examples clear draft
+fields while retaining accepted state. File selection reads only the selected
+file, checks its size before and after reading, decodes UTF-8 fatally without
+stripping a BOM, and preserves original bytes when an HTML control normalizes its
+display. A user edit, changed task or newer selection retires an earlier file read.
+Restoration uses the modeled restore operation and requires confirmation before
+replacing a modified session. Explicit downloads contain exact accepted UTF-8
+state; initiating a download is not proof of a completed save, so unsaved copy
+remains. Closing a modified window invokes the browser's unsaved-change prompt.
+There is no ambient storage, authentication, synchronization or host inference.
+
+HO-32 runs source/schema mutation and canonical framing tests, browser lifecycle
+and file preservation tests, and a compiled finite-state source fixture against
+the actual portable session. V4's portable corpus retains direct vectors and
+separately identifies frames that require a noninitial hidden state, invalid
+choices, required-input refusals or HTML-normalized typing. Its file restoration
+and saved-state roundtrip checks use real guest results. These are additional
+file-session checks; the earlier profile owners and their requirements remain.
+
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
 the V1 byte-request and View contract and adds explicit `coreMemoryPages` and
@@ -4118,3 +4156,4 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
 | `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
 | `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |
+| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, and downloads exact accepted state only on user action. | §3 |

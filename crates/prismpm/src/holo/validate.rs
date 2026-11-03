@@ -44,7 +44,9 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
     } else if matches!(&doc.application, Some(Application::Browser(_))) {
         "prismpm/model-document/4"
     } else if let Some(Application::Text(application)) = &doc.application {
-        if application.profile == "prismpm/text-application/3" {
+        if application.profile == "prismpm/text-application/4" {
+            "prismpm/model-document/7"
+        } else if application.profile == "prismpm/text-application/3" {
             "prismpm/model-document/6"
         } else if application.profile == "prismpm/text-application/2" {
             "prismpm/model-document/5"
@@ -97,7 +99,12 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
             Application::Legacy(value) => validate_application(value)?,
             Application::Text(value) => {
                 validate_text_application(value)?;
-                if value.workbench.is_some() && value.profile != super::workbench::PROFILE {
+                if value.workbench.is_some()
+                    && !matches!(
+                        value.profile.as_str(),
+                        super::workbench::PROFILE | super::workbench::SESSION_PROFILE
+                    )
+                {
                     return Err(PrismError::new(
                         "PP2009",
                         "a workbench is admitted only by the text/3 profile",
@@ -187,7 +194,10 @@ pub(crate) fn validate_text_application(
             })
     };
     // text/3 treats an absent bound as the V1 implicit budget; text/2 requires both.
-    let (pages, stack) = if application.profile == "prismpm/text-application/3" {
+    let (pages, stack) = if matches!(
+        application.profile.as_str(),
+        "prismpm/text-application/3" | "prismpm/text-application/4"
+    ) {
         (
             Some(
                 application
@@ -205,7 +215,13 @@ pub(crate) fn validate_text_application(
     };
     let resource_profile_valid = match (application.profile.as_str(), pages, stack) {
         ("prismpm/text-application/1", None, None) => true,
-        ("prismpm/text-application/2" | "prismpm/text-application/3", Some(pages), Some(stack)) => {
+        (
+            "prismpm/text-application/2"
+            | "prismpm/text-application/3"
+            | "prismpm/text-application/4",
+            Some(pages),
+            Some(stack),
+        ) => {
             let bytes = u64::from(pages) * 65_536;
             (1..=32_767).contains(&pages)
                 && stack > 0
@@ -219,13 +235,17 @@ pub(crate) fn validate_text_application(
     };
     let command_surface_valid = matches!(
         (application.profile.as_str(), &application.cli),
-        ("prismpm/text-application/3", Some(_))
-            | (
-                "prismpm/text-application/1" | "prismpm/text-application/2",
-                None
-            )
+        (
+            "prismpm/text-application/3" | "prismpm/text-application/4",
+            Some(_)
+        ) | (
+            "prismpm/text-application/1" | "prismpm/text-application/2",
+            None
+        )
     );
-    if !resource_profile_valid
+    if (application.profile == "prismpm/text-application/4") != application.session.is_some()
+        || (application.session.is_some() && application.workbench.is_none())
+        || !resource_profile_valid
         || !command_surface_valid
         || application.core_contract != "hologram:guest/core-wasm@1"
         || application.request_maximum == 0

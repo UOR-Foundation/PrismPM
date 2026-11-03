@@ -118,10 +118,7 @@ pub(crate) fn generate(
     let index=index.replace("<meta name=\"viewport\"",&format!("<meta name=\"description\" content=\"{}\"><link rel=\"canonical\" href=\"{}\"><meta name=\"viewport\"",html(&app.view.purpose),html(&app.cargo_homepage)))
         .replace("<p id=\"status\"",&format!("<p>{}</p><p>{}</p><ol class=\"guidance\">{}</ol><noscript><p>{}</p></noscript><p id=\"status\"",html(&app.view.purpose),html(&app.view.audience),guidance,html(&app.view.statuses.script_required)))
         .replace("</main>",&format!("<section id=\"guide\"><h2>{}</h2>{}</section><footer id=\"links\"><h2>{}</h2>{}</footer></main>",html(&app.view.labels.guide),documentation,html(&app.view.labels.links),links));
-    let view = javascript(
-        &serde_json::to_value(&app.view)
-            .map_err(|error| PrismError::new("PP5203", error.to_string()))?,
-    )?;
+    let view = javascript(&crate::holo::workbench::presentation(app)?)?;
     let binding = javascript(&json!(format!("./{}.js", app.cargo_name.replace('-', "_"))))?;
     let assets = |transport: &str| -> Vec<PackageFile> {
         let source = include_str!("workbench/runtime.js")

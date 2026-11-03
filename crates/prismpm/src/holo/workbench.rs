@@ -5,6 +5,48 @@ use serde::{Deserialize, Serialize};
 
 /// Immutable workbench application profile.
 pub const PROFILE: &str = "prismpm/text-application/3";
+/// Explicit file-backed workbench profile.
+pub const SESSION_PROFILE: &str = "prismpm/text-application/4";
+
+/// One source-owned user-selected file input, copied only into its declared draft field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FileInput {
+    /// Operation receiving the selected text.
+    pub operation: String,
+    /// Draft field receiving the selected text.
+    pub field: String,
+    /// Visible picker label.
+    pub label: String,
+    /// Closed file extension list, a picker hint rather than content validation.
+    pub accept: String,
+}
+
+/// Explicit user-controlled file workflow over a pure text guest. No ambient storage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionWorkbench {
+    /// Hidden shared state field, present in every operation.
+    pub state_field: String,
+    /// Initial state supplied to the model.
+    pub initial_state: String,
+    /// Existing single-field operation that validates selected saved bytes.
+    pub restore_operation: String,
+    /// Explicit download action label.
+    pub save_label: String,
+    /// Explicit restore action label.
+    pub open_label: String,
+    /// Confirmation before replacing a modified session.
+    pub replace_label: String,
+    /// Visible indication that changes may not have been saved.
+    pub unsaved_label: String,
+    /// Source-owned safe download filename.
+    pub file_name: String,
+    /// Maximum UTF-8 state artifact size.
+    pub maximum_state_bytes: u32,
+    /// Optional source-selected input file controls.
+    pub file_inputs: Vec<FileInput>,
+}
 
 /// Closed FieldKind presentation choices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -396,6 +438,8 @@ pub struct WorkbenchApplication {
     pub view_layer: u8,
     /// Text presentation metadata; byte bounds are owned by the application.
     pub view: WorkbenchView,
+    /// Explicit file session metadata for text/4 only.
+    pub session: Option<SessionWorkbench>,
 }
 
 impl WorkbenchView {
@@ -452,6 +496,7 @@ impl WorkbenchApplication {
             },
             cli: None,
             workbench: None,
+            session: None,
         }
     }
 }
@@ -512,8 +557,23 @@ fn id(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
-fn field_value(value: &str) -> bool {
-    value.len() <= 1_048_576 && !value.contains('\u{1f}')
+fn field_value(value: &str, session: bool) -> bool {
+    value.len() <= 1_048_576 && (session || !value.contains('\u{1f}'))
+}
+
+/// Canonical presentation identity includes file controls and state bindings.
+pub(crate) fn presentation(
+    app: &WorkbenchApplication,
+) -> Result<serde_json::Value, crate::error::PrismError> {
+    let mut value =
+        serde_json::to_value(&app.view).map_err(|_| invalid("workbench view cannot be encoded"))?;
+    if let Some(session) = &app.session {
+        value.as_object_mut().expect("view record").insert(
+            "session".into(),
+            serde_json::to_value(session).map_err(|_| invalid("session view cannot be encoded"))?,
+        );
+    }
+    Ok(value)
 }
 
 /// Decode and validate a bounded result without interpreting domain values.
@@ -530,7 +590,10 @@ pub fn result(
     let shape = result.rows <= application.view.response.maximum_cells
         && result.columns <= application.view.response.maximum_cells
         && u64::from(result.rows) * u64::from(result.columns) == result.cells.len() as u64;
-    if result.version != 1
+    if application.session.as_ref().is_some_and(|session| {
+        result.status == ResultStatus::Ok
+            && result.response.len() > session.maximum_state_bytes as usize
+    }) || result.version != 1
         || result.operation != operation
         || !copy(&result.message)
         || !shape
@@ -561,30 +624,36 @@ pub fn result(
 /// Validate the closed workbench before generation and after strict decoding.
 pub fn validate(application: &WorkbenchApplication) -> Result<(), crate::error::PrismError> {
     use std::collections::BTreeSet;
-    if application.profile != PROFILE {
+    if !matches!(
+        (application.profile.as_str(), application.session.is_some()),
+        (PROFILE, false) | (SESSION_PROFILE, true)
+    ) {
         return Err(invalid("unsupported workbench application profile"));
     }
     super::validate::validate_text_application(&application.byte_contract())?;
+    validate_session(application)?;
     let view = &application.view;
     let encoded =
         serde_json::to_value(view).map_err(|_| invalid("workbench view cannot be encoded"))?;
     // Every visible label is source-owned; this exhaustive closed-record pass
     // keeps labels and prose independent from input values and expected JSON.
-    fn record_copy(value: &serde_json::Value, key: &str) -> bool {
+    fn record_copy(value: &serde_json::Value, key: &str, session: bool) -> bool {
         match value {
-            serde_json::Value::Object(fields) => {
-                fields.iter().all(|(key, value)| record_copy(value, key))
+            serde_json::Value::Object(fields) => fields
+                .iter()
+                .all(|(key, value)| record_copy(value, key, session)),
+            serde_json::Value::Array(values) => {
+                values.iter().all(|value| record_copy(value, key, session))
             }
-            serde_json::Value::Array(values) => values.iter().all(|value| record_copy(value, key)),
             serde_json::Value::String(value) => match key {
-                "initial_value" | "placeholder" | "values" | "value" => field_value(value),
+                "initial_value" | "placeholder" | "values" | "value" => field_value(value, session),
                 "expected_response" => true,
                 _ => copy(value),
             },
             _ => true,
         }
     }
-    if !record_copy(&encoded, "view")
+    if !record_copy(&encoded, "view", application.session.is_some())
         || view.operations.is_empty()
         || view.operations.len() > 32
         || view.guidance.is_empty()
@@ -641,11 +710,11 @@ pub fn validate(application: &WorkbenchApplication) -> Result<(), crate::error::
                 }
             }
             let valid_value = |value: &str| {
-                field_value(value)
+                field_value(value, application.session.is_some())
                     && (!field.required || !value.trim().is_empty())
                     && (field.kind != FieldKind::Choice || choices.contains(value))
             };
-            if !field_value(&field.initial_value)
+            if !field_value(&field.initial_value, application.session.is_some())
                 || (field.kind == FieldKind::Choice
                     && !choices.contains(field.initial_value.as_str()))
             {
@@ -669,10 +738,10 @@ pub fn validate(application: &WorkbenchApplication) -> Result<(), crate::error::
         }
         let mut examples = BTreeSet::new();
         for example in &operation.examples {
-            let request = format!(
-                "{}\u{1f}{}",
-                operation.request_prefix,
-                example.values.join("\u{1f}")
+            let request = framed_request(
+                &operation.request_prefix,
+                &example.values,
+                application.session.is_some(),
             );
             if !id(&example.id)
                 || !examples.insert(example.id.as_str())
@@ -806,9 +875,13 @@ pub(crate) fn oracle_vectors(application: &WorkbenchApplication) -> OracleVector
         if let Some(raw) =
             request.strip_prefix(&format!("{}\u{1f}", application.view.raw.request_prefix))
         {
-            if raw.contains('\u{1f}') {
+            let Some(values) = framed_values(raw, application.session.is_some()) else {
+                selected.unrepresentable.push(index);
+                continue;
+            };
+            if values.len() != 1 {
                 selected.transport_rejected.push(index);
-            } else if raw.contains('\r') {
+            } else if values[0].contains('\r') {
                 selected.normalized.push(index);
             } else {
                 selected.ui.push(index);
@@ -820,7 +893,10 @@ pub(crate) fn oracle_vectors(application: &WorkbenchApplication) -> OracleVector
                     .map(|values| (operation, values))
             })
         {
-            let values = values.split('\u{1f}').collect::<Vec<_>>();
+            let Some(values) = framed_values(values, application.session.is_some()) else {
+                selected.unrepresentable.push(index);
+                continue;
+            };
             if values.len() != operation.fields.len()
                 || values.iter().zip(&operation.fields).any(|(value, field)| {
                     field.kind == FieldKind::Choice
@@ -828,15 +904,28 @@ pub(crate) fn oracle_vectors(application: &WorkbenchApplication) -> OracleVector
                 })
             {
                 selected.unrepresentable.push(index);
+            } else if application.session.as_ref().is_some_and(|session| {
+                operation.id != session.restore_operation
+                    && values.iter().zip(&operation.fields).any(|(value, field)| {
+                        field.id == session.state_field && *value != session.initial_state
+                    })
+            }) {
+                selected.unrepresentable.push(index);
             } else if values
                 .iter()
                 .zip(&operation.fields)
                 .any(|(value, field)| field.required && value.trim().is_empty())
             {
                 selected.transport_rejected.push(index);
-            } else if values.iter().zip(&operation.fields).any(|(value, field)| {
-                value.contains('\r') || field.kind != FieldKind::Multiline && value.contains('\n')
-            }) {
+            } else if !application
+                .session
+                .as_ref()
+                .is_some_and(|session| operation.id == session.restore_operation)
+                && values.iter().zip(&operation.fields).any(|(value, field)| {
+                    value.contains('\r')
+                        || field.kind != FieldKind::Multiline && value.contains('\n')
+                })
+            {
                 selected.normalized.push(index);
             } else {
                 selected.ui.push(index);
@@ -844,4 +933,159 @@ pub(crate) fn oracle_vectors(application: &WorkbenchApplication) -> OracleVector
         }
     }
     selected
+}
+
+fn validate_session(app: &WorkbenchApplication) -> Result<(), crate::error::PrismError> {
+    let Some(session) = &app.session else {
+        return Ok(());
+    };
+    let view = &app.view;
+    if !id(&session.state_field)
+        || !id(&session.restore_operation)
+        || session.maximum_state_bytes == 0
+        || session.maximum_state_bytes > 8_388_608
+        || session.maximum_state_bytes > app.request_maximum
+        || session.maximum_state_bytes > app.response_maximum
+        || session.initial_state.len() > session.maximum_state_bytes as usize
+        || session.file_inputs.len() > 32
+        || ![
+            &session.save_label,
+            &session.open_label,
+            &session.replace_label,
+            &session.unsaved_label,
+        ]
+        .iter()
+        .all(|s| copy(s))
+        || session.file_name.is_empty()
+        || session.file_name.len() > 128
+        || !session.file_name.as_bytes()[0].is_ascii_alphanumeric()
+        || !session
+            .file_name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        || view.initial_operation == session.restore_operation
+    {
+        return Err(invalid("text/4 session metadata exceeds its closed bounds"));
+    }
+    let restore = view
+        .operations
+        .iter()
+        .find(|o| o.id == session.restore_operation)
+        .ok_or_else(|| invalid("text/4 restore operation is absent"))?;
+    if restore.fields.len() != 1 || restore.fields[0].id != session.state_field {
+        return Err(invalid(
+            "text/4 restore must contain exactly the state field",
+        ));
+    }
+    for operation in &view.operations {
+        let field = operation
+            .fields
+            .iter()
+            .find(|f| f.id == session.state_field)
+            .ok_or_else(|| invalid("text/4 state field is required in every operation"))?;
+        if field.kind != FieldKind::Multiline
+            || field.required
+            || field.initial_value != session.initial_state
+        {
+            return Err(invalid(
+                "text/4 state field must have the exact shared initial value",
+            ));
+        }
+    }
+    let mut inputs = std::collections::BTreeSet::new();
+    for input in &session.file_inputs {
+        let operation = view
+            .operations
+            .iter()
+            .find(|o| o.id == input.operation)
+            .ok_or_else(|| invalid("text/4 file input operation is absent"))?;
+        let field = operation
+            .fields
+            .iter()
+            .find(|f| f.id == input.field)
+            .ok_or_else(|| invalid("text/4 file input field is absent"))?;
+        if input.field == session.state_field
+            || !matches!(field.kind, FieldKind::Text | FieldKind::Multiline)
+            || !inputs.insert((&input.operation, &input.field))
+            || !copy(&input.label)
+            || input.accept.len() > 256
+            || input.accept.is_empty()
+            || input.accept.split(',').count() > 16
+            || !input.accept.split(',').all(|extension| {
+                extension.starts_with('.')
+                    && extension.len() > 1
+                    && extension[1..].bytes().all(|b| b.is_ascii_alphanumeric())
+            })
+        {
+            return Err(invalid(
+                "text/4 file input binding or extension list is invalid",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn framed_request(prefix: &str, values: &[String], session: bool) -> String {
+    let payload = if session {
+        values
+            .iter()
+            .map(|value| format!("{}:{value}", value.len()))
+            .collect::<String>()
+    } else {
+        values.join("\u{1f}")
+    };
+    format!("{prefix}\u{1f}{payload}")
+}
+
+fn framed_values(mut payload: &str, session: bool) -> Option<Vec<&str>> {
+    if !session {
+        return Some(payload.split('\u{1f}').collect());
+    }
+    let mut values = Vec::new();
+    while !payload.is_empty() {
+        if values.len() == 32 {
+            return None;
+        }
+        let (header, rest) = payload.split_once(':')?;
+        if header.is_empty() || header.len() > 10 || !header.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let length = header.parse::<usize>().ok()?;
+        if length.to_string() != header {
+            return None;
+        }
+        values.push(rest.get(..length)?);
+        payload = rest.get(length..)?;
+    }
+    Some(values)
+}
+
+#[cfg(test)]
+mod file_session_tests {
+    use super::*;
+    #[test]
+    fn file_session_framing_preserves_every_utf8_scalar_and_reserved_separator() {
+        let values = vec![
+            "".to_owned(),
+            "é\r\n\0\u{1f}:".to_owned(),
+            "12:abc".to_owned(),
+        ];
+        let request = framed_request("step", &values, true);
+        assert_eq!(
+            framed_values(request.strip_prefix("step\u{1f}").unwrap(), true).unwrap(),
+            values
+        );
+        assert_eq!(
+            framed_request("step", &["a".into(), "b".into()], false),
+            "step\u{1f}a\u{1f}b"
+        );
+    }
+    #[test]
+    fn file_session_framing_rejects_ambiguity_truncation_and_unbounded_fields() {
+        for text in ["01:a", "1:é", "3:é", "1:aX", ":", "99999999999:a", "+1:a"] {
+            assert!(framed_values(text, true).is_none(), "{text}");
+        }
+        assert!(framed_values(&"0:".repeat(33), true).is_none());
+        assert_eq!(framed_values("0:", true).unwrap(), vec![""]);
+    }
 }

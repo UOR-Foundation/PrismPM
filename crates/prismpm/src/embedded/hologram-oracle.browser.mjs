@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {createInterface} from 'node:readline';
 import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 assert.equal(require('playwright/package.json').version, '1.62.1');
@@ -246,15 +247,15 @@ const {origin, application: app, browser_executable: browserExecutable} = JSON.p
 assert.equal(browserExecutable, process.arch === 'x64'
   ? '/ms-playwright/chromium_headless_shell-cft-157.0.8099.0/chrome-headless-shell-linux64/chrome-headless-shell'
   : '/ms-playwright/chromium_headless_shell-cft-157.0.8099.0/chrome-headless-shell-linux-arm64/chrome-headless-shell');
-assert.ok(Number.isInteger(app.request_maximum) && app.request_maximum > 0 && app.request_maximum <= 65_536,
+assert.ok(Number.isInteger(app.request_maximum) && app.request_maximum > 0 && app.request_maximum <= (app.profile === 'prismpm/text-application/4' ? 8_388_608 : 65_536),
   'request bound exceeds pinned portable View transport');
-assert.ok(Number.isInteger(app.response_maximum) && app.response_maximum > 0 && app.response_maximum <= 1_048_576,
+assert.ok(Number.isInteger(app.response_maximum) && app.response_maximum > 0 && app.response_maximum <= (app.profile === 'prismpm/text-application/4' ? 16_777_216 : 1_048_576),
   'response bound exceeds pinned portable View transport');
 const url = new URL(origin);
 assert.equal(url.hostname, '127.0.0.1');
 assert.equal(url.protocol, 'http:');
 assert.equal(url.origin, origin);
-const workbench = app.profile === 'prismpm/text-application/3' && app.workbench !== undefined;
+const workbench = ['prismpm/text-application/3','prismpm/text-application/4'].includes(app.profile) && app.workbench !== undefined;
 const text = ['prismpm/text-application/1', 'prismpm/text-application/2', 'prismpm/text-application/3'].includes(app.profile);
 const profile = workbench ? 'utf8-workbench' : text ? 'utf8-text' : 'legacy-numeric';
 const decode = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
@@ -403,11 +404,11 @@ function applicable(vector) {
     && view.operations.some(item => item.request_name === fields[1])
     && canonical(fields[2]) && canonical(fields[3]);
 }
-const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).filter(({vector}) => applicable(vector));
-assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
-const recovery = workbench ? valid.find(({vector}) => !frame(vector).operation
-  && JSON.parse(decode.decode(Uint8Array.from(vector.response))).status === 'ok')?.vector : valid[0].vector;
-assert.ok(recovery, 'workbench oracle requires an exact modeled successful raw wrapper vector');
+const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).filter(({vector}) => !app.session && applicable(vector));
+assert.ok(app.session || valid.length > 0, 'no modeled request can exercise the actual View');
+const recovery = app.session ? null : (workbench ? valid.find(({vector}) => !frame(vector).operation
+  && JSON.parse(decode.decode(Uint8Array.from(vector.response))).status === 'ok')?.vector : valid[0].vector);
+assert.ok(app.session || recovery, 'workbench oracle requires an exact modeled successful raw wrapper vector');
 async function submissionCompletion(response, trigger, navigation) {
   // Observe trigger rejection immediately, including after body/navigation
   // failure. Do not delay a first body failure until keyboard teardown settles.
@@ -572,6 +573,55 @@ async function journey(name, work) {
   finally { activeJourney = previousJourney; }
   cases.push({name, status: 'passed', attempts: 1});
 }
+if (app.session) {
+  const session=app.session;
+  const framed=(prefix,values)=>prefix+'\u001f'+values.map(value=>Buffer.byteLength(value)+':'+value).join('');
+  const unpack=payload=>{let bytes=Buffer.from(payload),values=[];while(bytes.length){assert.ok(values.length<32);const split=bytes.indexOf(58);assert.ok(split>0&&split<=10);const header=bytes.subarray(0,split).toString();assert.match(header,/^(0|[1-9][0-9]*)$/);const size=Number(header);assert.ok(size<=bytes.length-split-1);values.push(decode.decode(bytes.subarray(split+1,split+1+size)));bytes=bytes.subarray(split+1+size);}return values;};
+  const prepared=vector=>{const request=decode.decode(Uint8Array.from(vector.request)),at=request.indexOf('\u001f');assert.ok(at>0);const prefix=request.slice(0,at),values=unpack(request.slice(at+1));if(prefix===view.raw.request_prefix){assert.equal(values.length,1);return{request,values,raw:true};}const operation=view.operations.find(row=>row.request_prefix===prefix);assert.ok(operation);assert.equal(values.length,operation.fields.length);return{request,values,operation,restore:operation.id===session.restore_operation};};
+  const rows=[];
+  for(const [index,vector]of app.acceptance_vectors.entries()){
+    let request;try{request=decode.decode(Uint8Array.from(vector.request));}catch{continue;}
+    if(vector.request.length>app.request_maximum)continue;
+    directVectorIndexes.push(index);
+    const recognized=[view.raw.request_prefix,...view.operations.map(row=>row.request_prefix)].some(prefix=>request.startsWith(prefix+'\u001f'));
+    if(!recognized)continue;
+    let row;try{row=prepared(vector);}catch{unrepresentableFrameIndexes.push(index);continue;}
+    if(row.operation?.fields.some((field,at)=>field.kind==='choice'&&!field.choices.some(choice=>choice.value===row.values[at]))){unrepresentableFrameIndexes.push(index);continue;}
+    if(!row.restore&&row.operation?.fields.some((field,at)=>field.id===session.state_field&&row.values[at]!==session.initial_state)){unrepresentableFrameIndexes.push(index);continue;}
+    if(row.operation?.fields.some((field,at)=>field.required&&!row.values[at].trim())){transportRejectedIndexes.push(index);continue;}
+    if(!row.restore&&row.values.some((value,at)=>value.includes('\r')||(row.operation&&row.operation.fields[at].kind!=='multiline'&&value.includes('\n')))){textareaNormalizedIndexes.push(index);continue;}
+    rows.push({index,vector,...row});
+  }
+  assert.ok(rows.length>0);
+  const step=async(name,run)=>{activeJourney=name;await run();cases.push({name,status:'passed',attempts:1});};
+  const ready=()=>page.waitForFunction(()=>document.querySelector('#guided-submit')?.disabled===false);
+  const openPage=async()=>{await page.goto(origin);await ready();};
+  const saved=async()=>{const pending=page.waitForEvent('download');await page.locator('#save-session').click();const file=await pending;return readFileSync(await file.path(),'utf8');};
+  const submitRow=async(row,{reset=true,fileBinding=null}={})=>{
+    if(reset)await openPage();
+    if(!row.restore){if(row.raw){await page.locator('#raw-editor').evaluate(node=>{node.open=true;});await page.locator('#request').fill(row.values[0]);}
+    else{await page.locator('#operation').selectOption(row.operation.id);for(const [at,field]of row.operation.fields.entries()){if(field.id===session.state_field)continue;const node=page.locator('#field-'+field.id);if(field.kind==='choice')await node.selectOption(row.values[at]);else if(fileBinding?.field===field.id){await page.locator('#file-'+field.id).setInputFiles({name:'source.txt',mimeType:'text/plain',buffer:Buffer.from(row.values[at])});await page.waitForFunction(({id,value})=>document.querySelector('#field-'+id)?.value===value.replace(/\r\n?/g,'\n'),{id:field.id,value:row.values[at]});}else await node.fill(row.values[at]);}}}
+    let requests=0;const observed=request=>{if(request.url()===origin+'/_hologram/intent')requests++;};page.on('request',observed);
+    try{const response=page.waitForResponse(reply=>reply.url()===origin+'/_hologram/intent'&&reply.request().postDataJSON()?.payload===row.request);
+      if(row.restore)await page.locator('#open-session').setInputFiles({name:session.file_name,mimeType:'application/octet-stream',buffer:Buffer.from(row.values[0])});else await page.locator(row.raw?'#submit':'#guided-submit').click();
+      const reply=await response;assert.equal(reply.status(),200);const body=await bounded(reply.body());assert.deepEqual(JSON.parse(body.toString()),{version:1,outputs:[decode.decode(Uint8Array.from(row.vector.response))]});
+      const expected=JSON.parse(decode.decode(Uint8Array.from(row.vector.response)));await ready();await page.waitForFunction(message=>document.querySelector('#result-message')?.textContent===message,expected.message);assert.equal(requests,1);
+      if(expected.status==='ok'){assert.equal(await page.locator('#result').textContent(),expected.response);if(expected.response)assert.equal(await saved(),expected.response);}return expected;
+    }finally{page.off('request',observed);}
+  };
+  await step('attachment-assets',async()=>{await openPage();for(const path of ['/','/index.html','/app.css','/app.js']){const response=await fetch(origin+path);assert.equal(response.status,200);}assert.equal(await page.locator('#open-session').count(),1);assert.equal(await page.locator('#save-session').count(),1);assert.equal(await page.locator('#field-'+session.state_field).isVisible(),false);});
+  await step('file-session-vectors',async()=>{for(const index of directVectorIndexes){const vector=app.acceptance_vectors[index],request=decode.decode(Uint8Array.from(vector.request));const response=await fetch(origin+'/_hologram/intent',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({version:1,name:'application.invoke',payload:request})});assert.equal(response.status,200);assert.deepEqual(await response.json(),{version:1,outputs:[decode.decode(Uint8Array.from(vector.response))]});}for(const row of rows){await submitRow(row);vectorIndexes.push(row.index);}});
+  const successful=rows.find(row=>JSON.parse(decode.decode(Uint8Array.from(row.vector.response))).status==='ok'&&JSON.parse(decode.decode(Uint8Array.from(row.vector.response))).response);
+  assert.ok(successful,'a file session must have a modeled nonempty successful saved state');
+  await step('file-session-roundtrip',async()=>{const expected=await submitRow(successful),bytes=await saved();await openPage();const restore=view.operations.find(row=>row.id===session.restore_operation),request=framed(restore.request_prefix,[bytes]);const upstream=await fetch(origin+'/_hologram/intent',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({version:1,name:'application.invoke',payload:request})});assert.equal(upstream.status,200);const reference=(await upstream.json()).outputs[0],result=JSON.parse(reference);assert.equal(result.status,'ok');assert.equal(result.response,expected.response);await submitRow({request,values:[bytes],restore:true,operation:restore,vector:{response:[...Buffer.from(reference)]}},{reset:false});});
+  await step('file-session-refusal-preserves-state',async()=>{const expected=await submitRow(successful);await page.route('**/_hologram/intent',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:1,outputs:['{']})}));await page.locator('#raw-editor').evaluate(node=>{node.open=true;});await page.locator('#request').fill('invalid response');await page.locator('#submit').click();await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='response_error');assert.equal(await saved(),expected.response);await page.unroute('**/_hologram/intent');});
+  await step('file-session-file-inputs',async()=>{for(const binding of session.file_inputs){const row=rows.find(row=>row.operation?.id===binding.operation);assert.ok(row,'each file binding needs a modeled initial-state vector');await submitRow(row,{fileBinding:binding});}});
+  await step('file-session-privacy',async()=>{await openPage();assert.deepEqual(await page.evaluate(async()=>({local:localStorage.length,session:sessionStorage.length,registrations:(await navigator.serviceWorker.getRegistrations()).length})),{local:0,session:0,registrations:0});assert.deepEqual(unexpected,[]);});
+  process.stdout.write(`${JSON.stringify({stage:'live'})}\n`);const stopped=await input.next();assert.equal(stopped.done,false);assert.deepEqual(JSON.parse(stopped.value),{stage:'stopped'});
+  await step('detached-session',async()=>{await page.locator('#raw-editor').evaluate(node=>{node.open=true;});await page.locator('#request').fill('detached');const response=page.waitForResponse(reply=>reply.url()===origin+'/_hologram/intent');await page.locator('#submit').click();assert.equal((await response).status(),410);await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='compute_error');});
+  assert.deepEqual(unexpected,[]);
+  process.stdout.write(`${JSON.stringify({schema:'prismpm/portable-browser-oracle/1',profile:'utf8-file-session',engine:browser.browserType().name(),browser_version:browser.version(),playwright:'1.62.1',cases,vector_indexes:vectorIndexes,direct_vector_indexes:directVectorIndexes,ui_transport_rejected_indexes:transportRejectedIndexes,textarea_normalized_vector_indexes:textareaNormalizedIndexes,unrepresentable_frame_vector_indexes:unrepresentableFrameIndexes,browser_timing:[],skipped:0,retries:0,status:'passed'})}\n`);
+} else {
   await journey('attachment-assets', async () => {
     const modules = [];
     const onModule = response => {if (response.url() === `${origin}/app.js` && response.request().resourceType() === 'script') modules.push(response);};
@@ -950,6 +1000,7 @@ async function journey(name, work) {
       textarea_normalized_vector_indexes: textareaNormalizedIndexes, unrepresentable_frame_vector_indexes: unrepresentableFrameIndexes} : {}),
     browser_timing: browserTimings,
     skipped: 0, retries: 0, status: 'passed'})}\n`);
+}
 } catch (error) {
   primaryFailure = sanitizedFailure(error, 'session');
 } finally {

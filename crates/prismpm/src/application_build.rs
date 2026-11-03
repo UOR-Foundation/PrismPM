@@ -421,8 +421,7 @@ fn application_view(
                         .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
                 )?);
                 let view_model_id = content_id(&encode_value(
-                    &serde_json::to_value(&application.view)
-                        .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+                    &crate::holo::workbench::presentation(application)?,
                 )?);
                 let entry = application.entry_root.rsplit('.').next().ok_or_else(|| {
                     PrismError::new("PP2001", "application entry root is malformed")
