@@ -169,7 +169,7 @@ export function sdkContainerArguments(name, image, socketGroup, workspace) {
     '--dns', '127.0.0.1',
     '--user', '1000:1000', '--group-add', String(socketGroup), '--read-only', '--cap-drop', 'ALL',
     '--security-opt', 'no-new-privileges', '--pids-limit', '4096', '--init',
-    '--tmpfs', '/tmp:rw,nosuid,nodev,size=8589934592,mode=1777',
+    '--tmpfs', '/tmp:rw,nosuid,nodev,size=5368709120,mode=1777',
     '--mount', 'type=bind,source=/workspace,target=/workspace',
     '--mount', 'type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock',
     '--entrypoint', '/bin/sh', image, '-c', 'exec sleep infinity'];
