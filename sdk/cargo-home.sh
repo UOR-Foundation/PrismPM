@@ -8,8 +8,9 @@
 # private per final UID under TMPDIR; otherwise the home is /home/vscode/.cargo,
 # which the full SDK ships seeded and the build-only SDK ships empty.
 #
-# A home is complete only when `.seeded` exists. It is written last, after
-# every seed entry is in place; the full SDK writes it when it pre-seeds the
+# A home is complete only when `.seeded` exists. It is published last, after
+# every seed entry is in place and, for a root caller, after the whole home
+# belongs to the final identity; the full SDK writes it when it pre-seeds the
 # image home. Any other state is an interrupted or failed copy (signal,
 # ENOSPC) and is reseeded: copies go to a staging directory inside the home,
 # then replace only the seed's own top-level entries, so other content of the
@@ -40,7 +41,7 @@ fi
 entries() {
   for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
     [ -e "$entry" ] || continue
-    case ${entry##*/} in .seeded | .seed.lock | .seeding.*) continue ;; esac
+    case ${entry##*/} in .seeded | .seeded.* | .seed.lock | .seeding.*) continue ;; esac
     printf '%s\n' "$entry"
   done
 }
@@ -75,10 +76,19 @@ if [ ! -e "$home/.seeded" ]; then
       mv "$entry" "$home/$name"
     done
     rmdir "$stage"
-    : > "$home/.seeded"
+    # Publish completion last: only after every seed entry is in place and,
+    # for a root caller, the whole home belongs to the final identity. The
+    # marker is renamed into place so it never exists before that; a failed
+    # or interrupted ownership transfer leaves the home unmarked, and the next
+    # start reseeds and repeats the transfer.
     if [ -n "$owner" ]; then
       chown -R "$owner" "$home"
     fi
+    : > "$home/.seeded.pending"
+    if [ -n "$owner" ]; then
+      chown "$owner" "$home/.seeded.pending"
+    fi
+    mv "$home/.seeded.pending" "$home/.seeded"
   fi
   exec 9>&-
 fi

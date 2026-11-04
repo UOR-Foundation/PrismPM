@@ -78,9 +78,9 @@ function fixture(t) {
   return {seed, home: join(root, 'home'), before: tree(seed)};
 }
 
-function seedHome(seed, home, limit = '') {
+function seedHome(seed, home, limit = '', env = process.env) {
   return spawnSync('/bin/sh', ['-c', `${limit}\nexec /bin/sh "$@"`, '--', cargoHome, seed, home], {
-    encoding: 'utf8', timeout: 30_000,
+    encoding: 'utf8', timeout: 30_000, env,
   });
 }
 
@@ -136,5 +136,36 @@ test('Cargo home seeding interrupted mid-copy stays incomplete, and the next sta
   assert.deepEqual(seedOnly(tree(home)), before);
   assert(existsSync(join(home, '.seeded')));
   assert.deepEqual(staging(home), [], 'stale staging is discarded on retry');
+  assert.deepEqual(tree(seed), before);
+});
+
+test('Cargo home seeding publishes completion only after a root caller transfers ownership, and retries a failed transfer', t => {
+  const {seed, home, before} = fixture(t);
+  // Model a root caller without privileges or executable temporary files:
+  // shell functions take precedence over PATH, so `id -u` reports 0 and
+  // `chown` records its arguments and fails (73) until the control file exists.
+  const control = join(home, '..');
+  const log = join(control, 'chown.log');
+  const allow = join(control, 'chown-allowed');
+  const asRoot = () => spawnSync('/bin/sh', ['-c', `
+    id() { if [ "$1" = -u ]; then echo 0; else command id "$@"; fi; }
+    chown() { printf '%s\\n' "$*" >> "$LOG"; [ -e "$ALLOW" ] || return 73; }
+    set -- "$SEED" "$HOME_UNDER_TEST"
+    . "$HELPER"`], {
+    encoding: 'utf8', timeout: 30_000,
+    env: {...process.env, LOG: log, ALLOW: allow, SEED: seed, HOME_UNDER_TEST: home, HELPER: cargoHome},
+  });
+  const failed = asRoot();
+  assert.equal(failed.status, 73, failed.stderr);
+  assert(!existsSync(join(home, '.seeded')), 'no completion marker before the ownership transfer succeeds');
+  writeFileSync(allow, '');
+  const retried = asRoot();
+  assert.equal(retried.status, 0, retried.stderr);
+  assert(existsSync(join(home, '.seeded')));
+  assert(!existsSync(join(home, '.seeded.pending')));
+  assert.deepEqual(seedOnly(tree(home)), before);
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'),
+    [`-R 1000:1000 ${home}`, `-R 1000:1000 ${home}`, `1000:1000 ${home}/.seeded.pending`],
+    'the retry repeats the ownership transfer before publishing completion');
   assert.deepEqual(tree(seed), before);
 });
