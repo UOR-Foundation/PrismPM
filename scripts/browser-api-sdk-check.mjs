@@ -24,7 +24,7 @@ export const sourceRoots=Object.freeze([
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
  'crates/prismpm/src/browser_build.rs','crates/prismpm/src/browser_build','crates/prismpm/src/lifecycle.rs',
- 'crates/conformance/src/cases/browser_compiler.rs','crates/conformance/tests/conformance.rs',
+ 'crates/conformance/Cargo.toml','crates/conformance/src/cases/browser_compiler.rs','crates/conformance/tests/conformance.rs',
  'crates/conformance/src/cases/mod.rs','crates/conformance/src/cases/scheduling.rs',
  'crates/conformance/src/cases/node_suite.rs','schemas/model-document-v4.schema.json',
  'xtask/src/main.rs',
@@ -110,6 +110,7 @@ function boundedBytes(path,before){
 }
 
 export function capture(root,revision){
+ assert.equal(lstatSync(join(root,'crates/conformance/build.rs'),{throwIfNoEntry:false}),undefined,'unregistered conformance build script');
  hex(revision,40);root=resolve(root);const files=[];
  function walk(relative){
   const path=join(root,relative),stat=lstatSync(path);assert.ok(!stat.isSymbolicLink(),'source symlink '+relative);

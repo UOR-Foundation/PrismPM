@@ -1,5 +1,5 @@
 // Installed native-profile acceptance only; not SDK release or product acceptance.
-import { readSemantic, writeSemantic } from './semantic-source.mjs';
+import { readSemantic, writeSemantic, runtimeAudit } from './semantic-source.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -22,7 +22,7 @@ export const sourceRoots=Object.freeze([
  'crates/prismpm/LICENSE-MIT','crates/prismpm/LICENSE-APACHE','crates/prismpm/vendor',
  'crates/prismpm/stdlib','crates/prismpm/sdk','crates/prismpm/standards','crates/prismpm/standards.lock',
  'crates/prismpm/adapters','crates/prismpm/language',
- 'crates/prismpm/tests/native_library.rs','crates/conformance/src/cases/native_library.rs',
+ 'crates/prismpm/tests/native_library.rs','crates/conformance/Cargo.toml','crates/conformance/src/cases/native_library.rs',
  'model','language','schemas','stdlib','sdk','standards','standards.lock','adapters','LICENSE-MIT','LICENSE-APACHE',
  'tests/fixtures/library/native-library/project','tests/hologram-oracle','vendor',
  'scripts/browser-api-sdk-check.mjs','scripts/library-sdk-check.mjs','scripts/library-sdk-check.sh',
@@ -181,7 +181,11 @@ export function tree(root,selected=[''],aliases={}){
  files.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);assert.equal(new Set(files.map(row=>row.path)).size,files.length,'duplicate source entries');
  same(files.filter(row=>row.kind==='symlink').map(row=>row.path),Object.keys(aliases).sort(),'complete tracked source aliases');return files;
 }
-export function capture(root,revision){assert.equal(typeof revision,'string');assert.match(revision,/^[0-9a-f]{40}$/);return{revision,files:tree(root,sourceRoots,sourceAliases)};}
+export function capture(root,revision){
+ assert.equal(typeof revision,'string');assert.match(revision,/^[0-9a-f]{40}$/);
+ assert.equal(lstatSync(join(root,'crates/conformance/build.rs'),{throwIfNoEntry:false}),undefined,'unregistered conformance build script');
+ return{revision,files:tree(root,sourceRoots,sourceAliases)};
+}
 export function verifySource(root,expected){same(capture(root,expected.revision),expected,'installed SDK source closure differs');}
 
 export function cli(project,args,expected,launch=spawnSync){
@@ -228,6 +232,14 @@ export function requireModeledAssertionFailure(value,root){
  assert.equal(lines[1],root,'the first generated main panic must name the exact modeled assertion');
 }
 function document(path){const bytes=regularBytes(path),value=JSON.parse(bytes);assert.ok(bytes.equals(Buffer.from(canonical(value))),'canonical artifact bytes: '+path);return value;}
+export function boundRuntimeAudit(build,artifacts){
+ const texts=artifacts.filter(row=>row.path.startsWith('lexlean/build/modules/')&&row.path.endsWith('.lean')).map(row=>{
+  const bytes=regularBytes(join(build,row.path));
+  assert(bytes.length===row.size&&hash(bytes)===row.sha256,'runtime authority requires exact bound generated Lean bytes');
+  return bytes;
+ });
+ return runtimeAudit(texts);
+}
 function noVerification(project){const path=join(project,'.prism/verified');assert.ok(!existsSync(path)||readdirSync(path).length===0,'unaccepted source published verification');}
 export function checkAccepted(project,receipt,exporterArchiveSha256,compilerIdentity,requiredAcquisition='cold',binding){
  return readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdentity,requiredAcquisition,binding,false);
@@ -324,8 +336,14 @@ function readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdent
  const snapshot=JSON.parse(regularBytes(join(build,'lexlean/snapshot.json')));assert.ok(Array.isArray(snapshot.modules));const declarations=snapshot.modules.flatMap(module=>module.declarations.map(declaration=>({name:module.lean_module+'.'+declaration.lean_name,policy:declaration.axiom_policy})));
  const names=['LibraryProbe.Foundation.Library.V1.Model.NativeLibrary','LibraryProbe.Probe.acceptance','LibraryProbe.Probe.identity','LibraryProbe.Probe.probeLibrary'];same(declarations.map(row=>row.name).sort(),names,'complete selected declaration closure');
  assert.equal(lexAttestation.spec,'lexlean/attestation/2');assert.equal(lexAttestation.status,'verified');assert.equal(lexAttestation.build_id,inputs.lexlean_build_id);assert.equal(lexAttestation.source_id,inputs.lexlean_source_id);assert.equal(lexAttestation.semantic_id,inputs.lexlean_semantic_id);
- assert.ok(Array.isArray(lexAttestation.declarations));same(lexAttestation.declarations.map(row=>row.name).sort(),names,'complete published declaration audit');
- for(const row of lexAttestation.declarations){keys(row,['name','observed','policy','result']);assert.equal(row.result,'ok');same(row.policy,declarations.find(declaration=>declaration.name===row.name).policy,'exact declaration axiom policy');same(row.policy,{axioms:[],kind:'none'},'fixture has no admitted axioms');same(row.observed,[],'fixture has no observed axioms');}
+ const runtime=boundRuntimeAudit(build,artifacts);
+ assert.ok(Array.isArray(lexAttestation.declarations));same(lexAttestation.declarations.map(row=>row.name).sort(),[...names,...runtime.map(row=>row.name)].sort(),'complete published declaration audit');
+ for(const row of lexAttestation.declarations){
+  keys(row,['name','observed','policy','result']);assert.equal(row.result,'ok');
+  const declaration=declarations.find(declaration=>declaration.name===row.name);
+  if(declaration){same(row.policy,declaration.policy,'exact declaration axiom policy');same(row.policy,{axioms:[],kind:'none'},'fixture has no admitted axioms');same(row.observed,[],'fixture has no observed axioms');}
+  else same(row,runtime.find(declaration=>declaration.name===row.name),'exact source-owned runtime axiom audit');
+ }
  const library=artifacts.filter(row=>row.path.startsWith('library/'));
  same(library.map(row=>row.path),['library/coverage.json','library/kernel.ir','library/model-binding.json','library/package/Cargo.lock','library/package/Cargo.toml','library/package/LICENSE-APACHE','library/package/LICENSE-MIT','library/package/README.md','library/package/generation-manifest.json','library/package/src/lib.rs','library/prism-library-probe-0.1.0.crate','library/roots.json'],'complete fixture native artifact set');
  same(manifest.artifacts,library.map(row=>({path:row.path,byte_length:row.size,sha256:row.sha256})),'complete exact native package replay artifacts');

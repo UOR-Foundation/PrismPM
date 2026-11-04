@@ -3801,3 +3801,29 @@ qualification remain required. Issue #500 is delivered only when equivalent
 accepted focus behavior is established; #514 is not superseded by historical
 records alone. The separate #519 private ownership component remains outside
 this source union and does not establish a production streaming SDK.
+
+
+### Native runtime declaration reader repair
+
+The first genuine NativeLibrary owner on the reconciled source completed
+compiler verification but its independent Node replay rejected the declaration
+audit. The language-1.2 compiler published the four fixture declarations and
+160 imported Portable runtime declarations; the reader still required only the
+four fixture rows. This was retained as a failed owner, not accepted evidence.
+
+The #520 repair derives runtime expectations through the pinned LexLean runtime
+API from the exact generated Lean buffers whose lengths and SHA256 values match
+the already-bound artifact rows. It preserves the four project declarations and
+their empty axiom policies, requires exact imported-runtime rows and policies,
+and rejects globally valid runtime declarations that were not imported. Both
+source captures bind the helper package manifest and refuse an unregistered
+Cargo build script. This is the scoped reader/build-input correction, not a
+claim of a new hermetic helper-executable attestation.
+
+All seven original authentic-output controls remain; eight runtime audit
+controls bring the replay to fifteen refusals followed by a restored genuine
+baseline. The focused library/Binary/recording-shell tests passed 36 cases and
+the browser capture checks passed three. No compiler/writer audit or generated
+expectation was altered. Fresh complete NativeLibrary and Binary owner reruns
+remain necessary after this repair; broader SDK/profile/release qualification
+is unchanged.
