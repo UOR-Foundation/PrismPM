@@ -3,6 +3,11 @@ name: PrismPM OCI/native and Cargo publication
 on:
   workflow_dispatch:
     inputs:
+      resource-diagnostic-source:
+        description: Exact workflow/source SHA for the isolated unpublished native resource diagnostic; leave empty for ordinary release owners
+        required: false
+        default: ""
+        type: string
       version:
         description: Exact SemVer without a leading v
         required: true
@@ -39,6 +44,7 @@ env:
 
 jobs:
   policy:
+    if: ${{ inputs.resource-diagnostic-source == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -71,96 +77,8 @@ jobs:
   # One source pass, as the eight `just vv-part` parts of scripts/vv-assemble.mjs,
   # each under one 6 h hosted-job limit. Longest parts first so max-parallel
   # starts them before the short ones; tests derive the set from `parts`.
-  source-vv:
-    needs: policy
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        include:
-          - part: dk-3
-          - part: ho-oc
-          - part: dk-2
-          - part: gates
-          - part: st-sy
-          - part: dk-0-1
-          - part: conformance
-          - part: source
-    steps:
-      - name: Free runner disk
-        run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
-          df -h /
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-          submodules: false
-      # Reuse the construction layers populated by PR Fast Checks. Each shard
-      # still executes its complete source verification on this commit.
-      - id: cache
-        uses: ./.github/actions/devcontainer-cache
-      - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
-        with:
-          push: never
-          cacheFrom: ${{ steps.cache.outputs.cache-from }}
-          runCmd: |
-            set -euo pipefail
-            bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
-            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'
-            PRISMPM_VV
-            )"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: source-vv-part-${{ matrix.part }}
-          path: target/source-vv-evidence/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  gate:
-    needs: [policy, source-vv]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    outputs:
-      version: ${{ needs.policy.outputs.version }}
-      publish-crates: ${{ needs.policy.outputs.publish-crates }}
-      rehearsal: ${{ needs.policy.outputs.rehearsal }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          submodules: false
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.23.2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: source-vv-part-*
-          merge-multiple: true
-          path: target/source-vv-evidence
-      - name: Require every source part on this commit
-        run: |
-          node scripts/release-gate-evidence.mjs source-assemble . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" -
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: source-vv
-          path: target/source-vv-evidence/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  # Each platform is built on its own native runner: emulated arm64 builds
-  # exceed the hosted job limit. One job per platform builds every image in
-  # one Buildx builder, so the targets of sdk/Dockerfile share their stages.
   image-platforms:
-    needs: gate
+    needs: policy
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -187,7 +105,8 @@ jobs:
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
           REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - id: builder
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
           driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
@@ -199,37 +118,34 @@ jobs:
       - id: build
         env:
           ARCH: ${{ matrix.arch }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
+          BUILDER: ${{ steps.builder.outputs.name }}
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/image-platforms"
-          while read -r name dockerfile target repository; do
-            if [ "$dockerfile" = sdk/Dockerfile ]; then
-              build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$target")
-              context=()
-            else
-              test "$dockerfile" = sdk/runtime/Dockerfile
-              test "$target" = -
-              build=(docker buildx build --file "$dockerfile")
-              context=(.)
-            fi
-            "${build[@]}" --platform "linux/$ARCH" \
+          mkdir "$RUNNER_TEMP/image-platforms-work"
+          plan=$(node scripts/release-construction-plan.mjs "$GITHUB_SHA" "$ARCH" "$BUILDER" "$RUNNER_TEMP/image-platforms-work")
+          node scripts/sdk-image-inputs.mjs build-set . "$GITHUB_SHA" "$plan"
+          while read -r name target; do
+            node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/image-platforms-work/$name-build.json" > "$RUNNER_TEMP/image-platforms/$name-$ARCH.digest"
+          done <<'SDK_IMAGES'
+          sdk runtime
+          adapter-compose adapter-compose
+          adapter-kubernetes adapter-kubernetes
+          adapter-github-pages adapter-github-pages
+          oracles oracles
+          SDK_IMAGES
+          name=runtime
+          repository=ghcr.io/uor-foundation/prismpm-runtime
+          docker buildx build --builder "$BUILDER" --file sdk/runtime/Dockerfile --platform "linux/$ARCH" \
               --output "type=registry,name=$repository,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true" \
               --metadata-file "$RUNNER_TEMP/$name-build.json" \
               --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
               --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
-            node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/$name-build.json" > "$RUNNER_TEMP/image-platforms/$name-$ARCH.digest"
-          done <<'IMAGES'
-          sdk sdk/Dockerfile runtime ghcr.io/uor-foundation/prismpm-sdk
-          runtime sdk/runtime/Dockerfile - ghcr.io/uor-foundation/prismpm-runtime
-          adapter-compose sdk/Dockerfile adapter-compose ghcr.io/uor-foundation/prismpm-adapter-compose
-          adapter-kubernetes sdk/Dockerfile adapter-kubernetes ghcr.io/uor-foundation/prismpm-adapter-kubernetes
-          adapter-github-pages sdk/Dockerfile adapter-github-pages ghcr.io/uor-foundation/prismpm-adapter-github-pages
-          oracles sdk/Dockerfile oracles ghcr.io/uor-foundation/prismpm-oracles
-          IMAGES
+              --label "org.opencontainers.image.version=$VERSION" .
+          node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/$name-build.json" > "$RUNNER_TEMP/image-platforms/$name-$ARCH.digest"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: image-platforms-${{ matrix.arch }}
@@ -237,8 +153,225 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  images:
-    needs: [gate, image-platforms]
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-construction-${{ matrix.arch }}
+          path: ${{ runner.temp }}/image-platforms-work/native-release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  sdk-supply:
+    needs: [policy, image-platforms]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - name: sdk
+            dockerfile: sdk/Dockerfile
+            target: runtime
+            repository: ghcr.io/uor-foundation/prismpm-sdk
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the source-bound publication policy before registry credentials
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
+        run: node scripts/release-phases.mjs policy
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Install exact OCI transport and signature verifier tools
+        run: |
+          set -euo pipefail
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/release-tools"
+          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: image-platforms-*
+          merge-multiple: true
+          path: image-platforms
+      # The index names exactly the two platform manifests built natively
+      # above, and is pushed by digest: no tag moves.
+      - id: build
+        env:
+          IMAGE: ${{ matrix.name }}
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          platforms=()
+          for architecture in amd64 arm64; do
+            digest=$(cat "image-platforms/$IMAGE-$architecture.digest")
+            case "$digest" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 2 ;; esac
+            oras manifest fetch "$REPOSITORY@$digest" --output "$RUNNER_TEMP/$architecture.manifest.json"
+            platforms+=("$digest" "$RUNNER_TEMP/$architecture.manifest.json")
+          done
+          digest=$(node scripts/release-phases.mjs image-index "${platforms[@]}" "$RUNNER_TEMP/image-index.json")
+          oras manifest push --media-type application/vnd.oci.image.index.v1+json \
+            "$REPOSITORY@$digest" "$RUNNER_TEMP/image-index.json"
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+      - id: platforms
+        shell: bash
+        env:
+          IMAGE_INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "$REPOSITORY@$IMAGE_INDEX_DIGEST" > "${{ matrix.name }}-image-index.json"
+          for architecture in amd64 arm64; do
+            child_digest=$(jq -er --arg architecture "$architecture" \
+              '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $architecture) | .digest' \
+              "${{ matrix.name }}-image-index.json")
+            case "$child_digest" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 2 ;; esac
+            printf '%s=%s\n' "$architecture" "$child_digest" >> "$GITHUB_OUTPUT"
+          done
+      - id: sbom-amd64
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ matrix.repository }}@${{ steps.platforms.outputs.amd64 }}
+          syft-version: v1.51.1
+          format: spdx-json
+          output-file: ${{ matrix.name }}-linux-amd64.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - id: sbom-arm64
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ matrix.repository }}@${{ steps.platforms.outputs.arm64 }}
+          syft-version: v1.51.1
+          format: spdx-json
+          output-file: ${{ matrix.name }}-linux-arm64.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - id: attest-provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-name: ${{ matrix.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Stage the image-index provenance bundle
+        shell: bash
+        env:
+          PROVENANCE: ${{ steps.attest-provenance.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$PROVENANCE" "${{ matrix.name }}-provenance.sigstore.json"
+      # Large SPDX remains a complete blob, with its small OCI 1.1 manifest
+      # keylessly signed. This is not an inline SPDX attestation.
+      - name: Publish and verify both complete platform SBOM artifacts
+        env:
+          IMAGE: ${{ matrix.name }}
+          REPOSITORY: ${{ matrix.repository }}
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          AMD64_DIGEST: ${{ steps.platforms.outputs.amd64 }}
+          ARM64_DIGEST: ${{ steps.platforms.outputs.arm64 }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
+        run: |
+          set -euo pipefail
+          for architecture in amd64 arm64; do
+            if test "$architecture" = amd64; then digest=$AMD64_DIGEST; else digest=$ARM64_DIGEST; fi
+            directory="$RUNNER_TEMP/release-sbom-$IMAGE-$architecture"
+            prefix="$IMAGE-linux-$architecture"
+            mkdir "$directory"
+            cp "$IMAGE-image-index.json" "$directory/index.json"
+            cp "$prefix.spdx.json" "$directory/sbom.spdx.json"
+            oras manifest fetch "$REPOSITORY@$digest" --output "$directory/manifest.json"
+            oras manifest fetch-config "$REPOSITORY@$digest" --output "$directory/config.json"
+            node scripts/release-phases.mjs sbom-record "$directory" "$architecture" "$GITHUB_SHA" \
+              "$REPOSITORY@$INDEX_DIGEST" "$GITHUB_REF"
+            node scripts/release-phases.mjs sbom-publish "$directory" "$architecture" "$GITHUB_SHA" \
+              "$REPOSITORY@$INDEX_DIGEST" "$GITHUB_REF" standards/trust/sigstore-trusted-root-cosign-3.1.3.json
+            cmp "$directory/sbom.spdx.json" "$directory/sbom.received.spdx.json"
+            for evidence in sbom-record.json sbom-manifest.json sbom-artifact.json sbom.sigstore.json sbom-signature-verification.json; do
+              cp "$directory/$evidence" "$prefix.$evidence"
+            done
+            cp "$directory/manifest.json" "$prefix.image-manifest.json"
+            cp "$directory/config.json" "$prefix.image-config.json"
+          done
+      - shell: bash
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          case "$DIGEST" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 2 ;; esac
+          cosign sign --yes --oidc-provider github-actions \
+            --trusted-root standards/trust/sigstore-trusted-root-cosign-3.1.3.json "$REPOSITORY@$DIGEST"
+          node scripts/release-phases.mjs image-verify "$REPOSITORY@$DIGEST" "$GITHUB_SHA" "$GITHUB_REF" \
+            standards/trust/sigstore-trusted-root-cosign-3.1.3.json >/dev/null
+          docker pull "$REPOSITORY@$DIGEST"
+          if [ "${{ matrix.name }}" = runtime ]; then
+            test "$(docker run --rm --cap-drop ALL --security-opt no-new-privileges "$REPOSITORY@$DIGEST" id -u)" != 0
+            docker run --rm --cap-drop ALL --security-opt no-new-privileges "$REPOSITORY@$DIGEST" node /opt/prismpm/runtime/runtime.mjs help
+          else
+            # The default initializer uses only its ordinary setuid/setgid
+            # capability to adapt an optional Docker-socket group, then execs
+            # the command as UID 1000. Explicit non-root invocations require
+            # no capabilities at all, as used by the Action below.
+            test "$(docker run --rm "$REPOSITORY@$DIGEST" id -u)" = 1000
+            test "$(docker run --rm "$REPOSITORY@$DIGEST" sh -lc 'printf %s "$HOME"')" = /home/vscode
+            docker run --rm --user 1000:1000 --cap-drop ALL --security-opt no-new-privileges "$REPOSITORY@$DIGEST" prismpm --version
+            docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock "$REPOSITORY@$DIGEST" docker version --format '{{.Server.Version}}'
+            case "${{ matrix.name }}" in
+              adapter-compose) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/compose.json ;;
+              adapter-kubernetes) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/kubernetes.json ;;
+              adapter-github-pages) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/github-pages.json ;;
+              oracles) docker run --rm "$REPOSITORY@$DIGEST" test -x /usr/local/bin/oci-distribution-conformance ;;
+            esac
+          fi
+          printf '%s@%s\n' "$REPOSITORY" "$DIGEST" > "${{ matrix.name }}-image.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.name }}-image
+          path: ${{ matrix.name }}-image.txt
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.name }}-supply-chain
+          path: |
+            ${{ matrix.name }}-image-index.json
+            ${{ matrix.name }}-linux-amd64.spdx.json
+            ${{ matrix.name }}-linux-arm64.spdx.json
+            ${{ matrix.name }}-linux-amd64.sbom.sigstore.json
+            ${{ matrix.name }}-linux-arm64.sbom.sigstore.json
+            ${{ matrix.name }}-linux-*.sbom-record.json
+            ${{ matrix.name }}-linux-*.sbom-manifest.json
+            ${{ matrix.name }}-linux-*.sbom-artifact.json
+            ${{ matrix.name }}-linux-*.sbom-signature-verification.json
+            ${{ matrix.name }}-linux-*.image-manifest.json
+            ${{ matrix.name }}-linux-*.image-config.json
+            ${{ matrix.name }}-provenance.sigstore.json
+          if-no-files-found: error
+          retention-days: 30
+
+  product-images:
+    needs: [policy, image-platforms]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -251,10 +384,6 @@ jobs:
       max-parallel: 3
       matrix:
         include:
-          - name: sdk
-            dockerfile: sdk/Dockerfile
-            target: runtime
-            repository: ghcr.io/uor-foundation/prismpm-sdk
           - name: runtime
             dockerfile: sdk/runtime/Dockerfile
             target: ""
@@ -466,12 +595,158 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  reproducibility:
-    needs: [gate, images]
+  images:
+    needs: [sdk-supply, product-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - run: 'true'
+
+  source-vv:
+    name: source-vv-part-${{ matrix.part }}
+    needs: [policy, sdk-supply]
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       max-parallel: 4
+      matrix:
+        include:
+          - part: dk-3
+          - part: ho-oc
+          - part: dk-2
+          - part: gates
+          - part: st-sy
+          - part: dk-0-1
+          - part: conformance
+          - part: source
+    steps:
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: target/release-sdk
+      - id: evidence
+        run: |
+          image=$(cat target/release-sdk/sdk-image.txt)
+          name=$(node scripts/release-gate-evidence.mjs artifact-name "source-vv-part-${{ matrix.part }}" "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+      # Reuse the construction layers populated by PR Fast Checks. Each shard
+      # still executes its complete source verification on this commit.
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
+        with:
+          push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          runCmd: |
+            set -euo pipefail
+            bash scripts/sdk-candidate.sh install-oras "$PWD/target/release-tools"
+            bash scripts/sdk-candidate.sh install-cosign "$PWD/target/release-tools"
+            export PATH="$PWD/target/release-tools:$PATH"
+            image=$(cat target/release-sdk/sdk-image.txt)
+            bash scripts/source-sdk-handoff.sh "$image" '${{ github.sha }}' amd64 '${{ github.ref }}' '${{ github.event_name }}' \
+              bash scripts/vv.sh --with-sdk node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence \
+              '${{ github.sha }}' amd64 "$image" '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'
+      - name: Retain transport verification separately from source acceptance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: source-sdk-handoff-${{ matrix.part }}-${{ github.run_attempt }}
+          path: target/source-sdk-handoff/
+          if-no-files-found: warn
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ${{ steps.evidence.outputs.name }}
+          path: target/source-vv-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  gate:
+    needs: [policy, sdk-supply, source-vv]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ needs.policy.outputs.version }}
+      publish-crates: ${{ needs.policy.outputs.publish-crates }}
+      rehearsal: ${{ needs.policy.outputs.rehearsal }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: target/release-sdk
+      - id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/selection-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/selection-provider.json target/release-selection/selection.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" $(node scripts/vv-assemble.mjs --list | sed 's/[^[:space:]]\+/source-vv-part-&/g')
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/selection.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.selection.outputs.ids }}
+          merge-multiple: true
+          path: target/source-vv-evidence
+      - name: Require every source part on this commit
+        run: |
+          node scripts/release-gate-evidence.mjs source-assemble . target/source-vv-evidence "$GITHUB_SHA" amd64 "$(cat target/release-sdk/sdk-image.txt)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" -
+      - id: evidence
+        run: |
+          name=$(node scripts/release-gate-evidence.mjs artifact-name source-vv "$GITHUB_SHA" amd64 "$(cat target/release-sdk/sdk-image.txt)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.evidence.outputs.name }}
+          path: target/source-vv-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  # Twelve bounded pairs; never share a cache or builder across the cold roots.
+      - name: Retain original artifact metadata and immutable selections
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: artifact-selection-${{ github.job }}-${{ matrix.arch || 'all' }}-${{ github.run_attempt }}
+          path: target/release-selection/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  reproducibility-parts:
+    needs: [policy, images]
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - os: ubuntu-24.04
@@ -586,12 +861,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: Record allocated storage before the independent roots
+        run: bash root-a/scripts/release-storage-snapshot.sh before-roots "$RUNNER_TEMP/repro-before.txt" root-a root-b
       - shell: bash
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
           PLATFORM: ${{ matrix.platform }}
           TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
           IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
@@ -599,6 +876,11 @@ jobs:
           identity=$(cat "$identity_file")
           docker buildx imagetools inspect --raw "$identity" > shipped-index.json
           for root in root-a root-b; do
+            builder="repro-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.name }}-$root"
+            if docker buildx inspect "$builder" >/dev/null 2>&1; then exit 1; fi
+            docker buildx create --name "$builder" --driver docker-container \
+              --driver-opt image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+            trap 'docker buildx rm "$builder"' EXIT
             context=()
             if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
               build=(node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$GITHUB_SHA" "$TARGET")
@@ -607,16 +889,19 @@ jobs:
               build=(docker buildx build --file "$root/$DOCKERFILE")
               context=("$root")
             fi
-            "${build[@]}" --no-cache --provenance=false --sbom=false \
+            "${build[@]}" --builder "$builder" --no-cache --provenance=false --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
               --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
               --label "org.opencontainers.image.version=$VERSION" \
               --platform "$PLATFORM" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
-            mkdir "$root.oci"
-            tar -xf "$root.oci.tar" -C "$root.oci"
+              --output "type=oci,tar=false,dest=$root.oci,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
+            docker buildx rm "$builder"
+            trap - EXIT
+            volumes=$(docker volume ls --format '{{.Name}}')
+            if printf '%s\n' "$volumes" | grep -Fxq "buildx_buildkit_${builder}0_state"; then exit 1; fi
+            bash root-a/scripts/release-storage-snapshot.sh "$root-retired" "$RUNNER_TEMP/repro-$root-retired.txt" "$root.oci"
             jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
           done
           cmp root-a.digest root-b.digest
@@ -624,6 +909,15 @@ jobs:
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
             root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      - name: Record complete raw-pair allocated storage after final custody
+        run: bash root-a/scripts/release-storage-snapshot.sh after-custody "$RUNNER_TEMP/repro-after.txt" root-a.oci root-b.oci
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: reproduction-storage-${{ matrix.name }}
+          path: ${{ runner.temp }}/repro-*.txt
+          if-no-files-found: error
+          retention-days: 30
       - name: Diagnose differing OCI layers without changing acceptance
         if: failure()
         timeout-minutes: 5
@@ -645,44 +939,8 @@ jobs:
           path: ${{ matrix.name }}-reproducibility.txt
           if-no-files-found: error
           retention-days: 30
-      - name: Verify exact current SDK browser closure offline and read-only
-        if: matrix.image == 'sdk'
-        shell: bash
-        env:
-          RESULT_NAME: ${{ matrix.name }}
-        run: |
-          set -euo pipefail
-          bash root-a/scripts/browser-api-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-browser-sdk.log" 2>&1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && matrix.image == 'sdk'
-        with:
-          name: browser-sdk-${{ matrix.name }}
-          path: ${{ matrix.name }}-browser-sdk.log
-          if-no-files-found: error
-          retention-days: 30
-      - name: Verify exact current SDK native-library closure offline and read-only
-        if: matrix.image == 'sdk'
-        shell: bash
-        env:
-          RESULT_NAME: ${{ matrix.name }}
-        run: |
-          set -euo pipefail
-          node root-a/scripts/library-sdk-check.mjs tests
-          bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && matrix.image == 'sdk'
-        with:
-          name: library-sdk-${{ matrix.name }}
-          path: |
-            ${{ matrix.name }}-library-sdk.log
-            root-a/target/library-sdk-evidence/
-          if-no-files-found: error
-          retention-days: 30
-  # One installed pass per architecture, as the eight parts of
-  # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
-  # Part-major order so max-parallel 8 runs four parts on each architecture.
-  installed-vv:
-    needs: [gate, images]
+  browser-library:
+    needs: [policy, sdk-supply]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -690,7 +948,85 @@ jobs:
       packages: read
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 1
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: .shipped-image
+      - name: Verify exact current SDK browser closure offline and read-only
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          bash root-a/scripts/browser-api-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-browser-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: browser-sdk-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-browser-sdk.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify exact current SDK native-library closure offline and read-only
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/library-sdk-check.mjs tests
+          bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: library-sdk-sdk-${{ matrix.arch }}
+          path: |
+            sdk-${{ matrix.arch }}-library-sdk.log
+            root-a/target/library-sdk-evidence/
+          if-no-files-found: error
+          retention-days: 30
+  # One installed pass per architecture, as the eight parts of
+  # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
+  # Part-major order so max-parallel 8 runs four parts on each architecture.
+
+  reproducibility:
+    needs: [reproducibility-parts, browser-library]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - run: 'true'
+
+  installed-vv:
+    name: full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}
+    needs: [policy, sdk-supply]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      max-parallel: 4
       matrix:
         include:
           - os: ubuntu-24.04
@@ -767,6 +1103,10 @@ jobs:
         with:
           name: sdk-image
           path: .shipped-image
+      - id: evidence
+        run: |
+          name=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}" "$GITHUB_SHA" '${{ matrix.arch }}' "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
       - name: Verify this installed-SDK part on the native isolated runner
         shell: bash
         env:
@@ -780,7 +1120,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}
+          name: ${{ steps.evidence.outputs.name }}
           path: |
             sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/
             sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}-outer-owner/
@@ -788,12 +1128,64 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  installed-sdk:
-    needs: [gate, images, installed-vv]
+  product-cli:
+    needs: [policy, sdk-supply]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
       contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: .shipped-image
+      - name: Verify genuine installed product CLI and source-free browser release
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/product-sdk-check.mjs tests
+          bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "$RESULT_NAME-product-cli"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: product-cli-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-product-cli/
+          if-no-files-found: error
+          retention-days: 30
+
+  installed-sdk:
+    needs: [policy, sdk-supply, installed-vv, product-cli]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
       packages: read
     strategy:
       fail-fast: false
@@ -822,9 +1214,21 @@ jobs:
         with:
           name: sdk-image
           path: .shipped-image
+      - id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node root-a/scripts/release-artifact-metadata.mjs target/release-selection/selection-provider.json "$GITHUB_RUN_ID"
+          image=$(cat .shipped-image/sdk-image.txt)
+          node root-a/scripts/release-gate-evidence.mjs select-artifacts target/release-selection/selection-provider.json target/release-selection/selection.json \
+            "$GITHUB_SHA" '${{ matrix.arch }}' "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" $(node root-a/scripts/vv-assemble.mjs --list | sed "s/[^[:space:]]\+/full-sdk-vv-sdk-${{ matrix.arch }}-&/g")
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/selection.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: full-sdk-vv-sdk-${{ matrix.arch }}-*
+          artifact-ids: ${{ steps.selection.outputs.ids }}
           merge-multiple: true
           path: .installed-vv
       - name: Require every installed part on this commit and image
@@ -841,25 +1245,19 @@ jobs:
           path: sdk-${{ matrix.arch }}-vv-evidence.json
           if-no-files-found: error
           retention-days: 30
-      - name: Verify genuine installed product CLI and source-free browser release
-        shell: bash
-        env:
-          RESULT_NAME: sdk-${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          node root-a/scripts/product-sdk-check.mjs tests
-          bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" \
-            "$GITHUB_SHA" "$RESULT_NAME-product-cli"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+
+      - name: Retain original artifact metadata and immutable selections
         if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: product-cli-sdk-${{ matrix.arch }}
-          path: sdk-${{ matrix.arch }}-product-cli/
+          name: artifact-selection-${{ github.job }}-${{ matrix.arch || 'all' }}-${{ github.run_attempt }}
+          path: target/release-selection/*.json
           if-no-files-found: error
           retention-days: 30
 
   native:
-    needs: [gate, images]
+    name: sdk-equivalence-${{ matrix.arch }}
+    needs: [policy, sdk-supply]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -897,16 +1295,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: native-construction-${{ matrix.arch }}
+          path: .native-release
+      - id: evidence
+        run: |
+          image=$(cat .release-sdk/sdk-image.txt)
+          for kind in equivalence archive; do
+            if test "$kind" = equivalence; then owner="sdk-equivalence-${{ matrix.arch }}"; else owner="native-${{ matrix.target }}"; fi
+            name=$(node scripts/release-gate-evidence.mjs artifact-name "$owner" "$GITHUB_SHA" '${{ matrix.arch }}' "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+            printf '%s=%s\n' "$kind" "$name" >> "$GITHUB_OUTPUT"
+          done
       - shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
         run: |
           set -euo pipefail
-          node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" cli-archive \
-            --build-arg "SDK_VERSION=$VERSION" \
-            --platform "$PLATFORM" \
-            --output type=local,dest=.native-release
           archive=$(find .native-release -maxdepth 1 -type f -name 'prismpm-*.tar.gz' -print)
           test -n "$archive"
           test -f "$archive.sha256"
@@ -927,14 +1333,14 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: sdk-equivalence-${{ matrix.arch }}
+          name: ${{ steps.evidence.outputs.equivalence }}
           path: .native-equivalence/
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: native-${{ matrix.target }}
+          name: ${{ steps.evidence.outputs.archive }}
           path: |
             prismpm-*.tar.gz
             prismpm-*.tar.gz.sha256
@@ -948,6 +1354,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write
+      actions: read
       id-token: write
       attestations: write
     steps:
@@ -967,9 +1374,42 @@ jobs:
         run: node scripts/release-phases.mjs prerequisites oci-native
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: native-*
-          path: release
+          name: sdk-image
+          path: target/release-sdk
+      - id: native-amd64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/native-amd64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/native-amd64-provider.json target/release-selection/native-amd64.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" native-x86_64-unknown-linux-gnu
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/native-amd64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.native-amd64.outputs.ids }}
           merge-multiple: true
+          path: release
+      - id: native-arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/native-arm64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/native-arm64-provider.json target/release-selection/native-arm64.json \
+            "$GITHUB_SHA" arm64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" native-aarch64-unknown-linux-gnu
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/native-arm64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.native-arm64.outputs.ids }}
+          merge-multiple: true
+          path: release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-image'
@@ -985,9 +1425,38 @@ jobs:
           pattern: reproducibility-*
           path: release
           merge-multiple: true
+      - id: full-amd64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/full-amd64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/full-amd64-provider.json target/release-selection/full-amd64.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" $(node scripts/vv-assemble.mjs --list | sed "s/[^[:space:]]\+/full-sdk-vv-sdk-amd64-&/g")
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/full-amd64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: full-sdk-vv-sdk-*
+          artifact-ids: ${{ steps.full-amd64.outputs.ids }}
+          merge-multiple: true
+          path: .sdk-gate-evidence/full-sdk-vv
+      - id: full-arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/full-arm64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/full-arm64-provider.json target/release-selection/full-arm64.json \
+            "$GITHUB_SHA" arm64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" $(node scripts/vv-assemble.mjs --list | sed "s/[^[:space:]]\+/full-sdk-vv-sdk-arm64-&/g")
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/full-arm64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.full-arm64.outputs.ids }}
           merge-multiple: true
           path: .sdk-gate-evidence/full-sdk-vv
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1019,17 +1488,56 @@ jobs:
         with:
           name: library-sdk-sdk-arm64
           path: .sdk-gate-evidence/library-sdk-sdk-arm64
+      - id: source-vv
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/source-vv-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/source-vv-provider.json target/release-selection/source-vv.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" source-vv
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/source-vv.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: source-vv
+          artifact-ids: ${{ steps.source-vv.outputs.ids }}
+          merge-multiple: true
           path: .sdk-gate-evidence/source-vv
+      - id: sdk-equivalence-amd64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/sdk-equivalence-amd64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/sdk-equivalence-amd64-provider.json target/release-selection/sdk-equivalence-amd64.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" sdk-equivalence-amd64
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/sdk-equivalence-amd64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: sdk-equivalence-amd64
+          artifact-ids: ${{ steps.sdk-equivalence-amd64.outputs.ids }}
+          merge-multiple: true
           path: .sdk-gate-evidence/native-equivalence-sdk-amd64
+      - id: sdk-equivalence-arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/sdk-equivalence-arm64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/sdk-equivalence-arm64-provider.json target/release-selection/sdk-equivalence-arm64.json \
+            "$GITHUB_SHA" arm64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" sdk-equivalence-arm64
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/sdk-equivalence-arm64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: sdk-equivalence-arm64
+          artifact-ids: ${{ steps.sdk-equivalence-arm64.outputs.ids }}
+          merge-multiple: true
           path: .sdk-gate-evidence/native-equivalence-sdk-arm64
       - name: Preserve complete native SDK gate evidence without changing acceptance scope
         shell: bash
@@ -1043,7 +1551,7 @@ jobs:
           cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
           node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
-            release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            release/source-vv.tar "$image" "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           parts=$(node scripts/vv-assemble.mjs --list)
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
@@ -1098,6 +1606,15 @@ jobs:
   # reviewed archive, checked for crates.io metadata and dry-run, and nothing is
   # uploaded. docs/release/crates-io-publication.md states the order and the
   # pre-release version scheme (#214).
+      - name: Retain original artifact metadata and immutable selections
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: artifact-selection-${{ github.job }}-${{ matrix.arch || 'all' }}-${{ github.run_attempt }}
+          path: target/release-selection/*.json
+          if-no-files-found: error
+          retention-days: 30
+
   crates:
     if: ${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}
     needs: [gate, images, native, reproducibility, installed-sdk, oci-native]
@@ -1265,6 +1782,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write
+      actions: read
       id-token: write
       attestations: write
       packages: write
@@ -1284,9 +1802,42 @@ jobs:
         run: node scripts/release-phases.mjs prerequisites release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: native-*
-          path: release
+          name: sdk-image
+          path: target/release-sdk
+      - id: native-amd64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/native-amd64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/native-amd64-provider.json target/release-selection/native-amd64.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" native-x86_64-unknown-linux-gnu
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/native-amd64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.native-amd64.outputs.ids }}
           merge-multiple: true
+          path: release
+      - id: native-arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/native-arm64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/native-arm64-provider.json target/release-selection/native-arm64.json \
+            "$GITHUB_SHA" arm64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" native-aarch64-unknown-linux-gnu
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/release-selection/native-arm64.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.native-arm64.outputs.ids }}
+          merge-multiple: true
+          path: release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-image'
@@ -1341,3 +1892,195 @@ jobs:
           body_path: RELEASE_NOTES.md
           files: |
             release/*
+      - name: Retain original artifact metadata and immutable selections
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: artifact-selection-${{ github.job }}-${{ matrix.arch || 'all' }}-${{ github.run_attempt }}
+          path: target/release-selection/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # Explicitly exclusive from all release, acceptance and publication owners.
+  diagnostic-policy:
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      source: ${{ steps.plan.outputs.source }}
+      work-end-ms: ${{ steps.plan.outputs.work-end-ms }}
+      whole-end-ms: ${{ steps.plan.outputs.whole-end-ms }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - id: plan
+        name: Admit only the exact unpublished diagnostic source and common deadline
+        env:
+          DIAGNOSTIC_SOURCE: ${{ inputs.resource-diagnostic-source }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          node scripts/native-resource-diagnostic.mjs policy >> "$GITHUB_OUTPUT"
+      - name: Check diagnostic isolation and refusal contracts without construction
+        run: node --test scripts/native-resource-diagnostic.test.mjs scripts/native-resource-command.test.mjs scripts/native-resource-driver.test.mjs
+
+  diagnostic-production:
+    name: Native resource production (${{ matrix.arch }})
+    needs: diagnostic-policy
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Free only standard runner tools before the measured baseline
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup             /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft             /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
+          df --block-size=1 /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          use: false
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Run the bounded unpublished production owner
+        env:
+          NATIVE_DIAGNOSTIC_PLAN: ${{ needs.diagnostic-policy.outputs.plan }}
+          RESOURCE_ARCH: ${{ matrix.arch }}
+          RESOURCE_SOURCE: ${{ needs.diagnostic-policy.outputs.source }}
+          RESOURCE_WORK_END: ${{ needs.diagnostic-policy.outputs.work-end-ms }}
+          RESOURCE_WHOLE_END: ${{ needs.diagnostic-policy.outputs.whole-end-ms }}
+        run: |
+          set -euo pipefail
+          bash scripts/native-resource-diagnostic.sh production "$RESOURCE_ARCH" "$RESOURCE_SOURCE" \
+            "$RESOURCE_WORK_END" "$RESOURCE_WHOLE_END" "$RUNNER_TEMP/resource-production-$RESOURCE_ARCH"
+      - name: Retain the bounded original native production subject
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-production-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/resource-production-${{ matrix.arch }}/production-${{ matrix.arch }}.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain bounded resource observations and original failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-records-production-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/resource-production-${{ matrix.arch }}/
+            !${{ runner.temp }}/resource-production-${{ matrix.arch }}/.control/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  diagnostic-pair:
+    name: Native resource pair (${{ matrix.arch }})
+    needs: [diagnostic-policy, diagnostic-production]
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Free only standard runner tools before the measured baseline
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup             /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft             /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
+          df --block-size=1 /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          use: false
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - id: subjects
+        name: Select only exact successful current-attempt production records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/resource-selection
+          node scripts/release-artifact-metadata.mjs target/resource-selection/provider.json "$GITHUB_RUN_ID"
+          node scripts/native-resource-diagnostic.mjs select target/resource-selection/provider.json \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" target/resource-selection/selection.json
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/resource-selection/selection.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.subjects.outputs.ids }}
+          merge-multiple: true
+          path: target/resource-subjects
+      - name: Run the bounded unpublished pair owner
+        env:
+          NATIVE_DIAGNOSTIC_PLAN: ${{ needs.diagnostic-policy.outputs.plan }}
+          RESOURCE_ARCH: ${{ matrix.arch }}
+          RESOURCE_SOURCE: ${{ needs.diagnostic-policy.outputs.source }}
+          RESOURCE_WORK_END: ${{ needs.diagnostic-policy.outputs.work-end-ms }}
+          RESOURCE_WHOLE_END: ${{ needs.diagnostic-policy.outputs.whole-end-ms }}
+        run: |
+          set -euo pipefail
+          bash scripts/native-resource-diagnostic.sh pair "$RESOURCE_ARCH" "$RESOURCE_SOURCE" \
+            "$RESOURCE_WORK_END" "$RESOURCE_WHOLE_END" "$RUNNER_TEMP/resource-pair-$RESOURCE_ARCH" "$PWD/target/resource-subjects"
+      - name: Retain bounded resource observations and original failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-records-pair-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/resource-pair-${{ matrix.arch }}/
+            !${{ runner.temp }}/resource-pair-${{ matrix.arch }}/.control/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Retain exact provider originals and subject selection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-selection-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: target/resource-selection/*.json
+          if-no-files-found: error
+          retention-days: 30

@@ -234,13 +234,19 @@ test('owning shell contract rejects missing executions, shared producer mount an
 
 test('native release gate remains downstream of published images and mandatory alongside complete SDK VV',()=>{
  const source=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
- const job=source.split('\n  installed-vv:\n')[1]?.split('\n  native:\n')[0];assert(job);
- assert(job.includes('needs: [gate, images]'));assert(job.includes('needs: [gate, images, installed-vv]'));assert(job.includes('os: ubuntu-24.04-arm'));assert(job.includes('arch: amd64'));assert(job.includes('arch: arm64'));
- const outer=job.indexOf('bash root-a/scripts/sdk-vv-outer.sh');
- assert(outer>=0&&outer<job.indexOf('product-sdk-check.sh'));
+ const extract=name=>{const jobs=[...source.matchAll(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:\\n)`,'gm'))];assert.equal(jobs.length,1);return jobs[0][1];};
+ const job=extract('product-cli'),installed=extract('installed-sdk'),vv=extract('installed-vv');
+ for(const text of [job,vv])assert.match(text,/^    needs: \[policy, sdk-supply\]$/m);
+ assert.match(installed,/^    needs: \[policy, sdk-supply, installed-vv, product-cli\]$/m);
+ assert(installed.includes('sdk-release-evidence.mjs assemble-installed'));
+ assert.deepEqual([...job.matchAll(/          - os: ([^\n]+)\n            arch: ([^\n]+)\n/g)].map(row=>row.slice(1)),[['ubuntu-24.04','amd64'],['ubuntu-24.04-arm','arm64']]);
+ assert(vv.includes('bash root-a/scripts/sdk-vv-outer.sh'));
+ assert(!job.includes('sdk-vv-outer.sh'));assert(!vv.includes('product-sdk-check.sh'));
  assert(job.includes('node root-a/scripts/product-sdk-check.mjs tests'));
  assert(job.includes('bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)"'));
- assert(!job.includes('continue-on-error'));assert(!job.includes('if: false'));
+ const setupNode='      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38\n        with:\n          node-version: 22.23.2\n';
+ assert.equal(job.split(setupNode).length,2);assert(job.indexOf(setupNode)<job.search(/\bnode\s/));
+ for(const text of [job,vv,installed]){assert(!text.includes('continue-on-error'));assert(!text.includes('if: false'));}
  const script=readFileSync(new URL('./product-sdk-check.mjs',import.meta.url),'utf8');
  assert(script.includes("['build','--locked','--release',release,'-t'"));assert(script.includes("for(const name of ['first','second'])"));
  assert(script.includes("for(const release of ['A','B'])"));assert(script.includes("{code:'PP6101',exit:5}"));

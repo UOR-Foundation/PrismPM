@@ -50,8 +50,9 @@ export function captureEvidence(directory, kind, context) {
     ...(kind === 'full-sdk-vv' ? ['part'] : [])]);
   if (kind === 'full-sdk-vv') assert(vvParts.includes(context.part), 'closed V&V part');
   assert.match(context.source_revision, /^[0-9a-f]{40}$/);
-  if (kind === 'source-vv') assert.equal(context.image_reference, null);
-  else assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
+  // Historical source-only originals have no shared SDK image identity.
+  if (kind !== 'source-vv' || context.image_reference !== null)
+    assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
   assert(['amd64', 'arm64'].includes(context.architecture));
   assert(['full-sdk-vv', 'product-cli', 'source-vv', 'native-equivalence'].includes(kind));
   if (originalGate) releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);

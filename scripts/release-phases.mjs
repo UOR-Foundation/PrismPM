@@ -227,6 +227,21 @@ export function verifyReproducibility(image, indexBytes, architecture, revision,
   return published.digest;
 }
 
+// Read-only diagnostic metadata from one fully read local layout. This is not
+// a shipped subject, independent reconstruction, signature or acceptance.
+export function describeDiagnosticLayout(directory, architecture, revision) {
+  directory = resolve(directory);
+  const owner = rebuiltManifest(directory, architecture, revision), observations = [];
+  const index = readLayoutFile(join(directory, 'index.json'), metadataLimit, null, true, observations);
+  const manifest = readLayoutFile(join(directory, 'blobs/sha256', owner.descriptor.digest.slice(7)),
+    metadataLimit, owner.descriptor, true, observations);
+  const configDescriptor = JSON.parse(manifest).config;
+  const config = readLayoutFile(join(directory, 'blobs/sha256', configDescriptor.digest.slice(7)),
+    metadataLimit, configDescriptor, true, observations);
+  owner.verify(); verifyObservations(observations);
+  return {index, manifest, config, descriptor: owner.descriptor};
+}
+
 export function releaseSbomRecord(image, indexBytes, childBytes, configBytes, spdxBytes, architecture, revision) {
   assert.match(revision, /^[0-9a-f]{40}$/);
   const child = publishedPlatform(image, indexBytes, architecture);

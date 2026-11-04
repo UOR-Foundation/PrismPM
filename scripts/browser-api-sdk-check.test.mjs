@@ -314,10 +314,10 @@ test('current SDK source closure binds helper, compiler, suite and every selecte
   'tests/browser-operation-journal/source.txt','tests/support/browser_application.rs',
   'sdk/oracles/package.json','sdk/oracles/package-lock.json',
   'tests/browser-session/source.txt','tests/browser-budget/source.txt','tests/browser-contextual-effects/source.txt',
-  'crates/prismpm/src/browser_build.rs','scripts/fetch-oracle-cargo.sh']){
+  'crates/prismpm/src/browser_build.rs','crates/conformance/Cargo.toml','scripts/fetch-oracle-cargo.sh']){
   const bytes=readFileSync(join(root,path));put(root,path,Buffer.concat([bytes,Buffer.from('x')]));assert.throws(()=>verifySource(root,expected));put(root,path,bytes);
  }
- for(const path of ['sdk/oracles/package.json','sdk/oracles/package-lock.json']){
+ for(const path of ['sdk/oracles/package.json','sdk/oracles/package-lock.json','crates/conformance/Cargo.toml']){
   assert.ok(expected.files.some(row=>row.path===path),'actual oracle dependency input captured: '+path);
   const omitted=structuredClone(expected);omitted.files=omitted.files.filter(row=>row.path!==path);
   assert.throws(()=>verifySource(root,omitted),/exact current source/,'omitted oracle dependency input: '+path);
@@ -337,6 +337,15 @@ test('source binding rejects missing, aliased, nonregular and oversized inputs',
  renameSync(join(root,'stdlib'),join(root,'stdlib-real'));symlinkSync('stdlib-real',join(root,'stdlib'));assert.throws(()=>capture(root,revision),/parent alias/);rmSync(join(root,'stdlib'));renameSync(join(root,'stdlib-real'),join(root,'stdlib'));
  rmSync(path);execFileSync('mkfifo',[path]);assert.throws(()=>capture(root,revision),/bounded regular/);rmSync(path);
  const fd=openSync(path,'wx');try{ftruncateSync(fd,64*1024*1024+1);}finally{closeSync(fd);}assert.throws(()=>capture(root,revision),/bounded regular/);
+});
+
+test('browser helper package rejects an unregistered automatic build script',t=>{
+ const root=temporary(t);source(root);const expected=capture(root,revision),path='crates/conformance/build.rs';
+ put(root,path,'fn main() {}');
+ assert.throws(()=>capture(root,revision),/unregistered conformance build script/);
+ assert.throws(()=>verifySource(root,expected),/unregistered conformance build script/);
+ rmSync(join(root,path));symlinkSync('missing-build-source',join(root,path));
+ assert.throws(()=>capture(root,revision),/unregistered conformance build script/);
 });
 
 test('SDK identity is immutable, exact-source and native-platform bound',async ()=>{

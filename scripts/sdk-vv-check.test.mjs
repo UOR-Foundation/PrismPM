@@ -707,22 +707,35 @@ test('native release matrix executes the additional exact-image gate and preserv
     const jobs = [...source.matchAll(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:\\n)`, 'gm'))];
     assert.equal(jobs.length, 1); return jobs[0][1];
   };
-  const installed = extract('installed-sdk'), job = extract('installed-vv'), repro = extract('reproducibility');
+  const installed = extract('installed-sdk'), job = extract('installed-vv'), repro = extract('reproducibility-parts');
+  const browser = extract('browser-library'), product = extract('product-cli');
   assert.match(job, /^    runs-on: \$\{\{ matrix.os \}\}$/m);
-  assert.match(job, /^    needs: \[gate, images\]$/m);
-  assert.match(installed, /^    needs: \[gate, images, installed-vv\]$/m);
+  for (const text of [job, browser, product]) assert.match(text, /^    needs: \[policy, sdk-supply\]$/m);
+  assert.match(installed, /^    needs: \[policy, sdk-supply, installed-vv, product-cli\]$/m);
+  assert.match(extract('reproducibility'), /^    needs: \[reproducibility-parts, browser-library\]$/m);
   assert(installed.includes('sdk-release-evidence.mjs assemble-installed'));
-  assert(!/^    (?:if|continue-on-error):/m.test(job)); assert(!/^    (?:if|continue-on-error):/m.test(installed));
+  for (const text of [job, installed, browser, product]) assert(!/^    (?:if|continue-on-error):/m.test(text));
   const setupNode = '      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38\n        with:\n          node-version: 22.23.2\n';
   const hostPrerequisite = (job, command) => {
     assert.equal(job.split(setupNode).length, 2, 'exactly one pinned host Node setup required');
     const firstNode = job.indexOf(command);
-    assert(firstNode > job.indexOf(setupNode), 'pinned Node must precede the first source helper');
+    assert.equal(firstNode, job.search(/\bnode\s/), 'the first source helper must be checked');
+    assert(firstNode > job.indexOf(setupNode), 'pinned Node must precede every source helper');
+    for (const helper of job.matchAll(/\b(?:node|bash)\s+(?:root-[ab]\/scripts\/|scripts\/|"\$root\/scripts\/)/g)) {
+      assert(helper.index > job.indexOf(setupNode), 'pinned Node must precede source shell helpers too');
+    }
   };
-  for (const [text, command] of [[installed, 'node root-a/scripts/product-sdk-check.mjs tests'], [repro, 'node "$root/scripts/sdk-image-inputs.mjs"']]) {
+  for (const [text, command] of [
+    [job, 'node root-a/scripts/release-gate-evidence.mjs artifact-name'],
+    [installed, 'node root-a/scripts/release-artifact-metadata.mjs'],
+    [product, 'node root-a/scripts/product-sdk-check.mjs tests'],
+    [browser, 'node root-a/scripts/library-sdk-check.mjs tests'],
+    [repro, 'node "$root/scripts/sdk-image-inputs.mjs"'],
+  ]) {
     hostPrerequisite(text, command);
     assert.throws(() => hostPrerequisite(text.replace(setupNode, ''), command));
     assert.throws(() => hostPrerequisite(text.replace('node-version: 22.23.2', 'node-version: 20'), command));
+    assert.throws(() => hostPrerequisite(text.replace(setupNode, '') + setupNode, command));
   }
   const sdkRows = [...job.matchAll(/          - os: ([^\n]+)\n            arch: ([^\n]+)\n            part: ([^\n]+)\n/g)];
   assert.equal([...job.matchAll(/^            arch: /gm)].length, parts.length * 2);
@@ -739,7 +752,8 @@ test('native release matrix executes the additional exact-image gate and preserv
   assert(wrapper.includes('--read-only --user "$(id -u):$(id -g)"'));
   assert(wrapper.includes('test "$(controlled actor-running 10 container inspect "$container_id" --format'));
   assert(wrapper.includes('absent id-absence "$container_id"'));
-  assert(repro.includes('browser-api-sdk-check.sh')); assert(repro.includes('library-sdk-check.sh'));
+  assert(browser.includes('browser-api-sdk-check.sh')); assert(browser.includes('library-sdk-check.sh'));
+  assert(!repro.includes('browser-api-sdk-check.sh')); assert(!repro.includes('library-sdk-check.sh'));
   const dir = mkdtempSync(join(tmpdir(), 'prismpm-vv-workflow-unit-')); t.after(() => rmSync(dir, {recursive:true, force:true}));
   mkdirSync(join(dir, '.shipped-image')); writeFileSync(join(dir, '.shipped-image/sdk-image.txt'), image + '\n');
   // Explicit workflow units, not real Docker/image/SDK acceptance. Execute the

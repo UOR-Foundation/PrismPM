@@ -60,6 +60,9 @@ test('bootstrap acquisition disables ambient curl configuration before any downl
         if (command !== 'curl') return original(command, args, options);
         calls++;
         assert.equal(args[0], '--disable', 'curl must ignore user configuration');
+        assert.equal(options.timeout, 310000);
+        assert.deepEqual(options.stdio, ['ignore', 'pipe', 'inherit']);
+        assert.equal(options.maxBuffer, 1024);
         const result = cp.spawnSync(command, [args[0], '--version'], { encoding: 'utf8' });
         assert.equal(result.status, 0);
         assert(!result.stderr.includes('unregistered-prismpm-test-option'));
@@ -461,4 +464,131 @@ test('downloads retry only transient curl statuses, with bounded doubling backof
     assert.equal(calls, 1, `status ${status} must not be retried`);
   }
   assert.throws(() => withTransientRetry(() => 'x', { attempts: 0 }), /positive integer/);
+});
+
+test('HTTP acquisition retries explicit transient responses and discards failed bytes', async (t) => {
+  const module = new URL('./install.mjs', import.meta.url).href;
+  const success = { status: 0, http: '200', body: 'untrusted archive' };
+  const failure = (http, status = 22) => ({ status, http, body: 'partial archive' });
+  const cases = [
+    ...[408, 429, 500, 502, 503, 504].map((http) => ({
+      name: `HTTP ${http} recovers to digest verification`,
+      steps: [failure(String(http)), success], calls: 2, message: /digest/,
+    })),
+    {
+      name: 'mixed partial transfer and HTTP failures recover',
+      steps: [failure('200', 18), failure('503'), success], calls: 3, message: /digest/,
+    },
+    {
+      name: 'transient HTTP failures exhaust four attempts',
+      steps: Array(5).fill(failure('503')), calls: 4, status: 22, httpStatus: 503,
+    },
+    {
+      name: 'transient transport failures exhaust four attempts',
+      steps: Array(5).fill(failure('000', 56)), calls: 4, status: 56, httpStatus: 0,
+    },
+    ...['400', '401', '403', '404', '407', '410', '501', '200', '000', '', '503\n', '504\n', '504\r\n', 'x504', '503\nnoise'].map((http) => ({
+      name: `permanent or unknown HTTP ${JSON.stringify(http)} fails immediately`,
+      steps: [failure(http), success], calls: 1, status: 22,
+    })),
+    {
+      name: 'TLS verification failure cannot be retried by an HTTP status',
+      steps: [failure('503', 60), success], calls: 1, status: 60,
+    },
+    {
+      name: 'status output larger than the bound fails without retry',
+      steps: [failure('5'.repeat(2048)), success], calls: 1, message: /ENOBUFS|maxBuffer/,
+    },
+    {
+      name: 'successful corrupt archive fails integrity without retry',
+      steps: [success, success], calls: 1, message: /digest/,
+    },
+    {
+      name: 'failed partial bytes cannot survive a later empty success',
+      steps: [failure('200', 18), { status: 0, http: '200' }],
+      calls: 2, message: /ENOENT/,
+    },
+  ];
+  for (const fixture of cases) await t.test(fixture.name, () => {
+    const work = mkdtempSync(join(tmpdir(), 'bootstrap-http-retry.'));
+    try {
+      const log = join(work, 'calls.jsonl'), destination = join(work, 'runtime');
+      // Exercise real execFileSync exit/stdout handling without remote requests.
+      writeFileSync(join(work, 'curl'), `#!${process.execPath}
+        const fs = require('node:fs');
+        const args = process.argv.slice(2), log = process.env.BOOTSTRAP_TEST_LOG;
+        const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\\n').length : 0;
+        const step = JSON.parse(process.env.BOOTSTRAP_TEST_STEPS)[calls];
+        const archive = args[args.indexOf('--output') + 1];
+        fs.appendFileSync(log, JSON.stringify({ args, stale: fs.existsSync(archive) }) + '\\n');
+        if (!step) throw Error('unexpected download attempt');
+        if (step.body !== undefined) fs.writeFileSync(archive, step.body);
+        process.stdout.write(step.http);
+        process.exit(step.status);
+      `, { mode: 0o755 });
+      const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import fs from 'node:fs';
+        import { installRuntime } from ${JSON.stringify(module)};
+        const waits = [];
+        Atomics.wait = (_array, _index, _value, milliseconds) => {
+          const lines = fs.readFileSync(process.env.BOOTSTRAP_TEST_LOG, 'utf8').trim().split('\\n');
+          const { args } = JSON.parse(lines.at(-1));
+          assert(!fs.existsSync(args[args.indexOf('--output') + 1]), 'failed bytes must be removed before backoff');
+          waits.push(milliseconds);
+        };
+        let failure;
+        try { installRuntime(${JSON.stringify(destination)}); }
+        catch (error) { failure = { status: error.status, httpStatus: error.httpStatus, message: error.message }; }
+        assert(failure, 'fixture must fail acquisition or integrity');
+        process.stdout.write(JSON.stringify({ ...failure, waits }));
+      `], {
+        env: {
+          ...process.env,
+          PATH: `${work}:${process.env.PATH}`,
+          BOOTSTRAP_TEST_LOG: log,
+          BOOTSTRAP_TEST_STEPS: JSON.stringify(fixture.steps),
+        },
+        timeout: 10000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      }));
+      const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      assert.equal(calls.length, fixture.calls);
+      assert.deepEqual(result.waits, [2000, 4000, 8000].slice(0, fixture.calls - 1));
+      if (fixture.message) assert.match(result.message, fixture.message);
+      if (fixture.status !== undefined) assert.equal(result.status, fixture.status);
+      if (fixture.httpStatus !== undefined) assert.equal(result.httpStatus, fixture.httpStatus);
+      for (const call of calls) {
+        assert.equal(call.stale, false, 'each attempt must start without prior bytes');
+        assert.deepEqual(call.args, [
+          '--disable', '--proto', '=https', '--proto-redir', '=https', '--tlsv1.2',
+          '--fail', '--location', '--silent', '--show-error', '--max-time', '300',
+          '--max-filesize', '67108864', '--write-out', '%{http_code}',
+          lock.packages.libc.url, '--output', call.args.at(-1),
+        ]);
+        assert(!existsSync(call.args.at(-1)), 'failed installation must clean archive');
+      }
+      assert(!existsSync(destination));
+      assert(!readdirSync(work).some((name) => name.startsWith('.bootstrap-stage.')));
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
+test('HTTP retry uses the exact captured status string and a shared attempt budget', () => {
+  for (const code of ['408', '429', '500', '502', '503', '504']) {
+    let calls = 0; const waits = [];
+    assert.equal(withTransientRetry(() => {
+      if (++calls < 3) throw Object.assign(new Error('HTTP failure'), {status: 22, stdout: Buffer.from(code)});
+      return 'downloaded';
+    }, {delay: 10, sleep: ms => waits.push(ms)}), 'downloaded');
+    assert.equal(calls, 3); assert.deepEqual(waits, [10, 20]);
+  }
+  for (const code of ['400', '401', '403', '404', '407', '410', '501', '200', '000', '', '503\n', '504\n', '504\r\n', 'x504']) {
+    let calls = 0;
+    assert.throws(() => withTransientRetry(() => {
+      calls++; throw Object.assign(new Error('permanent'), {status: 22, stdout: Buffer.from(code)});
+    }, {sleep: () => assert.fail('permanent failure must not wait')}), /permanent/);
+    assert.equal(calls, 1);
+  }
 });

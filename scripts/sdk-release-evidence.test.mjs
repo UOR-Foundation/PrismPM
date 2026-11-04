@@ -64,13 +64,13 @@ function product(root) {
 }
 
 function validateWorkflow(workflow) {
-  const upload = workflow.jobs.reproducibility.steps.filter(step => step.with?.name === 'library-sdk-${{ matrix.name }}');
+  const upload = workflow.jobs['browser-library'].steps.filter(step => step.with?.name === 'library-sdk-sdk-${{ matrix.arch }}');
   assert.equal(upload.length, 1);
   assert.equal(upload[0].uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
-  assert.equal(upload[0].if, "always() && matrix.image == 'sdk'");
+  assert.equal(upload[0].if, 'always()');
   assert.equal(upload[0]['continue-on-error'], undefined);
-  assert.deepEqual(upload[0].with, {name: 'library-sdk-${{ matrix.name }}',
-    path: '${{ matrix.name }}-library-sdk.log\nroot-a/target/library-sdk-evidence/\n',
+  assert.deepEqual(upload[0].with, {name: 'library-sdk-sdk-${{ matrix.arch }}',
+    path: 'sdk-${{ matrix.arch }}-library-sdk.log\nroot-a/target/library-sdk-evidence/\n',
     'if-no-files-found': 'error', 'retention-days': 30});
   assert(assetNames().includes('sdk-metadata-native-join.json'));
   const steps = workflow.jobs['oci-native'].steps;
@@ -85,13 +85,29 @@ function validateWorkflow(workflow) {
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
     assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
   };
-  const parts = steps.filter(step => step.with?.pattern === 'full-sdk-vv-sdk-*');
-  assert.equal(parts.length, 1, 'missing or duplicate part evidence download');
-  assert.equal(parts[0].uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
-  assert.deepEqual(parts[0].with, {pattern: 'full-sdk-vv-sdk-*', 'merge-multiple': true, path: '.sdk-gate-evidence/full-sdk-vv'});
-  assert.equal(parts[0].if, undefined); assert.equal(parts[0]['continue-on-error'], undefined);
-  assert(steps.indexOf(parts[0]) < steps.indexOf(pack), 'evidence must arrive before capture');
+  const selected = (id, arch, owner, path) => {
+    const selectors = steps.filter(step => step.id === id);
+    assert.equal(selectors.length, 1, 'missing or duplicate immutable selector ' + id);
+    const selector = selectors[0];
+    assert.equal(selector.if, undefined); assert.equal(selector['continue-on-error'], undefined);
+    assert.equal(selector.env.GH_TOKEN, '${{ github.token }}');
+    assert(selector.run.startsWith('set -euo pipefail\n'));
+    assert(selector.run.includes('scripts/release-artifact-metadata.mjs'));
+    assert(selector.run.includes('scripts/release-gate-evidence.mjs select-artifacts'));
+    assert(selector.run.includes(`"$GITHUB_SHA" ${arch} "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" ${owner}`));
+    const matching = steps.filter(step => step.with?.['artifact-ids'] === '${{ steps.' + id + '.outputs.ids }}');
+    assert.equal(matching.length, 1, 'missing or duplicate immutable evidence download ' + id);
+    const step = matching[0];
+    assert.equal(step.uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
+    assert.deepEqual(step.with, {'artifact-ids': '${{ steps.' + id + '.outputs.ids }}', 'merge-multiple': true, path});
+    assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+    assert(steps.indexOf(selector) < steps.indexOf(step));
+    assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
+  };
+  assert.equal(steps.filter(step => step.with?.pattern === 'full-sdk-vv-sdk-*').length, 0);
   for (const arch of ['amd64', 'arm64']) {
+    selected(`full-${arch}`, arch, `$(node scripts/vv-assemble.mjs --list | sed "s/[^[:space:]]\\+/full-sdk-vv-sdk-${arch}-&/g")`, '.sdk-gate-evidence/full-sdk-vv');
+    selected(`native-${arch}`, arch, `native-${arch === 'amd64' ? 'x86_64' : 'aarch64'}-unknown-linux-gnu`, 'release');
     download(`product-cli-sdk-${arch}`, `.sdk-gate-evidence/product-cli-sdk-${arch}`);
     assert(assetNames().includes(`sdk-${arch}-product-cli.tar`));
     assert(assetNames().includes(`sdk-${arch}-vv-evidence.json`));
@@ -111,7 +127,7 @@ function validateWorkflow(workflow) {
     'cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/',
     'cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/',
     'node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \\',
-    '  release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    '  release/source-vv.tar "$image" "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
     'parts=$(node scripts/vv-assemble.mjs --list)',
     'for architecture in amd64 arm64; do',
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
@@ -129,8 +145,8 @@ function validateWorkflow(workflow) {
     '    "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
     'done', '',
   ].join('\n'));
-  download('source-vv', '.sdk-gate-evidence/source-vv');
-  for (const arch of ['amd64', 'arm64']) download(`sdk-equivalence-${arch}`, `.sdk-gate-evidence/native-equivalence-sdk-${arch}`);
+  selected('source-vv', 'amd64', 'source-vv', '.sdk-gate-evidence/source-vv');
+  for (const arch of ['amd64', 'arm64']) selected(`sdk-equivalence-${arch}`, arch, `sdk-equivalence-${arch}`, `.sdk-gate-evidence/native-equivalence-sdk-${arch}`);
   assert(steps.indexOf(pack) < steps.findIndex(step => step.run?.includes('checksums=$(mktemp)')));
   assert.deepEqual(workflow.jobs['oci-native'].needs, ['gate', 'images', 'native', 'reproducibility', 'installed-sdk']);
   assert(workflow.jobs.release.needs.includes('crates'));
@@ -155,7 +171,7 @@ test('OCI publication retains both native gate closures without granting SDK acc
   validateWorkflow(workflow);
   const steps = value => value.jobs['oci-native'].steps;
   const pack = value => steps(value).find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
-  const gate = value => steps(value).find(step => step.with?.pattern === 'full-sdk-vv-sdk-*');
+  const gate = value => steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.full-amd64.outputs.ids }}');
   for (const mutate of [
     value => steps(value).splice(steps(value).indexOf(gate(value)), 1),
     value => steps(value).push(structuredClone(gate(value))),
@@ -170,9 +186,11 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {pack(value).run = pack(value).run.replace('amd64 arm64', 'amd64');},
     value => {pack(value).run = pack(value).run.replace('library-sdk-metadata-evidence.mjs join', 'library-sdk-metadata-evidence.mjs omitted');},
     value => {pack(value).run = pack(value).run.replace('library-sdk-metadata-evidence.mjs pack', 'library-sdk-metadata-evidence.mjs omitted');},
-    value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with.path = '${{ matrix.name }}-library-sdk.log';},
-    value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with.path = 'root-a/target/library-sdk-evidence/';},
-    value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with['if-no-files-found'] = 'ignore';},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'library-sdk-sdk-${{ matrix.arch }}').with.path = 'sdk-${{ matrix.arch }}-library-sdk.log';},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'library-sdk-sdk-${{ matrix.arch }}').with.path = 'root-a/target/library-sdk-evidence/';},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'library-sdk-sdk-${{ matrix.arch }}').with['if-no-files-found'] = 'ignore';},
+    value => {steps(value).find(step => step.id === 'full-amd64').run = 'echo unverified';},
+    value => {steps(value).find(step => step.id === 'full-amd64').run = steps(value).find(step => step.id === 'full-amd64').run.replace('"$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"', '"124" "3"');},
     value => {pack(value).run = pack(value).run.replace('"$GITHUB_SHA"', '"stale"');},
     value => {pack(value).run = pack(value).run.replace('"$architecture"', '"$architecture" || true');},
     value => {const record = pack(value); steps(value).splice(steps(value).indexOf(record), 1); steps(value).push(record);},

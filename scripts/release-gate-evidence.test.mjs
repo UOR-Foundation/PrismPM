@@ -9,7 +9,7 @@ import {once} from 'node:events';
 import test from 'node:test';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import {bootstrapNames, canonical, hash, readOriginal, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
-import {assembleSourceEvidence, captureCommand, nativeInvocations, releaseContext, sourceEvidenceNames, validateCommand, validateSourcePart} from './release-gate-evidence.mjs';
+import {artifactName, assembleSourceEvidence, captureCommand, nativeInvocations, releaseContext, selectArtifacts, sourceEvidenceNames, validateCommand, validateSourcePart} from './release-gate-evidence.mjs';
 import {captureEvidence, packEvidence} from './sdk-release-evidence.mjs';
 import {retainPart, vvParts} from './sdk-vv-run.mjs';
 const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
@@ -27,7 +27,7 @@ function commandFixture(root, prefix, command, args, status, stdout = 'unit-only
   put(root, `${prefix}.json`, {command, arguments: args, status, signal: null, descendants_reaped:true, capture_failed:false, orphaned: false, overflow: false, interrupted: null,
     stdout: descriptor(`${prefix}.stdout`, out), stderr: descriptor(`${prefix}.stderr`, err)});
 }
-function sourceFixture(root) {
+function sourceFixture(root, binding = sourceContext) {
   for (const part of vvParts) {
     const raw = rawPart(part), prefix = `source-${part}`;
     commandFixture(root, prefix, 'just', ['vv-part', part], 0);
@@ -40,10 +40,97 @@ function sourceFixture(root) {
       bootstrap = {run: 1, files: rows};
     }
     put(root, `${prefix}-result.json`, {schema: 'prismpm/source-vv-retention/2', scope: 'original-source-part-only',
-      ...sourceContext, part, vv: descriptor(`${prefix}-vv.json`, raw), bootstrap});
+      ...binding, part, vv: descriptor(`${prefix}-vv.json`, raw), bootstrap});
   }
   put(root, 'source-vv.json', rawVv());
 }
+
+function providerFixture(owners, binding = {...context, run_attempt: '3'}) {
+  const artifacts = [], jobs = [];
+  for (const [index, owner] of owners.entries()) {
+    const attempt = index % 2 + 1;
+    jobs.push({id: 100 + index, run_id: Number(binding.run_id), run_attempt: attempt,
+      name: owner === 'source-vv' ? 'gate' : owner.startsWith('native-') ? `sdk-equivalence-${binding.architecture}` : owner, head_sha: binding.source_revision,
+      status: 'completed', conclusion: 'success'});
+    artifacts.push({id: 200 + index, name: artifactName(owner, {...binding, run_attempt: String(attempt)}),
+      digest: 'sha256:' + String(index % 10).repeat(64), expired: false, size_in_bytes: 10,
+      workflow_run: {id: Number(binding.run_id), head_sha: binding.source_revision}});
+  }
+  return {artifacts, jobs};
+}
+
+test('immutable provider selection reuses exact successful earlier owners and preserves metadata', () => {
+  for (const binding of [{...context, run_attempt: '3'}, {...sourceContext, run_attempt: '3'}]) {
+    const owners = vvParts.map(part => `source-vv-part-${part}`), metadata = providerFixture(owners, binding);
+    const original = structuredClone(metadata), selected = selectArtifacts(metadata, binding, owners);
+    assert.deepEqual(metadata, original, 'selection must not rewrite provider metadata');
+    assert.equal(selected.artifacts.length, vvParts.length);
+    for (const [index, artifact] of selected.artifacts.entries()) {
+      assert.equal(artifact.id, String(200 + index)); assert.equal(artifact.run_attempt, String(index % 2 + 1));
+      assert.equal(artifact.name, metadata.artifacts[index].name); assert.equal(artifact.digest, metadata.artifacts[index].digest);
+    }
+  }
+  const owners = ['full-sdk-vv-sdk-amd64-source', 'sdk-equivalence-amd64'];
+  assert.equal(selectArtifacts(providerFixture(owners), {...context, run_attempt: '3'}, owners).artifacts.length, 2);
+  const native = providerFixture(['native-x86_64-unknown-linux-gnu']);
+  assert.equal(selectArtifacts(native, {...context, run_attempt: '3'}, ['native-x86_64-unknown-linux-gnu']).artifacts[0].job_id, '100');
+  native.artifacts.push({...native.artifacts[0], id: 201, name: artifactName('sdk-equivalence-amd64', context)});
+  const siblings = selectArtifacts(native, {...context, run_attempt: '3'}, ['native-x86_64-unknown-linux-gnu', 'sdk-equivalence-amd64']);
+  assert.deepEqual(siblings.artifacts.map(artifact => artifact.job_id), ['100', '100']);
+  const retried = providerFixture(['source-vv-part-source']);
+  retried.jobs.push({...retried.jobs[0], id: 101, run_attempt: 2});
+  retried.artifacts.push({...retried.artifacts[0], id: 201, name: artifactName('source-vv-part-source', {...context, run_attempt: '2'})});
+  assert.equal(selectArtifacts(retried, {...context, run_attempt: '3'}, ['source-vv-part-source']).artifacts[0].id, '201');
+});
+
+test('foreign, future, duplicate, missing and failed owner selections fail closed', () => {
+  const binding = {...context, run_attempt: '3'}, owners = ['source-vv-part-source'];
+  for (const mutate of [
+    m => {m.jobs[0].run_id++;}, m => {m.jobs[0].head_sha = 'f'.repeat(40);},
+    m => {m.jobs[0].run_attempt = 4;}, m => {m.jobs[0].status = 'in_progress';},
+    m => {m.jobs[0].conclusion = 'failure';}, m => {m.jobs[0].conclusion = 'skipped';},
+    m => {m.jobs.push({...m.jobs[0], id: 999});}, m => {m.jobs = [];},
+    m => {m.artifacts[0].workflow_run.id++;}, m => {m.artifacts[0].workflow_run.head_sha = 'f'.repeat(40);},
+    m => {m.artifacts[0].name = artifactName(owners[0], {...binding, source_revision: 'f'.repeat(40), run_attempt: '1'});},
+    m => {m.artifacts[0].name = artifactName(owners[0], {...binding, image_reference: null, run_attempt: '1'});},
+    m => {m.artifacts[0].name = artifactName(owners[0], {...binding, architecture: 'arm64', run_attempt: '1'});},
+    m => {m.artifacts[0].name = artifactName(owners[0], {...binding, run_id: '124', run_attempt: '1'});},
+    m => {m.artifacts[0].name = artifactName(owners[0], {...binding, run_attempt: '4'});},
+    m => {m.artifacts[0].expired = true;}, m => {m.artifacts[0].digest = null;},
+    m => {m.artifacts[0].size_in_bytes = 0;}, m => {m.artifacts.push({...m.artifacts[0], id: 999});},
+    m => {m.artifacts = [];}, m => {m.artifacts[0].id = Number.MAX_SAFE_INTEGER + 1;},
+    // A failed retry must not silently fall back to the retained earlier pass.
+    m => {m.jobs.push({...m.jobs[0], id: 999, run_attempt: 2, conclusion: 'failure'});},
+    m => {m.jobs.push({...m.jobs[0], id: 999, run_attempt: 2});},
+  ]) {
+    const metadata = providerFixture(owners, binding); mutate(metadata);
+    assert.throws(() => selectArtifacts(metadata, binding, owners));
+  }
+  assert.throws(() => selectArtifacts(providerFixture(owners), binding, [...owners, ...owners]), /duplicate selected owner/);
+  assert.throws(() => artifactName('full-sdk-vv-sdk-arm64-source', binding), /closed evidence owner/);
+  assert.throws(() => artifactName('unowned', binding), /closed evidence owner/);
+  assert.throws(() => artifactName('sdk-equivalence-amd64', {...binding, image_reference: null}), /exact image/);
+  const duplicateIds = providerFixture(['source-vv-part-source', 'source-vv-part-dk-2'], binding);
+  duplicateIds.artifacts[1].id = duplicateIds.artifacts[0].id;
+  assert.throws(() => selectArtifacts(duplicateIds, binding, ['source-vv-part-source', 'source-vv-part-dk-2']), /duplicate selected artifact ID/);
+});
+
+test('artifact selector CLI writes fresh immutable selection and cannot replace originals', t => {
+  const root = temporary(t), input = join(root, 'provider.json'), output = join(root, 'selection.json');
+  const owner = 'sdk-equivalence-amd64', metadata = providerFixture([owner]); put(root, 'provider.json', metadata);
+  const script = new URL('./release-gate-evidence.mjs', import.meta.url).pathname;
+  const args = [script, 'select-artifacts', input, output, revision, 'amd64', image, '123', '3', owner];
+  execFileSync(process.execPath, args);
+  const original = readFileSync(output);
+  assert.deepEqual(JSON.parse(original), selectArtifacts(metadata, {...context, run_attempt: '3'}, [owner]));
+  assert.throws(() => execFileSync(process.execPath, args, {stdio: 'pipe'}));
+  assert.deepEqual(readFileSync(output), original); assert.deepEqual(JSON.parse(readFileSync(input)), metadata);
+  metadata.jobs[0].conclusion = 'failure'; put(root, 'provider.json', metadata);
+  assert.throws(() => execFileSync(process.execPath, args.map((arg, index) => index === 3 ? join(root, 'bad.json') : arg), {stdio: 'pipe'}));
+  assert(!existsSync(join(root, 'bad.json')));
+  const printed = execFileSync(process.execPath, [script, 'artifact-name', owner, revision, 'amd64', image, '123', '1'], {encoding: 'utf8'});
+  assert.equal(printed, metadata.artifacts[0].name + '\n');
+});
 function nativeFixture(root) {
   const source = '/unit-only/source';
   for (const [prefix, args, status] of nativeInvocations(source, image, 'amd64', 1000, 1000)) commandFixture(root, prefix, 'docker', args, status);
@@ -365,6 +452,36 @@ test('source and native archives preserve complete originals without promoting t
   }
 });
 
+test('image-bound source assembly preserves mixed earlier original attempts and rejects a foreign image', t => {
+  const root = temporary(t); sourceFixture(root, context);
+  const second = 'source-dk-2-result.json', row = JSON.parse(readFileSync(join(root, second)));
+  put(root, second, {...row, run_attempt: '2'});
+  const originals = new Map(readdirSync(root).map(name => [name, readFileSync(join(root, name))]));
+  const output = join(temporary(t), 'source.tar');
+  const manifest = packEvidence(root, 'source-vv', output, {...context, run_attempt: '3'});
+  assert.equal(manifest.image_reference, image);
+  for (const [name, bytes] of originals) {
+    assert.deepEqual(readFileSync(join(root, name)), bytes);
+    assert.deepEqual(execFileSync('tar', ['-xOf', output, name]), bytes);
+  }
+  assert.equal(JSON.parse(execFileSync('tar', ['-xOf', output, second])).run_attempt, '2');
+  assert.equal(JSON.parse(execFileSync('tar', ['-xOf', output, 'source-source-result.json'])).run_attempt, '1');
+  for (const changed of [{image_reference: null}, {image_reference: image.replace('b'.repeat(64), 'c'.repeat(64))},
+    {run_attempt: '1'}, {run_id: '124'}, {architecture: 'arm64'}, {source_revision: 'f'.repeat(40)}]) {
+    assert.throws(() => captureEvidence(root, 'source-vv', {...context, run_attempt: '3', ...changed}));
+  }
+});
+
+test('source execution rejects a different prepared SDK image before it starts the original command', t => {
+  const root = new URL('../', import.meta.url).pathname, output = join(temporary(t), 'must-not-exist');
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
+  assert.throws(() => execFileSync(process.execPath, [new URL('./release-gate-evidence.mjs', import.meta.url).pathname,
+    'source-run', root, output, head, 'amd64', image, '123', '1', 'source'],
+  {env: {...process.env, PRISMPM_TEST_SDK_IMAGE: image.replace('b'.repeat(64), 'c'.repeat(64))}, stdio: 'pipe'}),
+  /source owner must execute against the selected immutable SDK/);
+  assert(!existsSync(output));
+});
+
 test('missing bootstrap, failed command, substituted bytes and wrong native invocation fail closed', t => {
   for (const [kind, fixture, binding, changes] of [
     ['source-vv', sourceFixture, sourceContext, [
@@ -432,26 +549,51 @@ test('original files reject symbolic links, hardlinks and parent aliases before 
 function workflowContract(value) {
   const source = value.jobs['source-vv'].steps.find(step => step.with?.runCmd);
   assert.equal(source.if, undefined); assert.equal(source['continue-on-error'], undefined);
-  assert.equal(source.with.runCmd, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
-    + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
+  assert(source.with.runCmd.startsWith('set -euo pipefail\n'));
+  assert(source.with.runCmd.includes('bash scripts/source-sdk-handoff.sh "$image"'));
+  assert(source.with.runCmd.includes('bash scripts/vv.sh --with-sdk node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence'));
+  assert(source.with.runCmd.includes("'${{ github.sha }}' amd64 \"$image\" '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'"));
+  assert(!source.with.runCmd.includes('||'));
+  assert.equal(value.jobs['source-vv'].name, 'source-vv-part-${{ matrix.part }}');
+  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'sdk-supply']);
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
   assert.equal(value.jobs['source-vv'].strategy['max-parallel'], 4);
   for (const [name, job] of Object.entries(value.jobs)) assert(job['timeout-minutes'] > 0 && job['timeout-minutes'] <= 360, `${name} is bounded by one hosted-job limit`);
-  const partUpload = value.jobs['source-vv'].steps.find(step => step.with?.name === 'source-vv-part-${{ matrix.part }}');
+  const partUpload = value.jobs['source-vv'].steps.find(step => step.with?.path === 'target/source-vv-evidence/');
+  assert.equal(partUpload.with.name, '${{ steps.evidence.outputs.name }}');
+  const sourceName = value.jobs['source-vv'].steps.find(step => step.id === 'evidence');
+  assert(sourceName.run.includes('artifact-name "source-vv-part-${{ matrix.part }}" "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"'));
   assert.equal(partUpload.if, 'always()'); assert.equal(partUpload.with['if-no-files-found'], 'error');
   assert.equal(partUpload.with.path, 'target/source-vv-evidence/');
-  assert.deepEqual(value.jobs.gate.needs, ['policy', 'source-vv']); assert.equal(value.jobs.gate.if, undefined);
+  assert.deepEqual(value.jobs.gate.needs, ['policy', 'sdk-supply', 'source-vv']); assert.equal(value.jobs.gate.if, undefined);
+  const selection = value.jobs.gate.steps.find(step => step.id === 'selection');
+  assert(selection.run.includes('scripts/release-artifact-metadata.mjs'));
+  assert(selection.run.includes('scripts/release-gate-evidence.mjs select-artifacts'));
+  assert(selection.run.includes('"$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"'));
+  assert(selection.run.includes("sed 's/[^[:space:]]\\+/source-vv-part-&/g'"));
+  assert.equal(selection.if, undefined); assert.equal(selection['continue-on-error'], undefined);
+  const download = value.jobs.gate.steps.find(step => step.with?.['artifact-ids']);
+  assert.deepEqual(download.with, {'artifact-ids': '${{ steps.selection.outputs.ids }}', 'merge-multiple': true, path: 'target/source-vv-evidence'});
+  assert(value.jobs.gate.steps.indexOf(selection) < value.jobs.gate.steps.indexOf(download));
   const assemble = value.jobs.gate.steps.find(step => step.run?.includes('release-gate-evidence.mjs source-assemble'));
   assert.equal(assemble.if, undefined); assert.equal(assemble['continue-on-error'], undefined); assert(!assemble.run.includes('||'));
-  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  assert(assemble.run.includes('amd64 "$(cat target/release-sdk/sdk-image.txt)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"'));
+  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.path === 'target/source-vv-evidence/');
+  assert.equal(sourceUpload.with.name, '${{ steps.evidence.outputs.name }}');
   assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   const native = value.jobs.native.steps.find(step => step.run?.includes('release-gate-evidence.mjs native'));
   assert.equal(native.if, undefined); assert.equal(native['continue-on-error'], undefined);
   assert(!native.run.includes('||'), 'native failure cannot be waived');
   assert(native.run.includes('node scripts/release-gate-evidence.mjs native . .native-equivalence "$GITHUB_SHA" \\\n  "${PLATFORM#linux/}" "$sdk_image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$archive"'));
-  const nativeUpload = value.jobs.native.steps.find(step => step.with?.name === 'sdk-equivalence-${{ matrix.arch }}');
+  assert.equal(value.jobs.native.name, 'sdk-equivalence-${{ matrix.arch }}');
+  const nativeName = value.jobs.native.steps.find(step => step.id === 'evidence');
+  assert(nativeName.run.includes('artifact-name "$owner" "$GITHUB_SHA"'));
+  assert(nativeName.run.includes('owner="sdk-equivalence-${{ matrix.arch }}"'));
+  assert(nativeName.run.includes('owner="native-${{ matrix.target }}"'));
+  const nativeUpload = value.jobs.native.steps.find(step => step.with?.path === '.native-equivalence/');
+  assert.equal(nativeUpload.with.name, '${{ steps.evidence.outputs.equivalence }}');
   assert.equal(nativeUpload.if, 'always()'); assert.equal(nativeUpload.with.path, '.native-equivalence/');
   assert.equal(nativeUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.native.strategy.matrix.include, [
@@ -465,12 +607,15 @@ test('actual workflow retains every source part and complete native failure orig
   for (const mutate of [
     v => {v.jobs['source-vv'].steps.find(s => s.with?.runCmd).with.runCmd = 'just vv\n';},
     v => {v.jobs['source-vv'].strategy.matrix.include.pop();},
-    v => {v.jobs['source-vv'].steps.find(s => s.with?.name === 'source-vv-part-${{ matrix.part }}').if = 'success()';},
+    v => {v.jobs['source-vv'].steps.find(s => s.with?.path === 'target/source-vv-evidence/').if = 'success()';},
     v => {v.jobs.gate.needs.pop();},
     v => {v.jobs.gate.steps.find(s => s.run?.includes('source-assemble')).run += ' || true';},
-    v => {v.jobs.gate.steps.find(s => s.with?.name === 'source-vv').if = 'always()';},
+    v => {v.jobs.gate.steps.find(s => s.with?.path === 'target/source-vv-evidence/').if = 'always()';},
+    v => {v.jobs.gate.steps.find(s => s.id === 'selection').run = 'echo unverified';},
+    v => {v.jobs.gate.steps.find(s => s.with?.['artifact-ids']).with = {pattern: 'source-vv-part-*', 'merge-multiple': true, path: 'target/source-vv-evidence'};},
+    v => {v.jobs['source-vv'].steps.find(s => s.id === 'evidence').run = 'echo static-name';},
     v => {v.jobs.native.steps.find(s => s.run?.includes('release-gate-evidence.mjs native')).run += ' || true';},
-    v => {v.jobs.native.steps.find(s => s.with?.name === 'sdk-equivalence-${{ matrix.arch }}').with.path = '.';},
+    v => {v.jobs.native.steps.find(s => s.with?.path === '.native-equivalence/').with.path = '.';},
     v => {v.jobs.native.strategy.matrix.include[1].arch = 'amd64';},
   ]) {
     const changed = structuredClone(value); mutate(changed);

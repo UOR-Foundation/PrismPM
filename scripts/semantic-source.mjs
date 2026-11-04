@@ -37,3 +37,11 @@ export function writeSemantic(source, value) {
 export function toNotation(source) {
   return tool('to-notation', text(source));
 }
+
+// Exact policies of the pinned source-owned runtime imported by bound Lean
+// output, including the complete transitive module import closure.
+export function runtimeAudit(generatedTexts) {
+  const texts = generatedTexts.map(source => typeof source === 'string' ? source
+    : new TextDecoder('utf-8', { fatal: true }).decode(source));
+  return JSON.parse(tool('runtime-audit', JSON.stringify(texts)));
+}
