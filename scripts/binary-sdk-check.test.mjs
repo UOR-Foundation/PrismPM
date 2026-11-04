@@ -6,7 +6,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,rmSync,rena
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,validateGenerationWorkflow,verifySource,sourceRoots,sourceAliases,cli,checkAccepted as checkWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence as rejectWithAuthority} from './binary-sdk-check.mjs';
+import {capture,validateGenerationWorkflow,validateHelperBootstrapWorkflow,verifySource,sourceRoots,sourceAliases,cli,checkAccepted as checkWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence as rejectWithAuthority} from './binary-sdk-check.mjs';
 import {inventory,parserFixture,sourceAuthorityFixture} from './binary-sdk-check-fixtures.mjs';
 const checkAccepted=(root,receipt)=>checkWithAuthority(root,receipt,sourceAuthorityFixture);
 const rejectChangedEvidence=(root,receipt,path)=>rejectWithAuthority(root,receipt,path,sourceAuthorityFixture);
@@ -186,21 +186,22 @@ test('release retains existing mandatory gates and adds binary on both native pl
    'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
   ]);
   const runs=[...value.matchAll(/^        run: \|\n((?:          [^\n]*\n)+)/gm)].map(match=>match[1]);
-  assert.equal(runs.length,4);
+  assert.equal(runs.length,7);
+  validateHelperBootstrapWorkflow(value);
   for(const [index,command] of [
    [0,'bash scripts/binary-sdk-format.sh "$SOURCE_REVISION" "$RUNNER_TEMP/binary-format-review"'],
-   [1,'test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"'],
-   [1,'test -z "$(git status --porcelain)"'],
-   [1,'bash -n scripts/binary-sdk-check.sh scripts/binary-sdk-qualify.sh'],
-   [1,'node scripts/binary-sdk-check.mjs tests'],
-   [1,'bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/binary-tools"'],
-   [2,'node scripts/sdk-image-inputs.mjs build . "$SOURCE_REVISION" runtime'],
-   [2,'--platform "linux/$ARCHITECTURE"'],
-   [2,'--label org.opencontainers.image.version=0.4.0'],
-   [2,'--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0'],
-   [3,'bash scripts/binary-sdk-qualify.sh'],
-   [3,'"$RUNNER_TEMP/binary-qualification/sdk.oci.tar" "$ARCHITECTURE" "$SOURCE_REVISION"'],
-   [3,'"$RUNNER_TEMP/binary-qualification/evidence"'],
+   [3,'test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"'],
+   [3,'test -z "$(git status --porcelain)"'],
+   [3,'bash -n scripts/binary-sdk-check.sh scripts/binary-sdk-qualify.sh'],
+   [3,'node scripts/binary-sdk-check.mjs tests'],
+   [3,'bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/binary-tools"'],
+   [4,'node scripts/sdk-image-inputs.mjs build . "$SOURCE_REVISION" runtime'],
+   [4,'--platform "linux/$ARCHITECTURE"'],
+   [4,'--label org.opencontainers.image.version=0.4.0'],
+   [4,'--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0'],
+   [5,'bash scripts/binary-sdk-qualify.sh'],
+   [5,'"$RUNNER_TEMP/binary-qualification/sdk.oci.tar" "$ARCHITECTURE" "$SOURCE_REVISION"'],
+   [5,'"$RUNNER_TEMP/binary-qualification/evidence"'],
   ])assert.ok(runs[index].includes(command),command);
   for(const run of runs)assert.ok(run.startsWith('          set -euo pipefail\n'));
   assert.doesNotMatch(value,/continue-on-error:|^    if:|^    concurrency:/m);

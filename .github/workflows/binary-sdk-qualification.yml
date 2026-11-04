@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/binary-sdk-qualification.yml'
       - 'scripts/binary-sdk-*'
+      - 'scripts/semantic-source*'
+      - 'rust-toolchain.toml'
       - 'crates/prismpm/**'
       - 'crates/conformance/**'
       - 'model/**'
@@ -80,6 +82,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           submodules: false
+      - name: Initialize source-bound prerequisite diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/binary-qualification/setup"
+          printf '%s\n' "$SOURCE_REVISION" > "$RUNNER_TEMP/binary-qualification/setup/selected-source.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/binary-qualification/setup/source-revision.txt"
+          git rev-parse HEAD^{tree} > "$RUNNER_TEMP/binary-qualification/setup/source-tree.txt"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.23.2
@@ -87,21 +97,33 @@ jobs:
         with:
           version: v0.28.0
           driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Build the same-source semantic helper before offline boundary tests
+        shell: bash
+        env:
+          CARGO_HOME: ${{ runner.temp }}/binary-helper-cargo
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          set -euo pipefail
+          bash scripts/semantic-source-bootstrap.sh "$SOURCE_REVISION" \
+            "$RUNNER_TEMP/binary-helper-target" "$RUNNER_TEMP/binary-qualification/setup"
       - name: Check exact source and all owning boundary tests
         shell: bash
+        env:
+          PRISMPM_SEMANTIC_SOURCE: ${{ runner.temp }}/binary-helper-target/debug/prismpm-semantic-source
+          CARGO_NET_OFFLINE: "true"
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
           test -z "$(git status --porcelain)"
           bash -n scripts/binary-sdk-check.sh scripts/binary-sdk-qualify.sh
-          node scripts/binary-sdk-check.mjs tests
+          trap 'status=$?; printf "%s\n" "$status" > "$RUNNER_TEMP/binary-qualification/setup/boundary-step-exit-status.txt"' EXIT
+          node scripts/binary-sdk-check.mjs tests > "$RUNNER_TEMP/binary-qualification/setup/boundary-tests.log" 2>&1
           bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/binary-tools"
           echo "$RUNNER_TEMP/binary-tools" >> "$GITHUB_PATH"
       - name: Build exact native SDK OCI bytes without publication
         shell: bash
         run: |
           set -euo pipefail
-          mkdir "$RUNNER_TEMP/binary-qualification"
           node scripts/sdk-image-inputs.mjs build . "$SOURCE_REVISION" runtime \
             --platform "linux/$ARCHITECTURE" \
             --output "type=oci,dest=$RUNNER_TEMP/binary-qualification/sdk.oci.tar,rewrite-timestamp=true" \
@@ -117,11 +139,24 @@ jobs:
           bash scripts/binary-sdk-qualify.sh \
             "$RUNNER_TEMP/binary-qualification/sdk.oci.tar" "$ARCHITECTURE" "$SOURCE_REVISION" \
             "$RUNNER_TEMP/binary-qualification/evidence"
+      - name: Retain prerequisite and SDK phase status
+        if: always()
+        shell: bash
+        env:
+          QUALIFICATION_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/binary-qualification/setup"
+          printf '%s\n' "$QUALIFICATION_STATUS" > "$RUNNER_TEMP/binary-qualification/setup/job-status.txt"
+          printf '%s\n' "$SOURCE_REVISION" > "$RUNNER_TEMP/binary-qualification/setup/selected-source.txt"
+          printf '%s\n' 'Diagnostic evidence only; setup success is not installed SDK acceptance.' > "$RUNNER_TEMP/binary-qualification/setup/DIAGNOSTIC-ONLY.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: binary-sdk-${{ matrix.architecture }}-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/binary-qualification/evidence/
+          path: |
+            ${{ runner.temp }}/binary-qualification/setup/
+            ${{ runner.temp }}/binary-qualification/evidence/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30

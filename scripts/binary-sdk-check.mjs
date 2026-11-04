@@ -14,6 +14,7 @@ export function verifyImage(value,image,architecture,revision){
 }
 
 export const sourceRoots=Object.freeze([...libraryRoots,
+ 'scripts/semantic-source-bootstrap.sh','scripts/semantic-source-bootstrap.test.mjs',
  'crates/prismpm/tests/binary_program.rs','crates/conformance/src/cases/binary_program.rs',
  'tests/fixtures/binary/binary-program/project','scripts/binary-sdk-check.mjs',
  'scripts/binary-sdk-check.sh','scripts/sdk-owned-session.sh','scripts/sdk-owned-session.test.mjs','scripts/binary-sdk-source-extract.py','scripts/binary-sdk-check.test.mjs',
@@ -174,7 +175,32 @@ export function verifyResult(value,image,sourceRevision,architecture,sourceSha25
  assert.match(image,imagePattern);revision(sourceRevision);assert.ok(['amd64','arm64'].includes(architecture));hex(sourceSha256);hex(inventorySha256);hex(value.build_id);hex(value.attestation_id);
  same(value,{schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:image,source_revision:sourceRevision,source_sha256:sourceSha256,inventory_sha256:inventorySha256,architecture,build_id:value.build_id,attestation_id:value.attestation_id,checks:completedChecks,unclaimed},'complete installed binary result');
 }
+export function validateHelperBootstrapWorkflow(workflow,generated=false){
+ const evidence=generated?'$RUNNER_TEMP/binary-helper-evidence':'$RUNNER_TEMP/binary-qualification/setup';
+ const bootstrap='      - name: Build the same-source semantic helper before offline boundary tests\n'+
+  '        shell: bash\n        env:\n'+
+  '          CARGO_HOME: ${{ runner.temp }}/binary-helper-cargo\n          CARGO_NET_OFFLINE: "true"\n'+
+  '        run: |\n          set -euo pipefail\n'+
+  '          bash scripts/semantic-source-bootstrap.sh "$SOURCE_REVISION" \\\n'+
+  '            "$RUNNER_TEMP/binary-helper-target" "'+evidence+'"\n';
+ assert.equal(workflow.split(bootstrap).length,2,'one unconditional same-source helper bootstrap');
+ const boundary='      - name: '+(generated?'Check all owning boundary tests before running any writer':'Check exact source and all owning boundary tests')+'\n'+
+  '        shell: bash\n        env:\n'+
+  '          PRISMPM_SEMANTIC_SOURCE: ${{ runner.temp }}/binary-helper-target/debug/prismpm-semantic-source\n'+
+  '          CARGO_NET_OFFLINE: "true"\n        run: |\n          set -euo pipefail\n';
+ assert.equal(workflow.split(boundary).length,2,'one offline owner bound to the built helper');
+ const prepared=workflow.indexOf(bootstrap),tests=workflow.indexOf(boundary),command=workflow.indexOf('          node scripts/binary-sdk-check.mjs tests > "'+evidence+'/boundary-tests.log" 2>&1');
+ const downstream=workflow.indexOf(generated?'      - name: Run the unchanged owning writers':'      - name: Build exact native SDK OCI bytes');
+ assert(prepared<tests&&tests<command&&command<downstream,'helper readiness precedes every owner and SDK/writer operation');
+ assert.doesNotMatch(workflow.slice(prepared,downstream),/^        if:|\|\| true|\bif false\b|\bset \+e\b/m,'fail-closed host prerequisite');
+ if(!generated){
+  assert.ok(workflow.indexOf('      - name: Initialize source-bound prerequisite diagnostics')<prepared,'diagnostics exist before acquisition');
+  assert.ok(workflow.includes('      - name: Retain prerequisite and SDK phase status\n        if: always()'),'failed prerequisites retain status');
+ }
+ assert.ok(workflow.includes('            ${{ runner.temp }}/'+(generated?'binary-helper-evidence/':'binary-qualification/setup/')),'upload host prerequisite logs on failure');
+}
 export function validateGenerationWorkflow(workflow){
+ validateHelperBootstrapWorkflow(workflow,true);
  for(const required of [
   'branches: [work/binary-generated-review]','  workflow_dispatch:',
   '  contents: read','    runs-on: ubuntu-24.04','          ref: ${{ github.sha }}',
@@ -232,7 +258,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  }
  else if(mode==='format-image'&&args.length===2){const value=JSON.parse(readFileSync(args[0]));assert.equal(args[1],'ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21');verifySharedImage(value,args[1],'amd64',value[0]?.Config?.Labels?.['org.opencontainers.image.revision'],'0.3.0');}
  else if(mode==='format-evidence'&&args.length===3){const [directory,sourceRevision,image]=args;revision(sourceRevision);assert.match(image,imagePattern);const inventory=regularBytes(join(directory,'inventory.json'));validateInventory(inventory);const patch=regularBytes(join(directory,'format.patch')),paths=regularBytes(join(directory,'changed-paths.txt')).toString().trim().split('\n').filter(Boolean);assert.ok(paths.every(path=>!path.startsWith('/')&&!path.split('/').some(part=>['','..','.'].includes(part))&&/^(?:crates\/[^/]+\/|xtask\/).+\.rs$/.test(path)),'formatter changed non-owned Rust source');assert.equal(patch.length===0,paths.length===0);writeFileSync(join(directory,'format-result.json'),canonical({schema:'prismpm/source-format-review/1',scope:'source-format-only',source_revision:sourceRevision,sdk_image:image,inventory_sha256:hash(inventory),patch_sha256:hash(patch),formatter_log_sha256:hash(regularBytes(join(directory,'formatter.log'))),changed_paths:paths,status:patch.length?'review-required':'passed',unclaimed:['compilation','proof-verification','binary-package-acceptance','sdk-release','deployment']}));}
- else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-format-shell.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);const ownership=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/sdk-owned-session.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(ownership.stdout??'');process.stderr.write(ownership.stderr??'');assert.equal(ownership.error,undefined);assert.equal(ownership.signal,null);assert.equal(ownership.status,0);assert.equal(verifyTap(ownership.stdout,19),19,'complete additional owned-retirement controls');}
+ else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-format-shell.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);const ownership=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/sdk-owned-session.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(ownership.stdout??'');process.stderr.write(ownership.stderr??'');assert.equal(ownership.error,undefined);assert.equal(ownership.signal,null);assert.equal(ownership.status,0);assert.equal(verifyTap(ownership.stdout,19),19,'complete additional owned-retirement controls');const bootstrap=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-timeout=120000','scripts/semantic-source-bootstrap.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(bootstrap.stdout??'');process.stderr.write(bootstrap.stderr??'');assert.equal(bootstrap.error,undefined);assert.equal(bootstrap.signal,null);assert.equal(bootstrap.status,0);assert.equal(verifyTap(bootstrap.stdout,4),4,'complete separate host-helper prerequisite controls');}
  else if(mode==='run'&&args.length===4)console.log(canonical(run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),...args)));
  else throw Error('closed installed binary gate command');
 }
