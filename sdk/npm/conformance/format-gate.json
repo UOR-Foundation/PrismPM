@@ -58,6 +58,10 @@
     {
       "files": ["sdk/npm/spec/schemas/documents/sdk-lock-v3.schema.json"],
       "reason": "prismpm.lock is a project file and is never written into a holo; the optional authoring record (#325) changes no holo byte."
+    },
+    {
+      "files": ["crates/prismpm/src/holo/model_document.rs"],
+      "reason": "BinaryProgram adds package-only model-document/7 and uses the separate Binary generator; it is not emitted as a .holo application. Existing application model-document /1, /2, /5 and /6 schemas, the .holo writer, and npm format revisions/readers are unchanged. The new program field is omitted for existing applications, and relocated DTOs retain their serde shapes. Recomputed provenance/emitter identities use the existing encoding and do not change the .holo format."
     }
   ]
 }
