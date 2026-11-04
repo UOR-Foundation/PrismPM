@@ -584,13 +584,18 @@ async function keyboardOnlyProbe(source) {
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#field-message').inputValue(), example.values[0], 'the keyboard-loaded example must fill the guided field');
     await page.locator('#field-message').focus();
+    await page.keyboard.press('Control+A');
     await page.keyboard.type('keyboard input');
+    // Enter inserts a line in the modeled multiline field; Tab reaches Compute.
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#guided-submit').evaluate(node => node === document.activeElement), true, 'Tab must reach the compute control');
     await page.keyboard.press('Enter');
     await expectCell(page, 'KEYBOARD INPUT', 3000);
     await page.locator('#raw-editor > summary').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#raw-editor').evaluate(node => node.open), true, 'Enter must open the raw disclosure');
     await page.locator('#request').focus();
+    await page.keyboard.press('Control+A');
     await page.keyboard.type('raw keyboard');
     await page.keyboard.press('Control+Enter');
     await expectCell(page, 'RAW KEYBOARD', 3000);
@@ -625,8 +630,69 @@ async function focusRetainedProbe(source) {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'guided-submit', 'focus must remain on the submit control after the report renders');
   }, {source});
 }
+// Hold the actual intent response until focus and duplicate-submit assertions
+// finish. Rendering opportunities make native-disabled blur observable without
+// relying on a fast worker response or an arbitrary sleep.
+async function busyFocusProbe(source, rawMode=false, moveFocus=false) {
+  let releaseResponse, receivedRequest;
+  const held=new Promise(resolve=>{releaseResponse=resolve;});
+  const received=new Promise(resolve=>{receivedRequest=resolve;});
+  const view=viewData();view.execution.timeout_milliseconds=10000;
+  await withPage(async ({page,invocations}) => {
+    try {
+      await enabled(page);
+      if(rawMode)await page.locator('#raw-editor').evaluate(node=>{node.open=true;});
+      await page.locator(rawMode?'#request':'#field-message').fill('focus input');
+      await page.evaluate(()=>{
+        window.__intentFetches=0;const fetch=window.fetch;
+        window.fetch=function(input,...rest){if(input==='/_hologram/intent')window.__intentFetches++;return fetch.call(this,input,...rest);};
+      });
+      const id=rawMode?'submit':'guided-submit';
+      await page.locator('#'+id).focus();await page.keyboard.press('Enter');
+      let receiptTimer;
+      try {
+        await Promise.race([received,new Promise((_,reject)=>{
+          receiptTimer=setTimeout(()=>reject(new Error('intent request did not reach the fixture')),5000);
+        })]);
+      } finally {clearTimeout(receiptTimer);}
+      await state(page,'running');
+      const render=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await render();
+      assert.equal(await page.evaluate(()=>document.activeElement?.id),id,'busy computation must preserve submit focus');
+      for(const selector of ['#guided-submit','#submit']) {
+        assert.equal(await page.locator(selector).evaluate(node=>node.disabled),false,'busy submit remains natively focusable');
+        assert.equal(await page.locator(selector).getAttribute('aria-disabled'),'true');
+      }
+      for(const selector of ['#guided-form','#application-form','#result-table-region'])
+        assert.equal(await page.locator(selector).getAttribute('aria-busy'),'true');
+      await page.keyboard.press('Enter');await render();
+      assert.equal(await page.evaluate(()=>window.__intentFetches),1,'repeated keyboard submission must not dispatch another intent');
+      assert.equal(invocations.length,1);
+      if(moveFocus)await page.locator('#operation').focus();
+      releaseResponse();await expectCell(page,'FOCUS INPUT',3000);await state(page,'ready');
+      assert.equal(await page.evaluate(()=>document.activeElement?.id),moveFocus?'operation':id,
+        'completion must preserve the current focus, including intentional navigation');
+      for(const selector of ['#guided-submit','#submit']) {
+        assert.equal(await page.locator(selector).evaluate(node=>node.disabled),false);
+        assert.equal(await page.locator(selector).getAttribute('aria-disabled'),null);
+      }
+      for(const selector of ['#guided-form','#application-form','#result-table-region'])
+        assert.equal(await page.locator(selector).getAttribute('aria-busy'),null);
+      assert.equal(await page.evaluate(()=>window.__intentFetches),1);
+      assert.equal(invocations.length,1);
+    } finally {releaseResponse();}
+  },{source,view,transport:'hologram',hologram:async(invocation,response)=>{
+    receivedRequest();await held;
+    response.end(JSON.stringify({version:1,outputs:[JSON.stringify(intentReply(invocation,'FOCUS INPUT'))]}));
+  }});
+}
 test('text_v3_workbench focus stays on the submit control after rendering', async () => {
   await focusRetainedProbe(template);
+  for(const rawMode of [false,true])for(const moveFocus of [false,true])
+    await busyFocusProbe(template,rawMode,moveFocus);
+  const disabled=template.replace('compute.disabled=submit.disabled=!ready;', 'compute.disabled=submit.disabled=!ready||busy;');
+  assert.notEqual(disabled,template);
+  await assert.rejects(busyFocusProbe(disabled),error=>error instanceof assert.AssertionError);
   const broken = template.replace("if(answer.status==='error'){", "byId('operation').focus();if(answer.status==='error'){");
   assert.notEqual(broken, template);
   await assert.rejects(focusRetainedProbe(broken), error => error instanceof assert.AssertionError);
@@ -676,9 +742,10 @@ async function forcedColorsProbe(source, style) {
       };
       const colors = {canvas:system('Canvas'), canvasText:system('CanvasText'), field:system('Field'),
         fieldText:system('FieldText'), grayText:system('GrayText'), linkText:system('LinkText'), highlight:system('Highlight')};
-      const read = (node, disabled) => {
+      const read = (node, disabled, ariaDisabled = false) => {
         const copy = node.cloneNode(true); copy.removeAttribute('id');
         if (disabled !== undefined) copy.disabled = disabled;
+        if (ariaDisabled) copy.setAttribute('aria-disabled', 'true');
         copy.style.forcedColorAdjust = 'none';
         node.parentNode.append(copy);
         const computed = getComputedStyle(copy);
@@ -689,6 +756,7 @@ async function forcedColorsProbe(source, style) {
       return {colors,
         controls:[...document.querySelectorAll('button,input,textarea,select,a')].filter(node => !node.hidden).map(node => read(node)),
         status:read(document.querySelector('#status')), disabled:read(document.querySelector('#submit'), true),
+        busy:read(document.querySelector('#submit'), false, true),
         header:read(document.querySelector('.site-header')), panel:read(document.querySelector('.panel'))};
     });
     const {colors} = observed;
@@ -703,6 +771,7 @@ async function forcedColorsProbe(source, style) {
       assert.equal(control.borderTopColor, border, 'every control border must use its system color when forced');
     }
     assert.deepEqual(observed.disabled, {tag:'BUTTON', disabled:true, color:colors.grayText, backgroundColor:colors.canvas, borderTopColor:colors.grayText, borderBottomColor:colors.grayText}, 'the disabled submit must use GrayText when forced');
+    assert.deepEqual(observed.busy, {tag:'BUTTON', disabled:false, color:colors.grayText, backgroundColor:colors.canvas, borderTopColor:colors.grayText, borderBottomColor:colors.grayText}, 'the focusable busy submit must retain inactive system colors');
     assert.equal(observed.header.borderBottomColor, colors.canvasText, 'the header border must use CanvasText when forced');
     assert.equal(observed.panel.backgroundColor, colors.canvas, 'the panel background must use Canvas when forced');
     assert.equal(observed.panel.borderTopColor, colors.canvasText, 'the panel border must use CanvasText when forced');
@@ -714,6 +783,9 @@ async function forcedColorsProbe(source, style) {
 }
 test('text_v3_workbench forced-colors palette colors controls and the focus ring', async () => {
   await forcedColorsProbe(template, styleSource);
+  const busy = styleSource.replace('button:disabled,button[aria-disabled="true"]{background:Canvas', 'button:disabled{background:Canvas');
+  assert.notEqual(busy, styleSource);
+  await assert.rejects(forcedColorsProbe(template, busy), error => error instanceof assert.AssertionError);
   const broken = styleSource.replace(/\/\* forced-colors[\s\S]*$/, '');
   assert.notEqual(broken, styleSource);
   await assert.rejects(forcedColorsProbe(template, broken), error => error instanceof assert.AssertionError);

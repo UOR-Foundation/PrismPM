@@ -3687,3 +3687,26 @@ applicable downstream acceptance remain required. Issues #62 and #194, the
 original #186 qualification obligations, main integration and release approval
 remain open. The existing unpublished-SDK TLS bridge is retained without
 absorbing #193 or transferring its historical diagnostic results.
+
+### Reviewed public-source union
+
+The integration lineage now also preserves the already-public workbench source
+head `062d806e645f17636d803b0279b715f7696ca94e`, without changing that branch or
+the release branch. The only authored merge conflict was the emitter register:
+all 33 required inputs remain, and their union digest is
+`4176ad4e1488872ec0207d8f8f53df6b2e6d6fe7235a3d5410aa3fa57d31f9a4`.
+Genuine controller and threat-model owners independently observed application
+identity `3f579f239312ed1e2c15e1e4eace4869d8acd9c333218943d131815c10c3c0ce`;
+only their four authored bindings and the controller fixture comment changed.
+Expected outcomes and artifact declarations remain unchanged.
+
+Independent source review verified both feature deltas, `/1` preservation and
+the exact published workbench bytes. Nine source/contract tests, strict Clippy
+and formatting passed during union preparation. The five inherited shared
+golden files retain the public source head's original bytes and qualification
+scope; no native golden path changed. They do not qualify the combined emitter.
+Fresh union fixture, browser and DK-36 owner execution, the eventual authorized
+source correction, a single coordinated shared producer, independent generated
+review and all original native/installed/full-V&V/downstream obligations remain
+required. No producer, release rehearsal or new streaming profile is authorized
+by this source merge alone.

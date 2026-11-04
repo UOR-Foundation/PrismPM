@@ -111,7 +111,7 @@ export function mount(root=document.body) {
   let active=VIEW.operations.find(item=>item.id===VIEW.initial_operation),busy=false,ready=false,engineFailed=false,worker=null,controller=null,epoch=0,generation=0,timer=null,pending=null,last=null,bootAfter=null;
   const fieldNodes=new Map();
   const setStatus=key=>{status.textContent=VIEW.statuses[key];status.dataset.state=key;};
-  const updateControls=()=>{compute.disabled=submit.disabled=!ready||busy;cancel.hidden=!busy;for(const node of [form,rawForm,tableRegion]){if(busy)node.setAttribute('aria-busy','true');else node.removeAttribute('aria-busy');}};
+  const updateControls=()=>{compute.disabled=submit.disabled=!ready;for(const node of [compute,submit]){if(busy)node.setAttribute('aria-disabled','true');else node.removeAttribute('aria-disabled');}cancel.hidden=!busy;for(const node of [form,rawForm,tableRegion]){if(busy)node.setAttribute('aria-busy','true');else node.removeAttribute('aria-busy');}};
   const clearErrors=()=>{byId('result-error').replaceChildren();byId('result-error').hidden=true;for(const [id,node]of fieldNodes){node.removeAttribute('aria-invalid');node.setAttribute('aria-describedby','field-'+id+'-help');}request.removeAttribute('aria-invalid');request.setAttribute('aria-describedby','raw-help');};
   const clearOutput=()=>{clearErrors();byId('result').textContent='';byId('result-request').textContent='';byId('result-message').textContent='';shape.hidden=true;byId('result-rows').textContent='';byId('result-columns').textContent='';byId('result-empty').hidden=false;table.replaceChildren();tableRegion.hidden=true;details.replaceChildren();byId('details-heading').hidden=true;};
   const clearTimer=()=>{if(timer!==null){clearTimeout(timer);timer=null;}};
