@@ -687,7 +687,7 @@ pub fn run_at(root: &Path, id: &str) {
             8,
             "3600000",
         ),
-        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 43, "120000"),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 38, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
@@ -4257,7 +4257,7 @@ mod node_suite_tests {
             );
         }
         let owning_source = include_str!("mod.rs");
-        assert!(owning_source.lines().any(|line| line.trim() == "\"DK-29\" => verify_node_suite(root, id, &[\"sdk/exporter-seed.test.mjs\"], 43, \"120000\"),"));
+        assert!(owning_source.lines().any(|line| line.trim() == "\"DK-29\" => verify_node_suite(root, id, &[\"sdk/exporter-seed.test.mjs\"], 38, \"120000\"),"));
     }
 
     #[test]
