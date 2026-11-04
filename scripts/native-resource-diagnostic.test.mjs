@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
-import {cpSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {cpSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import test from 'node:test';
-import {admitDiagnosticPlan, diagnosticPolicy, diagnosticRef, diagnosticScope, diagnosticProductionPlan, productionRecord,
+import {admitDiagnosticPlan, diagnosticPolicy, diagnosticRef, diagnosticPushPrefix, diagnosticScope, diagnosticProductionPlan, productionRecord,
   diagnosticArchive, expectedDiagnosticSubject, productionArtifactName, selectDiagnosticProduction} from './native-resource-diagnostic.mjs';
+import {diagnosticInitialAncestor} from './native-resource-ancestry.mjs';
 
 const {load} = createRequire('/opt/prismpm/oracles/package.json')('js-yaml');
 const workflow = () => load(readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
@@ -22,6 +23,15 @@ test('resource observer pure refusal and custody units pass without privileged w
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 function temporary(t) {const root = mkdtempSync(join(tmpdir(), 'native-resource-unit-')); t.after(() => rmSync(root, {recursive: true, force: true})); return root;}
+function pushed(t) {
+  const root = temporary(t), path = join(root, 'event.json');
+  const event = {ref: diagnosticPushPrefix + revision, before: '0'.repeat(40), after: revision,
+    head_commit: {id: revision}, created: true, deleted: false, forced: false,
+    repository: {full_name: 'UOR-Foundation/PrismPM', fork: false}};
+  const env = {...environment(), GITHUB_EVENT_NAME: 'push', GITHUB_REF: event.ref, GITHUB_EVENT_PATH: path,
+    DIAGNOSTIC_SOURCE: '', DISPATCH_VERSION: '', REHEARSAL: 'null', PUBLISH_CRATES: 'null'};
+  const put = () => writeFileSync(path, JSON.stringify(event)); put(); return {root, path, event, env, put};
+}
 function layout(root, arch, marker = 'same') {
   mkdirSync(join(root, 'blobs/sha256'), {recursive: true});
   const put = (value, mediaType) => {const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value)); const digest = sha(bytes); writeFileSync(join(root, 'blobs/sha256', digest.slice(7)), bytes); return {digest, size: bytes.length, mediaType};};
@@ -56,6 +66,65 @@ test('every native owner requires the original source-bound policy and inherited
     const changed = structuredClone(p); mutate(changed);
     assert.throws(() => admitDiagnosticPlan(changed, revision, p.work_end_ms, p.whole_end_ms, environment()));
   }
+});
+test('create-only diagnostic push binds full ref, event head, source and workflow under unchanged ceilings', t => {
+  const f = pushed(t), p = diagnosticPolicy(f.env, 1000), dispatched = diagnosticPolicy(environment(), 1000);
+  assert.deepEqual(p.trigger, {event: 'push', ref: f.event.ref, source_revision: revision,
+    before: '0'.repeat(40), after: revision, head_commit: revision, created: true, deleted: false,
+    forced: false, ancestor_proof: null});
+  delete p.trigger; delete dispatched.trigger; assert.deepEqual(p, dispatched);
+  // Push mode has no dispatch inputs: it fixes unpublished behavior only after
+  // validating the original push, rather than treating absent input as release.
+  assert.equal(diagnosticPolicy({...f.env, PUBLISH_CRATES: 'true', REHEARSAL: 'false'}, 1000).scope, diagnosticScope);
+});
+test('pinned fast-forward verifies the actual local commit ancestry independently of its event', t => {
+  const f = pushed(t), result = spawnSync('/usr/bin/git', ['rev-parse', 'HEAD'], {encoding: 'utf8', timeout: 10000});
+  assert.equal(result.status, 0); const head = result.stdout.trim();
+  f.env.GITHUB_SHA = head; f.env.GITHUB_WORKFLOW_SHA = head; f.env.GITHUB_REF = diagnosticPushPrefix + head;
+  Object.assign(f.event, {ref: f.env.GITHUB_REF, before: diagnosticInitialAncestor, after: head,
+    head_commit: {id: head}, created: false}); f.put();
+  const p = diagnosticPolicy(f.env, 1000);
+  assert.deepEqual(p.trigger.ancestor_proof, {before: diagnosticInitialAncestor, after: head, strict_ancestor: true});
+  assert.equal(p.trigger.created, false); assert.equal(p.maximum_native_runners, 2);
+  for (const change of [{before: 'b'.repeat(40)}, {before: '0'.repeat(40)}, {created: true},
+    {forced: true}, {deleted: true}, {repository: {full_name: 'UOR-Foundation/PrismPM', fork: true}}]) {
+    const prior = structuredClone(f.event); Object.assign(f.event, change); f.put();
+    assert.throws(() => diagnosticPolicy(f.env)); Object.assign(f.event, prior); f.put();
+  }
+});
+test('diagnostic push refuses every foreign, partial, stale or non-create identity', t => {
+  for (const change of [{GITHUB_SHA: 'b'.repeat(40)}, {GITHUB_WORKFLOW_SHA: 'b'.repeat(40)},
+    {GITHUB_REPOSITORY: 'foreign/PrismPM'}, {GITHUB_REF: diagnosticRef},
+    {GITHUB_REF: 'refs/heads/main'}, {GITHUB_REF: 'refs/heads/release/v0.4'},
+    {GITHUB_REF: 'refs/heads/RESOURCE-DIAGNOSTIC/' + revision},
+    {GITHUB_REF: 'refs/tags/resource-diagnostic/' + revision}, {GITHUB_REF: 'refs/tags/v0.4.0'},
+    ...[revision.slice(0, 39), revision + 'a', revision.toUpperCase(), revision + '/extra', 'latest']
+      .map(suffix => ({GITHUB_REF: diagnosticPushPrefix + suffix})),
+    ...['pull_request', 'workflow_run', 'create', 'repository_dispatch'].map(name => ({GITHUB_EVENT_NAME: name}))]) {
+    const f = pushed(t); assert.throws(() => diagnosticPolicy({...f.env, ...change}));
+  }
+  for (const mutate of [e => e.ref = diagnosticPushPrefix + 'b'.repeat(40), e => e.after = 'b'.repeat(40),
+    e => e.head_commit.id = 'b'.repeat(40), e => delete e.head_commit, e => e.head_commit = null,
+    e => e.head_commit = {}, e => e.head_commit = 'invented', e => e.repository.full_name = 'foreign/PrismPM',
+    e => e.repository.fork = true, e => delete e.repository.fork,
+    e => e.created = false, e => e.deleted = true, e => e.forced = true, e => e.before = '1'.repeat(40),
+    e => e.created = 'true', e => delete e.deleted]) {
+    const f = pushed(t); mutate(f.event); f.put(); assert.throws(() => diagnosticPolicy(f.env));
+  }
+});
+test('push event must remain a bounded original file and is rechecked by native admission', t => {
+  for (const change of [f => rmSync(f.path), f => writeFileSync(f.path, '{malformed'),
+    f => truncateSync(f.path, 32 * 1024 ** 2 + 1),
+    f => {const target = join(f.root, 'other'); writeFileSync(target, readFileSync(f.path)); rmSync(f.path); symlinkSync(target, f.path);},
+    f => linkSync(f.path, join(f.root, 'hardlink'))]) {
+    const f = pushed(t); change(f); assert.throws(() => diagnosticPolicy(f.env));
+  }
+  const f = pushed(t), now = Date.now(), p = {...diagnosticPolicy(f.env, now),
+    workflow_sha256: sha(readFileSync(new URL('../.github/workflows/release.yml', import.meta.url))),
+    policy_helper_sha256: sha(readFileSync(new URL('./native-resource-diagnostic.mjs', import.meta.url)))};
+  assert.deepEqual(admitDiagnosticPlan(p, revision, p.work_end_ms, p.whole_end_ms, f.env), p);
+  f.event.head_commit.id = 'b'.repeat(40); f.put();
+  assert.throws(() => admitDiagnosticPlan(p, revision, p.work_end_ms, p.whole_end_ms, f.env));
 });
 test('P constructs only runtime and archive with a fresh builder and local outputs', () => {
   const p = diagnosticProductionPlan(revision, 'amd64', 'owned-diagnostic', '/tmp/diagnostic-exports');
@@ -114,12 +183,13 @@ test('only successful current-attempt exact diagnostic owners supply the subject
 });
 function isolation(w) {
   const jobs = w.jobs, diagnostics = ['diagnostic-policy', 'diagnostic-production', 'diagnostic-pair'];
-  assert.equal(jobs.policy.if, "${{ inputs.resource-diagnostic-source == '' }}");
-  assert.equal(jobs['diagnostic-policy'].if, "${{ inputs.resource-diagnostic-source != '' }}");
+  const diagnosticGuard = "${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}";
+  assert.equal(jobs.policy.if, "${{ inputs.resource-diagnostic-source == '' && !startsWith(github.ref, 'refs/heads/resource-diagnostic/') }}");
+  assert.equal(jobs['diagnostic-policy'].if, diagnosticGuard);
   function reachesPolicy(name, seen = new Set()) {assert(!seen.has(name)); if (name === 'policy') return true; const needs = jobs[name]?.needs; assert(needs); return (typeof needs === 'string' ? [needs] : needs).some(n => reachesPolicy(n, new Set([...seen, name])));}
   for (const name of Object.keys(jobs).filter(n => !diagnostics.includes(n))) {assert(!/always\(|failure\(|cancelled\(/.test(jobs[name].if ?? '')); assert(reachesPolicy(name));}
   for (const [name, needs] of [['diagnostic-production', 'diagnostic-policy'], ['diagnostic-pair', ['diagnostic-policy', 'diagnostic-production']]]) {
-    const job = jobs[name]; assert.deepEqual(job.needs, needs); assert.equal(job.if, "${{ inputs.resource-diagnostic-source != '' }}");
+    const job = jobs[name]; assert.deepEqual(job.needs, needs); assert.equal(job.if, diagnosticGuard);
     assert.equal(job['timeout-minutes'], 360); assert.equal(job.strategy['max-parallel'], 2); assert.equal(job.strategy['fail-fast'], false);
     assert.deepEqual(job.strategy.matrix.include, [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}]);
     assert.deepEqual(job.permissions, name === 'diagnostic-pair' ? {contents: 'read', actions: 'read'} : {contents: 'read'});
@@ -128,6 +198,92 @@ function isolation(w) {
     for (const step of job.steps) {assert(!/login-action|attest|gh-release|cargo.*publish/.test(step.uses ?? '')); assert(!/--push|docker (?:image )?push|oras (?:manifest )?push|publish-oci|cosign sign|gh release|cargo publish|--cache-from|--cache-to/.test(step.run ?? ''));}
   }
 }
+function diagnosticNodePrerequisite(w) {
+  isolation(w);
+  const policy = w.jobs['diagnostic-policy'], steps = policy.steps;
+  assert.equal(policy['runs-on'], 'ubuntu-24.04');
+  assert.equal(policy['timeout-minutes'], 10);
+  assert.deepEqual(policy.permissions, {contents: 'read'});
+  const matching = predicate => {
+    const found = steps.map((step, index) => ({step, index})).filter(({step}) => predicate(step));
+    assert.equal(found.length, 1, 'one exact diagnostic prerequisite/contract owner required');
+    return found[0];
+  };
+  const node = matching(step => step.uses?.startsWith('actions/setup-node@'));
+  assert.equal(node.step.uses, 'actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38');
+  assert.equal(node.step.with['node-version'], '22.23.2');
+  const plan = matching(step => step.id === 'plan');
+  assert.match(plan.step.run, /^\s*node scripts\/native-resource-diagnostic\.mjs policy >> "\$GITHUB_OUTPUT"\s*$/m);
+  const bootstrap = matching(step => step.name === 'Prepare exact source-owned Node oracles before diagnostic contracts');
+  const bootstrapLines = [
+    'set -euo pipefail',
+    'bash scripts/source-oracles-bootstrap.sh "$GITHUB_SHA" "$RUNNER_TEMP/diagnostic-node-oracles" "$RUNNER_TEMP/diagnostic-node-evidence"',
+    'node_path=$(cat "$RUNNER_TEMP/diagnostic-node-evidence/node-oracles-path.txt")',
+    'test "$node_path" = "$RUNNER_TEMP/diagnostic-node-oracles/node_modules"',
+    String.raw`printf 'NODE_PATH=%s\n' "$node_path" >> "$GITHUB_ENV"`,
+  ];
+  assert.deepEqual(bootstrap.step.run.replace(/\\\r?\n[ \t]*/g, '').trim().split('\n').map(line => line.trim()), bootstrapLines,
+    'diagnostic Node setup must conserve the source and export only its exact private modules');
+  const contracts = matching(step => step.run?.includes('node --test'));
+  const command = contracts.step.run.trim().split(/\s+/);
+  assert.deepEqual(command.slice(0, 2), ['node', '--test']);
+  assert.deepEqual(command.slice(2).sort(), ['scripts/native-resource-ancestry.test.mjs',
+    'scripts/native-resource-command.test.mjs', 'scripts/native-resource-diagnostic.test.mjs',
+    'scripts/native-resource-driver.test.mjs'], 'all original diagnostic contracts and ancestry must run without skips');
+  assert(node.index < plan.index && plan.index < bootstrap.index && bootstrap.index < contracts.index,
+    'pinned Node and source admission must precede dependency acquisition and every contract');
+  const upload = matching(step => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.equal(upload.step.uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+  assert.equal(upload.step.if, 'always()');
+  assert.equal(upload.step.with.path, '${{ runner.temp }}/diagnostic-node-evidence/');
+  assert.equal(upload.step.with['if-no-files-found'], 'error');
+  assert(bootstrap.index < upload.index, 'retain the original prerequisite diagnostics');
+  for (const {step} of [node, plan, bootstrap, contracts]) {
+    assert.equal(step.if, undefined, 'prerequisite and contracts must use normal success gating');
+    assert.equal(step['continue-on-error'], undefined, 'prerequisite and contract failures must stop policy');
+  }
+  for (const step of steps) {
+    assert(!/rustup|\bcargo\b|semantic-source-bootstrap/.test(step.run ?? ''), 'diagnostic policy needs Node only');
+    assert.equal(step.env?.NODE_PATH, undefined, 'do not override the validated private Node dependency path');
+    assert.equal(step.env?.NODE_OPTIONS, undefined, 'do not inject diagnostic Node behavior');
+  }
+}
+test('diagnostic policy prepares locked source-owned Node dependencies before every original contract', () => {
+  diagnosticNodePrerequisite(workflow());
+});
+test('diagnostic Node prerequisite contract refuses omission, widening, bypass and reordered acquisition', () => {
+  const named = w => w.jobs['diagnostic-policy'].steps.find(step => step.name === 'Prepare exact source-owned Node oracles before diagnostic contracts');
+  const contracts = w => w.jobs['diagnostic-policy'].steps.find(step => step.run?.includes('node --test'));
+  for (const mutate of [
+    w => w.jobs['diagnostic-policy'].steps.find(step => step.uses?.startsWith('actions/setup-node@')).with['node-version'] = '22',
+    w => w.jobs['diagnostic-policy'].steps.find(step => step.uses?.startsWith('actions/setup-node@')).uses = 'actions/setup-node@main',
+    w => {const steps = w.jobs['diagnostic-policy'].steps, index = steps.findIndex(step => step.id === 'plan');
+      const bootstrap = steps.splice(steps.findIndex(step => step === named(w)), 1)[0]; steps.splice(index, 0, bootstrap);},
+    w => {const steps = w.jobs['diagnostic-policy'].steps, index = steps.findIndex(step => step === contracts(w));
+      const node = steps.splice(steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')), 1)[0]; steps.splice(index, 0, node);},
+    w => named(w).run = named(w).run.replace('"$GITHUB_SHA"', '"$OTHER_SHA"'),
+    w => named(w).run = named(w).run.replaceAll('diagnostic-node-oracles', 'node_modules'),
+    w => named(w).run = named(w).run.replace('test "$node_path" = "$RUNNER_TEMP/diagnostic-node-oracles/node_modules"', ':'),
+    w => named(w).run = named(w).run.replace('node-oracles-path.txt', 'package-lock.json'),
+    w => named(w).run = named(w).run.replace('"$node_path" >> "$GITHUB_ENV"', '"/opt/prismpm/oracles/node_modules" >> "$GITHUB_ENV"'),
+    w => named(w).run = named(w).run.replace('set -euo pipefail', 'set +e'),
+    w => named(w)['continue-on-error'] = true,
+    w => named(w).if = 'always()',
+    w => named(w).run += '\nrustup run 1.97.1 cargo build\n',
+    w => {w.jobs['diagnostic-policy'].steps = w.jobs['diagnostic-policy'].steps.filter(step => step !== named(w));},
+    w => contracts(w).run = contracts(w).run.replace('scripts/native-resource-driver.test.mjs', ''),
+    w => contracts(w).run = contracts(w).run.replace('scripts/native-resource-ancestry.test.mjs', ''),
+    w => contracts(w).run = contracts(w).run.replace('node --test', 'node --test --test-skip-pattern=resource'),
+    w => contracts(w).run += ' || true',
+    w => contracts(w)['continue-on-error'] = true,
+    w => contracts(w).env = {NODE_PATH: '/opt/prismpm/oracles/node_modules'},
+    w => w.jobs['diagnostic-policy'].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).if = 'success()',
+    w => w.jobs['diagnostic-policy'].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).with['if-no-files-found'] = 'warn',
+    w => w.jobs['diagnostic-policy'].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).with.path = '${{ runner.temp }}/other-evidence/',
+  ]) {
+    const w = workflow(); mutate(w); assert.throws(() => diagnosticNodePrerequisite(w));
+  }
+});
 test('diagnostic dispatch cannot enter ordinary release or publication owners', () => {
   isolation(workflow());
   for (const mutate of [w => delete w.jobs.policy.if, w => w.jobs.release.if = 'always()', w => w.jobs['image-platforms'].needs = [],

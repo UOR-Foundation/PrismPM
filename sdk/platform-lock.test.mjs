@@ -8,7 +8,7 @@ import test from 'node:test';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { fixture as metadataFixture } from './metadata-test-fixture.mjs';
-import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
+import { CURRENT_SDK_VERSION, capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
 import { ociFixtureManifest } from './oci-test-fixture.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -88,7 +88,7 @@ async function fixture(directory) {
     await writeFile(`${directory}/${architecture}/inventory.json`, bytes);
     await writeFile(`${directory}/${architecture}/standards.lock`, standards);
     await writeFile(`${directory}/${architecture}/image.json`, encode({Os: 'linux', Architecture: architecture,
-      RepoDigests: [`example.invalid/test-sdk@${digest}`]}));
+      RepoDigests: [`example.invalid/test-sdk@${digest}`], Config:{Labels:{'org.opencontainers.image.version':'0.4.0'}}}));
   }
   const index = encode({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests});
   await writeFile(`${directory}/index.json`, index);
@@ -105,12 +105,18 @@ test('published migration schema admits complete evidence and rejects empty or w
   try {
     const {reference, inventories} = await fixture(directory);
     const target = await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64');
+    assert.equal(target.sdk_version, '0.4.0');
     const legacy = {schema: 'prismpm/sdk-lock/1', sdk_version: '0.3.0', sdk_image: reference,
       standards_lock: sha(standards), inventory: [{id: 'sdk-manifest', kind: 'image', version: '0.3.0', digest: reference.split('@')[1]}]};
     const proposal = {schema: 'prismpm/sdk-lock-migration/1', compatibility_review: 'required',
       generated_output_diff: 'required', security_review: 'required',
       patch: [{op: 'test', path: '', value: legacy}, {op: 'replace', path: '', value: target}]};
     assert.equal(validate(proposal), true, JSON.stringify(validate.errors));
+    for (const [entry, sdk_version] of [[0, '0.4.0'], [1, '0.5.0']]) {
+      const invalid = structuredClone(proposal);
+      invalid.patch[entry].value.sdk_version = sdk_version;
+      assert.equal(validate(invalid), false, 'migration source and target have distinct explicit version domains');
+    }
     for (const mutation of ['empty-source', 'empty-target', 'wrong-source', 'wrong-target', 'extra-source', 'extra-target', 'missing-test', 'partial-path']) {
       const invalid = structuredClone(proposal);
       if (mutation === 'empty-source') invalid.patch[0].value = {};
@@ -134,6 +140,7 @@ test('one exact index yields the same complete platform lock from either native 
     const arm64 = await createPlatformLock(directory, reference, inventories.get('arm64'), standards, 'arm64');
     assert.deepEqual(amd64, arm64);
     assert.equal(amd64.schema, 'prismpm/sdk-lock/2');
+    assert.equal(amd64.sdk_version, CURRENT_SDK_VERSION);
     assert.equal(amd64.sdk_index, index.toString());
     assert.notEqual(amd64.platforms[0].inventory_digest, amd64.platforms[1].inventory_digest);
     for (const row of amd64.platforms) {
@@ -150,6 +157,65 @@ test('one exact index yields the same complete platform lock from either native 
     const oversizedIndex = Buffer.concat([index, Buffer.alloc(1024 * 1024, ' ')]);
     assert.throws(() => parseSdkIndex(oversizedIndex, `example.invalid/test-sdk@${sha(oversizedIndex)}`), /byte bound/);
   } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
+test('current materialized-lock writer refuses historical, missing and foreign indexed image versions', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'prismpm-current-sdk-version-'));
+  try {
+    const {reference, inventories} = await fixture(directory);
+    const create = () => createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64');
+    assert.equal((await create()).sdk_version, '0.4.0');
+    for (const architecture of ['amd64', 'arm64']) {
+      const path = `${directory}/${architecture}/image.json`, original = await readFile(path);
+      for (const version of [undefined, '', '0.3.0', '0.5.0']) {
+        const image = JSON.parse(original);
+        if (version === undefined) delete image.Config.Labels['org.opencontainers.image.version'];
+        else image.Config.Labels['org.opencontainers.image.version'] = version;
+        await writeFile(path, encode(image));
+        await assert.rejects(create(), /SDK image version/);
+        await writeFile(path, original);
+        assert.equal((await create()).sdk_version, '0.4.0');
+      }
+    }
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
+test('versioned lock schemas preserve historical documents while current families explicitly admit 0.4', async () => {
+  const require = createRequire('/opt/prismpm/oracles/package.json');
+  const Ajv = require('ajv/dist/2020').default;
+  const read = async path => JSON.parse(await readFile(new URL(path, import.meta.url)));
+  const historical = JSON.parse((await read('./fixtures/hologram-live-historical-lock.json')).document);
+  for (const [name, original] of [
+    ['sdk-lock.schema.json', historical],
+    ['sdk-lock-v2.schema.json', await read('./npm/spec/test/fixtures/documents/sdk-lock-v2/calculator.json')],
+    ['sdk-lock-v3.schema.json', await read('./npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json')],
+  ]) {
+    const schema = await read('../schemas/' + name);
+    const validate = new Ajv({strict: false, allErrors: true}).compile(schema);
+    assert.equal(original.sdk_version, '0.3.0', 'historical fixture bytes stay unchanged');
+    assert.equal(validate(original), true, JSON.stringify(validate.errors));
+    const current = {...original, sdk_version: '0.4.0'};
+    assert.equal(validate(current), name !== 'sdk-lock.schema.json', name + ' explicit version domain');
+    for (const sdk_version of ['', '0.2.0', '0.5.0', '0.4', '0.4.0-extra'])
+      assert.equal(validate({...original, sdk_version}), false, name + ': ' + sdk_version);
+  }
+  const reviews = {compatibility_review: 'required', generated_output_diff: 'required', security_review: 'required'};
+  const legacyProposal = {schema: 'prismpm/sdk-lock-update/1', ...reviews, changes: [], proposed_lock: historical};
+  const legacyValidator = new Ajv({strict: false}).compile(await read('../schemas/sdk-lock-update.schema.json'));
+  assert.equal(legacyValidator(legacyProposal), true);
+  assert.equal(legacyValidator({...legacyProposal, proposed_lock: {...historical, sdk_version: '0.4.0'}}), false);
+  const target = await read('./npm/spec/test/fixtures/documents/sdk-lock-v2/calculator.json');
+  const schema = await read('../schemas/sdk-lock-update-v2.schema.json');
+  const validate = new Ajv({strict: false}).compile(schema);
+  const versionChange = {from: '0.3.0', op: 'replace', path: '/sdk_version', to: '0.4.0'};
+  const proposal = {schema: 'prismpm/sdk-lock-update/2', ...reviews,
+    changes: [versionChange], proposed_lock: {...target, sdk_version: '0.4.0'}};
+  assert.equal(schema.properties.changes.maxItems, 5);
+  assert.equal(validate({...proposal, changes: [], proposed_lock: target}), true);
+  assert.equal(validate(proposal), true, JSON.stringify(validate.errors));
+  for (const change of [{...versionChange, from: '0.2.0'}, {...versionChange, to: '0.5.0'},
+    {...versionChange, path: '/version'}, {...versionChange, op: 'add'}])
+    assert.equal(validate({...proposal, changes: [change]}), false);
 });
 
 test('inventory documents have closed canonical metadata and preserve exact final newlines', async () => {

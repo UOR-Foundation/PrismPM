@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {installedEnvironment} from './installed-exporter-concurrency.mjs';
 import {fixture as metadataFixture} from '../sdk/metadata-test-fixture.mjs';
 import {captureMetadataEvidence} from '../sdk/metadata-evidence.mjs';
+import {CURRENT_SDK_VERSION} from '../sdk/platform-lock.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const encode=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)
  ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
@@ -44,7 +45,7 @@ export function lockFixture(authority=sourceAuthorityFixture,standards=Buffer.fr
  } finally {for(const fn of cleanup)fn();}
  const sdk_index=graph.index.toString(),image=graph.reference;
  for(const [index,descriptor] of JSON.parse(sdk_index).manifests.entries())platforms[index].manifest_digest=descriptor.digest;
- const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.3.0',sdk_image:image,sdk_index,standards_lock:'sha256:'+hash(standards),platforms};
+ const lock={schema:'prismpm/sdk-lock/2',sdk_version:CURRENT_SDK_VERSION,sdk_image:image,sdk_index,standards_lock:'sha256:'+hash(standards),platforms};
  const bytes=Buffer.from(encode(lock));
  const binding=architecture=>({sdk_image:image,platform:'linux/'+architecture,lock_sha256:hash(bytes),
   inventory_sha256:hash(platforms.find(row=>row.platform==='linux/'+architecture).inventory_document),

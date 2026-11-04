@@ -49,8 +49,49 @@ const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_
   GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1'});
 const publicationTag = `sdk-oci-${revision}-123456789-1`;
 
+const semanticReadinessMutations = [
+  run => run.replace(/^helper=.*\n/m, ''),
+  run => run.replace(/^test "\$helper".*\n/m, ''),
+  run => run.replace(/^node_path=.*\n/m, ''),
+  run => run.replace('release-semantic-target-node-oracles/node_modules', 'unexpected-node-oracles/node_modules'),
+  run => run.replace('PRISMPM_SEMANTIC_SOURCE=%s\\n', ''),
+  run => run.replace('NODE_PATH=%s\\n', ''),
+  run => run.replace('"$helper" "$node_path"', '"$helper" "${NODE_PATH:-}"'),
+];
+
+function semanticPrerequisite(job, readers, workingDirectory) {
+  const matches = job.steps.filter(step => step.run?.includes('bash scripts/semantic-source-bootstrap.sh'));
+  assert.equal(matches.length, 1, 'one same-source semantic helper prerequisite');
+  const step = matches[0];
+  assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+  assert.equal(step['working-directory'], workingDirectory);
+  assert.deepEqual(step.env, {CARGO_HOME: '${{ runner.temp }}/release-semantic-cargo', CARGO_NET_OFFLINE: 'true'});
+  assert.equal(step.run, `set -euo pipefail
+bash scripts/semantic-source-bootstrap.sh "$GITHUB_SHA" \\
+  "$RUNNER_TEMP/release-semantic-target" "$RUNNER_TEMP/release-semantic-evidence"
+helper=$(cat "$RUNNER_TEMP/release-semantic-evidence/semantic-source-path.txt")
+test "$helper" = "$RUNNER_TEMP/release-semantic-target/debug/prismpm-semantic-source"
+node_path=$(cat "$RUNNER_TEMP/release-semantic-evidence/node-oracles-path.txt")
+test "$node_path" = "$RUNNER_TEMP/release-semantic-target-node-oracles/node_modules"
+printf 'PRISMPM_SEMANTIC_SOURCE=%s\\nNODE_PATH=%s\\n' "$helper" "$node_path" >> "$GITHUB_ENV"
+`);
+  for (const reader of readers) {
+    assert(reader, 'complete proof-reading owner required');
+    assert(job.steps.indexOf(step) < job.steps.indexOf(reader), 'source helper must precede every proof reader');
+  }
+}
+
 function validateWorkflow(value) {
-  assert.deepEqual(value.on.push, {branches: ['release/v0.4'], tags: ['v0.4.0']});
+  assert.deepEqual(Object.keys(value.on).sort(), ['push', 'workflow_dispatch']);
+  assert.deepEqual(value.on.push, {branches: ['release/v0.4', 'resource-diagnostic/*'], tags: ['v0.4.0']});
+  assert.equal(value.jobs.policy.if, "${{ inputs.resource-diagnostic-source == '' && !startsWith(github.ref, 'refs/heads/resource-diagnostic/') }}");
+  for (const name of ['diagnostic-policy', 'diagnostic-production', 'diagnostic-pair']) {
+    assert.equal(value.jobs[name].if, "${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}");
+    assert.equal(value.jobs[name]['continue-on-error'], undefined);
+  }
+  assert.equal(value.jobs['diagnostic-policy'].needs, undefined);
+  assert.equal(value.jobs['diagnostic-production'].needs, 'diagnostic-policy');
+  assert.deepEqual(value.jobs['diagnostic-pair'].needs, ['diagnostic-policy', 'diagnostic-production']);
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
   assert.equal(value.jobs['oci-native'].if, undefined, 'normal success gating must not be bypassed');
   assert.deepEqual(value.jobs.release.needs, [...ociNeeds, 'oci-native', 'crates']);
@@ -181,8 +222,18 @@ bash scripts/source-sdk-handoff.sh "$image" '\${{ github.sha }}' amd64 '\${{ git
   assert.match(product.run, /node root-a\/scripts\/product-sdk-check\.mjs tests/);
   const browser = value.jobs['browser-library'].steps.find(step => step.run?.includes('browser-api-sdk-check.sh'));
   const library = value.jobs['browser-library'].steps.find(step => step.run?.includes('library-sdk-check.sh'));
+  const binary = value.jobs['browser-library'].steps.find(step => step.run?.includes('binary-sdk-check.sh'));
+  assert(binary && binary.if === undefined && binary['continue-on-error'] === undefined);
+  assert.equal(binary.run, `set -euo pipefail
+node root-a/scripts/binary-sdk-check.mjs tests
+bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1
+bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+`);
+  semanticPrerequisite(value.jobs['browser-library'], [browser, library, binary], 'root-a');
+  const retainedProof = value.jobs['oci-native'].steps.find(step => step.run?.includes('library-sdk-metadata-evidence.mjs join'));
+  semanticPrerequisite(value.jobs['oci-native'], [retainedProof], undefined);
   assert(browser && browser.if === undefined && library && library.if === undefined);
-  for (const step of [product, browser, library]) {
+  for (const step of [product, browser, library, binary]) {
     assert.match(step.run, /^set -euo pipefail\n/);
     assert(!step.run.includes('||'), 'independent owner failure must propagate');
     assert(step.run.includes('"$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA"')
@@ -289,6 +340,26 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
   validateWorkflow(workflow());
   for (const mutate of [
     value => { value.on.push.branches = ['main']; },
+    value => { value.on.push.branches = ['release/v0.4']; },
+    value => { value.on.push.paths = ['scripts/**']; },
+    value => { value.on.workflow_call = {}; },
+    value => { value.jobs.policy.if = "${{ inputs.resource-diagnostic-source == '' }}"; },
+    value => { value.jobs['diagnostic-policy'].if = 'always()'; },
+    value => { value.jobs['diagnostic-production'].needs = 'policy'; },
+    ...['browser-library', 'oci-native'].flatMap(name => [
+      value => { value.jobs[name].steps = value.jobs[name].steps.filter(step => !step.run?.includes('semantic-source-bootstrap.sh')); },
+      value => { value.jobs[name].steps.find(step => step.run?.includes('semantic-source-bootstrap.sh')).env.CARGO_NET_OFFLINE = 'false'; },
+      value => { value.jobs[name].steps.find(step => step.run?.includes('semantic-source-bootstrap.sh')).if = 'false'; },
+      value => { const step = value.jobs[name].steps.find(step => step.run?.includes('semantic-source-bootstrap.sh'));
+        value.jobs[name].steps.splice(value.jobs[name].steps.indexOf(step), 1); value.jobs[name].steps.push(step); },
+    ]),
+    ...['browser-library', 'oci-native'].flatMap(name => semanticReadinessMutations.map(rewrite => value => {
+      const step = value.jobs[name].steps.find(candidate => candidate.run?.includes('semantic-source-bootstrap.sh'));
+      const changed = rewrite(step.run);
+      assert.notEqual(changed, step.run, 'readiness mutation must change the actual prerequisite');
+      step.run = changed;
+    })),
+    value => { value.jobs['browser-library'].steps.find(step => step.run?.includes('binary-sdk-check.sh')).run = 'true'; },
     value => value.jobs['oci-native'].needs.push('crates'),
     value => value.jobs['oci-native'].needs.pop(),
     value => { delete value.jobs['installed-sdk']; },

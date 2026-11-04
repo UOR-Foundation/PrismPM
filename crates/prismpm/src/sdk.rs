@@ -1369,7 +1369,7 @@ fn platform_update_proposal(
 ) -> Result<serde_json::Value, PrismError> {
     CanonicalDocument::from_value("prismpm/sdk-lock/2", current.clone())?;
     CanonicalDocument::from_value("prismpm/sdk-lock/2", proposed.clone())?;
-    let changes = ["platforms", "sdk_image", "sdk_index", "standards_lock"]
+    let changes = ["platforms", "sdk_image", "sdk_index", "sdk_version", "standards_lock"]
         .into_iter()
         .filter(|field| current[*field] != proposed[*field])
         .map(|field| json!({"from":current[field], "op":"replace", "path":format!("/{field}"), "to":proposed[field]}))
@@ -1944,7 +1944,8 @@ mod tests {
     #[test]
     fn platform_update_proposal_describes_every_changed_field_without_adopting_it() {
         let current = platform_fixture("old");
-        let proposed = platform_fixture("new");
+        let mut proposed = platform_fixture("new");
+        proposed["sdk_version"] = json!("0.4.0");
         let before = current.clone();
         let proposal = super::platform_update_proposal(&current, &proposed).unwrap();
         assert_eq!(proposal["schema"], "prismpm/sdk-lock-update/2");
@@ -1955,7 +1956,16 @@ mod tests {
             assert_eq!(change["from"], applied[field]);
             applied[field] = change["to"].clone();
         }
-        assert_eq!(proposal["changes"].as_array().unwrap().len(), 4);
+        assert_eq!(proposal["changes"].as_array().unwrap().len(), 5);
+        assert!(proposal["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| {
+                change["path"] == "/sdk_version"
+                    && change["from"] == "0.3.0"
+                    && change["to"] == "0.4.0"
+            }));
         assert_eq!(applied, proposed);
         assert_eq!(current, before);
         for review in [

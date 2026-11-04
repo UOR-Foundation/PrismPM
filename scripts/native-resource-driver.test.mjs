@@ -145,6 +145,11 @@ function exportDirectory(value){const dest=value.split('dest=')[1].split(',')[0]
   const invocation = (phase='production', window=19800000) => {
     const now=Date.now();
     const env={...process.env,PATH:join(root,'bin')+':'+process.env.PATH,DOCKER_CONFIG:join(root,'credential-config'),RUNNER_TEMP:join(root,'temporary'),GITHUB_ACTIONS:'true',GITHUB_REPOSITORY:'UOR-Foundation/PrismPM',GITHUB_EVENT_NAME:'workflow_dispatch',GITHUB_REF:'refs/heads/fix/521-release-build-sets',GITHUB_SHA:sha,GITHUB_WORKFLOW_SHA:sha,GITHUB_RUN_ID:'123',GITHUB_RUN_ATTEMPT:'2',DIAGNOSTIC_SOURCE:sha,DISPATCH_VERSION:'0.4.0',REHEARSAL:'true',PUBLISH_CRATES:'false'};
+    if(options.push){
+      env.GITHUB_EVENT_NAME='push';env.GITHUB_REF='refs/heads/resource-diagnostic/'+sha;env.GITHUB_EVENT_PATH=join(root,'push-event.json');
+      writeFileSync(env.GITHUB_EVENT_PATH,JSON.stringify({ref:env.GITHUB_REF,before:'0'.repeat(40),after:sha,head_commit:{id:sha},created:true,deleted:false,forced:false,repository:{full_name:'UOR-Foundation/PrismPM',fork:false}}));
+      env.DIAGNOSTIC_SOURCE='';env.DISPATCH_VERSION='';env.REHEARSAL='null';env.PUBLISH_CRATES='null';
+    }
     env.NATIVE_DIAGNOSTIC_PLAN=JSON.stringify(diagnosticPolicy(env,now+window-19800000));
     return {args:[join(root,'source/scripts/native-resource-diagnostic.sh'),phase,'amd64',sha,String(now+window),String(now+window+1800000),output,...(phase==='pair'?[join(root,'expected')]:[])],env};
   };
@@ -176,6 +181,13 @@ test('production lifecycle records exact caps, one cold two-target buildset, rea
   assert(f.commands().filter(row=>row.command==='docker').every(row=>row.dockerConfig===join(f.root,'credential-config')));
   assert.equal(d.filter(a=>a[0]==='rm').length,2);assert.equal(d.filter(a=>a[0]==='buildx'&&a[1]==='rm'&&a.includes('--keep-state')).length,2);
   assert(calls.findIndex(r=>r.command==='node'&&r.args[1]==='metadata')<calls.findLastIndex(r=>r.command==='docker'&&r.args[2]==='rm'));
+});
+test('create-only push passes the shell route with unchanged bounded production and owned retirement', t => {
+  const f=fixture(t,{push:true});successful(f,f.run());
+  const p=JSON.parse(readFileSync(join(f.output,'dispatch-plan.json')));
+  assert.equal(p.trigger.event,'push');assert.equal(p.trigger.ref,'refs/heads/resource-diagnostic/'+sha);
+  assert.equal(p.maximum_native_runners,2);assert.equal(p.store_bytes,42949672960);
+  assert.equal(f.commands().filter(row=>row.command==='node'&&row.args[1]==='build-set').length,1);
 });
 
 test('pair uses distinct cold roots/builders and retains both raw directories through actual verifier invocation',t=>{

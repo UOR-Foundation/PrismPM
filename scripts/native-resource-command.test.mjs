@@ -3,7 +3,7 @@ import {mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSyn
 import {dirname, join} from 'node:path';
 import {tmpdir} from 'node:os';
 import test from 'node:test';
-import {diagnosticRef, runDiagnosticCommand} from './native-resource-diagnostic.mjs';
+import {diagnosticPushPrefix, diagnosticRef, runDiagnosticCommand} from './native-resource-diagnostic.mjs';
 
 const revision = 'a'.repeat(40);
 const environment = {GITHUB_SHA: revision, GITHUB_WORKFLOW_SHA: revision, GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM',
@@ -35,6 +35,19 @@ test('controller uses original owner, complete logging and proven ordinary exit 
   assert.deepEqual(readFileSync(f.request.capture_path), Buffer.from([0, 255, 10]));
   assert(readFileSync(f.request.log_path).includes(Buffer.from('original stderr')));
   assert.deepEqual(JSON.parse(readFileSync(f.request.result_path)), r);
+});
+test('push command owner requires the same original event proof before execution', async t => {
+  for (const invalid of [false, true]) {
+    const f = fixture(t), path = join(f.root, 'event.json');
+    writeFileSync(path, JSON.stringify({ref: diagnosticPushPrefix + revision, after: revision,
+      head_commit: {id: invalid ? 'b'.repeat(40) : revision}, before: '0'.repeat(40),
+      created: true, deleted: false, forced: false, repository: {full_name: 'UOR-Foundation/PrismPM', fork: false}}));
+    const env = {...environment, GITHUB_EVENT_NAME: 'push', GITHUB_REF: diagnosticPushPrefix + revision,
+      GITHUB_EVENT_PATH: path}; let called = 0;
+    const run = () => runDiagnosticCommand(f.path, async () => {called++; return proven();}, env);
+    if (invalid) {await assert.rejects(run()); assert.equal(called, 0);}
+    else {assert.equal((await run()).status, 0); assert.equal(called, 1);}
+  }
 });
 test('leader success cannot waive timeout, abortion, overflow, orphan or missing retirement', async t => {
   for (const mutate of [r => r.timedOut = true, r => r.aborted = true, r => r.overflow = true,

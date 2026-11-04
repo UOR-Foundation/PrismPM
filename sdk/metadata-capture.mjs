@@ -1,7 +1,7 @@
 // SDK-owned bounded acquisition. Transport supplies raw digest-selected bytes;
 // image inspection records are never manufactured from parsed JSON.
 import assert from 'node:assert/strict';
-import {parseSdkIndex, validateInventory} from './platform-lock.mjs';
+import {CURRENT_SDK_VERSION, parseSdkIndex, validateInventory} from './platform-lock.mjs';
 import {decodeMetadataLayer, limits, parseConfig, parseManifest, sha} from './metadata-layer.mjs';
 
 export async function captureMetadataLock(reference, standardsDigest, transport, observeRequest) {
@@ -41,6 +41,8 @@ export async function captureMetadataLock(reference, standardsDigest, transport,
     const manifest = parseManifest(await fetch('manifest', child.reference, limits.document), child.descriptor);
     const config = parseConfig(await fetch('blob', repository + '@' + manifest.config.digest, manifest.config.size),
       manifest, child.descriptor.platform);
+    assert.equal(config.config?.Labels?.['org.opencontainers.image.version'], CURRENT_SDK_VERSION,
+      'indexed SDK config version differs from the current producer');
     const layer = manifest.layers.at(-1);
     const files = decodeMetadataLayer(await fetch('blob', repository + '@' + layer.digest, layer.size), manifest, config);
     assert.equal(sha(files.standards), standardsDigest, 'SDK standards digest differs from requested lock');
@@ -54,6 +56,6 @@ export async function captureMetadataLock(reference, standardsDigest, transport,
     platforms.push({platform:'linux/' + child.architecture, manifest_digest:child.descriptor.digest,
       inventory_digest:sha(files.inventory), inventory_document:files.inventory.toString('utf8'), inventory:inventory.artifacts});
   }
-  return {schema:'prismpm/sdk-lock/2', sdk_image:reference, sdk_index:indexBytes.toString('utf8'), sdk_version:'0.3.0',
+  return {schema:'prismpm/sdk-lock/2', sdk_image:reference, sdk_index:indexBytes.toString('utf8'), sdk_version:CURRENT_SDK_VERSION,
     standards_lock:standardsDigest, platforms};
 }

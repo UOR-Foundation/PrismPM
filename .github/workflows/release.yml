@@ -28,6 +28,7 @@ on:
     # pushes are always rehearsals; only the release tag can publish by push.
     branches:
       - release/v0.4
+      - resource-diagnostic/*
     tags:
       - v0.4.0
 
@@ -44,7 +45,7 @@ env:
 
 jobs:
   policy:
-    if: ${{ inputs.resource-diagnostic-source == '' }}
+    if: ${{ inputs.resource-diagnostic-source == '' && !startsWith(github.ref, 'refs/heads/resource-diagnostic/') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -965,6 +966,28 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.23.2
+      - name: Prepare the same-source semantic helper before native SDK owners
+        working-directory: root-a
+        env:
+          CARGO_HOME: ${{ runner.temp }}/release-semantic-cargo
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          set -euo pipefail
+          bash scripts/semantic-source-bootstrap.sh "$GITHUB_SHA" \
+            "$RUNNER_TEMP/release-semantic-target" "$RUNNER_TEMP/release-semantic-evidence"
+          helper=$(cat "$RUNNER_TEMP/release-semantic-evidence/semantic-source-path.txt")
+          test "$helper" = "$RUNNER_TEMP/release-semantic-target/debug/prismpm-semantic-source"
+          node_path=$(cat "$RUNNER_TEMP/release-semantic-evidence/node-oracles-path.txt")
+          test "$node_path" = "$RUNNER_TEMP/release-semantic-target-node-oracles/node_modules"
+          printf 'PRISMPM_SEMANTIC_SOURCE=%s\nNODE_PATH=%s\n' "$helper" "$node_path" >> "$GITHUB_ENV"
+      - name: Retain original semantic helper prerequisite diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-semantic-prerequisite-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-semantic-evidence/
+          if-no-files-found: error
+          retention-days: 30
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
@@ -1002,6 +1025,35 @@ jobs:
           path: |
             sdk-${{ matrix.arch }}-library-sdk.log
             root-a/target/library-sdk-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify exact current SDK binary-package closure offline and read-only
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/binary-sdk-check.mjs tests
+          bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1
+          bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-sdk-sdk-${{ matrix.arch }}
+          path: |
+            sdk-${{ matrix.arch }}-binary-sdk.log
+            sdk-${{ matrix.arch }}-binary-sdk/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-language-1.2-sdk-sdk-${{ matrix.arch }}
+          path: |
+            sdk-${{ matrix.arch }}-binary-sdk-language-1.2.log
+            sdk-${{ matrix.arch }}-binary-sdk-language-1.2/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
   # One installed pass per architecture, as the eight parts of
@@ -1362,6 +1414,9 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
       - name: Require the source-bound publication policy
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
@@ -1372,6 +1427,27 @@ jobs:
         env:
           RELEASE_NEEDS: ${{ toJSON(needs) }}
         run: node scripts/release-phases.mjs prerequisites oci-native
+      - name: Prepare the same-source semantic helper before retained proof readers
+        env:
+          CARGO_HOME: ${{ runner.temp }}/release-semantic-cargo
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          set -euo pipefail
+          bash scripts/semantic-source-bootstrap.sh "$GITHUB_SHA" \
+            "$RUNNER_TEMP/release-semantic-target" "$RUNNER_TEMP/release-semantic-evidence"
+          helper=$(cat "$RUNNER_TEMP/release-semantic-evidence/semantic-source-path.txt")
+          test "$helper" = "$RUNNER_TEMP/release-semantic-target/debug/prismpm-semantic-source"
+          node_path=$(cat "$RUNNER_TEMP/release-semantic-evidence/node-oracles-path.txt")
+          test "$node_path" = "$RUNNER_TEMP/release-semantic-target-node-oracles/node_modules"
+          printf 'PRISMPM_SEMANTIC_SOURCE=%s\nNODE_PATH=%s\n' "$helper" "$node_path" >> "$GITHUB_ENV"
+      - name: Retain original semantic helper prerequisite diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-semantic-retention-prerequisite-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-semantic-evidence/
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: sdk-image
@@ -1505,6 +1581,22 @@ jobs:
           artifact-ids: ${{ steps.source-vv.outputs.ids }}
           merge-multiple: true
           path: .sdk-gate-evidence/source-vv
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-sdk-sdk-amd64
+          path: .sdk-gate-evidence/binary-sdk-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-sdk-sdk-arm64
+          path: .sdk-gate-evidence/binary-sdk-sdk-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-language-1.2-sdk-sdk-amd64
+          path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-language-1.2-sdk-sdk-arm64
+          path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-arm64
       - id: sdk-equivalence-amd64
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1557,6 +1649,12 @@ jobs:
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
               "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
+            node scripts/binary-sdk-release-evidence.mjs \
+              ".sdk-gate-evidence/binary-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk.tar" \
+              "$image" "$GITHUB_SHA" "$architecture" 1.1
+            node scripts/binary-sdk-release-evidence.mjs \
+              ".sdk-gate-evidence/binary-language-1.2-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk-language-1.2.tar" \
+              "$image" "$GITHUB_SHA" "$architecture" 1.2
             for part in $parts; do
               node scripts/sdk-release-evidence.mjs full-sdk-vv \
                 ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \
@@ -1903,7 +2001,7 @@ jobs:
 
   # Explicitly exclusive from all release, acceptance and publication owners.
   diagnostic-policy:
-    if: ${{ inputs.resource-diagnostic-source != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -1917,6 +2015,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
@@ -1933,13 +2032,29 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           node scripts/native-resource-diagnostic.mjs policy >> "$GITHUB_OUTPUT"
+      - name: Prepare exact source-owned Node oracles before diagnostic contracts
+        run: |
+          set -euo pipefail
+          bash scripts/source-oracles-bootstrap.sh "$GITHUB_SHA" \
+            "$RUNNER_TEMP/diagnostic-node-oracles" "$RUNNER_TEMP/diagnostic-node-evidence"
+          node_path=$(cat "$RUNNER_TEMP/diagnostic-node-evidence/node-oracles-path.txt")
+          test "$node_path" = "$RUNNER_TEMP/diagnostic-node-oracles/node_modules"
+          printf 'NODE_PATH=%s\n' "$node_path" >> "$GITHUB_ENV"
+      - name: Retain original diagnostic Node prerequisite diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: diagnostic-node-prerequisite-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/diagnostic-node-evidence/
+          if-no-files-found: error
+          retention-days: 30
       - name: Check diagnostic isolation and refusal contracts without construction
-        run: node --test scripts/native-resource-diagnostic.test.mjs scripts/native-resource-command.test.mjs scripts/native-resource-driver.test.mjs
+        run: node --test scripts/native-resource-diagnostic.test.mjs scripts/native-resource-command.test.mjs scripts/native-resource-driver.test.mjs scripts/native-resource-ancestry.test.mjs
 
   diagnostic-production:
     name: Native resource production (${{ matrix.arch }})
     needs: diagnostic-policy
-    if: ${{ inputs.resource-diagnostic-source != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -2004,7 +2119,7 @@ jobs:
   diagnostic-pair:
     name: Native resource pair (${{ matrix.arch }})
     needs: [diagnostic-policy, diagnostic-production]
-    if: ${{ inputs.resource-diagnostic-source != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:

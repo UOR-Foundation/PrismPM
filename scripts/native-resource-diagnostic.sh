@@ -10,8 +10,11 @@ case "$phase:$arch" in production:amd64|production:arm64|pair:amd64|pair:arm64) 
 [[ "$revision" =~ ^[0-9a-f]{40}$ && "$work_end" =~ ^[0-9]{13}$ && "$whole_end" =~ ^[0-9]{13}$ ]]
 test "${GITHUB_ACTIONS:-}" = true
 test "${GITHUB_REPOSITORY:-}" = UOR-Foundation/PrismPM
-test "${GITHUB_EVENT_NAME:-}" = workflow_dispatch
-test "${GITHUB_REF:-}" = refs/heads/fix/521-release-build-sets
+case "${GITHUB_EVENT_NAME:-}" in
+  workflow_dispatch) test "${GITHUB_REF:-}" = refs/heads/fix/521-release-build-sets;;
+  push) test "${GITHUB_REF:-}" = "refs/heads/resource-diagnostic/$revision";;
+  *) exit 2;;
+esac
 test "${GITHUB_SHA:-}" = "$revision" && test "${GITHUB_WORKFLOW_SHA:-}" = "$revision"
 [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ]]
 checkout=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
@@ -34,17 +37,18 @@ if phase=='pair':
 else: assert not expected
 PY
 mkdir -- "$output"
+control=$output/.control
+mkdir -- "$control"
+# Validate the original push/dispatch event and persist the inherited policy
+# before allocating scratch storage or issuing any experiment command.
+node "$helper" admit "$revision" "$work_end" "$whole_end" "$output/dispatch-plan.json"
 scratch=$(mktemp -d "${RUNNER_TEMP:?}/native-resource-$phase-$arch.XXXXXXXX")
 scratch_identity=$(stat --format='%d:%i' -- "$scratch")
 store=$scratch/store backing=$scratch/store.ext4
 mkdir -- "$store"
 loop= mounted= owner_cid= owner_name= owner_builder= owner_directory= owner_identity= owner_plan= owner_finish= owner_stop= owner_samples= owner_snapshot= owner_terminal_sequence=0 outside_baseline_path= outside_baseline_sha= monitor_pid= watch_id= watch_result= watch_finish_deadline= controller_pid= controller_cancel= controller_id= controller_deadline=
 cleanup_mode=0 cleanup_complete=0 complete=0 reason=incomplete command_sequence=0 supervision_lost=0 resource_failure=0
-control=$output/.control
-mkdir -- "$control"
 capture=$control/stdout result=$control/command-result.json
-# Persist the exact inherited global dispatch policy before any experiment IO.
-node "$helper" admit "$revision" "$work_end" "$whole_end" "$output/dispatch-plan.json"
 # Commands run through the existing private-FD Linux subreaper. The shell
 # requests cancellation through an exact fresh receipt, never a numeric signal.
 clock_ms() { /usr/bin/python3 -I -B -c 'import time;print(int(time.time()*1000))'; }

@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
 import {executeOwnedSdkCommand} from './sdk-command-owner.mjs';
+import {CURRENT_SDK_VERSION} from '../sdk/platform-lock.mjs';
 
 export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','features/suites/stdlib.feature','features/suites/holo.feature','model','language',
@@ -35,6 +36,7 @@ export const sourceRoots=Object.freeze([
  'scripts/semantic-source.mjs','crates/conformance/src/bin/prismpm-semantic-source.rs',
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
  'sdk/account-genesis-artifact.mjs','sdk/generate-account-genesis.mjs',
+ 'sdk/platform-lock.mjs','sdk/metadata-layer.mjs',
 ]);
 // These installed host primitives include private prerequisites, not a public
 // browser application runtime. DK-26/27 are pure kernels, not host modules.
@@ -153,7 +155,7 @@ export function verifyModules(root,installed){
  }
 }
 
-export function verifyImage(value,image,architecture,revision){
+export function verifyImage(value,image,architecture,revision,expectedVersion=CURRENT_SDK_VERSION){
  assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
  assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
  assert.ok(Array.isArray(value)&&value.length===1);const config=value[0];
@@ -164,7 +166,7 @@ export function verifyImage(value,image,architecture,revision){
  assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
  assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
- assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.3.0');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],expectedVersion);
 }
 
 export function verifyTap(tap,minimum){

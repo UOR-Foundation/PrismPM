@@ -8,6 +8,10 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {boundedPositiveInteger, caseKeys, descriptor as ociDescriptor, limits, parseJson} from './metadata-layer.mjs';
 
+// Current producers bind actual image metadata to this source-owned version.
+// Historical document compatibility never selects an execution version.
+export const CURRENT_SDK_VERSION = '0.4.0';
+
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const digest = /^sha256:[0-9a-f]{64}$/;
 const image = /^[a-z0-9.-]+(?::[0-9]{1,5})?\/[a-z0-9./_-]+@sha256:[0-9a-f]{64}$/;
@@ -144,6 +148,8 @@ export async function validatePlatformBundle(directory, reference, standardsByte
     const inspected = JSON.parse(await boundedFile(`${path}/image.json`));
     assert.equal(inspected.Os, 'linux');
     assert.equal(inspected.Architecture, child.architecture);
+    assert.equal(inspected.Config?.Labels?.['org.opencontainers.image.version'], CURRENT_SDK_VERSION,
+      'indexed SDK image version differs from the current producer');
     assert.ok(inspected.RepoDigests.includes(child.reference), 'copied inventory image is not the exact indexed child');
     const bytes = await boundedFile(`${path}/inventory.json`);
     const inventory = validateInventory(bytes);
@@ -155,7 +161,7 @@ export async function validatePlatformBundle(directory, reference, standardsByte
       inventory_digest: sha(bytes), inventory_document: bytes.toString('utf8'), inventory: inventory.artifacts});
   }
   return {schema: 'prismpm/sdk-lock/2', sdk_image: reference, sdk_index: indexBytes.toString('utf8'),
-    sdk_version: '0.3.0', standards_lock: sha(standardsBytes), platforms};
+    sdk_version: CURRENT_SDK_VERSION, standards_lock: sha(standardsBytes), platforms};
 }
 
 export async function createPlatformLock(directory, reference, nativeInventoryBytes, standardsBytes, architecture) {

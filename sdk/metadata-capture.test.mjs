@@ -7,6 +7,7 @@ import {fixture, encode} from './metadata-test-fixture.mjs';
 test('bounded capture returns the ordinary complete lock from exact raw graph bytes without image pulls', async t => {
   const f = fixture(t);
   const lock = await captureMetadataLock(f.reference, sha(f.standards), f.transport);
+  assert.equal(lock.sdk_version, '0.4.0');
   assert.equal(lock.schema, 'prismpm/sdk-lock/2'); assert.equal(lock.sdk_index, f.index.toString());
   assert.equal(lock.sdk_image, f.reference); assert.equal(lock.standards_lock, sha(f.standards));
   assert.equal(f.calls.length, 7); assert.deepEqual(f.calls.map(call => call.kind), ['manifest','manifest','blob','blob','manifest','blob','blob']);
@@ -39,6 +40,19 @@ test('coherent image graphs cannot bypass standards, cross-platform identities, 
   const f = fixture(t);
   await assert.rejects(captureMetadataLock(f.reference, sha('wrong request'), f.transport), /standards digest/);
   assert.equal(f.calls.length, 4, 'first platform mismatch prevents further acquisition');
+});
+
+test('current capture refuses historical, missing and foreign versions on either digest-bound platform', async t => {
+  for (const architecture of ['amd64', 'arm64']) for (const version of [undefined, '', '0.3.0', '0.5.0']) {
+    const f = fixture(t, '', {configChange(config, selected) {
+      if (selected !== architecture) return;
+      if (version === undefined) delete config.config.Labels['org.opencontainers.image.version'];
+      else config.config.Labels['org.opencontainers.image.version'] = version;
+    }});
+    await assert.rejects(captureMetadataLock(f.reference, sha(f.standards), f.transport), /SDK config version/);
+    assert.equal(f.calls.length, architecture === 'amd64' ? 3 : 6,
+      'version refusal precedes that platform metadata layer and performs no retry');
+  }
 });
 
 test('transport overflow and exact-byte mismatch refuse capture without subsequent requests', async t => {

@@ -67,8 +67,10 @@ test('only the exact reviewed source aliases and their canonical target bytes ar
 });
 
 test('the immutable installed image must identify the exact current native source',()=>{
- const base=[{Os:'linux',Architecture:'amd64',RepoDigests:[image],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':revision,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}];
+ const base=[{Os:'linux',Architecture:'amd64',RepoDigests:[image],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':revision,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.4.0'}}}];
  verifyImage(base,image,'amd64',revision);
+ const historical=structuredClone(base);historical[0].Config.Labels['org.opencontainers.image.version']='0.3.0';
+ assert.throws(()=>verifyImage(historical,image,'amd64',revision));
  for(const change of [v=>v[0].Architecture='arm64',v=>v[0].Config.Labels['org.opencontainers.image.revision']='c'.repeat(40),v=>v[0].RepoDigests=[],v=>v[0].Config.Volumes={'/opt/prismpm':{}}]){const bad=structuredClone(base);change(bad);assert.throws(()=>verifyImage(bad,image,'amd64',revision));}
  assert.throws(()=>verifyImage(base,'ghcr.io/uor-foundation/prismpm-sdk:latest','amd64',revision));
 });
@@ -242,6 +244,7 @@ test('captured seed lock requires both exact platforms and independently selecte
   assert.throws(()=>validateCapturedLock(bytes,image,architecture,Buffer.from('changed'),inventory));
   assert.throws(()=>validateCapturedLock(bytes,image,architecture,standards,Buffer.from('changed')));
   for(const mutate of [v=>v.platforms.reverse(),v=>v.platforms.pop(),v=>v.schema='prismpm/sdk-lock/1',
+   v=>v.sdk_version='0.3.0',v=>v.sdk_version='0.5.0',
    v=>v.sdk_image=image.replace('example.invalid','other.invalid'),v=>v.platforms[0].manifest_digest='sha256:'+'a'.repeat(64),
    v=>v.platforms[1].inventory_digest='sha256:'+'a'.repeat(64)]){
    const changed=structuredClone(lock);mutate(changed);
@@ -333,7 +336,7 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   const doc=encode({schema:'prismpm/sdk-inventory/1',artifacts,commands:['cargo','devcontainer','docker','just','prismpm'].map(command=>({command,executable:'/usr/local/bin/'+command,sha256:'9'.repeat(64)}))});
   const manifests=['amd64','arm64'].map((architecture,index)=>({mediaType:'application/vnd.oci.image.manifest.v1+json',digest:'sha256:'+String(index+1).repeat(64),size:100,platform:{os:'linux',architecture}}));
   const index=encode({schemaVersion:2,mediaType:'application/vnd.oci.image.index.v1+json',manifests});
-  const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.3.0',sdk_image:'example.invalid/fixture@sha256:'+digest(index),sdk_index:index,standards_lock:'sha256:'+'a'.repeat(64),
+  const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.4.0',sdk_image:'example.invalid/fixture@sha256:'+digest(index),sdk_index:index,standards_lock:'sha256:'+'a'.repeat(64),
    platforms:['amd64','arm64'].map((architecture,index)=>({platform:'linux/'+architecture,manifest_digest:manifests[index].digest,inventory_digest:'sha256:'+digest(doc),inventory_document:doc,inventory:artifacts}))};
   if(mutation==='index')lock.sdk_image='example.invalid/fixture@sha256:'+'f'.repeat(64);
   put(root,'prismpm.lock',encode(lock));

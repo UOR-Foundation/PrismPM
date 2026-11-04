@@ -304,7 +304,7 @@ function source(root){
 function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{
  'org.opencontainers.image.revision':revision,
  'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM',
- 'org.opencontainers.image.version':'0.3.0',
+ 'org.opencontainers.image.version':'0.4.0',
 }}}];}
 
 test('current SDK source closure binds helper, compiler, suite and every selected byte',async t=>{
@@ -356,10 +356,14 @@ test('SDK identity is immutable, exact-source and native-platform bound',async (
   value=>value[0].Config.Labels['org.opencontainers.image.revision']='c'.repeat(40),
   value=>value[0].Config.Labels['org.opencontainers.image.source']='https://example.invalid',
   value=>value[0].Config.Labels['org.opencontainers.image.version']='0.2.0',
+  value=>value[0].Config.Labels['org.opencontainers.image.version']='0.3.0',
   value=>value.push(value[0]),
  ]){const changed=inspected();mutate(changed);assert.throws(()=>verifyImage(changed,image,'amd64',revision));}
  assert.throws(()=>verifyImage(inspected(),'ghcr.io/uor-foundation/prismpm-sdk:latest','amd64',revision));
  assert.throws(()=>verifyImage(inspected(),image,'amd64',[revision]));
+ const historical=inspected();historical[0].Config.Labels['org.opencontainers.image.version']='0.3.0';
+ verifyImage(historical,image,'amd64',revision,'0.3.0');
+ assert.throws(()=>verifyImage(inspected(),image,'amd64',revision,'0.3.0'));
 });
 
 const testSource=(count,skip=false)=>"import {test} from 'node:test';\n"+Array.from({length:count},(_,index)=>`test('case ${index}',${skip&&index===0?'{skip:true},':''}()=>{});\n`).join('');

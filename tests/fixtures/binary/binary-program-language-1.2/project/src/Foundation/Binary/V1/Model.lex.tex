@@ -1,0 +1,104 @@
+\begin{lexlean}{Foundation.Binary.V1.Model}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\title{Boolean}
+\begin{semanticmodule}
+structure{
+  name: RawFileCli,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: profile, type: String}]
+}
+
+structure{
+  name: BinaryAcceptanceVector,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: request, type: Bytes}, {name: response, type: Bytes}]
+}
+
+inductive{
+  name: AdapterFailure,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: InvalidArguments, fields: []},
+    {name: InputOpen, fields: []},
+    {name: InputType, fields: []},
+    {name: InputRead, fields: []},
+    {name: InputLimit, fields: []},
+    {name: AdapterAllocation, fields: []},
+    {name: ComputeFailure, fields: []},
+    {name: OutputLimit, fields: []},
+    {name: OutputExists, fields: []},
+    {name: OutputOpen, fields: []},
+    {name: OutputWrite, fields: []}
+  ]
+}
+
+inductive{
+  name: PublicationOutcome,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: NotPublished, fields: []},
+    {name: Published, fields: []},
+    {name: Unknown, fields: []}
+  ]
+}
+
+structure{
+  name: AdapterFailureResult,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: failure, type: AdapterFailure}, {name: publication, type: PublicationOutcome}]
+}
+
+structure{
+  name: BinaryProgram,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: profile, type: String},
+    {name: name, type: String},
+    {name: cargoName, type: String},
+    {name: cargoVersion, type: String},
+    {name: cargoDescription, type: String},
+    {name: cargoRepository, type: String},
+    {name: cargoHomepage, type: String},
+    {name: exportRoots, type: (List String)},
+    {name: entryRoot, type: String},
+    {name: requestMaximum, type: UInt32},
+    {name: responseMaximum, type: UInt32},
+    {name: memoryPages, type: UInt32},
+    {name: acceptanceVectors, type: (List BinaryAcceptanceVector)},
+    {name: cli, type: RawFileCli}
+  ]
+}
+
+definition{
+  name: failurePublication,
+  parameters: [failure : AdapterFailure],
+  result: PublicationOutcome,
+  body: (match failure
+    | AdapterFailure.InvalidArguments => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.InputOpen => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.InputType => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.InputRead => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.InputLimit => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.AdapterAllocation => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.ComputeFailure => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.OutputLimit => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.OutputExists => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.OutputOpen => (ctor PublicationOutcome.NotPublished)
+    | AdapterFailure.OutputWrite => (ctor PublicationOutcome.Unknown))
+}
+
+definition{
+  name: adapterFailureResult,
+  parameters: [failure : AdapterFailure],
+  result: AdapterFailureResult,
+  body: (record AdapterFailureResult {failure := failure, publication := (failurePublication failure)})
+}
+\end{semanticmodule}
+\end{lexlean}

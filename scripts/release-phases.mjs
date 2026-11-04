@@ -330,6 +330,7 @@ export function assetNames() {
       `sdk-${architecture}-vv-evidence.json`, `sdk-${architecture}-product-cli.tar`,
       `sdk-${architecture}-native-equivalence.tar`,
       `sdk-${architecture}-native-metadata.tar`,
+      `sdk-${architecture}-binary-sdk.tar`, `sdk-${architecture}-binary-sdk-language-1.2.tar`,
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
     ]),
     ...['x86_64', 'aarch64'].flatMap(architecture => [

@@ -63,6 +63,38 @@ function product(root) {
     unclaimed: ['sdk-release', 'crates.io-publication', 'producer-authorization', 'deployment', 'foundry-readiness']});
 }
 
+const semanticReadinessMutations = [
+  run => run.replace(/^helper=.*\n/m, ''),
+  run => run.replace(/^test "\$helper".*\n/m, ''),
+  run => run.replace(/^node_path=.*\n/m, ''),
+  run => run.replace('release-semantic-target-node-oracles/node_modules', 'unexpected-node-oracles/node_modules'),
+  run => run.replace('PRISMPM_SEMANTIC_SOURCE=%s\\n', ''),
+  run => run.replace('NODE_PATH=%s\\n', ''),
+  run => run.replace('"$helper" "$node_path"', '"$helper" "${NODE_PATH:-}"'),
+];
+
+function semanticPrerequisite(job, readers, workingDirectory) {
+  const matches = job.steps.filter(step => step.run?.includes('bash scripts/semantic-source-bootstrap.sh'));
+  assert.equal(matches.length, 1, 'one same-source semantic helper prerequisite');
+  const step = matches[0];
+  assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+  assert.equal(step['working-directory'], workingDirectory);
+  assert.deepEqual(step.env, {CARGO_HOME: '${{ runner.temp }}/release-semantic-cargo', CARGO_NET_OFFLINE: 'true'});
+  assert.equal(step.run, `set -euo pipefail
+bash scripts/semantic-source-bootstrap.sh "$GITHUB_SHA" \\
+  "$RUNNER_TEMP/release-semantic-target" "$RUNNER_TEMP/release-semantic-evidence"
+helper=$(cat "$RUNNER_TEMP/release-semantic-evidence/semantic-source-path.txt")
+test "$helper" = "$RUNNER_TEMP/release-semantic-target/debug/prismpm-semantic-source"
+node_path=$(cat "$RUNNER_TEMP/release-semantic-evidence/node-oracles-path.txt")
+test "$node_path" = "$RUNNER_TEMP/release-semantic-target-node-oracles/node_modules"
+printf 'PRISMPM_SEMANTIC_SOURCE=%s\\nNODE_PATH=%s\\n' "$helper" "$node_path" >> "$GITHUB_ENV"
+`);
+  for (const reader of readers) {
+    assert(reader, 'complete proof-reading owner required');
+    assert(job.steps.indexOf(step) < job.steps.indexOf(reader), 'source helper must precede every proof reader');
+  }
+}
+
 function validateWorkflow(workflow) {
   const upload = workflow.jobs['browser-library'].steps.filter(step => step.with?.name === 'library-sdk-sdk-${{ matrix.arch }}');
   assert.equal(upload.length, 1);
@@ -76,6 +108,7 @@ function validateWorkflow(workflow) {
   const steps = workflow.jobs['oci-native'].steps;
   const pack = steps.find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
   assert(pack && pack.if === undefined && pack['continue-on-error'] === undefined);
+  semanticPrerequisite(workflow.jobs['oci-native'], [pack], undefined);
   const download = (name, path) => {
     const matching = steps.filter(step => step.with?.name === name);
     assert.equal(matching.length, 1, 'missing or duplicate gate download ' + name);
@@ -84,13 +117,16 @@ function validateWorkflow(workflow) {
     assert.deepEqual(step.with, {name, path});
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
     assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
+    return step;
   };
+  const sdkImage = download('sdk-image', 'target/release-sdk');
   const selected = (id, arch, owner, path) => {
     const selectors = steps.filter(step => step.id === id);
     assert.equal(selectors.length, 1, 'missing or duplicate immutable selector ' + id);
     const selector = selectors[0];
     assert.equal(selector.if, undefined); assert.equal(selector['continue-on-error'], undefined);
     assert.equal(selector.env.GH_TOKEN, '${{ github.token }}');
+    assert(steps.indexOf(sdkImage) < steps.indexOf(selector), 'exact SDK identity must arrive before artifact selection');
     assert(selector.run.startsWith('set -euo pipefail\n'));
     assert(selector.run.includes('scripts/release-artifact-metadata.mjs'));
     assert(selector.run.includes('scripts/release-gate-evidence.mjs select-artifacts'));
@@ -116,6 +152,27 @@ function validateWorkflow(workflow) {
     download(`library-sdk-sdk-${arch}`, `.sdk-gate-evidence/library-sdk-sdk-${arch}`);
     for (const kind of ['browser', 'library']) assert(assetNames().includes(`sdk-${arch}-${kind}-sdk.log`));
     assert(assetNames().includes(`sdk-${arch}-native-metadata.tar`));
+    for (const [name, language] of [[`binary-sdk-sdk-${arch}`, '1.1'], [`binary-language-1.2-sdk-sdk-${arch}`, '1.2']]) {
+      download(name, `.sdk-gate-evidence/${name}`);
+      const languageSuffix = language === '1.1' ? '' : '-language-1.2';
+      assert(assetNames().includes(`sdk-${arch}-binary-sdk${languageSuffix}.tar`));
+    }
+  }
+  assert.deepEqual(assetNames().filter(name => /^sdk-(amd64|arm64)-binary-sdk(?:-language-1\.2)?\.tar$/.test(name)).sort(),
+    ['amd64', 'arm64'].flatMap(arch => [`sdk-${arch}-binary-sdk.tar`, `sdk-${arch}-binary-sdk-language-1.2.tar`]).sort());
+  const nativeOwners = workflow.jobs['browser-library'];
+  const binary = nativeOwners.steps.find(step => step.run?.includes('binary-sdk-check.sh'));
+  assert(binary && binary.if === undefined && binary['continue-on-error'] === undefined);
+  semanticPrerequisite(nativeOwners, [binary], 'root-a');
+  for (const [name, suffix] of [['binary-sdk-sdk-${{ matrix.arch }}', 'binary-sdk'], ['binary-language-1.2-sdk-sdk-${{ matrix.arch }}', 'binary-sdk-language-1.2']]) {
+    const uploads = nativeOwners.steps.filter(step => step.with?.name === name);
+    assert.equal(uploads.length, 1);
+    const upload = uploads[0];
+    assert.equal(upload.if, 'always()'); assert.equal(upload['continue-on-error'], undefined);
+    assert.equal(upload.uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+    assert.deepEqual(upload.with, {name, path: `sdk-\${{ matrix.arch }}-${suffix}.log\nsdk-\${{ matrix.arch }}-${suffix}/\n`,
+      'include-hidden-files': true, 'if-no-files-found': 'error', 'retention-days': 30});
+    assert(nativeOwners.steps.indexOf(binary) < nativeOwners.steps.indexOf(upload));
   }
   assert.equal(pack.shell, 'bash');
   assert.equal(pack.run, [
@@ -133,6 +190,12 @@ function validateWorkflow(workflow) {
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
     '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
+    '  node scripts/binary-sdk-release-evidence.mjs \\',
+    '    ".sdk-gate-evidence/binary-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk.tar" \\',
+    '    "$image" "$GITHUB_SHA" "$architecture" 1.1',
+    '  node scripts/binary-sdk-release-evidence.mjs \\',
+    '    ".sdk-gate-evidence/binary-language-1.2-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk-language-1.2.tar" \\',
+    '    "$image" "$GITHUB_SHA" "$architecture" 1.2',
     '  for part in $parts; do',
     '    node scripts/sdk-release-evidence.mjs full-sdk-vv \\',
     '      ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \\',
@@ -173,6 +236,7 @@ test('OCI publication retains both native gate closures without granting SDK acc
   const pack = value => steps(value).find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
   const gate = value => steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.full-amd64.outputs.ids }}');
   for (const mutate of [
+    value => {steps(value).splice(steps(value).findIndex(step => step.with?.name === 'sdk-image'), 1);},
     value => steps(value).splice(steps(value).indexOf(gate(value)), 1),
     value => steps(value).push(structuredClone(gate(value))),
     value => {gate(value).with.path = 'release';},
@@ -180,6 +244,21 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {gate(value).if = 'always()';},
     value => {gate(value)['continue-on-error'] = true;},
     value => {const record = gate(value); steps(value).splice(steps(value).indexOf(record), 1); steps(value).push(record);},
+    value => {steps(value).splice(steps(value).findIndex(step => step.with?.name === 'binary-sdk-sdk-amd64'), 1);},
+    value => {steps(value).splice(steps(value).findIndex(step => step.with?.name === 'binary-language-1.2-sdk-sdk-arm64'), 1);},
+    value => {pack(value).run = pack(value).run.replace('binary-sdk-release-evidence.mjs', 'omitted-binary-reader.mjs');},
+    value => {pack(value).run = pack(value).run.replace('"$architecture" 1.2', '"$architecture" 1.1');},
+    value => {steps(value).find(step => step.run?.includes('semantic-source-bootstrap.sh')).if = 'false';},
+    value => {const helper = steps(value).find(step => step.run?.includes('semantic-source-bootstrap.sh'));
+      steps(value).splice(steps(value).indexOf(helper), 1); steps(value).push(helper);},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'binary-sdk-sdk-${{ matrix.arch }}').with.path = 'sdk-${{ matrix.arch }}-binary-sdk.log';},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'binary-language-1.2-sdk-sdk-${{ matrix.arch }}').with['include-hidden-files'] = false;},
+    ...['browser-library', 'oci-native'].flatMap(name => semanticReadinessMutations.map(rewrite => value => {
+      const step = value.jobs[name].steps.find(candidate => candidate.run?.includes('semantic-source-bootstrap.sh'));
+      const changed = rewrite(step.run);
+      assert.notEqual(changed, step.run, 'readiness mutation must change the actual prerequisite');
+      step.run = changed;
+    })),
     value => {pack(value).if = 'false';},
     value => {pack(value)['continue-on-error'] = true;},
     value => {pack(value).run = pack(value).run.replace('set -euo pipefail', 'set -uo pipefail');},

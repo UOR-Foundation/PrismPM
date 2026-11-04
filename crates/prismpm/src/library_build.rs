@@ -1,4 +1,4 @@
-//! Native-only export of an explicitly modeled library through lean4-prod.
+//! Shared source-owned native core generation, completed by each package profile.
 
 use crate::error::PrismError;
 use crate::holo::canonical::content_id;
@@ -19,6 +19,8 @@ const FUNCTION_KEYWORDS: &[&str] = &[
     "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final", "macro",
     "override", "priv", "typeof", "unsized", "virtual", "yield", "try", "gen",
 ];
+
+pub(crate) mod binary;
 
 pub(crate) type LibraryArtifact = (String, Vec<u8>);
 
@@ -52,7 +54,7 @@ pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), PrismError> {
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", path.display())))
 }
 
-fn relative(path: &str) -> Result<(), PrismError> {
+pub(crate) fn relative(path: &str) -> Result<(), PrismError> {
     if path.is_empty()
         || path.contains('\\')
         || Path::new(path)
@@ -251,26 +253,98 @@ pub(crate) fn generate_owned(
     )
 }
 
-fn generate_in(
-    repository_root: &Path,
-    model: &ModelDocument,
-    model_bytes: &[u8],
-    lex_root: &Path,
-    lex_manifest_bytes: &[u8],
-    owned: Option<(&Path, &crate::exporter::GenerationContext<'_>)>,
-) -> Result<GeneratedLibrary, PrismError> {
-    let library = model
-        .library
-        .as_ref()
-        .ok_or_else(|| PrismError::new("PP9001", "native generation requires a library profile"))?;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeCoreProfile {
+    Library,
+    Binary,
+}
+
+impl NativeCoreProfile {
+    fn directory_prefix(self) -> &'static str {
+        match self {
+            Self::Library => "prismpm-native-library-",
+            Self::Binary => "prismpm-binary-program-",
+        }
+    }
+    fn lake_name(self) -> &'static str {
+        match self {
+            Self::Library => "prismpm_native_library",
+            Self::Binary => "prismpm_binary_program",
+        }
+    }
+    fn work_label(self) -> &'static str {
+        match self {
+            Self::Library => "$LIBRARY_WORK",
+            Self::Binary => "$BINARY_WORK",
+        }
+    }
+    fn artifact_prefix(self) -> &'static str {
+        match self {
+            Self::Library => "library",
+            Self::Binary => "binary",
+        }
+    }
+    fn package_tool(self) -> &'static str {
+        match self {
+            Self::Library => "native-library-package",
+            Self::Binary => "binary-program-package",
+        }
+    }
+    fn archive_context(self) -> &'static str {
+        match self {
+            Self::Library => "native library",
+            Self::Binary => "binary program",
+        }
+    }
+    fn acceptance_roots(self, library: &crate::holo::model_document::ModelLibrary) -> &[String] {
+        match self {
+            Self::Library => &library.acceptance_roots,
+            Self::Binary => &[],
+        }
+    }
+}
+
+struct NativeCoreRequest<'a, 'context> {
+    profile: NativeCoreProfile,
+    repository_root: &'a Path,
+    library: &'a crate::holo::model_document::ModelLibrary,
+    lex_root: &'a Path,
+    lex_manifest_bytes: &'a [u8],
+    owned: Option<(&'a Path, &'a crate::exporter::GenerationContext<'context>)>,
+}
+
+// This is an unfinished core, deliberately without ProductEvidence. Its owner
+// keeps the workspace and original exporter custody alive through completion.
+struct CoreParts<'a> {
+    workspace: &'a Path,
+    replacements: &'a [(&'a Path, &'static str)],
+    module: prod_ir::Module,
+    kernel_sha256: String,
+    archive_name: String,
+    artifacts: Vec<LibraryArtifact>,
+    processes: Vec<ProcessRecord>,
+}
+
+fn with_generated_core<T: crate::exporter::ProductEvidence>(
+    request: NativeCoreRequest<'_, '_>,
+    validate_module: impl FnOnce(&prod_ir::Module) -> Result<(), PrismError>,
+    complete: impl FnOnce(CoreParts<'_>) -> Result<T, PrismError>,
+) -> Result<T, PrismError> {
+    let NativeCoreRequest {
+        profile,
+        repository_root,
+        library,
+        lex_root,
+        lex_manifest_bytes,
+        owned,
+    } = request;
     let mut work = crate::exporter::directory::Directory::temporary(
-        "prismpm-native-library-",
+        profile.directory_prefix(),
         None,
         Default::default(),
     )?;
     let workspace_path = work.path().to_owned();
     let workspace = workspace_path.as_path();
-    let first_build = owned.is_none();
     let mut seed_custody = None;
     let (lean_package, exporter_acquisition) = match owned {
         Some((package, acquisition)) => (package.to_owned(), acquisition.receipt().clone()),
@@ -339,7 +413,7 @@ fn generate_in(
     write(
         &workspace.join("lakefile.toml"),
         crate::lean_project::configuration(
-            "prismpm_native_library",
+            profile.lake_name(),
             &crate::lean_project::roots(&runtime, &modules.iter().cloned().collect::<Vec<_>>()),
         )
         .as_bytes(),
@@ -351,7 +425,7 @@ fn generate_in(
     let lake = executable("lake")?;
     let replacements = [
         (lean_package.as_path(), "$LEAN4_PROD"),
-        (workspace, "$LIBRARY_WORK"),
+        (workspace, profile.work_label()),
         (repository_root, "$PROJECT"),
     ];
     let no_env = BTreeMap::new();
@@ -371,7 +445,7 @@ fn generate_in(
         if tool == "lean4-prod-build" {
             if let Some((_, context)) = owned {
                 context.before_build(repository_root, &lean_package)?;
-            } else if first_build {
+            } else {
                 crate::exporter::before_first_build(
                     repository_root,
                     &lean_package,
@@ -383,7 +457,7 @@ fn generate_in(
             }
         }
         processes.push(match owned {
-            Some((_, context)) => context.run_library(
+            Some((_, context)) if profile == NativeCoreProfile::Library => context.run_library(
                 tool,
                 &lake,
                 &args,
@@ -392,7 +466,7 @@ fn generate_in(
                 &replacements,
                 "PP5004",
             ),
-            None => run_process(
+            _ => run_process(
                 tool,
                 &lake,
                 &args,
@@ -421,7 +495,7 @@ fn generate_in(
             .into_owned(),
     )]);
     processes.push(match owned {
-        Some((_, context)) => context.run_library(
+        Some((_, context)) if profile == NativeCoreProfile::Library => context.run_library(
             "prod-export",
             &lake,
             &arguments,
@@ -430,7 +504,7 @@ fn generate_in(
             &replacements,
             "PP5004",
         ),
-        None => crate::exporter::run_export_with_custody(
+        _ => crate::exporter::run_export_with_custody(
             "prod-export",
             &lake,
             &arguments,
@@ -446,11 +520,11 @@ fn generate_in(
     for name in ["coverage.json", "kernel.ir", "roots.json"] {
         let bytes = std::fs::read(export.join(name))
             .map_err(|error| PrismError::new("PP5004", format!("{name}: {error}")))?;
-        artifacts.push((format!("library/{name}"), bytes));
+        artifacts.push((format!("{}/{name}", profile.artifact_prefix()), bytes));
     }
     let kernel = &artifacts
         .iter()
-        .find(|(path, _)| path == "library/kernel.ir")
+        .find(|(path, _)| path == &format!("{}/kernel.ir", profile.artifact_prefix()))
         .expect("kernel recorded")
         .1;
     let text = std::str::from_utf8(kernel)
@@ -467,12 +541,14 @@ fn generate_in(
         .map_err(|error| PrismError::new("PP5004", error.to_string()))
     };
     validate_export_identity(
-        &document("library/coverage.json")?,
-        &document("library/roots.json")?,
+        &document(&format!("{}/coverage.json", profile.artifact_prefix()))?,
+        &document(&format!("{}/roots.json", profile.artifact_prefix()))?,
         &module,
         &library.export_roots,
-        &library.acceptance_roots,
+        profile.acceptance_roots(library),
     )?;
+    validate_module(&module)?;
+    let kernel_sha256 = sha256(kernel);
     let package = generate_cargo_package(
         &module,
         &CargoPackageSpec {
@@ -493,7 +569,10 @@ fn generate_in(
     for file in package.files {
         relative(&file.path)?;
         write(&package_root.join(&file.path), &file.bytes)?;
-        artifacts.push((format!("library/package/{}", file.path), file.bytes));
+        artifacts.push((
+            format!("{}/package/{}", profile.artifact_prefix(), file.path),
+            file.bytes,
+        ));
     }
     let cargo_home = workspace.join("cargo-home");
     std::fs::create_dir(&cargo_home)
@@ -509,8 +588,8 @@ fn generate_in(
     let package_arguments =
         ["package", "--locked", "--offline", "--allow-dirty"].map(str::to_owned);
     processes.push(match owned {
-        Some((_, context)) => context.run_library(
-            "native-library-package",
+        Some((_, context)) if profile == NativeCoreProfile::Library => context.run_library(
+            profile.package_tool(),
             &cargo,
             &package_arguments,
             &package_root,
@@ -518,8 +597,8 @@ fn generate_in(
             &replacements,
             "PP4102",
         ),
-        None => run_process(
-            "native-library-package",
+        _ => run_process(
+            profile.package_tool(),
             &cargo,
             &package_arguments,
             &package_root,
@@ -530,35 +609,97 @@ fn generate_in(
     }?);
     let archive_name = format!("{}-{}.crate", library.cargo_name, library.cargo_version);
     let crate_bytes = std::fs::read(package_root.join("target/package").join(&archive_name))
-        .map_err(|error| PrismError::new("PP4102", format!("native library archive: {error}")))?;
-    artifacts.push((format!("library/{archive_name}"), crate_bytes));
+        .map_err(|error| {
+            PrismError::new(
+                "PP4102",
+                format!("{} archive: {error}", profile.archive_context()),
+            )
+        })?;
     artifacts.push((
-        "library/model-binding.json".to_owned(),
-        crate::contracts::CanonicalDocument::from_value(
-            "prismpm/library-build-binding/1",
-            json!({
-                "acceptance_roots": library.acceptance_roots, "export_roots": library.export_roots,
-                "model_id": content_id(model_bytes), "profile": library.profile,
-                "schema": "prismpm/library-build-binding/1", "scope": "native-library-only"
-            }),
-        )?
-        .bytes()
-        .to_vec(),
+        format!("{}/{archive_name}", profile.artifact_prefix()),
+        crate_bytes,
     ));
-    artifacts.sort_by(|left, right| left.0.cmp(&right.0));
+    let result = complete(CoreParts {
+        workspace,
+        replacements: &replacements,
+        module,
+        kernel_sha256,
+        archive_name,
+        artifacts,
+        processes,
+    })?;
     if seed_custody.is_some() {
         work.protect_verified_package(&lean_package, &export_custody)?;
     }
     work.close()?;
-    Ok(GeneratedLibrary {
-        artifacts,
-        processes,
-    })
+    Ok(result)
+}
+
+fn generate_in(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+    owned: Option<(&Path, &crate::exporter::GenerationContext<'_>)>,
+) -> Result<GeneratedLibrary, PrismError> {
+    let library = model
+        .library
+        .as_ref()
+        .ok_or_else(|| PrismError::new("PP9001", "native generation requires a library profile"))?;
+    with_generated_core(
+        NativeCoreRequest {
+            profile: NativeCoreProfile::Library,
+            repository_root,
+            library,
+            lex_root,
+            lex_manifest_bytes,
+            owned,
+        },
+        |_| Ok(()),
+        |core| {
+            let CoreParts {
+                mut artifacts,
+                processes,
+                ..
+            } = core;
+            let binding = crate::contracts::CanonicalDocument::from_value(
+                "prismpm/library-build-binding/1",
+                json!({
+                    "acceptance_roots": library.acceptance_roots, "export_roots": library.export_roots,
+                    "model_id": content_id(model_bytes), "profile": library.profile,
+                    "schema": "prismpm/library-build-binding/1", "scope": "native-library-only"
+                }),
+            )?;
+            artifacts.push((
+                "library/model-binding.json".to_owned(),
+                binding.bytes().to_vec(),
+            ));
+            artifacts.sort_by(|left, right| left.0.cmp(&right.0));
+            Ok(GeneratedLibrary {
+                artifacts,
+                processes,
+            })
+        },
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{regular_bytes, validate_export_identity};
+
+    #[test]
+    fn unfinished_core_cannot_be_submitted_as_product_evidence() {
+        // A successful shared core still lacks profile completion. If it ever
+        // implements ProductEvidence, inference becomes ambiguous here.
+        trait AmbiguousIfEvidence<A> {
+            fn check() {}
+        }
+        impl<T: ?Sized> AmbiguousIfEvidence<()> for T {}
+        struct EvidenceMarker;
+        impl<T: ?Sized + crate::exporter::ProductEvidence> AmbiguousIfEvidence<EvidenceMarker> for T {}
+        let _ = <super::CoreParts<'static> as AmbiguousIfEvidence<_>>::check;
+    }
     use prod_ir::{Definition, Expr, Module, Type};
     use serde_json::{json, Value};
 

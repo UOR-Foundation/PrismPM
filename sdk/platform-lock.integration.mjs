@@ -86,6 +86,7 @@ try {
       await chmod(join(context, 'standards.lock'), 0o444);
       await writeFile(join(context, 'Dockerfile'), 'FROM scratch AS metadata\nCOPY inventory.json standards.lock /opt/prismpm/share/\n'
         + 'FROM scratch\nCOPY facts /test-facts\nCOPY --link --from=metadata / /\n'
+        + 'LABEL org.opencontainers.image.version="0.4.0"\n'
         + 'LABEL ' + label + '="' + profile + '"\nCMD ["/never-executed-test-fixture"]\n');
       const tag = `${endpoint}/test-sdk-${nonce}:${generation}-${architecture}`;
       imageReferences.add(tag);

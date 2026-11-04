@@ -38,7 +38,8 @@ export function fixture(t, mutation = '', options = {}) {
     const lower = put(Buffer.from('never fetched lower layer ' + architecture), media + 'layer.v1.tar');
     lowerDigests.push(lower.digest);
     const terminal = put(result.stdout, media + 'layer.v1.tar');
-    const config = {architecture, os:'linux', config:{Labels:{[label]:profile}}, rootfs:{type:'layers', diff_ids:[lower.digest, terminal.digest]}};
+    const config = {architecture, os:'linux', config:{Labels:{[label]:profile,'org.opencontainers.image.version':'0.4.0'}}, rootfs:{type:'layers', diff_ids:[lower.digest, terminal.digest]}};
+    if (options.configChange) options.configChange(config, architecture);
     if (mutation === 'legacy') delete config.config.Labels[label];
     if (mutation === 'platform' && architecture === 'arm64') config.architecture = 'amd64';
     if (mutation === 'diffid') config.rootfs.diff_ids[1] = sha('other');

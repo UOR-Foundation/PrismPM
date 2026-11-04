@@ -7,8 +7,10 @@ import {pathToFileURL} from 'node:url';
 import {describeDiagnosticLayout, platformIndex, verifyReproducibility} from './release-phases.mjs';
 import {validateConfig} from './sdk-candidate.mjs';
 import {executeOwnedSdkCommand} from './sdk-command-owner.mjs';
+import {diagnosticInitialAncestor, verifyDiagnosticAncestor} from './native-resource-ancestry.mjs';
 
 export const diagnosticRef = 'refs/heads/fix/521-release-build-sets';
+export const diagnosticPushPrefix = 'refs/heads/resource-diagnostic/';
 export const diagnosticScope = 'unpublished native resource diagnostic only; not shipped, signed, SDK or release acceptance';
 const sha = bytes => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
 const oid = value => assert.match(value, /^[a-f0-9]{40}$/);
@@ -46,23 +48,52 @@ function digestOriginal(path, limit, hash = createHash('sha256')) {
     assert.equal(realpathSync(path), path); return {stat: before, length, hash};
   } finally {closeSync(fd);}
 }
-function context(revision, arch, environment = process.env) {
-  oid(revision); assert(['amd64', 'arm64'].includes(arch));
+export function diagnosticTrigger(revision, environment = process.env, budgetMs = 10000) {
+  assert(Number.isInteger(budgetMs) && budgetMs > 0 && budgetMs <= 10000, 'remaining trigger proof budget required');
+  oid(revision);
   assert.equal(environment.GITHUB_REPOSITORY, 'UOR-Foundation/PrismPM');
   assert.equal(environment.GITHUB_SHA, revision); assert.equal(environment.GITHUB_WORKFLOW_SHA, revision);
-  assert.equal(environment.GITHUB_REF, diagnosticRef); assert.equal(environment.GITHUB_EVENT_NAME, 'workflow_dispatch');
+  if (environment.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+    assert.equal(environment.GITHUB_REF, diagnosticRef);
+    return {event: 'workflow_dispatch', ref: diagnosticRef, source_revision: revision};
+  }
+  assert.equal(environment.GITHUB_EVENT_NAME, 'push');
+  assert.equal(environment.GITHUB_REF, diagnosticPushPrefix + revision, 'full source SHA must name the diagnostic ref');
+  assert(typeof environment.GITHUB_EVENT_PATH === 'string' && environment.GITHUB_EVENT_PATH.length > 0);
+  const event = JSON.parse(original(environment.GITHUB_EVENT_PATH));
+  assert.equal(event.repository.full_name, 'UOR-Foundation/PrismPM');
+  assert.equal(event.repository.fork, false);
+  assert.equal(event.ref, environment.GITHUB_REF); assert.equal(event.after, revision);
+  assert.equal(event.head_commit.id, revision, 'original pushed head required');
+  assert.equal(typeof event.created, 'boolean'); assert.equal(event.deleted, false); assert.equal(event.forced, false);
+  let ancestorProof = null;
+  if (event.created) assert.equal(event.before, '0'.repeat(40), 'new diagnostic ref must have no previous head');
+  else {
+    assert.equal(event.before, diagnosticInitialAncestor, 'only the pinned initial ancestor can be advanced');
+    ancestorProof = verifyDiagnosticAncestor(revision, undefined, budgetMs);
+  }
+  return {event: 'push', ref: event.ref, source_revision: revision, before: event.before,
+    after: event.after, head_commit: event.head_commit.id, created: event.created, deleted: false,
+    forced: false, ancestor_proof: ancestorProof};
+}
+function context(revision, arch, environment = process.env) {
+  assert(['amd64', 'arm64'].includes(arch)); diagnosticTrigger(revision, environment);
   positive(environment.GITHUB_RUN_ID); positive(environment.GITHUB_RUN_ATTEMPT);
   return {source_revision: revision, architecture: arch, run_id: environment.GITHUB_RUN_ID, run_attempt: environment.GITHUB_RUN_ATTEMPT};
 }
 
-export function diagnosticPolicy(environment, now = Date.now()) {
-  const revision = environment.DIAGNOSTIC_SOURCE; oid(revision);
-  context(revision, 'amd64', environment);
-  assert.equal(environment.DISPATCH_VERSION, '0.4.0');
-  assert.equal(environment.REHEARSAL, 'true'); assert.equal(environment.PUBLISH_CRATES, 'false');
+export function diagnosticPolicy(environment, now = Date.now(), budgetMs = 10000) {
+  const revision = environment.GITHUB_EVENT_NAME === 'push' ? environment.GITHUB_SHA : environment.DIAGNOSTIC_SOURCE; oid(revision);
+  const trigger = diagnosticTrigger(revision, environment, budgetMs);
+  positive(environment.GITHUB_RUN_ID); positive(environment.GITHUB_RUN_ATTEMPT);
+  if (environment.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+    assert.equal(environment.DISPATCH_VERSION, '0.4.0');
+    assert.equal(environment.REHEARSAL, 'true'); assert.equal(environment.PUBLISH_CRATES, 'false');
+  }
   assert(Number.isSafeInteger(now) && now > 0);
   return {schema: 'prismpm/native-resource-plan/1', scope: diagnosticScope, source_revision: revision,
-    workflow_revision: revision, run_id: environment.GITHUB_RUN_ID, run_attempt: environment.GITHUB_RUN_ATTEMPT,
+    workflow_revision: revision, trigger,
+    run_id: environment.GITHUB_RUN_ID, run_attempt: environment.GITHUB_RUN_ATTEMPT,
     work_end_ms: now + 19800000, whole_end_ms: now + 21600000, maximum_native_runners: 2,
     store_bytes: 40 * 1024 ** 3, backing_reserve_bytes: 12 * 1024 ** 3,
     outside_allowance_bytes: 2 * 1024 ** 3, sampled_inner_stop_bytes: 1024 ** 3,
@@ -79,7 +110,8 @@ export function admitDiagnosticPlan(plan, revision, workEnd, wholeEnd, environme
   assert(Number.isSafeInteger(workEnd) && Number.isSafeInteger(wholeEnd));
   assert(Date.now() < workEnd && wholeEnd - Date.now() <= 21600000);
   const expected = {...diagnosticPolicy({...environment, DIAGNOSTIC_SOURCE: revision,
-    DISPATCH_VERSION: '0.4.0', REHEARSAL: 'true', PUBLISH_CRATES: 'false'}, workEnd - 19800000), ...policyDigests()};
+    DISPATCH_VERSION: '0.4.0', REHEARSAL: 'true', PUBLISH_CRATES: 'false'}, workEnd - 19800000,
+      Math.min(10000, Math.floor(workEnd - Date.now()))), ...policyDigests()};
   assert.equal(expected.whole_end_ms, wholeEnd);
   assert.deepEqual(plan, expected, 'exact source-bound dispatch plan required');
   return plan;
@@ -193,9 +225,6 @@ export async function runDiagnosticCommand(requestPath, execute = executeOwnedSd
   keys(request, ['schema','source_revision','run_id','run_attempt','command_id','deadline_ms','maximum_ms',
     'log_path','capture_path','result_path','cancel_file','stream_output','argv']);
   assert.equal(request.schema, 'prismpm/native-resource-command/1'); oid(request.source_revision);
-  assert.equal(request.source_revision, environment.GITHUB_SHA); assert.equal(request.source_revision, environment.GITHUB_WORKFLOW_SHA);
-  assert.equal(environment.GITHUB_REPOSITORY, 'UOR-Foundation/PrismPM'); assert.equal(environment.GITHUB_REF, diagnosticRef);
-  assert.equal(environment.GITHUB_EVENT_NAME, 'workflow_dispatch');
   for (const field of ['run_id', 'run_attempt']) {positive(request[field]); assert.equal(request[field], environment[field === 'run_id' ? 'GITHUB_RUN_ID' : 'GITHUB_RUN_ATTEMPT']);}
   assert.match(request.command_id, /^[a-z0-9][a-z0-9-]{0,63}$/);
   assert(Number.isSafeInteger(request.deadline_ms) && Number.isSafeInteger(request.maximum_ms) && request.maximum_ms >= 0 && request.maximum_ms <= 21600000);
@@ -213,11 +242,17 @@ export async function runDiagnosticCommand(requestPath, execute = executeOwnedSd
   const cap = basename(request.log_path) === 'cleanup.log' ? 16 * 1024 ** 2 : 256 * 1024 ** 2;
   const prior = lstatSync(request.log_path, {throwIfNoEntry: false});
   if (prior) assert(prior.isFile() && prior.nlink === 1 && realpathSync(request.log_path) === request.log_path && prior.size < cap);
-  const admitted = Math.min(request.deadline_ms - Date.now(), request.maximum_ms || 21600000);
-  assert(admitted > 5000 && admitted <= 21600000, 'shared deadline must include private owner retirement');
+  const admissionStarted = performance.now();
+  const initialAdmission = Math.min(request.deadline_ms - Date.now(), request.maximum_ms || 21600000);
+  assert(initialAdmission > 5000 && initialAdmission <= 21600000, 'shared deadline must include private owner retirement');
+  diagnosticTrigger(request.source_revision, environment, Math.min(10000, Math.floor(initialAdmission - 5000)));
+  let admitted = Math.min(request.deadline_ms - Date.now(), initialAdmission - (performance.now() - admissionStarted));
+  assert(admitted > 5000, 'trigger proof consumed the remaining command budget');
   const logHash = createHash('sha256'), captureHash = createHash('sha256');
   const initialLog = prior ? digestOriginal(request.log_path, cap, logHash) : undefined;
   assert.equal(initialLog?.length ?? 0, prior?.size ?? 0);
+  admitted = Math.min(request.deadline_ms - Date.now(), initialAdmission - (performance.now() - admissionStarted));
+  assert(admitted > 5000, 'admission readback consumed the remaining command budget');
   const abort = new AbortController(), started = performance.now(); let reason = null, timer, response, cancelIdentity;
   let logfd, capturefd, logged = prior?.size ?? 0, captured = 0, truncated = false, stderr = Buffer.alloc(0);
   const completeWrite = (fd, bytes) => {for (let offset = 0; offset < bytes.length;) {const n = writeSync(fd, bytes, offset, bytes.length - offset); assert(n > 0, 'diagnostic write made no progress'); offset += n;}};

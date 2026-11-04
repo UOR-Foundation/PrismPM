@@ -403,10 +403,17 @@ const releaseJobs = ['policy', 'image-platforms', 'sdk-supply', 'product-images'
   'source-vv', 'gate', 'reproducibility-parts', 'browser-library', 'reproducibility',
   'installed-vv', 'product-cli', 'installed-sdk', 'native', 'oci-native', 'crates', 'release'];
 const diagnosticJobs = ['diagnostic-policy', 'diagnostic-production', 'diagnostic-pair'];
-const releaseGuard = "${{ inputs.resource-diagnostic-source == '' }}";
-const diagnosticGuard = "${{ inputs.resource-diagnostic-source != '' }}";
+const releaseGuard = "${{ inputs.resource-diagnostic-source == '' && !startsWith(github.ref, 'refs/heads/resource-diagnostic/') }}";
+const diagnosticGuard = "${{ (github.event_name == 'workflow_dispatch' && inputs.resource-diagnostic-source != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/resource-diagnostic/')) }}";
+function releaseTriggerContract(value) {
+  assert.deepEqual(Object.keys(value.on).sort(), ['push', 'workflow_dispatch']);
+  assert.deepEqual(value.on.push, {branches: ['release/v0.4', 'resource-diagnostic/*'], tags: ['v0.4.0']});
+  const diagnostic = value.on.workflow_dispatch.inputs['resource-diagnostic-source'];
+  assert.equal(diagnostic.type, 'string'); assert.equal(diagnostic.default, ''); assert.equal(diagnostic.required, false);
+}
 function releaseRunnerBudget(value, mode = 'release') {
   assert(['release', 'diagnostic'].includes(mode), 'closed execution mode');
+  releaseTriggerContract(value);
   const names = Object.keys(value.jobs), indices = new Map(names.map((name, i) => [name, i]));
   assert(names.length > 0 && names.length <= 24, 'bounded complete job graph');
   assert.deepEqual([...names].sort(), [...releaseJobs, ...diagnosticJobs].sort(), 'complete closed release job inventory');
@@ -476,12 +483,59 @@ test('exclusive execution modes cap every weighted antichain at fifteen release 
   assert.equal(releaseRunnerBudget(workflow('release'), 'diagnostic'), 2);
 });
 
+test('diagnostic push and manual routes preserve exact triggers and exclusive execution guards', () => {
+  const value = workflow('release'); releaseTriggerContract(value);
+  const selected = (guard, event, ref, source) => {
+    const expression = guard.slice(3, -3).replaceAll('github.event_name', 'event')
+      .replaceAll('github.ref', 'ref').replaceAll('inputs.resource-diagnostic-source', 'source');
+    // Actions treats absent input as empty and startsWith is case insensitive.
+    return Function('event', 'ref', 'source', 'startsWith', `return ${expression}`)(event, ref, source ?? '',
+      (text, prefix) => text.toLowerCase().startsWith(prefix.toLowerCase()));
+  };
+  for (const [event, ref, source, release, diagnostic] of [
+    ['workflow_dispatch', 'refs/heads/fix/521-release-build-sets', '', true, false],
+    ['workflow_dispatch', 'refs/heads/fix/521-release-build-sets', 'a'.repeat(40), false, true],
+    ['push', 'refs/heads/release/v0.4', '', true, false],
+    ['push', 'refs/heads/release/v0.4', null, true, false],
+    ['push', 'refs/tags/v0.4.0', '', true, false],
+    ['push', 'refs/heads/resource-diagnostic/' + 'a'.repeat(40), '', false, true],
+    ['push', 'refs/heads/resource-diagnostic/' + 'a'.repeat(40), null, false, true],
+    ['push', 'refs/heads/RESOURCE-DIAGNOSTIC/' + 'a'.repeat(40), '', false, true],
+    ['workflow_dispatch', 'refs/heads/resource-diagnostic/' + 'a'.repeat(40), '', false, false],
+    ['pull_request', 'refs/pull/1/merge', 'a'.repeat(40), false, false],
+    ['create', 'refs/heads/resource-diagnostic/' + 'a'.repeat(40), '', false, false],
+  ]) {
+    assert.equal(selected(releaseGuard, event, ref, source), release);
+    assert.equal(selected(diagnosticGuard, event, ref, source), diagnostic);
+    assert(!(release && diagnostic), 'release and diagnostic branches cannot execute together');
+  }
+  for (const mutate of [
+    changed => changed.on.push.branches.pop(),
+    changed => changed.on.push.branches.push('main'),
+    changed => {changed.on.push.branches[1] = 'resource-diagnostic/**';},
+    changed => {changed.on.push.branches[1] = 'resource-diagnostic*';},
+    changed => changed.on.push.tags.push('*'),
+    changed => {changed.on.push.tags = [];},
+    changed => {changed.on.push.paths = ['scripts/**'];},
+    changed => {changed.on.push['paths-ignore'] = ['docs/**'];},
+    changed => {changed.on.push['branches-ignore'] = ['main'];},
+    changed => {changed.on.create = {};},
+    changed => {changed.on.workflow_call = {};},
+    changed => {delete changed.on.workflow_dispatch;},
+  ]) {
+    const changed = structuredClone(value); mutate(changed);
+    for (const mode of ['release', 'diagnostic']) assert.throws(() => releaseRunnerBudget(changed, mode));
+  }
+});
+
 test('mode selection cannot hide unknown edges, cycles or weakened isolation guards', () => {
   const bypasses = ['always()', 'failure()', '${{ always() }}', '${{ failure() }}'];
   for (const mutate of [
     value => { delete value.jobs.policy.if; },
+    value => { value.jobs.policy.if = "${{ inputs.resource-diagnostic-source == '' }}"; },
     value => { value.jobs.policy.if = diagnosticGuard; },
     value => { value.jobs['diagnostic-policy'].if = releaseGuard; },
+    ...diagnosticJobs.map(name => value => { value.jobs[name].if = "${{ inputs.resource-diagnostic-source != '' }}"; }),
     ...releaseJobs.flatMap(name => bypasses.map(guard => value => { value.jobs[name].if = guard; })),
     ...diagnosticJobs.map(name => value => { delete value.jobs[name].if; }),
     value => { value.jobs['image-platforms'].needs = []; },
