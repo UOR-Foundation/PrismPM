@@ -24,7 +24,7 @@ test('canonical Cargo Git caches retain every object and real locked offline sub
 
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
-  const steps = workflow().jobs.reproducibility.steps;
+  const steps = workflow().jobs['reproducibility-parts'].steps;
   const compare = steps.find(step => step.env?.DOCKERFILE);
   assert.match(compare.run, /cmp root-a.digest root-b.digest\n/);
   assert.match(compare.run, /cmp root-a.oci\/index.json root-b.oci\/index.json\n/);
@@ -118,121 +118,171 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs.rehearsal, '${{ needs.policy.outputs.rehearsal }}');
   assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert(value.jobs.policy.steps.some(step => step.run === 'node --test scripts/release-native-contract.test.mjs'));
-  assert.equal(value.jobs['source-vv'].needs, 'policy', 'cheap release contracts must pass before source verification');
+  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'sdk-supply'], 'source verification consumes the independently signed SDK');
   const sourceSteps = value.jobs['source-vv'].steps;
   assert(sourceSteps.some(step => step.id === 'cache' && step.uses === './.github/actions/devcontainer-cache'));
   const sourceBuild = sourceSteps.find(step => step.with?.runCmd).with;
   assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
   assert.equal(sourceBuild.cacheTo, undefined, 'source shards consume the construction cache without concurrent writers');
-  const sourceGate = value.jobs['source-vv'].steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
-    + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
+  assert.equal(sourceBuild.runCmd, `set -euo pipefail
+bash scripts/sdk-candidate.sh install-oras "$PWD/target/release-tools"
+bash scripts/sdk-candidate.sh install-cosign "$PWD/target/release-tools"
+export PATH="$PWD/target/release-tools:$PATH"
+image=$(cat target/release-sdk/sdk-image.txt)
+bash scripts/source-sdk-handoff.sh "$image" '\${{ github.sha }}' amd64 '\${{ github.ref }}' '\${{ github.event_name }}' \\
+  bash scripts/vv.sh --with-sdk node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence \\
+  '\${{ github.sha }}' amd64 "$image" '\${{ github.run_id }}' '\${{ github.run_attempt }}' '\${{ matrix.part }}'
+`);
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
-  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  const sourceUpload = value.jobs.gate.steps.find(step => step.uses?.startsWith('actions/upload-artifact'));
   assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
+  assert.equal(sourceUpload.with.name, '${{ steps.evidence.outputs.name }}');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
-  assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
+  assert.deepEqual(value.jobs.gate.needs, ['policy', 'sdk-supply', 'source-vv']);
+  assert.deepEqual(value.jobs.images.needs, ['sdk-supply', 'product-images']);
+  assert.deepEqual(value.jobs.reproducibility.needs, ['reproducibility-parts', 'browser-library']);
+  assert.deepEqual(value.jobs['reproducibility-parts'].needs, ['policy', 'images']);
   const installed = value.jobs['installed-sdk'], parts = value.jobs['installed-vv'];
-  assert.deepEqual(installed.needs, ['gate', 'images', 'installed-vv']); assert.deepEqual(parts.needs, ['gate', 'images']);
-  for (const job of [installed, parts]) {assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], undefined); assert.equal(job['runs-on'], '${{ matrix.os }}');}
-  assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
+  assert.deepEqual(installed.needs, ['policy', 'sdk-supply', 'installed-vv', 'product-cli']);
+  const nativePlatforms = [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}];
+  for (const name of ['source-vv', 'installed-vv', 'product-cli', 'browser-library', 'native'])
+    assert.deepEqual(value.jobs[name].needs, ['policy', 'sdk-supply']);
+  for (const name of ['gate', 'images', 'reproducibility', 'installed-sdk', 'reproducibility-parts', 'installed-vv', 'product-cli', 'browser-library', 'native']) {
+    const job = value.jobs[name];
+    assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], undefined);
+    for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
+  }
+  for (const job of [installed, parts, value.jobs['product-cli'], value.jobs['browser-library']])
+    assert.equal(job['runs-on'], '${{ matrix.os }}');
+  for (const name of ['installed-sdk', 'product-cli', 'browser-library'])
+    assert.deepEqual(value.jobs[name].strategy.matrix.include, nativePlatforms);
   const byKey = row => `${row.arch}/${row.part}`;
-  assert.deepEqual(parts.strategy.matrix.include.map(byKey).sort(), [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]
+  assert.deepEqual(parts.strategy.matrix.include.map(byKey).sort(), nativePlatforms
     .flatMap(row => vvParts.map(part => byKey({...row, part}))).sort());
   assert.equal(parts.strategy.matrix.include.length, vvParts.length * 2);
   for (const row of parts.strategy.matrix.include) assert.equal(row.os, row.arch === 'amd64' ? 'ubuntu-24.04' : 'ubuntu-24.04-arm');
   const complete = parts.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
-  assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
+  assert(complete); assert.equal(complete.if, undefined);
   assert.match(complete.run, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
   const outer = readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url), 'utf8');
   assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run'));
   assert(outer.includes('--target registry_qualification_tools'));
   assert(parts.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
-  const retained = parts.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}');
+  const retained = parts.steps.find(step => step.uses?.startsWith('actions/upload-artifact'));
+  assert.equal(retained.with.name, '${{ steps.evidence.outputs.name }}');
   assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
   assert(retained.with.path.includes('!sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/'), 'private transport data must not be uploaded');
   const assembled = installed.steps.find(step => step.run?.includes('assemble-installed'));
-  assert(assembled); assert.equal(assembled.if, undefined); assert.equal(assembled['continue-on-error'], undefined);
+  assert(assembled); assert.equal(assembled.if, undefined);
+  const product = value.jobs['product-cli'].steps.find(step => step.run?.includes('product-sdk-check.sh'));
+  assert(product && product.if === undefined);
+  assert.match(product.run, /^set -euo pipefail\n/);
+  assert.match(product.run, /node root-a\/scripts\/product-sdk-check\.mjs tests/);
+  const browser = value.jobs['browser-library'].steps.find(step => step.run?.includes('browser-api-sdk-check.sh'));
+  const library = value.jobs['browser-library'].steps.find(step => step.run?.includes('library-sdk-check.sh'));
+  assert(browser && browser.if === undefined && library && library.if === undefined);
+  for (const step of [product, browser, library]) {
+    assert.match(step.run, /^set -euo pipefail\n/);
+    assert(!step.run.includes('||'), 'independent owner failure must propagate');
+    assert(step.run.includes('"$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA"')
+      || step.run.includes('"$(cat .shipped-image/sdk-image.txt)" \\\n  "$GITHUB_SHA"'));
+  }
+  assert.match(library.run, /node root-a\/scripts\/library-sdk-check\.mjs tests/);
   const platformJob = value.jobs['image-platforms'];
-  assert.deepEqual(platformJob.needs, 'gate');
+  assert.equal(platformJob.needs, 'policy');
   assert.equal(platformJob['runs-on'], '${{ matrix.os }}');
-  assert.deepEqual(platformJob.strategy.matrix.include, [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}]);
-  assert.deepEqual(value.jobs.images.needs, ['gate', 'image-platforms']);
+  assert.deepEqual(platformJob.strategy.matrix.include, nativePlatforms);
   for (const job of Object.values(value.jobs))
     assert.ok(!job.steps.some(step => step.uses?.startsWith('docker/setup-qemu-action')), 'every platform is built natively');
   const builds = platformJob.steps.find(step => step.id === 'build');
-  assert.equal(builds.uses, undefined);
-  assert.equal(builds.with, undefined);
+  assert.equal(builds.uses, undefined); assert.equal(builds.with, undefined);
+  assert.match(builds.run, /plan=\$\(node scripts\/release-construction-plan\.mjs "\$GITHUB_SHA" "\$ARCH" "\$BUILDER" "\$RUNNER_TEMP\/image-platforms-work"\)/);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs build-set \. "\$GITHUB_SHA" "\$plan"/);
+  assert.equal(builds.env.BUILDER, '${{ steps.builder.outputs.name }}');
+  assert.match(builds.run, /docker buildx build --builder "\$BUILDER" --file sdk\/runtime\/Dockerfile --platform "linux\/\$ARCH"/);
   assert.match(builds.run, /--output "type=registry,name=\$repository,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
   assert.ok(!builds.run.includes('--tag'), 'unaccepted publication must not move discovery aliases');
-  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$target"\)/);
-  assert.match(builds.run, /--platform "linux\/\$ARCH"/);
   assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
-  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/\$name-build\.json" > "\$RUNNER_TEMP\/image-platforms\/\$name-\$ARCH\.digest"/);
-  const table = builds.run.slice(builds.run.indexOf("<<'IMAGES'\n") + 10, builds.run.indexOf('IMAGES\n', builds.run.indexOf("<<'IMAGES'\n") + 10))
-    .trim().split('\n').map(line => line.split(' '));
-  assert.deepEqual(table, value.jobs.images.strategy.matrix.include.map(image =>
-    [image.name, image.dockerfile, image.target || '-', image.repository]), 'every image is built on both platforms');
-  const assembly = value.jobs.images.steps.find(step => step.id === 'build');
-  assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
-  assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
-  assert.ok(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
-  const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/image-platforms-work\/\$name-build\.json"/);
+  const table = builds.run.split("<<'SDK_IMAGES'\n")[1].split('SDK_IMAGES\n')[0].trim().split('\n').map(line => line.split(' '));
+  const supplyNames = ['sdk-supply', 'product-images'];
+  const imageRows = supplyNames.flatMap(name => value.jobs[name].strategy.matrix.include);
+  assert.deepEqual(imageRows.map(row => row.name), ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']);
+  assert.deepEqual(table, imageRows.filter(row => row.dockerfile === 'sdk/Dockerfile').map(row => [row.name, row.target]));
+  const native = value.jobs.native;
+  assert(native.steps.some(step => step.with?.name === 'native-construction-${{ matrix.arch }}' && step.with.path === '.native-release'));
+  assert(!native.steps.some(step => step.run?.includes('sdk-image-inputs.mjs build')), 'native acceptance must consume the original archive');
+  const equivalence = native.steps.find(step => step.run?.includes('release-gate-evidence.mjs native'));
+  assert.match(equivalence.run, /sha256sum --check/); assert.equal(equivalence.if, undefined);
+  const rebuild = value.jobs['reproducibility-parts'].steps.find(step => step.env?.DOCKERFILE);
   for (const key of ['created', 'revision', 'source', 'version']) {
     assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
       || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
     assert.ok(rebuild.run.includes(`--label "org.opencontainers.image.${key}=`), `rebuild omits ${key}`);
   }
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.revision=\$GITHUB_SHA"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.source=https:\/\/github\.com\/\$GITHUB_REPOSITORY"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.version=\$VERSION"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.created=1970-01-01T00:00:00Z"/);
+  for (const [key, expected] of [['revision', '$GITHUB_SHA'], ['source', 'https://github.com/$GITHUB_REPOSITORY'], ['version', '$VERSION'], ['created', '1970-01-01T00:00:00Z']])
+    assert(rebuild.run.includes(`--label "org.opencontainers.image.${key}=${expected}"`));
+  assert.match(rebuild.run, /for root in root-a root-b; do/);
+  assert.match(rebuild.run, /builder="repro-.*-\$root"/);
+  assert.match(rebuild.run, /docker buildx create --name "\$builder" --driver docker-container/);
+  assert.match(rebuild.run, /--builder "\$builder" --no-cache --provenance=false --sbom=false/);
+  assert(!/--cache-(?:from|to)|--keep-state/.test(rebuild.run));
+  assert(rebuild.run.indexOf('\n  docker buildx rm "$builder"\n') > rebuild.run.indexOf('"${build[@]}"'));
   assert.match(rebuild.run, /release-phases\.mjs reproducibility/);
-  assert.match(rebuild.run, /type=oci,dest=\$root\.oci\.tar,rewrite-timestamp=true,oci-mediatypes=true/);
-  for (const row of value.jobs.reproducibility.strategy.matrix.include) {
-    assert.ok(value.jobs.images.strategy.matrix.include.some(image => image.name === row.image
-      && image.dockerfile === row.dockerfile && image.target === row.target));
-  }
+  assert.match(rebuild.run, /type=oci,tar=false,dest=\$root\.oci,rewrite-timestamp=true,oci-mediatypes=true/);
+  assert(!rebuild.run.includes('.oci.tar'), 'reproducibility retains the complete layouts without duplicate outer archives');
+  for (const row of value.jobs['reproducibility-parts'].strategy.matrix.include)
+    assert(imageRows.some(image => image.name === row.image && image.dockerfile === row.dockerfile && image.target === row.target));
+  assert.equal(value.jobs['reproducibility-parts'].strategy.matrix.include.length, 12);
   const publication = value.jobs['oci-native'].steps;
-  assert.ok(publication.some(step => step.run?.includes('release-phases.mjs prerequisites oci-native')));
-  assert.ok(publication.some(step => step.run?.includes('release-phases.mjs publish-oci')));
-  assert.ok(!publication.some(step => step.run?.includes('imagetools create')));
-  assert.ok(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
+  assert(publication.some(step => step.run?.includes('release-phases.mjs prerequisites oci-native')));
+  assert(publication.some(step => step.run?.includes('release-phases.mjs publish-oci')));
+  assert(!publication.some(step => step.run?.includes('imagetools create')));
+  assert(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
     'default overwrite-enabled release upload must not replace source-addressed bytes');
-  for (const name of ['image-platforms', 'images', 'oci-native', 'crates', 'release']) {
+  for (const name of ['image-platforms', ...supplyNames, 'oci-native', 'crates', 'release']) {
     const steps = value.jobs[name].steps;
     const policyStep = steps.findIndex(step => step.run?.includes('release-phases.mjs policy'));
     assert.ok(policyStep >= 0, `${name} must check its own publication policy`);
     assert.equal(steps[policyStep].env.PUBLISH_CRATES, '${{ toJSON(inputs.publish-crates) }}');
     const firstCredential = steps.findIndex(step => step.uses?.startsWith('docker/login-action')
       || step.uses?.startsWith('rust-lang/crates-io-auth-action') || step.env?.GH_TOKEN);
-    assert.ok(firstCredential < 0 || policyStep < firstCredential);
+    assert(firstCredential < 0 || policyStep < firstCredential);
   }
-  for (const name of ['image-platforms', 'images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
+  for (const name of ['image-platforms', ...supplyNames, 'native', 'reproducibility-parts', 'browser-library', 'product-cli', 'installed-vv', 'installed-sdk', 'release']) {
     const builder = value.jobs[name].steps.find(step => step.uses?.startsWith('docker/setup-buildx-action'));
     assert.equal(builder.with.version, 'v0.28.0');
     assert.equal(builder.with['driver-opts'], `image=${buildkit}`);
   }
-  assert.ok(!value.jobs.images.steps.some(step => step.uses?.startsWith('actions/attest-sbom')),
-    'complete SPDX must not enter the inline predicate size limit');
-  for (const architecture of ['amd64', 'arm64']) {
-    const step = value.jobs.images.steps.find(step => step.id === `sbom-${architecture}`);
-    assert.equal(step.with['syft-version'], 'v1.51.1');
-    assert.equal(step.with['upload-artifact'], false);
+  for (const name of supplyNames) {
+    const supply = value.jobs[name];
+    assert.deepEqual(supply.needs, ['policy', 'image-platforms']);
+    assert.equal(supply.if, undefined); assert.equal(supply['continue-on-error'], undefined);
+    for (const step of supply.steps) {
+      assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+    }
+    const assembly = supply.steps.find(step => step.id === 'build');
+    assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
+    assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
+    assert(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
+    assert(!supply.steps.some(step => step.uses?.startsWith('actions/attest-sbom')), 'complete SPDX must not enter the inline predicate size limit');
+    for (const architecture of ['amd64', 'arm64']) {
+      const step = supply.steps.find(step => step.id === `sbom-${architecture}`);
+      assert.equal(step.with['syft-version'], 'v1.51.1'); assert.equal(step.with['upload-artifact'], false);
+    }
+    const transport = supply.steps.find(step => step.run?.includes('release-phases.mjs sbom-publish'));
+    assert(transport, 'both platform SBOMs must be signed and re-fetched');
+    assert.match(transport.run, /for architecture in amd64 arm64/); assert.match(transport.run, /oras manifest fetch-config/);
+    assert.match(transport.run, /release-phases\.mjs sbom-record/);
+    assert.match(transport.run, /cmp .*sbom\.spdx\.json.*sbom\.received\.spdx\.json/);
+    const indexVerification = supply.steps.find(step => step.run?.includes('docker pull "$REPOSITORY@$DIGEST"'));
+    assert.match(indexVerification.run, /^set -euo pipefail\n/);
+    assert.match(indexVerification.run, /release-phases\.mjs image-verify "\$REPOSITORY@\$DIGEST" "\$GITHUB_SHA" "\$GITHUB_REF"/);
+    assert.match(indexVerification.run, /standards\/trust\/sigstore-trusted-root-cosign-3\.1\.3\.json/);
+    assert(!indexVerification.run.includes('certificate-identity-regexp'));
+    assert(!indexVerification.run.includes('||'), 'index signature failure must stop publication');
   }
-  const transport = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs sbom-publish'));
-  assert.ok(transport, 'both platform SBOMs must be signed and re-fetched');
-  assert.match(transport.run, /for architecture in amd64 arm64/);
-  assert.match(transport.run, /oras manifest fetch-config/);
-  assert.match(transport.run, /release-phases\.mjs sbom-record/);
-  assert.match(transport.run, /cmp .*sbom\.spdx\.json.*sbom\.received\.spdx\.json/);
-  const indexVerification = value.jobs.images.steps.find(step => step.run?.includes('docker pull "$REPOSITORY@$DIGEST"'));
-  assert.match(indexVerification.run, /^set -euo pipefail\n/);
-  assert.match(indexVerification.run, /release-phases\.mjs image-verify "\$REPOSITORY@\$DIGEST" "\$GITHUB_SHA" "\$GITHUB_REF"/);
-  assert.match(indexVerification.run, /standards\/trust\/sigstore-trusted-root-cosign-3\.1\.3\.json/);
-  assert.ok(!indexVerification.run.includes('certificate-identity-regexp'));
-  assert.ok(!indexVerification.run.includes('||'), 'index signature failure must stop publication');
 }
 
 test('publication phases preserve all gates and decouple OCI/native from optional Cargo', () => {
@@ -290,32 +340,60 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).env.CARGO_REGISTRY_TOKEN
       = '${{ steps.auth.outputs.token }}'; },
     value => { value.jobs['source-vv'].steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
-    value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
-    value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
+    value => { value.jobs['reproducibility-parts'].steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
+    value => { value.jobs['sdk-supply'].steps = value.jobs['sdk-supply'].steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
       run => run + '\n--tag mutable:unaccepted\n',
       run => run.replace('push-by-digest=true', 'push-by-digest=false'),
-      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$target"', 'docker buildx build'),
+      run => run.replace('node scripts/sdk-image-inputs.mjs build-set . "$GITHUB_SHA" "$plan"', 'docker buildx build'),
       run => run.replace('--platform "linux/$ARCH"', '--platform linux/amd64'),
       run => run.replace('--provenance=false', '--provenance=true'),
-      run => run.replace('oracles sdk/Dockerfile oracles ghcr.io/uor-foundation/prismpm-oracles\n', ''),
+      run => run.replace('oracles oracles\n', ''),
     ].map(mutate => value => { const step = value.jobs['image-platforms'].steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
     value => { value.jobs['image-platforms'].strategy.matrix.include.pop(); },
     value => { value.jobs['image-platforms'].steps.splice(1, 0, {uses: 'docker/setup-qemu-action@fixture'}); },
-    value => { const step = value.jobs.images.steps.find(step => step.id === 'build');
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.id === 'build');
       step.run = step.run.replace('"$REPOSITORY@$digest" "$RUNNER_TEMP/image-index.json"', '"$REPOSITORY:latest" "$RUNNER_TEMP/image-index.json"'); },
-    value => { value.jobs.images.steps.push({uses: 'actions/attest-sbom@fixture'}); },
-    value => { value.jobs.images.steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { value.jobs['sdk-supply'].steps.push({uses: 'actions/attest-sbom@fixture'}); },
+    value => { value.jobs['sdk-supply'].steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"other-sha" "$GITHUB_REF"'); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"$GITHUB_SHA" "refs/heads/release/v0.4"'); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('set -euo pipefail\n', ''); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run += '\ntrue || true\n'; },
+    ...['images', 'reproducibility', 'installed-sdk'].flatMap(name => [
+      value => value.jobs[name].needs.pop(),
+      value => value.jobs[name].if = '${{ always() }}',
+      value => value.jobs[name]['continue-on-error'] = true,
+    ]),
+    ...['product-cli', 'browser-library'].flatMap(name => [
+      value => value.jobs[name].strategy.matrix.include.pop(),
+      value => value.jobs[name].needs.push('gate'),
+      value => value.jobs[name].steps.find(step => step.run?.includes('-sdk-check.sh')).if = '${{ false }}',
+      value => value.jobs[name].steps.find(step => step.run?.includes('-sdk-check.sh')).run += ' || true\n',
+    ]),
+    ...[
+      run => run.replace('--no-cache', ''),
+      run => run.replace('matrix.name }}-$root', 'matrix.name }}-shared'),
+      run => run.replace('\n  docker buildx rm "$builder"\n', '\n'),
+      run => run.replace('tar=false', 'tar=true'),
+    ].map(mutate => value => {
+      const step = value.jobs['reproducibility-parts'].steps.find(step => step.env?.DOCKERFILE);
+      step.run = mutate(step.run);
+    }),
+    ...[
+      value => { value.jobs['product-images'].steps = value.jobs['product-images'].steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
+      value => { value.jobs['product-images'].steps.find(step => step.id === 'sbom-arm64').with['syft-version'] = 'latest'; },
+      value => { const step = value.jobs['product-images'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+        step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"other-sha" "$GITHUB_REF"'); },
+      value => { value.jobs['product-images'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'))['continue-on-error'] = true; },
+    ],
   ]) {
     const changed = workflow(); mutate(changed);
+    assert.notDeepEqual(changed, workflow(), 'mutation must change the actual workflow: ' + mutate.toString());
     assert.throws(() => validateWorkflow(changed), undefined, mutate.toString());
   }
 });
@@ -472,7 +550,21 @@ test('the release part shell must fail when its one invocation fails', t => {
       const root = mkdtempSync(join(tmpdir(), 'prismpm-release-session-'));
       t.after(() => rmSync(root, {recursive: true, force: true}));
       const env = sessionFixture(root, process.env, {first, release: true,
-        image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
+        image: `ghcr.io/uor-foundation/prismpm-sdk@sha256:${'b'.repeat(64)}`});
+      const image = env.PRISMPM_TEST_SDK_IMAGE;
+      delete env.PRISMPM_TEST_SDK_IMAGE;
+      // Exercise the actual workflow and handoff shell. Only tool installation
+      // and signature acquisition are transport fixtures here; their real
+      // verification is owned by source-sdk-handoff's dedicated tests.
+      mkdirSync(join(root, 'target/release-sdk'), {recursive: true});
+      writeFileSync(join(root, 'target/release-sdk/sdk-image.txt'), image + '\n');
+      writeFileSync(join(root, 'scripts/sdk-candidate.sh'), 'set -eu\ncase "$1" in install-oras|install-cosign) ;; *) exit 64 ;; esac\ntest "$#" -eq 2\nmkdir -p "$2"\n');
+      writeFileSync(join(root, 'scripts/source-sdk-handoff.sh'), readFileSync(new URL('./source-sdk-handoff.sh', import.meta.url)));
+      writeFileSync(join(root, 'scripts/source-sdk-handoff.mjs'), `
+        import assert from 'node:assert/strict';
+        assert.deepEqual(process.argv.slice(2), ${JSON.stringify([image,
+          '${{ github.sha }}', 'amd64', '${{ github.ref }}', '${{ github.event_name }}'])});
+      `);
       if (first === 0) {
         assert.equal(execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), 'call:1\n');
       } else {
@@ -482,6 +574,10 @@ test('the release part shell must fail when its one invocation fails', t => {
           return true;
         });
       }
+      const rows = readFileSync(join(root, 'session.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+      assert(!rows.some(row => ['build', 'docker'].includes(row.kind)), 'verified SDK handoff must prevent source reconstruction');
+      const calls = rows.filter(row => row.kind === 'source-run'); assert.equal(calls.length, 1);
+      assert.equal(calls[0].image, image); assert.equal(calls[0].args[6], image);
     }
   };
   for (const body of bodies) {

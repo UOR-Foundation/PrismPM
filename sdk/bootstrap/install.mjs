@@ -22,16 +22,17 @@ import {
 
 // curl exit statuses that indicate a transient network condition: resolve (6),
 // connect (7), partial transfer (18), timeout (28), TLS connect (35), empty
-// reply (52), send (55), receive (56). Anything else, including HTTP errors
-// and every integrity failure, is final on the first attempt.
+// reply (52), send (55), receive (56). HTTP errors need the separately captured
+// response status; every other curl error and every integrity failure is final.
 export const TRANSIENT_CURL_STATUS = new Set([6, 7, 18, 28, 35, 52, 55, 56]);
+const TRANSIENT_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
 // Run one download at most `attempts` times with doubling backoff, retrying
-// only transient transport failures. Retrying never relaxes verification: the
-// caller checks the digest of whatever the successful attempt produced.
+// only transient transport or explicitly identified HTTP failures. Retrying never
+// relaxes verification: the caller checks the successful attempt's digest.
 export function withTransientRetry(
   download,
   { attempts = 4, delay = 2000, sleep = pause } = {},
@@ -44,10 +45,12 @@ export function withTransientRetry(
     try {
       return download();
     } catch (error) {
-      if (attempt >= attempts || !TRANSIENT_CURL_STATUS.has(error?.status))
-        throw error;
+      const transient =
+        TRANSIENT_CURL_STATUS.has(error?.status) ||
+        (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.httpStatus));
+      if (attempt >= attempts || !transient) throw error;
       process.stderr.write(
-        `download failed with curl status ${error.status}; retry ${attempt}/${attempts - 1}\n`,
+        `download failed with curl status ${error.status}${error.httpStatus ? ` (HTTP ${error.httpStatus})` : ''}; retry ${attempt}/${attempts - 1}\n`,
       );
       sleep(delay * 2 ** (attempt - 1));
     }
@@ -103,31 +106,45 @@ export function installRuntime(destination = RUNTIME, cache = null) {
           archive,
         );
       else
-        withTransientRetry(() =>
-          execFileSync(
-            'curl',
-            [
-              '--disable',
-              '--proto',
-              '=https',
-              '--proto-redir',
-              '=https',
-              '--tlsv1.2',
-              '--fail',
-              '--location',
-              '--silent',
-              '--show-error',
-              '--max-time',
-              '300',
-              '--max-filesize',
-              '67108864',
-              authority.url,
-              '--output',
-              archive,
-            ],
-            { timeout: 310000, stdio: 'inherit' },
-          ),
-        );
+        withTransientRetry(() => {
+          // Never resume or reuse bytes from a failed attempt, even when curl
+          // fails before opening its output file on the next attempt.
+          rmSync(archive, { force: true });
+          try {
+            execFileSync(
+              'curl',
+              [
+                '--disable',
+                '--proto',
+                '=https',
+                '--proto-redir',
+                '=https',
+                '--tlsv1.2',
+                '--fail',
+                '--location',
+                '--silent',
+                '--show-error',
+                '--max-time',
+                '300',
+                '--max-filesize',
+                '67108864',
+                '--write-out',
+                '%{http_code}',
+                authority.url,
+                '--output',
+                archive,
+              ],
+              { timeout: 310000, stdio: ['ignore', 'pipe', 'inherit'] },
+            );
+          } catch (error) {
+            rmSync(archive, { force: true });
+            // stdout contains only curl's final response code, including after
+            // HTTPS redirects. Unknown/malformed codes are never HTTP retries.
+            const status = error.stdout?.toString();
+            if (/^[0-9]{3}$/.test(status)) error.httpStatus = Number(status);
+            throw error;
+          }
+        });
       checkedFile(archive, authority.sha256);
       const unpacked = join(work, name);
       execFileSync('dpkg-deb', ['--extract', archive, unpacked], {
