@@ -3132,11 +3132,8 @@ mod tests {
                 // The oracle checks Compose validity; the loopback audit of the
                 // emitted bytes is the check a wildcard binding cannot pass.
                 let compose: Value = serde_json::from_slice(&projection.bytes).unwrap();
-                crate::system::host_effect::audit_compose(&compose).unwrap();
-                assert_eq!(
-                    compose["services"]["gateway"]["ports"][0]["host_ip"],
-                    "127.0.0.1"
-                );
+                crate::system::host_effect::audit_compose(&compose, system.value()).unwrap();
+                assert_eq!(compose["services"]["gateway"]["network_mode"], "host");
                 let mut dangling = compose.clone();
                 dangling["services"]["gateway"]["depends_on"]["absent"] =
                     json!({"condition":"service_healthy","required":true});

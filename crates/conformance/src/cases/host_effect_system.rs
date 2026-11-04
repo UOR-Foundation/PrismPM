@@ -1,4 +1,4 @@
-//! SY-09: host-effect service system, loopback Compose projection, locked oracle.
+//! SY-09: host-effect service system, host-network loopback Compose projection, locked oracle.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -36,7 +36,7 @@ pub(super) fn verify(root: &Path) {
         BTreeSet::from([
             "controller::release_tests::host_effect_system_named_release_selects_and_binds_its_source",
             "authority::tests::host_effect_system_compose_passes_the_locked_oracle",
-            "system::host_effect::tests::host_effect_system_compose_publishes_loopback_only",
+            "system::host_effect::tests::host_effect_system_compose_puts_each_api_on_the_host_network",
             "system::host_effect::tests::host_effect_system_contract_is_registered_and_closed",
             "system::host_effect::tests::host_effect_system_refuses_every_non_loopback_port_binding",
             "system::host_effect::tests::host_effect_system_refuses_open_or_inconsistent_declarations",

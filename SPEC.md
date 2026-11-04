@@ -1704,12 +1704,26 @@ The application profile names the server application contract
 and lists the effects that application declares: at least one, each once, each
 a dotted lowercase name. The effect vocabulary belongs to the application, not
 to this profile. Components are `api`, `worker`, `job` or `telemetry-collector`,
-each with one declared image, parameters, secret references, volumes, networks
-and resources. A component depends only on components declared before it, so
-the dependency order is its own acyclicity witness. Listeners are the only
-published ports. A listener belongs to an `api` component that sits on at least
-one non-internal network, binds `127.0.0.1`, uses TCP and publishes a port no
-other listener publishes. The single target is the pinned Compose adapter.
+each with one declared image, parameters, secret references, volumes and
+resources. A component depends only on components declared before it, so the
+dependency order is its own acyclicity witness. An `api` component declares no
+network, because it runs on the host network, and every other component declares
+at least one. An `api` component runs exactly one replica: on the host network
+a second would bind the same loopback port as the first. Other components may
+run several. A listener belongs to an `api` component, binds `127.0.0.1`, uses
+TCP and takes a port no other listener takes. The single target is the pinned
+Compose adapter.
+
+The `api` component is on the host network because a served application
+listens on `127.0.0.1` only, and Docker forwards a port published from a bridge
+network to the container's interface, never to its loopback: such a listener is
+unreachable however the port is published. On the host network the container's
+loopback is the host's, so the listener is reached from the host's `127.0.0.1`
+and from no other interface. The loopback-only guarantee then rests on the
+address the application binds, which is the listener's `bind_address`; this
+profile states that address but does not yet tie it to the serving declaration
+of the selected server application (see the last paragraph). A Linux engine is
+assumed: Docker Desktop gives host networking another meaning.
 
 An authored `SystemManifest` and the generated empty-axiom theorem
 `manifestValidation_sound_complete`, with `validateManifest model manifest =
@@ -1717,23 +1731,29 @@ true` decided for the selected model and manifest, bind the application model
 digest, the product identity, the declared effects and the published listener
 identities. Planted defects are decided theorems: a wildcard, hostname or other
 loopback address, a missing, zero or out-of-range port, a listener on a worker
-or on an unknown component or on internal networks only, two listeners on one
-port, a wrong contract or protocol, no declared effect, a repeated effect, an
-unknown kind, a forward or unknown dependency, an unknown image or network, a
-repeated identity and each manifest mismatch.
+or on an unknown component, an `api` component on a network, a worker on none,
+an `api` component with a second replica, two listeners on one port, a wrong contract or protocol, no declared effect, a
+repeated effect, an unknown kind, a forward or unknown dependency, an unknown
+image or network, a repeated identity and each manifest mismatch.
 
 The Compose adapter descriptor lists the profiles it projects in
-`model_schemas` and names the one address a published port may bind in its
-projection policy as `loopback_address`. The projection copies each listener
-as `host_ip`, `published`, `target` and `protocol`, and refuses a listener that
-does not name that address instead of rewriting it. The closed schema carries
+`model_schemas` and names the one address a listener may bind in its
+projection policy as `loopback_address`. The projection gives each `api`
+service `network_mode: host` and no networks, gives every other service its
+declared networks, and publishes no port; it refuses a listener that does not
+name the loopback address instead of rewriting it. The closed schema carries
 the same constant, so a wildcard binding is refused three times: by the
 contract, by the validator and by the projection. A Compose project is also
-audited as emitted bytes: every service port is long-form and names the
-loopback address, and no service uses the host network. The locked Compose
-oracle accepts any host address, so that audit is the check a wildcard cannot
-pass. The projection set is the Compose project and SPDX, both validated by
-their locked oracles.
+audited as emitted bytes against the roles the model gives its components: the
+services are exactly the components; an `api` service has `network_mode: host`,
+no networks and one replica; every other service names no network mode and is on
+exactly its declared networks; and no service publishes or exposes a port. The
+locked Compose oracle accepts any published port and any network mode, so that
+audit is the check a published wildcard, or a worker moved onto the host
+network, cannot pass.
+It cannot see which address a process binds, which is why the address is held
+by the contract, the validator and the projection. The projection set is the
+Compose project and SPDX, both validated by their locked oracles.
 
 This profile does not claim that the declared effects equal the host protocol
 of the selected application: the server application model that issue 216
@@ -4038,7 +4058,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
 | `SY-07` | `system` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. | §11 |
 | `SY-08` | `system` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. | §11 |
-| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services whose published ports bind loopback only and pass the locked Compose oracle. | §11 |
+| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. | §11 |
 | `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
 | `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
 | `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |
