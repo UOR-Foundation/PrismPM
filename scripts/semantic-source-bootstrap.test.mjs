@@ -13,10 +13,18 @@ function fixture(t){
  mkdirSync(join(root,'scripts'));mkdirSync(join(root,'bin'));
  copyFileSync(new URL('./semantic-source-bootstrap.sh',import.meta.url),join(root,'scripts/semantic-source-bootstrap.sh'));
  writeFileSync(join(root,'Cargo.lock'),'recording lock\n');writeFileSync(join(root,'rust-toolchain.toml'),'[toolchain]\nchannel = \"1.97.1\"\n');
- const git=(...args)=>{const result=spawnSync('git',args,{cwd:root,encoding:'utf8'});assert.equal(result.status,0,result.stderr);return result.stdout.trim();};
+ const git=(...args)=>{const result=spawnSync('/usr/bin/git',args,{cwd:root,encoding:'utf8'});assert.equal(result.status,0,result.stderr);return result.stdout.trim();};
  git('init','--quiet');git('add','.');git('-c','user.name=Setup test','-c','user.email=setup@example.invalid','commit','--quiet','-m','recording setup source');
  const evidence=join(root,'../'+root.split('/').at(-1)+'-evidence');
  t.after(()=>rmSync(evidence,{recursive:true,force:true}));
+ writeFileSync(join(root,'bin/git'),`#!/bin/sh
+if test "$1" = status && test "\${GIT_STATUS_FAILURE:-0}" != 0; then
+ if test "\${GIT_STATUS_AFTER_BUILD:-0}" = 0 || test -f "$HELPER_TARGET/debug/prismpm-semantic-source"; then
+  exit "$GIT_STATUS_FAILURE"
+ fi
+fi
+exec /usr/bin/git "$@"
+`,{mode:0o755});
  writeFileSync(join(root,'bin/rustup'),String.raw`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),a=process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS,JSON.stringify({args:a,offline:process.env.CARGO_NET_OFFLINE})+'\n');
@@ -29,14 +37,14 @@ if(a[2]==='cargo'&&a[3]==='build'){
  if(process.env.BUILD_STATUS)process.exit(Number(process.env.BUILD_STATUS));
  if(process.env.SWAP_SOURCE_ON_BUILD){const r=require('node:child_process').spawnSync('git',['-c','user.name=Setup test','-c','user.email=setup@example.invalid','commit','--quiet','--allow-empty','-m','clean source moved']);if(r.status!==0)process.exit(67);}
  const target=a[a.indexOf('--target-dir')+1];fs.mkdirSync(path.join(target,'debug'),{recursive:true});
- fs.writeFileSync(path.join(target,'debug/prismpm-semantic-source'),'#!/bin/sh\nprintf "[]"\n',{mode:0o755});process.exit(0);
+ fs.writeFileSync(path.join(target,'debug/prismpm-semantic-source'),'#!/bin/sh\nprintf "[]"\nexit '+Number(process.env.HELPER_STATUS||0)+'\n',{mode:0o755});process.exit(0);
 }
 process.exit(66);
 `);chmodSync(join(root,'bin/rustup'),0o755);
  // Keep tool calls and build outputs outside the clean source snapshot.
  git('add','bin');git('-c','user.name=Setup test','-c','user.email=setup@example.invalid','commit','--quiet','-m','recording tool');
  const source=git('rev-parse','HEAD'),calls=join(evidence,'calls.jsonl'),target=join(evidence,'target');
- const run=(extra={},selected=source)=>spawnSync('bash',[join(root,'scripts/semantic-source-bootstrap.sh'),selected,target,evidence],{cwd:root,encoding:'utf8',env:{...process.env,PATH:join(root,'bin')+':'+process.env.PATH,CALLS:calls,...extra}});
+ const run=(extra={},selected=source)=>spawnSync('bash',[join(root,'scripts/semantic-source-bootstrap.sh'),selected,target,evidence],{cwd:root,encoding:'utf8',env:{...process.env,PATH:join(root,'bin')+':'+process.env.PATH,CALLS:calls,HELPER_TARGET:target,...extra}});
  return{root,evidence,target,source,run,git,calls:()=>readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse)};
 }
 
@@ -71,6 +79,31 @@ test('failed offline build retains diagnostics and cannot publish helper readine
  assert.notEqual(f.git('rev-parse','HEAD'),f.source);assert.equal(f.git('status','--porcelain'),'');
  assert.ok(existsSync(join(f.target,'debug/prismpm-semantic-source')),'the recording build finished before the source recheck');
  assert.ok(!existsSync(join(f.evidence,'semantic-source-path.txt')));
+});
+test('helper stdout matching readiness cannot hide its failed probe status',t=>{
+ const f=fixture(t),result=f.run({HELPER_STATUS:'23'});
+ assert.equal(result.status,23);assert.equal(f.calls().length,7);
+ const helper=join(f.target,'debug/prismpm-semantic-source');
+ const probe=spawnSync(helper,['runtime-audit'],{input:'[]',encoding:'utf8',env:{...process.env,HELPER_STATUS:'23'}});
+ assert.equal(probe.stdout,'[]');assert.equal(probe.status,23);
+ assert.equal(readFileSync(join(f.evidence,'bootstrap-exit-status.txt'),'utf8'),'23\n');
+ assert.ok(!existsSync(join(f.evidence,'semantic-source-path.txt')));
+ assert.ok(!existsSync(join(f.evidence,'SHA256SUMS')));
+});
+test('empty Git status output cannot hide a failed prebuild or final source observation',t=>{
+ for(const afterBuild of [false,true]){
+  const f=fixture(t),result=f.run({GIT_STATUS_FAILURE:'31',GIT_STATUS_AFTER_BUILD:afterBuild?'1':'0'});
+  assert.equal(result.status,31);
+  const probe=spawnSync(join(f.root,'bin/git'),['status','--porcelain'],{cwd:f.root,encoding:'utf8',
+   env:{...process.env,GIT_STATUS_FAILURE:'31',HELPER_TARGET:f.target}});
+  assert.equal(probe.status,31);assert.equal(probe.stdout,'');
+  assert.equal(readFileSync(join(f.evidence,'bootstrap-exit-status.txt'),'utf8'),'31\n');
+  assert.equal(existsSync(join(f.target,'debug/prismpm-semantic-source')),afterBuild);
+  if(afterBuild)assert.equal(f.calls().length,7);else assert.ok(!existsSync(join(f.evidence,'calls.jsonl')));
+  assert.equal(f.git('status','--porcelain'),'','the actual Git source snapshot remains clean');
+  assert.ok(!existsSync(join(f.evidence,'semantic-source-path.txt')));
+  assert.ok(!existsSync(join(f.evidence,'SHA256SUMS')));
+ }
 });
 test('both workflows require the exact helper before offline owners and retain prebuild evidence',()=>{
  for(const generated of [false,true]){

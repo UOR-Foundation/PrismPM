@@ -16,7 +16,8 @@ printf '%s\n' "$revision" > "$evidence/selected-source.txt"
 git rev-parse HEAD > "$evidence/source-revision.txt"
 git rev-parse 'HEAD^{tree}' > "$evidence/source-tree.txt"
 test "$(cat "$evidence/source-revision.txt")" = "$revision"
-test -z "$(git status --porcelain)"
+source_status=$(git status --porcelain)
+test -z "$source_status"
 cp Cargo.lock "$evidence/Cargo.lock"
 cp rust-toolchain.toml "$evidence/rust-toolchain.toml"
 python3 - <<'PYTHON'
@@ -36,8 +37,10 @@ CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 \
   --package repo-conformance --bin prismpm-semantic-source --target-dir "$target"
 helper="$target/debug/prismpm-semantic-source"
 test -x "$helper"
-test "$(printf '[]' | "$helper" runtime-audit)" = '[]'
-test -z "$(git status --porcelain)"
+helper_output=$(printf '[]' | "$helper" runtime-audit)
+test "$helper_output" = '[]'
+source_status=$(git status --porcelain)
+test -z "$source_status"
 test "$(git rev-parse HEAD)" = "$revision"
 test "$(git rev-parse 'HEAD^{tree}')" = "$(cat "$evidence/source-tree.txt")"
 cmp Cargo.lock "$evidence/Cargo.lock"
