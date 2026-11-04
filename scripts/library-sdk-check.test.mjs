@@ -1,6 +1,7 @@
 import { readSemantic, writeSemantic, runtimeAudit } from './semantic-source.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 import {cpSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -351,10 +352,44 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
 
 test('release job keeps both native library and browser gates mandatory for each SDK architecture',()=>{
  const workflow=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
- assert.match(workflow,/bash root-a\/scripts\/browser-api-sdk-check\.sh/);
- assert.match(workflow,/name: Verify exact current SDK native-library closure offline and read-only\n\s+if: matrix.image == 'sdk'/);
- assert.match(workflow,/bash root-a\/scripts\/library-sdk-check\.sh "\$\(cat \.shipped-image\/sdk-image.txt\)" "\$GITHUB_SHA"/);
- assert.match(workflow,/os: ubuntu-24.04-arm/);assert.match(workflow,/name: library-sdk-\$\{\{ matrix.name \}\}/);
+ const {load}=createRequire('/opt/prismpm/oracles/package.json')('js-yaml');
+ const jobs=load(workflow).jobs;
+ const ownerContract=jobs=>{
+  const owner=jobs['browser-library'];
+  assert.deepEqual(owner.needs,['policy','sdk-supply']);assert.equal(owner['runs-on'],'${{ matrix.os }}');
+  assert.equal(owner.if,undefined);assert.equal(owner['continue-on-error'],undefined);
+  assert.deepEqual(owner.strategy.matrix.include,[{os:'ubuntu-24.04',arch:'amd64'},{os:'ubuntu-24.04-arm',arch:'arm64'}]);
+  const inputs=owner.steps.filter(step=>step.with?.name==='sdk-image');assert.equal(inputs.length,1);
+  assert.deepEqual(inputs[0].with,{name:'sdk-image',path:'.shipped-image'});
+  assert.equal(inputs[0].if,undefined);assert.equal(inputs[0]['continue-on-error'],undefined);
+  for(const [kind,label]of [['browser','browser'],['library','native-library']]){
+   const steps=owner.steps.filter(step=>step.name===`Verify exact current SDK ${label} closure offline and read-only`);
+   assert.equal(steps.length,1);const step=steps[0];
+   assert.equal(step.if,undefined);assert.equal(step['continue-on-error'],undefined);assert.equal(step.shell,'bash');
+   assert.deepEqual(step.env,{RESULT_NAME:'sdk-${{ matrix.arch }}'});
+   assert.equal(step.run,'set -euo pipefail\n'+(kind==='library'?'node root-a/scripts/library-sdk-check.mjs tests\n':'')+
+    `bash root-a/scripts/${kind==='browser'?'browser-api':'library'}-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-${kind}-sdk.log" 2>&1\n`);
+   assert(owner.steps.indexOf(inputs[0])<owner.steps.indexOf(step));
+   const uploads=owner.steps.filter(row=>row.with?.name===kind+'-sdk-sdk-${{ matrix.arch }}');assert.equal(uploads.length,1);
+   const upload=uploads[0];assert.equal(upload.uses,'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+   assert.equal(upload.if,'always()');assert.equal(upload['continue-on-error'],undefined);
+   assert.equal(upload.with['if-no-files-found'],'error');
+   assert.equal(upload.with.path,kind==='library'?'sdk-${{ matrix.arch }}-library-sdk.log\nroot-a/target/library-sdk-evidence/\n':'sdk-${{ matrix.arch }}-browser-sdk.log');
+   assert(owner.steps.indexOf(step)<owner.steps.indexOf(upload));
+  }
+  assert.deepEqual(jobs.reproducibility.needs,['reproducibility-parts','browser-library']);
+  assert.equal(jobs.reproducibility.if,undefined);assert.equal(jobs.reproducibility['continue-on-error'],undefined);
+  for(const name of ['oci-native','release'])assert(jobs[name].needs.includes('reproducibility'));
+ };
+ ownerContract(jobs);
+ for(const mutate of [
+  value=>{value['browser-library'].strategy.matrix.include.pop();},
+  value=>{value['browser-library'].needs=['policy'];},
+  value=>{value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK native-library closure offline and read-only').if='false';},
+  value=>{value['browser-library']['continue-on-error']=true;},
+  value=>{value['browser-library'].steps.find(step=>step.with?.name==='library-sdk-sdk-${{ matrix.arch }}').with.path='sdk-${{ matrix.arch }}-library-sdk.log';},
+  value=>{value.reproducibility.needs=['reproducibility-parts'];},
+ ]){const changed=structuredClone(jobs);mutate(changed);assert.throws(()=>ownerContract(changed));}
  const wrapper=readFileSync(new URL('./library-sdk-check.sh',import.meta.url),'utf8');
  for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/library-sdk-check.mjs run'])assert.ok(wrapper.includes(required),required);
  const execution=wrapper.slice(wrapper.indexOf('# Execution has no network'));
