@@ -510,10 +510,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         id,
         "prismpm/binary-build-binding/1" | "prismpm/binary-acceptance/1"
     ) {
-        let program: crate::holo::binary_program::BinaryProgram =
+        let program: crate::package_contracts::BinaryProgram =
             serde_json::from_value(value["program"].clone())
                 .map_err(|error| PrismError::new("PP4004", error.to_string()))?;
-        crate::holo::binary_program::validate(&program)?;
+        crate::package_contracts::validate_binary_program(&program)?;
         if id == "prismpm/binary-acceptance/1" {
             let expected = if program
                 .acceptance_vectors

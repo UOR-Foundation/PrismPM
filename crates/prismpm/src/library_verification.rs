@@ -11,6 +11,8 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+pub(crate) mod binary;
+
 pub(crate) struct LibraryVerification<'a> {
     pub(crate) repository_root: &'a Path,
     pub(crate) config: &'a ProjectConfig,

@@ -3037,20 +3037,22 @@ pub(crate) fn run(
         ));
     }
     if model.program.is_some() {
-        return crate::binary_verification::run(crate::library_verification::LibraryVerification {
-            repository_root: &controller.root,
-            config: &config,
-            build,
-            model,
-            model_bytes,
-            build_manifest,
-            build_root: &build_root,
-            lex_attestation,
-            lex_attestation_id,
-            lex_snapshot,
-            processes: toolchain.records,
-            exporter_owner,
-        });
+        return crate::library_verification::binary::run(
+            crate::library_verification::LibraryVerification {
+                repository_root: &controller.root,
+                config: &config,
+                build,
+                model,
+                model_bytes,
+                build_manifest,
+                build_root: &build_root,
+                lex_attestation,
+                lex_attestation_id,
+                lex_snapshot,
+                processes: toolchain.records,
+                exporter_owner,
+            },
+        );
     }
     if model.library.is_some() {
         return crate::library_verification::run(

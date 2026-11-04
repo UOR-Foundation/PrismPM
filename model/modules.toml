@@ -161,7 +161,15 @@ path = "crates/prismpm/src/library_build.rs"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/library_build/"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/library_verification.rs"
+module = "images"
+
+[[owner]]
+path = "crates/prismpm/src/library_verification/"
 module = "images"
 
 [[owner]]
@@ -187,6 +195,10 @@ module = "images"
 [[owner]]
 path = "crates/prismpm/src/operations.rs"
 module = "containers"
+
+[[owner]]
+path = "crates/prismpm/src/package_contracts.rs"
+module = "errors"
 
 [[owner]]
 path = "crates/prismpm/src/process_resources.rs"

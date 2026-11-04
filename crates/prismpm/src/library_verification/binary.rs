@@ -49,7 +49,7 @@ pub(crate) fn run(
         .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
     // The controller build is export A. This independently exports and packages
     // the attested Lean closure as export B; both complete byte sets must agree.
-    let replay = crate::binary_build::generate_owned(
+    let replay = crate::library_build::binary::generate_owned(
         context.repository_root,
         &context.model,
         &context.model_bytes,
@@ -219,10 +219,10 @@ pub(crate) fn run(
         "PP4102",
     )?);
     let runner = work.path().join("runner.mjs");
-    write(&runner, include_bytes!("binary_verification/runner.mjs"))?;
+    write(&runner, include_bytes!("../binary_verification/runner.mjs"))?;
     write(
         &work.path().join("memory-inspector.mjs"),
-        include_bytes!("binary_verification/memory-inspector.mjs"),
+        include_bytes!("../binary_verification/memory-inspector.mjs"),
     )?;
     let program_value = serde_json::to_value(program)
         .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
@@ -332,7 +332,7 @@ pub(crate) fn run(
                 &lex_manifest,
                 &json!(bindings),
                 processes.as_array().expect("serialized process array"),
-                &crate::binary_build::export_arguments(
+                &crate::library_build::binary::export_arguments(
                     &modules,
                     program,
                     Path::new("$BINARY_WORK/export"),

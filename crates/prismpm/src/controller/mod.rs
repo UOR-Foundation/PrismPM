@@ -87,6 +87,33 @@ fn library_generator_identity() -> String {
     content_id(&source)
 }
 
+// Charge the shared native-core authority and every Binary-only template.
+// This retains the original content hash convention and all original inputs.
+fn binary_generator_identity() -> String {
+    content_id(
+        &[
+            include_bytes!("../library_build/binary.rs").as_slice(),
+            include_bytes!("../binary_cli.rs").as_slice(),
+            include_bytes!("../binary_cli/main.rs.in").as_slice(),
+            include_bytes!("../binary_cli/input.rs.in").as_slice(),
+            include_bytes!("../library_build.rs").as_slice(),
+            include_bytes!("../library_verification.rs").as_slice(),
+            include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
+            include_bytes!("../lean_project.rs").as_slice(),
+            include_bytes!("../exporter.rs").as_slice(),
+            include_bytes!("../exporter/owner.rs").as_slice(),
+            include_bytes!("../exporter/custody.rs").as_slice(),
+            include_bytes!("../exporter/directory.rs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed-admission.mjs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed.mjs").as_slice(),
+            include_bytes!("../../sdk/inventory-metadata.mjs").as_slice(),
+            include_bytes!("../binary_verification/runner.mjs").as_slice(),
+            include_bytes!("../binary_verification/memory-inspector.mjs").as_slice(),
+        ]
+        .concat(),
+    )
+}
+
 thread_local! {
     static VERIFY_WORKER_ACTIVE: Cell<bool> = const { Cell::new(false) };
 }
@@ -1004,7 +1031,7 @@ impl Controller {
         if prepared.model.program.is_some() {
             artifacts.extend(match exporter_owner.as_deref_mut() {
                 Some(owner) => {
-                    crate::binary_build::generate_owned(
+                    crate::library_build::binary::generate_owned(
                         &self.root,
                         &prepared.model,
                         &prepared.model_bytes,
@@ -1015,7 +1042,7 @@ impl Controller {
                     )?
                     .artifacts
                 }
-                None => crate::binary_build::generate(
+                None => crate::library_build::binary::generate(
                     &self.root,
                     &prepared.model,
                     &prepared.model_bytes,
@@ -1098,18 +1125,7 @@ impl Controller {
         }
         if prepared.model.program.is_some() {
             inputs["binary_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
-            inputs["binary_generator_sha256"] = json!(content_id(
-                &[
-                    include_bytes!("../binary_build.rs").as_slice(),
-                    include_bytes!("../binary_cli.rs").as_slice(),
-                    include_bytes!("../binary_cli/main.rs.in").as_slice(),
-                    include_bytes!("../binary_cli/input.rs.in").as_slice(),
-                    include_bytes!("../library_build.rs").as_slice(),
-                    include_bytes!("../library_verification.rs").as_slice(),
-                    include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
-                ]
-                .concat()
-            ));
+            inputs["binary_generator_sha256"] = json!(binary_generator_identity());
             inputs["schema"] = json!("prismpm/build-inputs/4");
         }
         let build_id = content_id(&encode_value(&inputs)?);
@@ -1369,6 +1385,43 @@ mod tests {
         redistributed[1].insert(0, byte);
         assert_eq!(originals.concat(), redistributed.concat());
         assert_ne!(actual, encode(&redistributed, &paths));
+    }
+
+    #[test]
+    fn binary_generator_charges_original_templates_and_shared_core_authority() {
+        let parts = [
+            include_bytes!("../library_build/binary.rs").as_slice(),
+            include_bytes!("../binary_cli.rs").as_slice(),
+            include_bytes!("../binary_cli/main.rs.in").as_slice(),
+            include_bytes!("../binary_cli/input.rs.in").as_slice(),
+            include_bytes!("../library_build.rs").as_slice(),
+            include_bytes!("../library_verification.rs").as_slice(),
+            include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
+            include_bytes!("../lean_project.rs").as_slice(),
+            include_bytes!("../exporter.rs").as_slice(),
+            include_bytes!("../exporter/owner.rs").as_slice(),
+            include_bytes!("../exporter/custody.rs").as_slice(),
+            include_bytes!("../exporter/directory.rs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed-admission.mjs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed.mjs").as_slice(),
+            include_bytes!("../../sdk/inventory-metadata.mjs").as_slice(),
+            include_bytes!("../binary_verification/runner.mjs").as_slice(),
+            include_bytes!("../binary_verification/memory-inspector.mjs").as_slice(),
+        ];
+        let actual = super::binary_generator_identity();
+        assert_eq!(actual, super::content_id(&parts.concat()));
+        for index in 0..parts.len() {
+            let mut changed = parts.map(<[u8]>::to_vec);
+            changed[index].push(0);
+            assert_ne!(actual, super::content_id(&changed.concat()));
+            let omitted = parts
+                .iter()
+                .enumerate()
+                .filter(|(at, _)| *at != index)
+                .flat_map(|(_, bytes)| bytes.iter().copied())
+                .collect::<Vec<_>>();
+            assert_ne!(actual, super::content_id(&omitted));
+        }
     }
 
     #[test]
