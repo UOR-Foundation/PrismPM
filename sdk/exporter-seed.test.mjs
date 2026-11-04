@@ -6,7 +6,7 @@ import {chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, read
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, publishSeedFiles, readSmall, runConstruction, runtimePaths, separateConstructionTrees, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
-import {decodeExporterSeed, encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
+import {BUILD_VARIANT_OMITTED, decodeExporterSeed, encodeInventory, exporterArtifactBindings, omitBuildVariantArtifacts} from './inventory-metadata.mjs';
 import {bindSeedInventory, bindSeedManifest, stageSeedFiles, verifySeedFiles} from './exporter-seed-admission.mjs';
 import * as seedRuntime from './exporter-seed.mjs';
 import {closeSync, openSync} from 'node:fs';
@@ -1052,5 +1052,38 @@ test('replacing publication parent never deletes foreign content or publishes in
     `,owner,parent,seed,JSON.stringify(manifest),phase,new URL('./exporter-seed.mjs',import.meta.url).href],
     {encoding:'utf8',timeout:15000,maxBuffer:65536});
     assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);
+  }
+});
+
+// Build-only SDK variant (`sdk-build` in sdk/Dockerfile): its inventory is the
+// measured runtime inventory minus exactly BUILD_VARIANT_OMITTED.
+const variantRow = id => ({id, kind: 'oracle', version: '1', digest: `sha256:${'0'.repeat(64)}`});
+const variantKept = ['conformance-corpus', 'lean', 'lean4-prod', 'lexlean', 'prismpm'].map(variantRow);
+const variantMeasured = [...variantKept, ...BUILD_VARIANT_OMITTED.map(variantRow)];
+
+test('build variant keeps every row except the omitted release-acceptance runners', () => {
+  const result = omitBuildVariantArtifacts(variantMeasured, new Set(['lean', 'lexlean', 'prismpm']));
+  assert.deepEqual(result.map(row => row.id), variantKept.map(row => row.id));
+});
+
+test('build variant refuses to omit a row that was never measured', () => {
+  const missing = variantMeasured.filter(row => row.id !== 'oci-runtime-validate');
+  assert.throws(() => omitBuildVariantArtifacts(missing, new Set()), /unmeasured artifact: oci-runtime-validate/);
+});
+
+test('build variant refuses a duplicated measured row', () => {
+  assert.throws(() => omitBuildVariantArtifacts([...variantMeasured, variantRow('openid-conformance')], new Set()),
+    /unmeasured artifact: openid-conformance/);
+});
+
+test('build variant refuses when an omitted runner is still on PATH', () => {
+  assert.throws(() => omitBuildVariantArtifacts(variantMeasured, new Set(['prismpm', 'prismpm-conformance'])),
+    /omitted command on PATH: prismpm-conformance/);
+});
+
+test('build variant never omits what application builds need', () => {
+  for (const id of ['lean', 'lean4-prod', 'lean4-prod-exporter', 'lean4-prod-exporter-seed', 'lexlean', 'prismpm',
+    'conformance-corpus', 'playwright-headless-shell', 'spdx-validator']) {
+    assert(!BUILD_VARIANT_OMITTED.includes(id), id);
   }
 });

@@ -6,11 +6,21 @@
 # identity before executing the requested command, and a root login shell can
 # still write a 1000-owned home. Ephemeral homes (PRISMPM_EPHEMERAL_HOME=1) are
 # private per final UID under TMPDIR; otherwise the home is /home/vscode/.cargo,
-# which the full SDK ships already seeded and the build-only SDK ships empty.
-# Idempotent: a seeded home is reused as is, and the seed is never written.
+# which the full SDK ships seeded and the build-only SDK ships empty.
+#
+# A home is complete only when `.seeded` exists. It is written last, after
+# every seed entry is in place; the full SDK writes it when it pre-seeds the
+# image home. Any other state is an interrupted or failed copy (signal,
+# ENOSPC) and is reseeded: copies go to a staging directory inside the home,
+# then replace only the seed's own top-level entries, so other content of the
+# home (installed tools, credentials) is kept. One seeder runs at a time per
+# home (flock, released if the holder dies). The seed itself is only read.
+#
+# Usage: prismpm-cargo-home               SDK startup
+#        prismpm-cargo-home SEED HOME     tests
 set -eu
 
-seed=/opt/prismpm/cargo-home
+seed=${1:-/opt/prismpm/cargo-home}
 uid=$(id -u)
 owner=
 if [ "$uid" = 0 ]; then
@@ -18,28 +28,51 @@ if [ "$uid" = 0 ]; then
   owner=1000:1000
 fi
 
-if [ "${PRISMPM_EPHEMERAL_HOME:-}" = 1 ]; then
+if [ $# -ge 2 ]; then
+  home=$2
+elif [ "${PRISMPM_EPHEMERAL_HOME:-}" = 1 ]; then
   home=${TMPDIR:-/tmp}/prismpm-cargo-$uid
 else
   home=/home/vscode/.cargo
 fi
 
-if [ ! -e "$home/.seeded" ] && [ ! -d "$home/registry" ]; then
+# The seed's top-level entries, excluding this script's own bookkeeping names.
+entries() {
+  for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+    [ -e "$entry" ] || continue
+    case ${entry##*/} in .seeded | .seed.lock | .seeding.*) continue ;; esac
+    printf '%s\n' "$entry"
+  done
+}
+
+if [ ! -e "$home/.seeded" ]; then
   test -d "$seed"
   mkdir -p "$home"
-  # Copy entries, not "$seed/.": the home directory may belong to another
-  # identity (the image's 1000-owned, world-writable home), and its own
-  # ownership and times must not be rewritten.
-  for entry in "$seed"/* "$seed"/.[!.]* "$seed"/..?*; do
-    if [ -e "$entry" ]; then
-      cp -a "$entry" "$home/"
-      chmod -R u+rwX "$home/${entry##*/}"
+  exec 9>>"$home/.seed.lock"
+  flock 9
+  if [ ! -e "$home/.seeded" ]; then
+    for stale in "$home"/.seeding.*; do
+      if [ -e "$stale" ]; then rm -rf "$stale"; fi
+    done
+    stage=$(mktemp -d "$home/.seeding.XXXXXX")
+    # Copy entries, not "$seed/.": the home directory may belong to another
+    # identity, and its own ownership and times must not be rewritten.
+    entries "$seed" | while IFS= read -r entry; do
+      cp -a "$entry" "$stage/"
+    done
+    chmod -R u+rwX "$stage"
+    entries "$stage" | while IFS= read -r entry; do
+      name=${entry##*/}
+      rm -rf "${home:?}/$name"
+      mv "$entry" "$home/$name"
+    done
+    rmdir "$stage"
+    : > "$home/.seeded"
+    if [ -n "$owner" ]; then
+      chown -R "$owner" "$home"
     fi
-  done
-  : > "$home/.seeded"
-  if [ -n "$owner" ]; then
-    chown -R "$owner" "$home"
   fi
+  exec 9>&-
 fi
 
 printf '%s\n' "$home"

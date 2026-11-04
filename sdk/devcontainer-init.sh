@@ -20,9 +20,10 @@ fi
 # drops to UID 1000 below). GitHub runners can have any numeric uid, so their
 # short-lived action containers get a private per-UID home. The build-only SDK
 # ships /home/vscode/.cargo unseeded and seeds it here on first start; the
-# full SDK ships it seeded, so its non-ephemeral startup is unchanged.
+# full SDK ships it seeded and marked complete (.seeded), so its non-ephemeral
+# startup is unchanged. An interrupted earlier seeding is completed here.
 cargo_home=/usr/local/libexec/prismpm-cargo-home
-if [ "${PRISMPM_EPHEMERAL_HOME:-}" = 1 ] || { [ -x "$cargo_home" ] && [ ! -d /home/vscode/.cargo/registry ]; }; then
+if [ "${PRISMPM_EPHEMERAL_HOME:-}" = 1 ] || { [ -x "$cargo_home" ] && [ ! -e /home/vscode/.cargo/.seeded ]; }; then
   CARGO_HOME=$("$cargo_home")
   export CARGO_HOME
 fi

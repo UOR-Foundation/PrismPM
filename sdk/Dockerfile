@@ -395,6 +395,7 @@ RUN set -eu; \
     fi; \
     mkdir -p /workspace /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
     && cp -a /opt/prismpm/cargo-home/. /home/vscode/.cargo/ \
+    && : > /home/vscode/.cargo/.seeded \
     && chown -R 1000:1000 /workspace /home/vscode \
     && chmod 0755 /home/vscode \
     && chmod -R a+rwX /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
