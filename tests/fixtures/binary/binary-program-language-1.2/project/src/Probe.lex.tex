@@ -4,7 +4,12 @@
 \importmodule{Foundation.Binary.V1.Model}
 \title{Natural number}
 \begin{semanticmodule}
-definition{name: identity, parameters: [value : Bytes], result: Bytes, body: value}
+definition{
+  name: identity,
+  parameters: [value : Bytes],
+  result: Bytes,
+  body: (prim append value 0x : Bytes)
+}
 
 definition{
   name: probeProgram,

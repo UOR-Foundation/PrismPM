@@ -49,7 +49,7 @@ export function parserFixture(root,change=()=>{},changeOwner=()=>{},authority=so
  return{schema:'prismpm/verify-result/1',build_id:buildId,attestation_id:attestation,verified_root:verified};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const [root]=process.argv.slice(2);if(process.argv.length!==3)throw Error('one test fixture root required');
+ const [root,language='1.1']=process.argv.slice(2);if(![3,4].includes(process.argv.length)||!['1.1','1.2'].includes(language))throw Error('one test fixture root and optional qualification language required');
  const authority={archive_sha256:hash(readFileSync(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:readFileSync(new URL('../lean-toolchain',import.meta.url),'utf8').trim()};
- const receipt=parserFixture(root,undefined,undefined,authority);put(root,'receipt.json',canonical(receipt));console.log(JSON.stringify(receipt));
+ const receipt=parserFixture(root,undefined,undefined,authority,language);put(root,'receipt.json',canonical(receipt));console.log(JSON.stringify(receipt));
 }
