@@ -152,7 +152,7 @@ export function verifyModules(root,installed){
  }
 }
 
-export function verifyImage(value,image,architecture,revision){
+export function verifyImage(value,image,architecture,revision,expectedVersion='0.3.0'){
  assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
  assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
  assert.ok(Array.isArray(value)&&value.length===1);const config=value[0];
@@ -163,7 +163,7 @@ export function verifyImage(value,image,architecture,revision){
  assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
  assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
- assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.3.0');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],expectedVersion);
 }
 
 export function verifyTap(tap,minimum){

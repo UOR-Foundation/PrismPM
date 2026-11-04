@@ -30,6 +30,7 @@ mod lean_project;
 mod library_build;
 mod library_verification;
 pub mod lifecycle;
+mod package_contracts;
 mod lock_command;
 pub mod oci;
 pub mod operations;
