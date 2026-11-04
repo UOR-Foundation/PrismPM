@@ -48,8 +48,7 @@ export function captureEvidence(directory, kind, context) {
   const originalGate = ['source-vv', 'native-equivalence'].includes(kind);
   keys(context, ['source_revision', 'image_reference', 'architecture', ...(originalGate ? ['run_id', 'run_attempt'] : [])]);
   assert.match(context.source_revision, /^[0-9a-f]{40}$/);
-  if (kind === 'source-vv') assert.equal(context.image_reference, null);
-  else assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
+  if (kind !== 'source-vv' || context.image_reference !== null) assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
   assert(['amd64', 'arm64'].includes(context.architecture));
   assert(['full-sdk-vv', 'product-cli', 'source-vv', 'native-equivalence'].includes(kind));
   if (originalGate) releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
