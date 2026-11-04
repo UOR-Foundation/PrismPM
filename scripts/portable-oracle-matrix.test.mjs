@@ -1622,3 +1622,56 @@ test('portable probe rejects undeclared triggers and infrastructure keyboard cla
     assert.match(result.stderr, message);
   }
 });
+
+test('file-session failures retain journey and vector without exposing matter content or weakening acceptance', async () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const helpers = source.slice(source.indexOf('const sanitizedFailures ='), source.indexOf('// Pending observers'));
+  const submission = source.slice(source.indexOf('  const step=async(name,run)=>'), source.indexOf("  await step('attachment-assets'"));
+  assert(helpers.startsWith('const sanitizedFailures ='));
+  assert(submission.startsWith('  const step=async(name,run)=>'));
+  class TimeoutError extends Error {}
+  for (const fault of ['none','navigation','fill','dispatch','response','body','envelope','render','duplicate','save','unavailable']) {
+    const diagnostics = [], cases = [];
+    const privateText = 'confidential-client-source-and-journal';
+    const expected = {status:'ok',message:privateText,response:privateText};
+    const row = {index:17,raw:true,values:[privateText],request:privateText,vector:{response:[...Buffer.from(JSON.stringify(expected))]}};
+    const page = new EventEmitter();
+    const fail = phase => {if (fault === phase) throw new TimeoutError(privateText);};
+    const request = {url:()=> 'http://local/_hologram/intent',postDataJSON:()=>({payload:privateText})};
+    const reply = {url:request.url,request:()=>request,status:()=>200,body:async()=>{
+      fail('body');
+      if(fault==='unavailable')throw new Error('Network.getResponseBody: No data found for resource '+privateText);
+      return Buffer.from(JSON.stringify({version:1,outputs:[fault==='envelope'?'incorrect':JSON.stringify(expected)]}));
+    }};
+    page.goto = async()=>fail('navigation');
+    page.waitForFunction = async(fn,value)=>{if(value!==undefined)fail('render');};
+    page.waitForResponse = async predicate=>{fail('response');assert.equal(predicate(reply),true);return reply;};
+    page.waitForEvent = async()=>{fail('save');return{path:async()=>'/private-journal'};};
+    page.locator = selector=>({
+      evaluate:async fn=>fn({}),fill:async()=>fail('fill'),
+      click:async()=>{if(selector==='#save-session')return;fail('dispatch');page.emit('request',request);page.emit('response',reply);if(fault==='duplicate')page.emit('request',request);},
+      textContent:async()=>privateText,
+    });
+    const run = runInNewContext(`(async()=>{${helpers}\nlet activeJourney;${submission}\nawait step('file-session-vectors',()=>submitRow(row));return cases;})()`,
+      {assert,errors:{TimeoutError},console:{error:value=>diagnostics.push(JSON.parse(value))},page,row,cases,
+        origin:'http://local',session:{},decode:new TextDecoder(),Uint8Array,Buffer,
+        readFileSync:()=>privateText,setTimeout,clearTimeout});
+    if(fault==='none') {await run;assert.equal(cases.length,1);assert.deepEqual(diagnostics,[]);}
+    else {
+      await assert.rejects(run,error=>{
+        assert.match(error.message,/portable View oracle file-session-vectors:/);
+        assert(!error.message.includes(privateText));return true;
+      });
+      assert.equal(cases.length,0);
+      assert.equal(diagnostics.length,1);
+      const diagnostic = diagnostics[0];
+      const phase = fault==='envelope'||fault==='unavailable'?'body':fault==='duplicate'?'render':fault;
+      assert.deepEqual(Object.keys(diagnostic).sort(),['schema','journey','vectorIndex','phase','requests','responses','matchedResponses','failure'].sort());
+      assert.equal(diagnostic.phase,phase);assert.equal(diagnostic.vectorIndex,17);
+      assert.equal(diagnostic.journey,'file-session-vectors');
+      assert.equal(diagnostic.failure,fault==='unavailable'?'response-body-unavailable':['envelope','duplicate'].includes(fault)?'assertion':'timeout');
+      assert(!JSON.stringify(diagnostics).includes(privateText));
+    }
+    assert.equal(page.listenerCount('request'),0);assert.equal(page.listenerCount('response'),0);
+  }
+});

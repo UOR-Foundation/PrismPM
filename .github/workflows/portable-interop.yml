@@ -46,7 +46,7 @@ jobs:
             import {verifyTap,verifyFileCompletions} from './scripts/browser-api-sdk-check.mjs';
             import {diagnosticLimits,readDiagnosticFile} from './scripts/portable-oracle-diagnostics.mjs';
             const node=readFileSync('target/ci-diagnostics/portable-interop/node.log','utf8');
-            const total=verifyTap(node,57);
+            const total=verifyTap(node,60);
             verifyFileCompletions(node,[resolve('scripts/portable-oracle-matrix.test.mjs')],total);
             const rust=readFileSync('target/ci-diagnostics/portable-interop/interop.log','utf8');
             assert.equal((rust.match(/^test result: ok\. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;/gm)||[]).length,1);

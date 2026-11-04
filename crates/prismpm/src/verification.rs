@@ -557,12 +557,12 @@ fn stable_success_output(tool: &str, value: String) -> String {
 
 fn hologram_oracle_environment(root: &Path) -> BTreeMap<String, String> {
     // run_process clears the ambient Cargo policy. Bound this independent
-    // cold compiler explicitly; debug symbols and incremental state do not
-    // participate in the unchanged upstream oracle's execution or assertions.
+    // cold compiler explicitly. The CPU-bound reference host runs optimized;
+    // debug symbols and incremental state do not participate in its assertions.
     BTreeMap::from([
         ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
         ("CARGO_BUILD_JOBS".to_owned(), "2".to_owned()),
-        ("CARGO_PROFILE_DEV_DEBUG".to_owned(), "0".to_owned()),
+        ("CARGO_PROFILE_RELEASE_DEBUG".to_owned(), "0".to_owned()),
         ("CARGO_INCREMENTAL".to_owned(), "0".to_owned()),
         (
             "CARGO_TARGET_DIR".to_owned(),
@@ -655,6 +655,7 @@ fn run_hologram_oracle(
         &cargo,
         &[
             "build".to_owned(),
+            "--release".to_owned(),
             "--manifest-path".to_owned(),
             harness.join("Cargo.toml").to_string_lossy().into_owned(),
             "--locked".to_owned(),
@@ -672,6 +673,7 @@ fn run_hologram_oracle(
         &cargo,
         &[
             "run".to_owned(),
+            "--release".to_owned(),
             "--manifest-path".to_owned(),
             harness.join("Cargo.toml").to_string_lossy().into_owned(),
             "--locked".to_owned(),
@@ -986,7 +988,7 @@ mod portable_oracle_tests {
         const CHILD: &str = "PRISMPM_ORACLE_BUILD_POLICY_TEST";
         let hostile = BTreeMap::from([
             ("CARGO_BUILD_JOBS", "999"),
-            ("CARGO_PROFILE_DEV_DEBUG", "2"),
+            ("CARGO_PROFILE_RELEASE_DEBUG", "2"),
             ("CARGO_INCREMENTAL", "1"),
             ("CARGO_NET_OFFLINE", "false"),
             ("CARGO_TARGET_DIR", "/nonexistent/ambient-oracle-target"),
@@ -1000,13 +1002,13 @@ mod portable_oracle_tests {
             let policy = hologram_oracle_environment(root.path());
             let expected = json!({
                 "CARGO_BUILD_JOBS": "2",
-                "CARGO_PROFILE_DEV_DEBUG": "0",
+                "CARGO_PROFILE_RELEASE_DEBUG": "0",
                 "CARGO_INCREMENTAL": "0",
                 "CARGO_NET_OFFLINE": "true",
                 "CARGO_TARGET_DIR": root.path().join("target/hologram-oracle"),
             });
             assert_eq!(serde_json::to_value(&policy).unwrap(), expected);
-            let script = "const keys=['CARGO_BUILD_JOBS','CARGO_PROFILE_DEV_DEBUG','CARGO_INCREMENTAL','CARGO_NET_OFFLINE','CARGO_TARGET_DIR'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]]))));";
+            let script = "const keys=['CARGO_BUILD_JOBS','CARGO_PROFILE_RELEASE_DEBUG','CARGO_INCREMENTAL','CARGO_NET_OFFLINE','CARGO_TARGET_DIR'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]]))));";
             let observed = run_process(
                 "oracle-compile-policy-observer",
                 &executable("node").unwrap(),
