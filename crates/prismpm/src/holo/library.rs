@@ -9,7 +9,7 @@ use lexlean::SemanticSnapshot;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-mod roots;
+pub(super) mod roots;
 
 fn invalid(message: &str) -> PrismError {
     PrismError::new("PP4004", message)
@@ -231,6 +231,7 @@ pub fn project_library(snapshot: &SemanticSnapshot) -> Result<Option<ModelDocume
         quality: Default::default(),
         application: None,
         library: Some(library),
+        program: None,
     };
     super::validate::validate(&document)?;
     Ok(Some(document))

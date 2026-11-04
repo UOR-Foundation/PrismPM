@@ -52,6 +52,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
         quality,
         application: None,
         library: None,
+        program: None,
     };
     super::validate::validate(&doc)?;
     Ok(doc)
@@ -60,7 +61,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 31] = [
+    const INPUTS: [(&str, &[u8]); 33] = [
         (
             "crates/prismpm/src/application_build.rs",
             include_bytes!("../application_build.rs"),
@@ -72,6 +73,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "crates/prismpm/src/holo/application/workbench.rs",
             include_bytes!("application/workbench.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/binary_program.rs",
+            include_bytes!("binary_program.rs"),
         ),
         (
             "crates/prismpm/src/holo/browser_application.rs",
@@ -173,6 +178,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "schemas/model-document-v6.schema.json",
             include_bytes!("../../schemas/model-document-v6.schema.json"),
+        ),
+        (
+            "schemas/model-document-v7.schema.json",
+            include_bytes!("../../schemas/model-document-v7.schema.json"),
         ),
         (
             "schemas/model-document.schema.json",

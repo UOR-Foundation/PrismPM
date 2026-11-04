@@ -3492,6 +3492,18 @@ refusal, the real xtask dispatcher binding, nonzero child propagation and the
 workflow's immutable source/read-only publication boundary. These are narrowly
 scoped preparation regressions, not evidence for any unexecuted SDK gate.
 
+BinaryProgram DK-36 verification is a distinct binary-package gate. Its source
+fixtures and generated adapters exercise arbitrary octets (including malformed
+UTF-8), native std/no_std, Core-Wasm and standard/file/mixed streams, exact
+maxima and first-over input bounds, and real argument/open/type/read/write,
+no-clobber, computation and output-limit failures. AdapterAllocation executes the generated adapter's real reservation helper
+with usize::MAX, exercising the standard library's deterministic capacity-overflow
+error without exhausting host memory. Physical allocator exhaustion remains
+unmeasured. Core OOM,
+abort or signals are failed processes, not typed recovery guarantees. Source
+checks and parser tests are not evidence that installed amd64/arm64 SDK lanes
+have passed.
+
 ### Selected LexLean adapter source boundary
 
 The actual preparation run
@@ -3610,3 +3622,48 @@ here; the Buildx test ("pinned Buildx pushes a genuine two-platform OCI index")
 needs `docker buildx`, which this environment lacks, and does not touch the
 `crates` job. The layout-custody test failed once when the file ran beside
 `crate-readiness.test.mjs` and passed alone and in the next full run.
+
+## BinaryProgram current-main source integration — 4 November 2026
+
+This candidate preserves the complete #186 history at
+`017a78f478d0fc938031f87ee24421a9466e3337` and integrates it with main
+`33953384ea84a6196a907982dc30f6a3c0d1a955`. It addresses #516's source
+integration scope. Historical executions recorded above retain their original
+source identities; none qualifies this candidate.
+
+BinaryProgram now uses closed `prismpm/model-document/7`, preserving the
+existing text `/5` and `/6` contracts. The generated raw CLI reuses the current
+shared input adapter, including the architecture-specific Linux no-follow flag;
+its complete source is charged to the binary generator identity. The original
+root allocation test name and all original adapter diagnostics are preserved.
+The raw-file-cli/1 protocol, 16 MiB request/response maxima, and explicit
+`OutputWrite:Unknown` behavior remain unchanged. No source-level Result grammar,
+stream executor, atomic output publication, or compression-specific dispatch is
+introduced.
+
+Local component checks use the repository-pinned Rust 1.97.1 and Node 22.23.2:
+workspace/all-target offline check, all-feature strict Clippy, workspace format,
+17 model tests, six Binary contract tests, five raw CLI tests (including actual
+generated native/Core-Wasm failure execution), and two Binary exporter-owner
+reader controls passed. The complete Binary Node wrapper passed its 20
+parser/transport cases and 19 additional ownership cases, with no skips.
+Current shared library/metadata/candidate owners also passed all 37 cases,
+including the real pinned ORAS and Sigstore negatives. These are component
+results on the integration source, not installed-SDK or release acceptance.
+
+The genuine selected LexLean writer refreshed the Binary fixture lock; lock
+check/repeat and linked source check passed. The owning `validate-model --write`
+regenerated the documentation and deterministic SDK source archive, and the
+ordinary subsequent check passed. The production emitter computation matches
+the authored input register. Generated shared/native proof records remain the
+reviewed main records and require fresh owning generation and independent
+review; no process or proof expectation was hand-edited.
+
+The complete DK-36 runtime owner has not completed successfully. Fresh
+current-source source/security/reproducibility gates, complete shared and both
+native writer closures, source-free installed Binary qualification on AMD64 and
+ARM64, both complete consecutive V&V passes, immutable SDK acquisition and
+applicable downstream acceptance remain required. Issues #62 and #194, the
+original #186 qualification obligations, main integration and release approval
+remain open. The existing unpublished-SDK TLS bridge is retained without
+absorbing #193 or transferring its historical diagnostic results.
