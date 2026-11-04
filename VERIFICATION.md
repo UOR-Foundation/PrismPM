@@ -3547,36 +3547,83 @@ Node preparation suite passes 10/10 locally; it is not Rust-gate evidence.
 
 ## Host-effect service systems (SY-09)
 
-`prismpm/system-model/3` (`Production.HostEffectSystem`) was run on the branch
-head in WSL, with `PRISMPM_TEST_SDK_IMAGE` unset. Six of the seven owning
-tests passed: contract registration and closure, the mcp-loopback example and
-its manifest, the loopback-only Compose projection, every non-loopback
-binding, a table of open or inconsistent declarations, and the named
-release built from Lean source. The seventh runs the locked Compose and SPDX
-oracles in the SDK image and was not run locally. `lexlean verify` accepts the
-module with an empty axiom set: the soundness theorem and 25 decided theorems. The projection
-was also read by Docker Compose 2.40.3 (`config --quiet`), which is not the
-locked oracle.
+`prismpm/system-model/3` (`Production.HostEffectSystem`) puts each `api`
+component on the host network. A served application listens on `127.0.0.1`
+only, and Docker forwards a port published from a bridge network to the
+container's interface, so the first projection, with `ports` bound to
+`127.0.0.1`, could not reach the listener it published. Measured on Docker
+29.1.3 (Linux) with a process listening on `127.0.0.1:P` in its container:
+
+| Network | From the host's `127.0.0.1` | From the host's LAN address |
+| --- | --- | --- |
+| bridge, published `127.0.0.1:P:P` | no answer | not published |
+| host | answers | no answer |
+
+Run on the branch head in WSL:
+
+- The seven owning tests pass, the locked Compose and SPDX oracles included,
+  with `PRISMPM_TEST_SDK_IMAGE` set to the SDK candidate
+  `sha256:0519fe6e2f1d731fc0d475c70ad21d00396d9089051f0c703d477e1ffe39a11c`.
+- `lexlean verify` (LexLean 0.4.0 from that image) with the module added as an
+  entrypoint verifies 61 modules. The module states the soundness theorem and
+  26 decided theorems, each with an empty axiom set.
+- `cargo xtask validate-model` reports the documents current.
+
+Review of the first draft found two gaps, closed in the same change:
+
+- **The audit did not know the roles.** It refused a network mode other than
+  `host` and the host network beside another, but accepted a worker moved
+  whole onto the host network (`networks` removed, `network_mode: host`
+  added). `audit_compose` now takes the model: the services are exactly the
+  components, an `api` service is on the host network alone with one replica,
+  and every other service names no network mode and is on exactly its
+  declared networks.
+- **Replicas of an `api` component.** The schema admits up to 1024, and the
+  projection copies `replicas_min` into `deploy.replicas`; on the host network
+  every replica would bind the same loopback port. An `api` component now runs
+  exactly one replica (`apiRunsOnce` in Lean, mirrored in `host_effect.rs`);
+  workers may run several.
+
+Run on that head in WSL, with the same SDK candidate: the seven owning tests
+pass, the locked Compose oracle and the named release included;
+`authority resolve --locked`, `shipped_standards_lock` and
+`validate-model` pass after `standards.lock` and `sdk/stdlib-sources.tar` were
+regenerated (the lock hashes `authority.rs`, whose test changed); and
+`lexlean check` and `lexlean verify` pass on a project of the module, its
+`Production.Core`, the fixture release and its Calculator (4 modules), with the
+module as an entrypoint. The module now states 28 decided theorems.
 
 Planted defects, each applied alone and reverted afterwards:
 
 | Defect | Rejected by |
 | --- | --- |
-| Lean validator ignores the bind address | `wildcardBindingIsRefused` and the other binding theorems |
-| Lean validator ignores the `api` owner | `listenerOnAWorkerIsRefused` |
-| Lean validator ignores dependency order | `dependencyOnALaterComponentIsRefused` |
-| Lean validator ignores the manifest listeners | `manifestMustNameThePublishedListeners` |
-| Rust validator ignores the bind address | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Projection copies a non-loopback address | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Emitted-bytes audit ignores `host_ip` | `host_effect_system_refuses_every_non_loopback_port_binding` |
-| Schema constant for `bind_address` removed | the same test and the named release |
-| Rust validator ignores dependency order | `host_effect_system_refuses_open_or_inconsistent_declarations` |
-| Rust validator ignores the `api` owner | the named release (the unit case is also refused by the network rule) |
-| Manifest binding not compared | the example test and the named release |
-| Adapter policy names `0.0.0.0` | all six owning tests |
+| Lean network rule admits every component | `lexlean verify`: `LLV7002`, `decide` refutes two refusal theorems |
+| Lean network rule lets an `api` component declare a network | `lexlean verify`: `LLV7002`, `apiComponentOnANetworkIsRefused` |
+| Lean listener rule ignores the `api` owner | `lexlean verify`: `LLV7002`, the worker and unknown-component theorems |
+| Rust validator ignores the network rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Rust validator ignores the `api` owner | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Projection leaves the `api` on its declared networks | four owning tests, the oracle test and the named release among them |
+| Projection keeps the `api`'s networks beside the host network | `host_effect_system_compose_puts_each_api_on_the_host_network`, the oracle test, the named release |
+| Projection also publishes the listener's port | the same three tests |
+| Projection no longer refuses a non-loopback listener | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits any network mode | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits a published port | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits the host network beside another | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Schema requires a network of every component again | every owning test but the manifest one |
+| Audit ignores where a non-`api` service is placed | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit ignores the replicas of an `api` service | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Rust validator ignores the one-replica rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Lean `apiRunsOnce` admits every component | `lexlean verify`: `LLV7002`, `decide` refutes `apiComponentWithASecondReplicaIsRefused` |
+| Lean `apiRunsOnce` ignores the kind | `lexlean verify`: `LLV7002`, `decide` refutes `workerWithSeveralReplicasIsAdmitted` |
 
-Not established here: the oracle test, the server application binding that
-issue 216 will supply, and any OCI release, replay or deployment of
+The named release does not check the module's theorems: with the listener
+rule's `api` owner removed it still passed. The Lean planted defects are
+therefore held by `lexlean verify` alone.
+
+Not established here: the server application binding that issue 216 will
+supply, which would tie a listener to the address the application declares;
+that the listener is reached on a Docker Desktop engine, where host networking
+means something else; and any OCI release, replay or deployment of
 `system-model/3`.
 
 ## crates.io readiness (#214)
@@ -3710,3 +3757,47 @@ source correction, a single coordinated shared producer, independent generated
 review and all original native/installed/full-V&V/downstream obligations remain
 required. No producer, release rehearsal or new streaming profile is authorized
 by this source merge alone.
+
+
+### Current-main Binary and focus reconciliation
+
+The reviewed module repair follows the existing BinaryProgram lineage without
+adding a pending dependency or legacy cycle member. Pure package DTOs and
+metadata validation are an `errors`-owned leaf, preserving their original public
+paths and mandatory canonical-document checks. NativeLibrary and Binary share
+one attested Lean/export/Cargo-core authority; Binary verification remains a
+separate profile under the existing library verification owner. Native Boolean
+acceptance and Binary byte/vector/transport evidence remain distinct. The strict
+module gate reports nine modules, fifteen pending edges and nineteen existing
+cycle members, with no violations.
+
+The subsequent source union preserves actual main
+`ecb594bd5640f3cb4bdc567c096c20f03209bd0d` and the public workbench focus source
+`062d806e645f17636d803b0279b715f7696ca94e`. No authored implementation conflict
+occurred. The SDK source archive conflict was resolved by the normal metadata
+writer over all 325 authored stdlib/language files. The other three conflicts
+were shared generated records; the complete five-record shared manifest/model/
+attestation set and both native record sets retain actual main's authentic bytes
+and historical scope. They do not qualify this combined source. The previous
+public focus records remain preserved in ancestry. No pending #514 native record
+was imported.
+
+The emitter closure now includes the pure package leaf. Binary generator
+identity retains every original input and charges the actual shared native-core
+owner, runtime staging and emitted acceptance assets. Genuine controller and
+threat-model owners independently observed application digest
+`2c49ea741eff63bf4206bbf16e7099f4e3aa6a44dd4b327f46169b0e4fae77a7`.
+Only their four authored bindings and the controller fixture comment changed;
+all expected outcomes, diagnostics and artifact declarations remain unchanged.
+The ordinary read-only fixture owner passed all 35 cases. Twenty-nine existing
+Binary/native/text contract cases, both generator-identity controls, five
+host-only HostEffect controls and the 34 bounded disk/workflow checks passed.
+The locked HostEffect oracle remains separate from those host-only checks.
+
+Fresh owning NativeLibrary/Binary execution, the actual pinned-browser focus
+owner, one combined shared-golden proposal and independent review, both current
+native records, installed source-free acceptance, full V&V and downstream
+qualification remain required. Issue #500 is delivered only when equivalent
+accepted focus behavior is established; #514 is not superseded by historical
+records alone. The separate #519 private ownership component remains outside
+this source union and does not establish a production streaming SDK.
