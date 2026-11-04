@@ -417,6 +417,69 @@ extra, reordered or forged journey/index evidence cannot satisfy verification.
 Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
 source-fixture verification supplement model/projection/schema mutation checks.
 
+The separate `Foundation.View.Text.V4.Model.TextApplication` (HO-32) declares
+`prismpm/text-application/4` in closed `prismpm/model-document/7`. It retains
+Text/3's typed command line and workbench, requires a `SessionWorkbench`, and
+keeps all application interpretation in the compiled byte guest. The session
+record declares one hidden multiline state field in every operation, an initial
+state, a single-field restore operation, source-owned save/open/replacement and
+unsaved copy, a safe download filename, a byte cap, and optional operation/field
+file-input bindings. Earlier profiles refuse this metadata; V4 requires it.
+The complete presentation identity includes the session record.
+
+Portable Text/4 execution uses explicit host-selected session limits equal to
+its modeled request and response maxima, bounded by the verifier to 8 MiB and
+16 MiB respectively. The broker checks decoded UTF-8 bytes before guest
+invocation and aggregate output bytes after invocation; the HTTP adapter admits
+at most six times the request maximum plus 256 bytes for JSON escaping. Other
+profiles retain the 64 KiB request / 1 MiB response transport defaults. Guests
+cannot select or change transport limits. The carried Hologram dependency fix
+is registered with exact archive and patch digests; execution report version 3
+identifies the upstream base revision, patch digest, and patched source digest.
+Oversized modeled vectors must be refused by the intent boundary and counted
+separately from accepted intent vectors; direct execution still checks their
+modeled guest response. Text/4 uses its explicit allocation-boundary vector.
+
+V4 framing is the operation prefix, U+001F, and a sequence of canonical UTF-8
+byte-length fields `N:value`. Zero is written `0`; other lengths have no leading
+zero and at most ten digits. The request bound still applies. Embedded separators,
+NULs, line endings and Unicode scalars are data. Up to 32 fields are admitted.
+V1 through V3 framing is unchanged.
+
+The View holds only the last bounded, validated successful response's `response`
+string as accepted state. Typed refusals, malformed or oversized results, failures,
+cancellation and retired work cannot replace it. The guest validates and replays
+state; the host does not interpret its contents. Reset and examples clear draft
+fields while retaining accepted state. File selection reads only the selected
+file, checks its size before and after reading, decodes UTF-8 fatally without
+stripping a BOM, and preserves original bytes when an HTML control normalizes its
+display. A user edit, changed task or newer selection retires an earlier file read.
+Restoration uses the modeled restore operation and requires confirmation before
+replacing a modified session. Explicit downloads contain exact accepted UTF-8
+state; initiating a download is not proof of a completed save, so unsaved copy
+remains. Closing a modified window invokes the browser's unsaved-change prompt.
+There is no ambient storage, authentication, synchronization or host inference.
+
+A successful V4 result may use its `request` string to propose the next form.
+An empty string offers no form; a nonempty string must be a bounded canonical V4
+frame for a declared operation other than restore. Field arity and choice values
+must match; its state field must be empty. Required draft fields may be empty.
+An invalid proposal invalidates the entire response before state is accepted.
+The View offers a button labeled with the declared operation label. Activating
+it fills that form and focuses its first visible field, preserving exact UTF-8
+draft values and injecting accepted state. It does not dispatch or change state.
+Draft edits, task changes and new invocations retire the proposal. Refusals never
+offer a form. This meaning of `request` is exclusive to V4; earlier profiles retain
+their raw request display contract. The guest owns all next-step decisions.
+
+HO-32 runs source/schema mutation and canonical framing tests, browser lifecycle
+and file preservation tests, and a compiled finite-state source fixture against
+the actual portable session. V4's portable corpus retains direct vectors and
+separately identifies frames that require a noninitial hidden state, invalid
+choices, required-input refusals or HTML-normalized typing. Its file restoration
+and saved-state roundtrip checks use real guest results. These are additional
+file-session checks; the earlier profile owners and their requirements remain.
+
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
 the V1 byte-request and View contract and adds explicit `coreMemoryPages` and
@@ -3879,10 +3942,10 @@ are not extended in place, and `/1` evidence cannot satisfy these `/2`
 acceptance checks. This does not change Holo/1, `prismpm/verify-result/1`,
 or `prismpm/application-verification-manifest/1`.
 
-Required portable-browser execution evidence uses `prismpm/hologram-oracle/2`.
-The prior recording-only `/1` report cannot satisfy current application
-verification; its archived records remain historical evidence, not a browser
-execution claim.
+Required portable-browser execution evidence uses `prismpm/hologram-oracle/3`.
+Reports `/1` and `/2` cannot satisfy current application verification. Version 3
+requires separate accepted/rejected intent counts and the exact carried runtime
+source identity; archived earlier reports remain historical evidence.
 
 ## Appendix A. Conformance ID Registry
 
@@ -4118,3 +4181,4 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
 | `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
 | `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |
+| `HO-32` | `holo` | The closed Text/4 file session profile keeps accepted state in the generic View, submits canonical UTF-8 byte-length framed fields to the pure modeled guest, validates explicit file restoration, preserves state on refusal or retired work, downloads exact accepted state only on user action, offers validated guest-selected forms without executing them, and enforces explicit bounded portable session transport with separately evidenced over-limit refusals. | §3 |

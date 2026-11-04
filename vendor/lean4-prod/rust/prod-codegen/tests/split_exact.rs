@@ -30,10 +30,15 @@ impl Drop for Fixture {
 #[test]
 fn split_exact_preserves_uint32_bound_without_truncation() {
     let ir = r#"(module SplitMaximum
+      (type "SplitConfig" (ctor "SplitConfig.mk" (delimiter String)))
       (def maximum ((value String)) (Option (List String))
         (let bound 4294967295 (split-exact value (string "|") bound)))
       (def bounded ((value String) (delimiter String) (maximum UInt32)) (Option (List String))
-        (split-exact value delimiter maximum)))"#;
+        (split-exact value delimiter maximum))
+      (def record_delimiter ((value String) (config (named "SplitConfig")) (maximum UInt32)) (Option (List String))
+        (split-exact value (proj "SplitConfig" "delimiter" config) maximum))
+      (def record_alias_delimiter ((value String) (config (named "SplitConfig")) (maximum UInt32)) (Option (List String))
+        (let delimiter (proj "SplitConfig" "delimiter" config) (split-exact value delimiter maximum))))"#;
     let (_, module) = parse_module(ir).unwrap();
     let generated = generate_module(&module).unwrap();
     let fixture = Fixture::new();
@@ -47,6 +52,16 @@ fn split_exact_preserves_uint32_bound_without_truncation() {
           assert_eq!(bounded(value.into(), "|".into(), expected.len() as u32).unwrap(), expected);
           assert_eq!(bounded(value.into(), "|".into(), expected.len() as u32 - 1), None);
           assert_eq!(bounded(value.into(), "".into(), u32::MAX), None);
+          for limit in [0, expected.len() as u32 - 1, expected.len() as u32, u32::MAX] {
+            let config = SplitConfig { delimiter: "|".into() };
+            let answer = if limit >= expected.len() as u32 { Some(expected.iter().map(|s| alloc::string::String::from(*s)).collect::<alloc::vec::Vec<_>>()) } else { None };
+            assert_eq!(record_delimiter(value.into(), &config, limit), answer);
+            assert_eq!(record_alias_delimiter(value.into(), &config, limit), answer);
+            assert_eq!(config.delimiter, "|", "splitting must not consume the source field");
+          }
+          let empty = SplitConfig { delimiter: "".into() };
+          assert_eq!(record_delimiter(value.into(), &empty, u32::MAX), None);
+          assert_eq!(record_alias_delimiter(value.into(), &empty, u32::MAX), None);
         }
       }
     "#;

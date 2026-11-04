@@ -249,3 +249,5 @@ test_case!(conformance_tm_03, "TM-03");
 test_case!(conformance_tm_04, "TM-04");
 test_case!(conformance_tm_05, "TM-05");
 test_case!(conformance_tm_06, "TM-06");
+
+test_case!(conformance_ho_32, "HO-32");

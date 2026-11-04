@@ -20,7 +20,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Dual digests (`digests`) | 18 | + | N/A | N/A |
 | Dispatch through the guest (`dispatch`) | 7 | + | N/A | N/A |
 | Typed errors (`errors`) | 8 | + | N/A | N/A |
-| Load a holo (`load`) | 19 | + | N/A | N/A |
+| Load a holo (`load`) | 20 | + | N/A | N/A |
 | Histories and replay (`replay`) | 5 | - | N/A | N/A |
 | Verify a holo (`verify`) | 24 | + | N/A | N/A |
 | The world contract (`world`) | 16 | + | N/A | N/A |
@@ -149,6 +149,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `load.attestation.tolerated` | An attestation section as the last row does not stop a load or change the identities. | + | N/A | N/A |
 | `load.attestation.not-last` | An attestation section that is not the last row is refused. | + | N/A | N/A |
 | `load.attestation.duplicate` | Two attestation sections are refused. | + | N/A | N/A |
+| `load.file-session.inspection` | The Text/4 model document is recognized and its exact source-defined limits are inspectable without claiming world or proof acceptance. | + | N/A | N/A |
 
 ### Histories and replay
 

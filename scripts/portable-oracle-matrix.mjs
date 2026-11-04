@@ -51,7 +51,7 @@ const inputs = [
 ];
 const captured = inputs.map(path => capture(join(root, path)));
 captured.push(capture(process.execPath), capture(browser), capture('/usr/bin/python3'));
-assert.equal(captured[0].measurement.sha256, 'caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66');
+assert.equal(captured[0].measurement.sha256, '85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f');
 for (const [actual, embedded] of [['Cargo.toml', 'Cargo.toml'], ['Cargo.lock', 'Cargo.lock'], ['src/main.rs', 'main.rs']])
   assert(readFileSync(join(root, 'tests/hologram-oracle', actual))
     .equals(readFileSync(join(root, 'crates/prismpm/src/embedded/hologram-oracle.' + embedded))));

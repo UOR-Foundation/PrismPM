@@ -8,7 +8,7 @@ use hologram::space::{address_bytes, AppManifest, Layer, Realization};
 use hologram_live::holo::{inspect_bytes, plan_bytes, HoloCatalog, HoloExecutor, HoloRuntime};
 use hologram_live::store::ObjectStore;
 use hologram_view_surface::{
-    PortableViewAttachment, PortableViewSurface, SurfaceFuture, ViewAttachmentId,
+    PortableViewAttachment, PortableViewSurface, SurfaceFuture, ViewAttachmentId, ViewIntentLimits,
     ViewIntentRequest, APPLICATION_INVOKE_INTENT, VIEW_INTENT_VERSION,
 };
 use serde_json::{json, Value};
@@ -95,8 +95,8 @@ async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> 
             return reject(StatusCode::UNSUPPORTED_MEDIA_TYPE);
         }
         // JSON may represent a UTF-8 payload byte using six ASCII bytes. The
-        // authoritative DTO separately enforces the decoded 64KiB byte bound.
-        let maximum = hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES * 6 + 256;
+        // authoritative broker separately enforces the decoded session byte bound.
+        let maximum = attachment.intents.limits().request_envelope_bytes();
         let body = match to_bytes(request.into_body(), maximum).await {
             Ok(body) => body,
             Err(_) => return reject(StatusCode::PAYLOAD_TOO_LARGE),
@@ -105,7 +105,10 @@ async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> 
             Ok(value) => value,
             Err(_) => return reject(StatusCode::BAD_REQUEST),
         };
-        if intent.validate().is_err() {
+        if intent
+            .validate_with_limits(attachment.intents.limits())
+            .is_err()
+        {
             return reject(StatusCode::BAD_REQUEST);
         }
         match attachment.intents.handle(&attachment.id, intent).await {
@@ -280,6 +283,7 @@ fn allocation_boundary(
             "prismpm/text-application/1"
                 | "prismpm/text-application/2"
                 | "prismpm/text-application/3"
+                | "prismpm/text-application/4"
         )
     ) {
         vectors
@@ -325,15 +329,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("pinned portable View transport limits changed".into());
     }
-    for (field, maximum) in [
+    let file_session = application["profile"] == "prismpm/text-application/4";
+    let (request_limit, response_limit) = if file_session {
+        (8_388_608, 16_777_216)
+    } else {
         (
-            "request_maximum",
             hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES,
-        ),
-        (
-            "response_maximum",
             hologram_view_surface::MAX_INTENT_OUTPUT_BYTES,
-        ),
+        )
+    };
+    for (field, maximum) in [
+        ("request_maximum", request_limit),
+        ("response_maximum", response_limit),
     ] {
         if application[field]
             .as_u64()
@@ -342,6 +349,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("application bounds exceed pinned portable View transport limits".into());
         }
     }
+    let limits = if file_session {
+        ViewIntentLimits::new(
+            application["request_maximum"].as_u64().unwrap() as usize,
+            application["response_maximum"].as_u64().unwrap() as usize,
+        )?
+    } else {
+        ViewIntentLimits::default()
+    };
     let vectors = application["acceptance_vectors"]
         .as_array()
         .ok_or("model has no acceptance vectors")?;
@@ -389,6 +404,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let surface = Arc::new(RecordingSurface::default());
     registry.register_portable(surface.clone())?;
     let session = HoloExecutor::with_view_surfaces(registry)
+        .with_view_intent_limits(limits)
         .start_session(&archive)
         .await?;
     if surface.attached.load(Ordering::SeqCst) != 1 {
@@ -409,7 +425,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("attached portable View asset closure/order is not canonical".into());
     }
 
+    if attachment.intents.limits() != limits {
+        return Err("attached intent bounds differ from selected session".into());
+    }
     let mut intent_count = 0usize;
+    let mut intent_rejected_count = 0usize;
     let mut lifecycle_request = None;
     for vector in vectors {
         let request = bytes(vector, "request")?;
@@ -426,6 +446,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 name: APPLICATION_INVOKE_INTENT.to_owned(),
                 payload,
             };
+            if request.payload.len() > limits.payload_bytes() {
+                if attachment
+                    .intents
+                    .handle(&attachment.id, request)
+                    .await
+                    .is_ok()
+                {
+                    return Err("oversized portable intent reached the guest".into());
+                }
+                intent_rejected_count += 1;
+                continue;
+            }
             let intent = attachment
                 .intents
                 .handle(&attachment.id, request.clone())
@@ -572,9 +604,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "footer_verified": true,
             "guest_allocation_boundary": "verified",
             "intent_vectors": intent_count,
+            "intent_rejected_vectors": intent_rejected_count,
             "resident_vectors": vectors.len(),
             "portable_browser": portable_browser,
-            "schema": "prismpm/hologram-oracle/2",
+            "runtime_source": {"archive_sha256": "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f", "base_revision": "d8208266d8abdc2445b7bbc0cef412a566adfaf1", "patch_sha256": "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"},
+            "schema": "prismpm/hologram-oracle/3",
             "view_attached": 1,
             "view_detached": 1
         }))?

@@ -14,7 +14,7 @@ sha256 = "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf"
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "8aff4bd39ccd82cfb634c0cb6fcc216eca6fbbe9a4776a5382f44734b606f52b"
+sha256 = "8bf3f0518074f8db4ef991c1c0636c95da09467973631bed265a900a020a38b4"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
@@ -25,7 +25,7 @@ sha256 = "3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "29270825b581f950b3914509b7a0613f34964f003eb3c61772636d0805b09148"
+sha256 = "e9d203e05f016fe938b5acb67dd6156c850de685699538c1946bafe2ce56399d"
 
 [[dependency.artifact]]
 kind = "file"
@@ -59,7 +59,14 @@ role = "validation-oracle"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/hologram-live.tar"
-sha256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
+sha256 = "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f"
+
+# Carried dependency fix: upstream base revision above plus this exact patch.
+# The source tarball hash identifies the patched runtime, not unmodified upstream.
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/hologram-live-session-bounds.patch"
+sha256 = "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"
 
 [[dependency]]
 id = "uor-hologram"

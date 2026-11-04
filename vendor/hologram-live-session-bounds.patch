@@ -1,0 +1,398 @@
+diff --git a/apps/desktop/src-tauri/src/view_surface.rs b/apps/desktop/src-tauri/src/view_surface.rs
+index d2837fc..d4c4f4c 100644
+--- a/apps/desktop/src-tauri/src/view_surface.rs
++++ b/apps/desktop/src-tauri/src/view_surface.rs
+@@ -6,7 +6,7 @@ use hologram_live::holo_capability::EffectiveGrant;
+ use hologram_live::protocol::HoloRunResult;
+ use hologram_view_surface::{
+     PortableViewAttachment, PortableViewIntentHandler, PortableViewSurface, SurfaceFuture,
+-    ViewAttachmentId, ViewIntentRequest, ViewSurfaceRegistry, MAX_INTENT_PAYLOAD_BYTES,
++    ViewAttachmentId, ViewIntentRequest, ViewSurfaceRegistry,
+ };
+ use serde::Serialize;
+ use std::collections::HashMap;
+@@ -365,9 +365,7 @@ impl ViewAssetStore {
+         let mut labels = state
+             .attachments
+             .iter()
+-            .filter(|(_, attachment)| {
+-                application_kappas.contains(&attachment.id.application_kappa)
+-            })
++            .filter(|(_, attachment)| application_kappas.contains(&attachment.id.application_kappa))
+             .map(|(label, _)| label.clone())
+             .collect::<Vec<_>>();
+         labels.sort();
+@@ -499,7 +497,13 @@ impl ViewAssetStore {
+         {
+             return error_response(StatusCode::BAD_REQUEST, "invalid portable View intent URL");
+         }
+-        if request.body().len() > MAX_INTENT_PAYLOAD_BYTES + 1024 {
++        let (id, handler) = match self.intent_target(webview_label, request) {
++            Ok(target) => target,
++            Err((status, message)) => return error_response(status, &message),
++        };
++        // JSON may escape each UTF-8 byte as six ASCII bytes. The broker also
++        // enforces the decoded byte bound before invoking any guest.
++        if request.body().len() > handler.limits().request_envelope_bytes() {
+             return error_response(
+                 StatusCode::PAYLOAD_TOO_LARGE,
+                 "portable View intent request is too large",
+@@ -525,10 +529,6 @@ impl ViewAssetStore {
+                 );
+             }
+         };
+-        let (id, handler) = match self.intent_target(webview_label, request) {
+-            Ok(target) => target,
+-            Err((status, message)) => return error_response(status, &message),
+-        };
+         match handler.handle(&id, intent).await {
+             Ok(response) => match serde_json::to_vec(&response) {
+                 Ok(body) => response_builder(StatusCode::OK)
+diff --git a/crates/hologram-view-surface/src/lib.rs b/crates/hologram-view-surface/src/lib.rs
+index 4db7b52..3c0c57c 100644
+--- a/crates/hologram-view-surface/src/lib.rs
++++ b/crates/hologram-view-surface/src/lib.rs
+@@ -12,6 +12,56 @@ pub const MAX_INTENT_PAYLOAD_BYTES: usize = 64 * 1024;
+ pub const MAX_INTENT_OUTPUTS: usize = 16;
+ pub const MAX_INTENT_OUTPUT_BYTES: usize = 1024 * 1024;
+ 
++/// Immutable limits selected by a trusted host before starting a session.
++/// Defaults preserve the original portable View protocol. Guest payloads cannot
++/// select or enlarge these limits. Byte counts are UTF-8, not character counts.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub struct ViewIntentLimits {
++    payload_bytes: usize,
++    output_bytes: usize,
++}
++
++impl ViewIntentLimits {
++    pub fn new(payload_bytes: usize, output_bytes: usize) -> Result<Self, String> {
++        for value in [payload_bytes, output_bytes] {
++            if value == 0
++                || value
++                    .checked_mul(6)
++                    .and_then(|n| n.checked_add(256))
++                    .is_none()
++            {
++                return Err(
++                    "portable View limits must be positive with representable JSON envelopes"
++                        .to_owned(),
++                );
++            }
++        }
++        Ok(Self {
++            payload_bytes,
++            output_bytes,
++        })
++    }
++
++    pub const fn payload_bytes(self) -> usize {
++        self.payload_bytes
++    }
++    pub const fn output_bytes(self) -> usize {
++        self.output_bytes
++    }
++    pub const fn request_envelope_bytes(self) -> usize {
++        self.payload_bytes * 6 + 256
++    }
++}
++
++impl Default for ViewIntentLimits {
++    fn default() -> Self {
++        Self {
++            payload_bytes: MAX_INTENT_PAYLOAD_BYTES,
++            output_bytes: MAX_INTENT_OUTPUT_BYTES,
++        }
++    }
++}
++
+ pub type SurfaceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
+ pub type IntentFuture<'a> =
+     Pin<Box<dyn Future<Output = Result<ViewIntentResponse, String>> + Send + 'a>>;
+@@ -33,6 +83,10 @@ pub struct ViewIntentRequest {
+ 
+ impl ViewIntentRequest {
+     pub fn validate(&self) -> Result<(), String> {
++        self.validate_with_limits(ViewIntentLimits::default())
++    }
++
++    pub fn validate_with_limits(&self, limits: ViewIntentLimits) -> Result<(), String> {
+         if self.version != VIEW_INTENT_VERSION {
+             return Err(format!(
+                 "unsupported portable View intent version {}; expected {VIEW_INTENT_VERSION}",
+@@ -45,10 +99,11 @@ impl ViewIntentRequest {
+                 self.name
+             ));
+         }
+-        if self.payload.len() > MAX_INTENT_PAYLOAD_BYTES {
++        if self.payload.len() > limits.payload_bytes() {
+             return Err(format!(
+-                "portable View intent payload is {} bytes; maximum is {MAX_INTENT_PAYLOAD_BYTES}",
+-                self.payload.len()
++                "portable View intent payload is {} bytes; maximum is {}",
++                self.payload.len(),
++                limits.payload_bytes()
+             ));
+         }
+         Ok(())
+@@ -63,6 +118,10 @@ pub struct ViewIntentResponse {
+ }
+ 
+ pub trait PortableViewIntentHandler: Send + Sync {
++    fn limits(&self) -> ViewIntentLimits {
++        ViewIntentLimits::default()
++    }
++
+     fn handle<'a>(
+         &'a self,
+         id: &'a ViewAttachmentId,
+@@ -195,4 +254,22 @@ mod tests {
+         invalid.payload = "x".repeat(MAX_INTENT_PAYLOAD_BYTES + 1);
+         assert!(invalid.validate().expect_err("payload").contains("maximum"));
+     }
++    #[test]
++    fn explicit_limits_measure_utf8_and_refuse_invalid_envelopes() {
++        assert!(ViewIntentLimits::new(0, 1).is_err());
++        assert!(ViewIntentLimits::new(1, 0).is_err());
++        assert!(ViewIntentLimits::new(usize::MAX, 1).is_err());
++        assert!(ViewIntentLimits::new(1, usize::MAX).is_err());
++        let limits = ViewIntentLimits::new(65_538, 2_097_152).unwrap();
++        let mut request = ViewIntentRequest {
++            version: VIEW_INTENT_VERSION,
++            name: APPLICATION_INVOKE_INTENT.to_owned(),
++            payload: "é".repeat(32_769),
++        };
++        assert!(request.validate().is_err());
++        assert!(request.validate_with_limits(limits).is_ok());
++        request.payload.push('x');
++        assert!(request.validate_with_limits(limits).is_err());
++        assert_eq!(limits.request_envelope_bytes(), 65_538 * 6 + 256);
++    }
+ }
+diff --git a/src/holo.rs b/src/holo.rs
+index 2cce30a..a309d75 100644
+--- a/src/holo.rs
++++ b/src/holo.rs
+@@ -20,7 +20,7 @@ use crate::store::ObjectStore;
+ use crate::util::hex;
+ use hologram::archive::{HoloLoader, HoloWriter};
+ use hologram::space::{address_bytes, AppManifest, Realization};
+-use hologram_view_surface::ViewSurfaceRegistry;
++use hologram_view_surface::{ViewIntentLimits, ViewSurfaceRegistry};
+ use std::collections::HashMap;
+ use std::sync::{Arc, Mutex, OnceLock};
+ use wasmtime::Engine;
+@@ -471,6 +471,7 @@ impl HoloRuntime {
+ /// compiles, runs, and drops one local archive without a service process.
+ #[derive(Default)]
+ pub struct HoloExecutor {
++    view_intent_limits: ViewIntentLimits,
+     engine: Engine,
+     view_surfaces: Arc<ViewSurfaceRegistry>,
+     object_store: Option<Arc<ObjectStore>>,
+@@ -539,8 +540,16 @@ impl HoloApplicationSession {
+ }
+ 
+ impl HoloExecutor {
++    /// Set host-owned finite bounds for portable intents in subsequently started sessions.
++    /// The selected limits are captured by each broker and cannot be changed by a guest.
++    pub fn with_view_intent_limits(mut self, limits: ViewIntentLimits) -> Self {
++        self.view_intent_limits = limits;
++        self
++    }
++
+     pub fn with_view_surfaces(view_surfaces: Arc<ViewSurfaceRegistry>) -> Self {
+         Self {
++            view_intent_limits: ViewIntentLimits::default(),
+             engine: Engine::default(),
+             view_surfaces,
+             object_store: None,
+@@ -550,6 +559,7 @@ impl HoloExecutor {
+ 
+     pub fn with_object_store(object_store: Arc<ObjectStore>) -> Self {
+         Self {
++            view_intent_limits: ViewIntentLimits::default(),
+             engine: Engine::default(),
+             view_surfaces: Arc::new(ViewSurfaceRegistry::new()),
+             object_store: Some(object_store),
+@@ -559,6 +569,7 @@ impl HoloExecutor {
+ 
+     pub fn with_channel_broker(channel_broker: Arc<ChannelBroker>) -> Self {
+         Self {
++            view_intent_limits: ViewIntentLimits::default(),
+             engine: Engine::default(),
+             view_surfaces: Arc::new(ViewSurfaceRegistry::new()),
+             object_store: None,
+@@ -644,7 +655,8 @@ impl HoloExecutor {
+             self.view_surfaces.clone(),
+             self.object_store.clone(),
+             self.channel_broker.clone(),
+-        )?;
++        )?
++        .with_view_intent_limits(self.view_intent_limits);
+         registry.evaluate(&mut report);
+         let plan = report.into_application_plan()?;
+         let requested_capabilities_kappa = plan.requested_capabilities.kappa.clone();
+diff --git a/src/holo_provider.rs b/src/holo_provider.rs
+index f5c029b..56ec379 100644
+--- a/src/holo_provider.rs
++++ b/src/holo_provider.rs
+@@ -8,8 +8,8 @@ use crate::error::{LiveError, Result};
+ use crate::holo_capability::{EffectiveGrant, RequestedCapabilities};
+ use hologram::space::LayerKind;
+ use hologram_view_surface::{
+-    PortableViewIntentHandler, ViewAttachmentId, ViewIntentRequest, ViewIntentResponse,
+-    MAX_INTENT_OUTPUTS, MAX_INTENT_OUTPUT_BYTES, VIEW_INTENT_VERSION,
++    PortableViewIntentHandler, ViewAttachmentId, ViewIntentLimits, ViewIntentRequest,
++    ViewIntentResponse, MAX_INTENT_OUTPUTS, VIEW_INTENT_VERSION,
+ };
+ use serde::{Deserialize, Serialize};
+ use std::collections::HashMap;
+@@ -148,6 +148,7 @@ pub trait PreparedLayer: Send + Sync {
+ }
+ 
+ pub struct ProviderRegistry {
++    view_intent_limits: ViewIntentLimits,
+     target: ProviderTarget,
+     providers: Vec<Arc<dyn LayerProvider>>,
+ }
+@@ -195,7 +196,17 @@ impl ProviderRegistry {
+                 )));
+             }
+         }
+-        Ok(Self { target, providers })
++        Ok(Self {
++            target,
++            providers,
++            view_intent_limits: ViewIntentLimits::default(),
++        })
++    }
++
++    /// Select immutable host bounds for sessions prepared through this registry.
++    pub fn with_view_intent_limits(mut self, limits: ViewIntentLimits) -> Self {
++        self.view_intent_limits = limits;
++        self
+     }
+ 
+     pub const fn target(&self) -> ProviderTarget {
+@@ -277,14 +288,16 @@ struct PreparedApplicationLayer {
+ }
+ 
+ struct ApplicationIntentBroker {
++    limits: ViewIntentLimits,
+     application_kappa: String,
+     primary: OnceLock<Arc<dyn PreparedLayer>>,
+     invocation: Arc<Mutex<()>>,
+ }
+ 
+ impl ApplicationIntentBroker {
+-    fn new(application_kappa: &str, invocation: Arc<Mutex<()>>) -> Self {
++    fn new(application_kappa: &str, invocation: Arc<Mutex<()>>, limits: ViewIntentLimits) -> Self {
+         Self {
++            limits,
+             application_kappa: application_kappa.to_owned(),
+             primary: OnceLock::new(),
+             invocation,
+@@ -302,13 +315,17 @@ impl ApplicationIntentBroker {
+ }
+ 
+ impl PortableViewIntentHandler for ApplicationIntentBroker {
++    fn limits(&self) -> ViewIntentLimits {
++        self.limits
++    }
++
+     fn handle<'a>(
+         &'a self,
+         id: &'a ViewAttachmentId,
+         request: ViewIntentRequest,
+     ) -> hologram_view_surface::IntentFuture<'a> {
+         Box::pin(async move {
+-            request.validate()?;
++            request.validate_with_limits(self.limits)?;
+             if id.application_kappa != self.application_kappa {
+                 return Err("portable View intent does not belong to this application".to_owned());
+             }
+@@ -339,9 +356,10 @@ impl PortableViewIntentHandler for ApplicationIntentBroker {
+                     })
+                 })
+                 .collect::<std::result::Result<Vec<_>, _>>()?;
+-            if output_bytes > MAX_INTENT_OUTPUT_BYTES {
++            if output_bytes > self.limits.output_bytes() {
+                 return Err(format!(
+-                    "portable View intent returned {output_bytes} bytes; maximum is {MAX_INTENT_OUTPUT_BYTES}"
++                    "portable View intent returned {output_bytes} bytes; maximum is {}",
++                    self.limits.output_bytes()
+                 ));
+             }
+             Ok(ViewIntentResponse {
+@@ -553,7 +571,11 @@ pub(crate) async fn prepare_and_start_with_admitted_grants(
+         };
+         let invocation = Arc::new(Mutex::new(()));
+         invocations.push(invocation.clone());
+-        let view_intents = Arc::new(ApplicationIntentBroker::new(application_kappa, invocation));
++        let view_intents = Arc::new(ApplicationIntentBroker::new(
++            application_kappa,
++            invocation,
++            registry.view_intent_limits,
++        ));
+         let prepared_start = prepared.len();
+         let requested_capabilities = application_requested_capabilities(plan, application_index)?;
+         let grant = admitted_grants.get(&application_index).ok_or_else(|| {
+@@ -1784,4 +1806,57 @@ mod tests {
+     fn take(events: &Mutex<Vec<String>>) -> Vec<String> {
+         std::mem::take(&mut *events.lock().expect("events"))
+     }
++    #[tokio::test]
++    async fn explicit_view_limits_are_enforced_before_invocation_and_after_output() {
++        let events = Arc::new(Mutex::new(Vec::new()));
++        let layer = Arc::new(SyntheticLayer {
++            position: 0,
++            events: events.clone(),
++            fail_start: false,
++            fail_stop: false,
++            stopped: AtomicBool::new(false),
++        });
++        let limits = ViewIntentLimits::new(70_000, 69_999).unwrap();
++        let broker =
++            ApplicationIntentBroker::new("app", Arc::new(tokio::sync::Mutex::new(())), limits);
++        broker.bind(layer).unwrap();
++        let id = ViewAttachmentId {
++            token: "test".into(),
++            application_kappa: "app".into(),
++            layer_position: 1,
++        };
++        let request = |n| ViewIntentRequest {
++            version: VIEW_INTENT_VERSION,
++            name: APPLICATION_INVOKE_INTENT.into(),
++            payload: "x".repeat(n),
++        };
++        assert_eq!(broker.limits(), limits);
++        assert_eq!(
++            broker.handle(&id, request(69_999)).await.unwrap().outputs[0].len(),
++            69_999
++        );
++        assert!(broker
++            .handle(&id, request(70_000))
++            .await
++            .unwrap_err()
++            .contains("returned 70000 bytes"));
++        let count = events.lock().unwrap().len();
++        assert!(broker
++            .handle(&id, request(70_001))
++            .await
++            .unwrap_err()
++            .contains("payload"));
++        assert_eq!(events.lock().unwrap().len(), count);
++        let defaults = ApplicationIntentBroker::new(
++            "other",
++            Arc::new(tokio::sync::Mutex::new(())),
++            ViewIntentLimits::default(),
++        );
++        assert_eq!(defaults.limits(), ViewIntentLimits::default());
++        assert!(defaults
++            .handle(&id, request(69_999))
++            .await
++            .unwrap_err()
++            .contains("payload"));
++    }
+ }

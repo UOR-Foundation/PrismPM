@@ -144,6 +144,34 @@
       "op": "load",
       "archive": "attestation-duplicate",
       "expect": { "ok": false, "error": { "code": "attestation.duplicate" } }
+    },
+    {
+      "id": "load.file-session.inspection",
+      "title": "The Text/4 model document is recognized and its exact source-defined limits are inspectable without claiming world or proof acceptance.",
+      "op": "inspect",
+      "archive": "file-session",
+      "expect": {
+        "ok": true,
+        "result": {
+          "revision": "2026-10-23",
+          "name": "Text Request",
+          "model": {
+            "schema": "prismpm/model-document/7",
+            "profile": "prismpm/text-application/4",
+            "vectors": 10,
+            "limits": {
+              "request": 4096,
+              "response": 16384,
+              "guest_allocation": 4097
+            }
+          },
+          "verification": {
+            "footer": true,
+            "labels": true,
+            "cross_references": true
+          }
+        }
+      }
     }
   ]
 }

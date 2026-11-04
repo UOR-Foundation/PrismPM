@@ -3,7 +3,7 @@
  * and the harness writes that file and hands the shim its path, so a runtime in
  * any language reads the same bytes and needs no code from this package.
  *
- * Every archive derives from one committed file, the reference Calculator holo,
+ * The baseline mutations derive from the committed reference Calculator holo,
  * by a recipe below. `corpus/archives.lock.json` pins the sha256 of each result,
  * so a changed recipe is a visible change in review, and `corpus --out <dir>`
  * writes them all for a runtime author to read.
@@ -204,6 +204,8 @@ const name = (text) => concat([leb(enc.encode(text).length), enc.encode(text)]);
  */
 export const ARCHIVES = Object.freeze({
   reference,
+  // Compiled from tests/fixtures/holo/ho-32-file-session/project; no handwritten guest.
+  'file-session': () => new Uint8Array(readFileSync(here('../corpus/FileSession.holo'))),
 
   // Not a holo at all, or a structure no reader may accept.
   empty: () => new Uint8Array(0),

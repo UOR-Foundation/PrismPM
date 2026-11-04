@@ -82,7 +82,7 @@ export function observationDriver(source,mode,trigger){
  let driver=source;
  const entry='async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {';
  driver=replacement(driver,entry,`let observationOrdinal = 0;\n${entry}\n  const observationSubmission = ++observationOrdinal;`);
- const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
+ const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup, transportRequestMaximum);';
  driver=replacement(driver,acquisition,mode==='observed'
   ? acquisition+'\n    await network.ready; // Diagnostic-only witness preparation, not ordinary acceptance.'
   : mode==='ordinary' ? acquisition : '    // Qualification omits only the read-only diagnostic collector.');
@@ -162,7 +162,7 @@ function main(){
   witnesses:observationSummary(preliminary).witnesses})+'\n',{flag:'wx'});
  for(const subject of subjects)subject.verify();
  assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,'real upstream session must pass without retry');
- const report=JSON.parse(result.stdout.trim());assert.equal(report.schema,'prismpm/hologram-oracle/2');
+ const report=JSON.parse(result.stdout.trim());assert.equal(report.schema,'prismpm/hologram-oracle/3');
  const actual=report.portable_browser;
  assert.equal(actual.schema,'prismpm/portable-browser-oracle/1');assert.equal(actual.status,'passed');
  assert.equal(actual.skipped,0);assert.equal(actual.retries,0);assert.equal(actual.profile,profile.profile);

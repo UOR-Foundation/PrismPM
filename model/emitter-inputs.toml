@@ -1,5 +1,5 @@
 spec = "prismpm/emitter-inputs/1"
-digest = "3964c9c3578af9bf5917b5e317001ce67d62585b8b56dbef3effa872f53da915"
+digest = "a6f9427ad9489f290260a3909405ba560562664c09f40321840b89a9bb12d05d"
 inputs = [
     "crates/prismpm/src/application_build.rs",
     "crates/prismpm/src/holo/application.rs",
@@ -30,6 +30,7 @@ inputs = [
     "schemas/model-document-v4.schema.json",
     "schemas/model-document-v5.schema.json",
     "schemas/model-document-v6.schema.json",
+    "schemas/model-document-v7.schema.json",
     "schemas/model-document.schema.json",
     "schemas/workbench-view-projection.schema.json"
 ]

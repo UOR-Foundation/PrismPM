@@ -10,6 +10,7 @@ mod browser_system;
 mod cbor_primitive;
 mod design_views;
 mod feature_journeys;
+mod file_session;
 mod holo_browser;
 mod host_effect_system;
 mod mailbox_admission;
@@ -465,6 +466,7 @@ pub fn run_at(root: &Path, id: &str) {
         ),
 
         "HO-19" => workbench::verify(root),
+        "HO-32" => file_session::verify(root),
 
         "HO-16" => {
             let browser = Command::new("timeout")
@@ -3363,6 +3365,7 @@ fn verify_portable_view_report(root: &Path) {
         "direct_vectors":6,
         "footer_verified":true,
         "guest_allocation_boundary":"verified",
+        "intent_rejected_vectors": 0,
         "intent_vectors":5,
         "portable_browser":{
             "schema":"prismpm/portable-browser-oracle/1",
@@ -3377,7 +3380,8 @@ fn verify_portable_view_report(root: &Path) {
             "status":"passed"
         },
         "resident_vectors":6,
-        "schema":"prismpm/hologram-oracle/2",
+        "runtime_source": {"archive_sha256": "85f65bb80b4e2f79823bff95d85616e6584add4875127b81f260e7bf4ec94c0f", "base_revision": "d8208266d8abdc2445b7bbc0cef412a566adfaf1", "patch_sha256": "8ecf5003de3a738aa47dfd83293dd4f797115c1be36fd744368667172391051a"},
+        "schema":"prismpm/hologram-oracle/3",
         "view_attached":1,
         "view_detached":1
     });

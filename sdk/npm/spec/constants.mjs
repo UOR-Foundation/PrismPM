@@ -216,6 +216,7 @@ export const FORMAT_REVISIONS = freeze({
       'prismpm/model-document/2',
       'prismpm/model-document/5',
       'prismpm/model-document/6',
+      'prismpm/model-document/7',
     ]),
   }),
 });

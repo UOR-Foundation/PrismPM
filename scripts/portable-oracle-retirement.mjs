@@ -91,7 +91,7 @@ browser.close = async () => {
       : ''}
 };`);
   if (!['late-acquisition', 'pending-acquisition', 'pending-acquisition-rejected-close', 'registry-overflow', 'registry-rejection', 'post-seal-acquisition'].includes(fault)) {
-    const acquisition = '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
+    const acquisition = '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup, transportRequestMaximum);';
     driver = replace(driver, acquisition, acquisition + '\n    await network.ready; // Fault preparation only; ordinary production never joins setup.');
   }
   if (trigger === 'keyboard') {
