@@ -1,0 +1,84 @@
+name: Disk checkpoint survival smoke
+
+# Diagnostic only: no full V&V or release qualification is implied.
+on:
+  push:
+    branches: [test/disk-checkpoint-survival]
+  pull_request:
+    paths:
+      - 'scripts/ci-disk-checkpoint*'
+      - 'scripts/ci-disk-components*'
+      - 'scripts/ci-disk-walk.py'
+      - '.github/actions/disk-checkpoint-smoke/**'
+      - '.github/workflows/disk-checkpoint-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: disk-checkpoint-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  produce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: actions/upload-artifact
+          ref: ea165f8d65b6e75b540449e92b4886f43607fa02
+          path: .ci-checkpoint-uploader
+          persist-credentials: false
+      - name: Prepare verified uploader
+        run: |
+          set -euo pipefail
+          cp .ci-checkpoint-uploader/dist/upload/index.js "$RUNNER_TEMP/checkpoint-survival-uploader.js"
+          echo '0165b8a75330f3228f2c7a234b4ff8a107b9139c2b519147f4c8e9fe99b262d8  '${RUNNER_TEMP}'/checkpoint-survival-uploader.js' | sha256sum --check --status
+          rm -rf .ci-checkpoint-uploader
+      - name: Upload then terminate the producer
+        uses: ./.github/actions/disk-checkpoint-smoke
+  verify-after-termination:
+    needs: produce
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download finalized checkpoint after producer job ends
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vv-disk-${{ github.run_id }}-${{ github.run_attempt }}-0
+          path: checkpoint
+      - name: Verify closed diagnostic data
+        run: |
+          node - <<'JS'
+          try {
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          assert.deepEqual(fs.readdirSync('checkpoint'), ['snapshot-0.json']);
+          const bytes = fs.readFileSync('checkpoint/snapshot-0.json');
+          assert.ok(bytes.length <= 16384);
+          const x = JSON.parse(bytes);
+          const keys = (value, expected) => assert.deepEqual(Object.keys(value).sort(), expected.sort());
+          keys(x, ['version', 'sequence', 'time', 'previousUpload', 'sample']);
+          assert.equal(x.version, 1); assert.equal(x.sequence, 0); assert.equal(x.previousUpload, 'none');
+          assert.match(x.time, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+          keys(x.sample, ['schema', 'components', 'capacity']); assert.equal(x.sample.schema, 1);
+          keys(x.sample.components, ['workspace-target', 'workspace-other', 'docker-storage', 'runner-installation', 'hosted-toolchains']);
+          const statuses = ['complete', 'partial', 'timed-out', 'unavailable', 'entry-limit', 'depth-limit', 'output-limit', 'failed', 'invalid-output', 'not-sampled'];
+          const fields = ['allocatedBytes', 'entriesVisited', 'symlinks', 'skippedMounts', 'errors'];
+          for (const row of Object.values(x.sample.components)) {
+            keys(row, ['status', ...fields]); assert.ok(statuses.includes(row.status));
+            for (const field of fields) assert.ok(row[field] === null || (Number.isSafeInteger(row[field]) && row[field] >= 0));
+          }
+          keys(x.sample.capacity, ['workspace', 'docker']);
+          for (const row of Object.values(x.sample.capacity)) {
+            keys(row, ['status', 'totalBytes', 'availableBytes', 'freeFiles']);
+            assert.ok(['ok', 'unavailable', 'timed-out', 'output-limit', 'failed', 'invalid-output', 'not-sampled'].includes(row.status));
+            for (const field of ['totalBytes', 'availableBytes', 'freeFiles']) assert.ok(row[field] === null || (Number.isSafeInteger(row[field]) && row[field] >= 0));
+          }
+          } catch { process.stderr.write('Checkpoint schema verification failed.\n'); process.exitCode = 1; }
+          JS

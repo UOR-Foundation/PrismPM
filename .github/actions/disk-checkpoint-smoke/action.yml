@@ -1,0 +1,5 @@
+name: Exercise checkpoint producer termination
+description: Test-only action that starts and terminates the real checkpoint monitor without printing its environment.
+runs:
+  using: node20
+  main: index.cjs
