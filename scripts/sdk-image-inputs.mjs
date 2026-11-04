@@ -148,6 +148,16 @@ export function dockerArguments(source, revision, target, closure, args) {
       assert(typeof args[++i] === 'string' && args[i].length > 0 && !args[i].startsWith('-') && !args[i].includes('\0'));
       continue;
     }
+    if (args[i] === '--cache-from' || args[i] === '--cache-to') {
+      const exporting = args[i] === '--cache-to';
+      // Cache transport cannot replace source contexts, build arguments or
+      // inventory checks. Restrict it to this workflow's GHA cache service.
+      const syntax = exporting
+        ? /^type=gha,version=2,scope=[a-zA-Z0-9_-]{1,128},mode=(?:min|max)$/
+        : /^type=gha,version=2,scope=[a-zA-Z0-9_-]{1,128}$/;
+      assert.match(args[++i] ?? '', syntax, 'closed GHA cache configuration');
+      continue;
+    }
     if (args[i] === '--build-arg') {
       assert.match(args[++i] ?? '', /^(?:SOURCE_DATE_EPOCH=0|SDK_VERSION=[0-9]+\.[0-9]+\.[0-9]+)$/); continue;
     }
