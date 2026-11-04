@@ -3557,6 +3557,30 @@ Run on the branch head in WSL:
   26 decided theorems, each with an empty axiom set.
 - `cargo xtask validate-model` reports the documents current.
 
+Review of the first draft found two gaps, closed in the same change:
+
+- **The audit did not know the roles.** It refused a network mode other than
+  `host` and the host network beside another, but accepted a worker moved
+  whole onto the host network (`networks` removed, `network_mode: host`
+  added). `audit_compose` now takes the model: the services are exactly the
+  components, an `api` service is on the host network alone with one replica,
+  and every other service names no network mode and is on exactly its
+  declared networks.
+- **Replicas of an `api` component.** The schema admits up to 1024, and the
+  projection copies `replicas_min` into `deploy.replicas`; on the host network
+  every replica would bind the same loopback port. An `api` component now runs
+  exactly one replica (`apiRunsOnce` in Lean, mirrored in `host_effect.rs`);
+  workers may run several.
+
+Run on that head in WSL, with the same SDK candidate: the seven owning tests
+pass, the locked Compose oracle and the named release included;
+`authority resolve --locked`, `shipped_standards_lock` and
+`validate-model` pass after `standards.lock` and `sdk/stdlib-sources.tar` were
+regenerated (the lock hashes `authority.rs`, whose test changed); and
+`lexlean check` and `lexlean verify` pass on a project of the module, its
+`Production.Core`, the fixture release and its Calculator (4 modules), with the
+module as an entrypoint. The module now states 28 decided theorems.
+
 Planted defects, each applied alone and reverted afterwards:
 
 | Defect | Rejected by |
@@ -3574,6 +3598,11 @@ Planted defects, each applied alone and reverted afterwards:
 | Audit admits a published port | `host_effect_system_refuses_every_non_loopback_port_binding` |
 | Audit admits the host network beside another | `host_effect_system_refuses_every_non_loopback_port_binding` |
 | Schema requires a network of every component again | every owning test but the manifest one |
+| Audit ignores where a non-`api` service is placed | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit ignores the replicas of an `api` service | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Rust validator ignores the one-replica rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Lean `apiRunsOnce` admits every component | `lexlean verify`: `LLV7002`, `decide` refutes `apiComponentWithASecondReplicaIsRefused` |
+| Lean `apiRunsOnce` ignores the kind | `lexlean verify`: `LLV7002`, `decide` refutes `workerWithSeveralReplicasIsAdmitted` |
 
 The named release does not check the module's theorems: with the listener
 rule's `api` owner removed it still passed. The Lean planted defects are

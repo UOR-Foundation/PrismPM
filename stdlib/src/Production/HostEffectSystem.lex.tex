@@ -362,6 +362,13 @@ definition{
 }
 
 definition{
+  name: apiRunsOnce,
+  parameters: [component : Component],
+  result: Bool,
+  body: ((not (prim equal (project component kind) "api" : Bool)) || ((project (project component resources) replicasMax) =? 1))
+}
+
+definition{
   name: validProduct,
   parameters: [product : Production.Core::Product],
   result: Bool,
@@ -403,7 +410,7 @@ definition{
   name: validComponent,
   parameters: [model : SystemModel, earlier : (List String), component : Component],
   result: Bool,
-  body: ((nonEmpty (project component id)) && ((nonEmpty (project component version)) && ((validKind (project component kind)) && ((memberString (project component artifact) (artifactIds (project model artifacts))) && ((nonEmptyStrings (project component command)) && ((allNonEmpty (project component command)) && ((allMembers (project component dependsOn) earlier) && (((prim equal (project component kind) "job" : Bool) || (nonEmptyStrings (project component readiness))) && ((allMembers (project component parameters) (parameterIds (project model parameters))) && ((allMembers (project component secrets) (secretIds (project model secretReferences))) && ((allMembers (project component volumes) (volumeIds (project model volumes))) && ((validNetworkSet component) && ((allMembers (project component networks) (networkIds (project model networks))) && (validResources (project component resources)))))))))))))))
+  body: ((nonEmpty (project component id)) && ((nonEmpty (project component version)) && ((validKind (project component kind)) && ((memberString (project component artifact) (artifactIds (project model artifacts))) && ((nonEmptyStrings (project component command)) && ((allNonEmpty (project component command)) && ((allMembers (project component dependsOn) earlier) && (((prim equal (project component kind) "job" : Bool) || (nonEmptyStrings (project component readiness))) && ((allMembers (project component parameters) (parameterIds (project model parameters))) && ((allMembers (project component secrets) (secretIds (project model secretReferences))) && ((allMembers (project component volumes) (volumeIds (project model volumes))) && ((validNetworkSet component) && ((apiRunsOnce component) && ((allMembers (project component networks) (networkIds (project model networks))) && (validResources (project component resources))))))))))))))))
 }
 
 definition{
@@ -817,6 +824,22 @@ theorem{
   name: workerWithoutANetworkIsRefused,
   parameters: [],
   statement: ((validateManifest (exampleModel (goodProfile) (cons (exampleVerifier) (cons (exampleComponent "signer" "worker" "signer-image" (cons "/usr/local/bin/signer" (nil String)) (nil String) (cons "/usr/local/bin/signer" (cons "--ready" (nil String))) (nil String) (cons "signing-key" (nil String)) (nil String) (nil String)) (cons (exampleEngineHost) (cons (goodGateway) (cons (exampleCollector) (nil Component)))))) (exampleNetworks) (goodListeners "127.0.0.1")) (goodManifest)) = false),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: apiComponentWithASecondReplicaIsRefused,
+  parameters: [],
+  statement: ((validateManifest (exampleModel (goodProfile) (exampleComponents (record Component {id := "gateway", kind := "api", version := "0.1.0", artifact := "gateway-image", command := (cons "/usr/local/bin/gateway" (nil String)), dependsOn := (cons "engine-host" (cons "signer" (nil String))), readiness := (cons "/usr/local/bin/gateway" (cons "--ready" (nil String))), parameters := (cons "listen-port" (cons "log-level" (nil String))), secrets := (nil String), volumes := (nil String), networks := (nil String), resources := (record Resources {cpuMillis := 500, memoryBytes := 268435456, replicasMin := 1, replicasMax := 2})})) (exampleNetworks) (goodListeners "127.0.0.1")) (goodManifest)) = false),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: workerWithSeveralReplicasIsAdmitted,
+  parameters: [],
+  statement: ((validateManifest (exampleModel (goodProfile) (cons (exampleVerifier) (cons (record Component {id := "signer", kind := "worker", version := "0.1.0", artifact := "signer-image", command := (cons "/usr/local/bin/signer" (nil String)), dependsOn := (nil String), readiness := (cons "/usr/local/bin/signer" (cons "--ready" (nil String))), parameters := (nil String), secrets := (cons "signing-key" (nil String)), volumes := (nil String), networks := (cons "backend" (nil String)), resources := (record Resources {cpuMillis := 500, memoryBytes := 268435456, replicasMin := 1, replicasMax := 3})}) (cons (exampleEngineHost) (cons (goodGateway) (cons (exampleCollector) (nil Component)))))) (exampleNetworks) (goodListeners "127.0.0.1")) (goodManifest)) = true),
   proof: decide{},
   axioms: []
 }

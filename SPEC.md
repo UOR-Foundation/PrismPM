@@ -1708,7 +1708,9 @@ each with one declared image, parameters, secret references, volumes and
 resources. A component depends only on components declared before it, so the
 dependency order is its own acyclicity witness. An `api` component declares no
 network, because it runs on the host network, and every other component declares
-at least one. A listener belongs to an `api` component, binds `127.0.0.1`, uses
+at least one. An `api` component runs exactly one replica: on the host network
+a second would bind the same loopback port as the first. Other components may
+run several. A listener belongs to an `api` component, binds `127.0.0.1`, uses
 TCP and takes a port no other listener takes. The single target is the pinned
 Compose adapter.
 
@@ -1730,7 +1732,7 @@ digest, the product identity, the declared effects and the published listener
 identities. Planted defects are decided theorems: a wildcard, hostname or other
 loopback address, a missing, zero or out-of-range port, a listener on a worker
 or on an unknown component, an `api` component on a network, a worker on none,
-two listeners on one port, a wrong contract or protocol, no declared effect, a
+an `api` component with a second replica, two listeners on one port, a wrong contract or protocol, no declared effect, a
 repeated effect, an unknown kind, a forward or unknown dependency, an unknown
 image or network, a repeated identity and each manifest mismatch.
 
@@ -1742,10 +1744,13 @@ declared networks, and publishes no port; it refuses a listener that does not
 name the loopback address instead of rewriting it. The closed schema carries
 the same constant, so a wildcard binding is refused three times: by the
 contract, by the validator and by the projection. A Compose project is also
-audited as emitted bytes: no service publishes or exposes a port, no service
-names a network mode other than `host`, and a service on the host network is
-on no other network. The locked Compose oracle accepts any published port and
-any network mode, so that audit is the check a published wildcard cannot pass.
+audited as emitted bytes against the roles the model gives its components: the
+services are exactly the components; an `api` service has `network_mode: host`,
+no networks and one replica; every other service names no network mode and is on
+exactly its declared networks; and no service publishes or exposes a port. The
+locked Compose oracle accepts any published port and any network mode, so that
+audit is the check a published wildcard, or a worker moved onto the host
+network, cannot pass.
 It cannot see which address a process binds, which is why the address is held
 by the contract, the validator and the projection. The projection set is the
 Compose project and SPDX, both validated by their locked oracles.
