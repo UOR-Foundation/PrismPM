@@ -37,6 +37,8 @@ pub mod operations;
 mod process_resources;
 mod release_verification;
 pub mod replay;
+#[cfg(test)]
+mod resource_adapter;
 pub mod sdk;
 pub mod supply_chain;
 pub mod system;
