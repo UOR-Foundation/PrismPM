@@ -74,7 +74,7 @@ impl Owner {
         let event = model::eventDecode(bytes);
         let old = self.state.as_ref().expect("owned source State");
         source_call();
-        let transition = match model::advance(old, &event) {
+        let transition = match model::advance(old, event) {
             Ok(value) => value,
             Err(error) => {
                 // A checked error preserves ONLY the known pre-call owner.

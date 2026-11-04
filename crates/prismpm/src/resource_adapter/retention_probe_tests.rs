@@ -295,7 +295,7 @@ fn source_owned_retention_cleanup_and_release_execute_in_native_and_wasm() {
         "pub fn init(config: &crate::Config) -> crate::Transition",
         "pub fn observationEncode(observation: &crate::Observation) -> alloc::vec::Vec<u8>",
         "pub fn requestRelease(state: &crate::State) -> crate::Transition",
-        "pub fn advance(state: &crate::State, event: &crate::Event) -> Result<crate::Transition, crate::ComputeError>",
+        "pub fn advance(state: &crate::State, event: crate::Event) -> Result<crate::Transition, crate::ComputeError>",
     ] {
         assert!(
             generated.contains(signature),
