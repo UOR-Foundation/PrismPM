@@ -51,8 +51,13 @@ if [ ! -e "$home/.seeded" ]; then
   exec 9>>"$home/.seed.lock"
   flock 9
   if [ ! -e "$home/.seeded" ]; then
+    # The seed is read-only and `cp -a` keeps its modes, so an interrupted
+    # stage holds read-only directories: restore owner write before removal.
     for stale in "$home"/.seeding.*; do
-      if [ -e "$stale" ]; then rm -rf "$stale"; fi
+      if [ -e "$stale" ]; then
+        chmod -R u+rwX "$stale"
+        rm -rf "$stale"
+      fi
     done
     stage=$(mktemp -d "$home/.seeding.XXXXXX")
     # Copy entries, not "$seed/.": the home directory may belong to another
@@ -63,7 +68,10 @@ if [ ! -e "$home/.seeded" ]; then
     chmod -R u+rwX "$stage"
     entries "$stage" | while IFS= read -r entry; do
       name=${entry##*/}
-      rm -rf "${home:?}/$name"
+      if [ -e "$home/$name" ]; then
+        chmod -R u+rwX "$home/$name"
+        rm -rf "${home:?}/$name"
+      fi
       mv "$entry" "$home/$name"
     done
     rmdir "$stage"
