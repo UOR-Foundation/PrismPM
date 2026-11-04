@@ -1052,19 +1052,19 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: binary-sdk-sdk-amd64
-          path: release
+          path: .sdk-gate-evidence/binary-sdk-sdk-amd64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: binary-sdk-sdk-arm64
-          path: release
+          path: .sdk-gate-evidence/binary-sdk-sdk-arm64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: binary-language-1.2-sdk-sdk-amd64
-          path: release
+          path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-amd64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: binary-language-1.2-sdk-sdk-arm64
-          path: release
+          path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-arm64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: source-vv
