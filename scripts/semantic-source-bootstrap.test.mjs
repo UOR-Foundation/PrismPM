@@ -84,6 +84,8 @@ test('both workflows require the exact helper before offline owners and retain p
    ['node scripts/binary-sdk-check.mjs tests >','node scripts/binary-sdk-check.mjs tests || true >'],
    ['            ${{ runner.temp }}/'+(generated?'binary-helper-evidence/':'binary-qualification/setup/'),''],
   ]){assert.ok(workflow.includes(before));assert.throws(()=>validate(workflow.replace(before,after)),undefined,before);}
+  if(!generated){assert.throws(()=>validate(workflow.replace('      - name: Initialize source-bound prerequisite diagnostics','      - name: Omitted prerequisite diagnostics')));assert.throws(()=>validate(workflow.replace('      - name: Retain prerequisite and SDK phase status\n        if: always()','      - name: Retain prerequisite and SDK phase status\n        if: success()')));}
+  assert.throws(()=>validate(workflow.replace('boundary-step-exit-status.txt','omitted-exit-status.txt')));
   const start=workflow.indexOf('      - name: Build the same-source semantic helper'),end=workflow.indexOf('      - name: Check ',start),next=workflow.indexOf('      - name: ',end+10);
   assert.throws(()=>validate(workflow.slice(0,start)+workflow.slice(end,next)+workflow.slice(start,end)+workflow.slice(next)),'owners before bootstrap rejected');
  }

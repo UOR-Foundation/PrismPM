@@ -194,9 +194,11 @@ export function validateHelperBootstrapWorkflow(workflow,generated=false){
  assert(prepared<tests&&tests<command&&command<downstream,'helper readiness precedes every owner and SDK/writer operation');
  assert.doesNotMatch(workflow.slice(prepared,downstream),/^        if:|\|\| true|\bif false\b|\bset \+e\b/m,'fail-closed host prerequisite');
  if(!generated){
-  assert.ok(workflow.indexOf('      - name: Initialize source-bound prerequisite diagnostics')<prepared,'diagnostics exist before acquisition');
+  const initialized=workflow.indexOf('      - name: Initialize source-bound prerequisite diagnostics');
+  assert(initialized>=0&&initialized<prepared,'diagnostics exist before acquisition');
   assert.ok(workflow.includes('      - name: Retain prerequisite and SDK phase status\n        if: always()'),'failed prerequisites retain status');
  }
+ assert.ok(workflow.includes('          trap \'status=$?; printf \"%s\\n\" \"$status\" > \"'+evidence+'/boundary-step-exit-status.txt\"\' EXIT'),'owner exit status retained');
  assert.ok(workflow.includes('            ${{ runner.temp }}/'+(generated?'binary-helper-evidence/':'binary-qualification/setup/')),'upload host prerequisite logs on failure');
 }
 export function validateGenerationWorkflow(workflow){
