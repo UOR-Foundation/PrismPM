@@ -322,7 +322,7 @@ fn accepted(root: &Path, project: &Path, verified: &prismpm::controller::VerifyR
         serde_json::from_slice::<Value>(&reader.stdout).unwrap(),
         json!({
             "schema":"prismpm/native-library-reader-regression/1","real_baseline":"passed",
-            "mutations_rejected":7,"restored_baseline":"passed"
+            "mutations_rejected":16,"restored_baseline":"passed"
         })
     );
 }

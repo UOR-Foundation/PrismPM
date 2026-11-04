@@ -6,6 +6,8 @@
 //!   source with its module replaced (same surface) on stdout.
 //! * `to-notation`: data-form source text on stdin, language-1.2 notation on
 //!   stdout.
+//! * `runtime-audit`: generated Lean texts as a JSON string array on stdin,
+//!   the exact audit rows of their imported, source-owned runtime on stdout.
 
 use std::io::{Read, Write};
 use std::process::ExitCode;
@@ -25,15 +27,31 @@ fn run(command: &str, input: &str) -> Result<String, String> {
             lexlean::sdk::write_module(source, &request["value"]).map_err(|error| error.to_string())
         }
         "to-notation" => lexlean::sdk::to_notation(input).map_err(|error| error.to_string()),
+        "runtime-audit" => {
+            let texts: Vec<String> =
+                serde_json::from_str(input).map_err(|error| error.to_string())?;
+            let modules = lexlean::backend::runtime::imported_by(texts.iter().map(String::as_str))
+                .map_err(|error| error.message)?;
+            let mut rows = modules
+                .iter()
+                .flat_map(|module| module.declarations.iter())
+                .map(|(name, axioms)| {
+                    serde_json::json!({"name":name,"observed":axioms,
+                        "policy":{"axioms":axioms,"kind":"exact"},"result":"ok"})
+                })
+                .collect::<Vec<_>>();
+            rows.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+            serde_json::to_string(&rows).map_err(|error| error.to_string())
+        }
         other => Err(format!(
-            "unknown command `{other}`; expected read, write, or to-notation"
+            "unknown command `{other}`; expected read, write, to-notation, or runtime-audit"
         )),
     }
 }
 
 fn main() -> ExitCode {
     let Some(command) = std::env::args().nth(1) else {
-        eprintln!("usage: prismpm-semantic-source read|write|to-notation < input");
+        eprintln!("usage: prismpm-semantic-source read|write|to-notation|runtime-audit < input");
         return ExitCode::from(2);
     };
     let mut input = String::new();
