@@ -62,6 +62,7 @@ test('bootstrap acquisition disables ambient curl configuration before any downl
         assert.equal(args[0], '--disable', 'curl must ignore user configuration');
         assert.equal(options.timeout, 310000);
         assert.deepEqual(options.stdio, ['ignore', 'pipe', 'inherit']);
+        assert.equal(options.maxBuffer, 1024);
         const result = cp.spawnSync(command, [args[0], '--version'], { encoding: 'utf8' });
         assert.equal(result.status, 0);
         assert(!result.stderr.includes('unregistered-prismpm-test-option'));
@@ -486,13 +487,17 @@ test('HTTP acquisition retries explicit transient responses and discards failed 
       name: 'transient transport failures exhaust four attempts',
       steps: Array(5).fill(failure('000', 56)), calls: 4, status: 56, httpStatus: 0,
     },
-    ...['401', '403', '404', '407', '501', '000', '', '503\nnoise'].map((http) => ({
+    ...['400', '401', '403', '404', '407', '410', '501', '200', '000', '', '503\n', '504\n', '504\r\n', 'x504', '503\nnoise'].map((http) => ({
       name: `permanent or unknown HTTP ${JSON.stringify(http)} fails immediately`,
       steps: [failure(http), success], calls: 1, status: 22,
     })),
     {
       name: 'TLS verification failure cannot be retried by an HTTP status',
       steps: [failure('503', 60), success], calls: 1, status: 60,
+    },
+    {
+      name: 'status output larger than the bound fails without retry',
+      steps: [failure('5'.repeat(2048)), success], calls: 1, message: /ENOBUFS|maxBuffer/,
     },
     {
       name: 'successful corrupt archive fails integrity without retry',
@@ -568,4 +573,22 @@ test('HTTP acquisition retries explicit transient responses and discards failed 
       rmSync(work, { recursive: true, force: true });
     }
   });
+});
+
+test('HTTP retry uses the exact captured status string and a shared attempt budget', () => {
+  for (const code of ['408', '429', '500', '502', '503', '504']) {
+    let calls = 0; const waits = [];
+    assert.equal(withTransientRetry(() => {
+      if (++calls < 3) throw Object.assign(new Error('HTTP failure'), {status: 22, stdout: Buffer.from(code)});
+      return 'downloaded';
+    }, {delay: 10, sleep: ms => waits.push(ms)}), 'downloaded');
+    assert.equal(calls, 3); assert.deepEqual(waits, [10, 20]);
+  }
+  for (const code of ['400', '401', '403', '404', '407', '410', '501', '200', '000', '', '503\n', '504\n', '504\r\n', 'x504']) {
+    let calls = 0;
+    assert.throws(() => withTransientRetry(() => {
+      calls++; throw Object.assign(new Error('permanent'), {status: 22, stdout: Buffer.from(code)});
+    }, {sleep: () => assert.fail('permanent failure must not wait')}), /permanent/);
+    assert.equal(calls, 1);
+  }
 });
