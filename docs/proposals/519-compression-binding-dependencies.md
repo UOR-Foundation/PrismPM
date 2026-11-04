@@ -52,6 +52,23 @@ coverage and generated-signature evidence before product glue is emitted.
    unresolved calls and symbol collisions. A list of source strings is not this
    evidence; do not shorten or repair nominal names by guesswork.
 
+   For the existing NativeLibrary route, provide the original same-build
+   `model.prism.json`, `lexlean/snapshot.json`, `library/model-binding.json`,
+   `library/roots.json`, `library/coverage.json`, `library/kernel.ir`,
+   `library/package/generation-manifest.json`, `library/package/src/lib.rs`,
+   package manifest/lock and original `.crate`, plus its genuine verification
+   receipt and artifact hashes. These are the actual output paths of the reused
+   library facility. The model binding supplies export/acceptance roots; roots
+   and coverage identify requested/included definitions and erased proof
+   dependencies, with external calls, opaque nodes and unsupported types
+   explicitly accounted for. The generated manifest binds the IR digest and
+   output files. Supply the complete artifact set for all selected roots,
+   together with exact product source, compiler revision and language lock.
+   A diagnostic compiler route may supply its corresponding original artifact
+   set with equivalent explicit bindings; its compiler identity and unqualified
+   SDK status must remain visible. No compiler or product lock is changed by
+   this dependency request.
+
 2. **Distinct control outcomes and authority.** Bind the exact Workspace.State,
    BoundUserIntent, Intent, RuntimeNotice, Invocation, Update and NumberEdit
    constructors. Preserve Invocation's modeled applied/stale disposition and
