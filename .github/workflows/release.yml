@@ -286,7 +286,11 @@ jobs:
               adapter-kubernetes) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/kubernetes.json ;;
               adapter-github-pages) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/github-pages.json ;;
               oracles) docker run --rm "$REPOSITORY@$DIGEST" test -x /usr/local/bin/oci-distribution-conformance ;;
-              sdk-build) docker run --rm "$REPOSITORY@$DIGEST" sh -ec 'test -d /ms-playwright/chromium_headless_shell-cft-157.0.8099.0; test ! -e /ms-playwright/firefox-1538; test ! -e /usr/local/bin/prismpm-conformance; lean --version' ;;
+              sdk) bash scripts/sdk-cargo-startup-smoke.sh "$REPOSITORY@$DIGEST" ;;
+              sdk-build)
+                docker run --rm "$REPOSITORY@$DIGEST" sh -ec 'test -d /ms-playwright/chromium_headless_shell-cft-157.0.8099.0; test ! -e /ms-playwright/firefox-1538; test ! -e /usr/local/bin/prismpm-conformance; lean --version'
+                bash scripts/sdk-cargo-startup-smoke.sh "$REPOSITORY@$DIGEST"
+                ;;
             esac
           fi
           printf '%s@%s\n' "$REPOSITORY" "$DIGEST" > "${{ matrix.name }}-image.txt"

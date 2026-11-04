@@ -291,6 +291,7 @@ RUN cargo build --locked --release --package prismpm \
     && rm -rf target vendor/lexlean/target
 
 COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/devcontainer-init.sh /usr/local/bin/prismpm-devcontainer-init
+COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/cargo-home.sh /usr/local/libexec/prismpm-cargo-home
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
@@ -482,8 +483,10 @@ LABEL org.opencontainers.image.title="PrismPM standards oracles" \
 # Build-only SDK (`prismpm-sdk-build`): what `prismpm check`, `build` and
 # `verify` use, byte-identical to runtime_base, without the release-acceptance
 # oracle runners and their Java runtime, the browsers the Hologram oracle does
-# not pin, the deploy and telemetry CLIs, and the non-ephemeral duplicate of
-# the offline Cargo cache. Application builds bind tool identities, never the
+# not pin, the deploy and telemetry CLIs, and the pre-seeded copy of the offline
+# Cargo cache in /home/vscode/.cargo: the entrypoint and login shells seed it
+# on demand from /opt/prismpm/cargo-home for the executing identity
+# (sdk/cargo-home.sh). Application builds bind tool identities, never the
 # image, so they are byte-identical across the two images. `conformance`,
 # `deploy` and the Kubernetes lifecycle need the full SDK. The removed files
 # live in lower layers, so the remaining tree is flattened into one layer.
@@ -532,7 +535,6 @@ ENV LANG=C.UTF-8 \
     ELAN_HOME=/usr/local/elan \
     ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 \
     PRISMPM_SDK_INVENTORY=/opt/prismpm/share/inventory.json \
-    PRISMPM_EPHEMERAL_HOME=1 \
     PRISMPM_OCI_PACKAGE=sdk-build \
     PATH=/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin
 WORKDIR /workspace
