@@ -329,6 +329,8 @@ const expectedMatrices = {
     'installed-vv': vvStartOrder.flatMap(part => platforms.map(({os, arch}) => ({os, arch, part}))),
     'image-platforms': platforms,
     native: [{os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
+    'diagnostic-production': platforms,
+    'diagnostic-pair': platforms,
   },
   'sdk-candidate': {
     build: platforms.map(({os, arch}) => ({runner: os, architecture: arch})),
@@ -392,12 +394,22 @@ test('publication keeps non-canceling lifecycles and every original matrix row',
 });
 
 // A running job and any of its ancestors cannot occupy runners together.
-// Count each matrix by its explicit cap, including conditional jobs as though
-// enabled. This is a one-run scheduling bound, not measured disk/memory fit,
+// Count each matrix by its explicit cap, including conditional publication jobs
+// as though enabled. The diagnostic branch is exclusive only after validating
+// every guard and the complete dependency graph. This is a one-run scheduling
+// bound, not measured disk/memory fit,
 // nested Docker concurrency, or a bound across separate workflow executions.
-function releaseRunnerBudget(value) {
+const releaseJobs = ['policy', 'image-platforms', 'sdk-supply', 'product-images', 'images',
+  'source-vv', 'gate', 'reproducibility-parts', 'browser-library', 'reproducibility',
+  'installed-vv', 'product-cli', 'installed-sdk', 'native', 'oci-native', 'crates', 'release'];
+const diagnosticJobs = ['diagnostic-policy', 'diagnostic-production', 'diagnostic-pair'];
+const releaseGuard = "${{ inputs.resource-diagnostic-source == '' }}";
+const diagnosticGuard = "${{ inputs.resource-diagnostic-source != '' }}";
+function releaseRunnerBudget(value, mode = 'release') {
+  assert(['release', 'diagnostic'].includes(mode), 'closed execution mode');
   const names = Object.keys(value.jobs), indices = new Map(names.map((name, i) => [name, i]));
   assert(names.length > 0 && names.length <= 24, 'bounded complete job graph');
+  assert.deepEqual([...names].sort(), [...releaseJobs, ...diagnosticJobs].sort(), 'complete closed release job inventory');
   const ancestors = new Array(names.length), active = new Set();
   const visit = i => {
     if (ancestors[i] !== undefined) return ancestors[i];
@@ -414,6 +426,28 @@ function releaseRunnerBudget(value) {
     active.delete(i); return ancestors[i] = mask;
   };
   names.forEach((_, i) => visit(i));
+  // Check the unfiltered graph first: disabled branches cannot hide unknown
+  // edges, cycles, a missing policy ancestor, or an always()/failure() bypass.
+  assert.equal(value.jobs.policy.if, releaseGuard);
+  assert.equal(value.jobs.policy.needs, undefined);
+  const policyBit = 1 << indices.get('policy');
+  const diagnosticMask = diagnosticJobs.reduce((mask, name) => mask | 1 << indices.get(name), 0);
+  for (const name of releaseJobs) {
+    const job = value.jobs[name], expected = name === 'policy' ? releaseGuard
+      : name === 'crates' ? "${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}"
+      : name === 'release' ? "${{ needs.gate.outputs.rehearsal != 'true' }}" : undefined;
+    assert.equal(job.if, expected, name + ' exact success-gated release guard');
+    assert.equal(job['continue-on-error'], undefined);
+    assert.equal(ancestors[indices.get(name)] & diagnosticMask, 0, name + ' must not depend on diagnostics');
+    if (name !== 'policy') assert(ancestors[indices.get(name)] & policyBit, name + ' requires the original policy ancestor');
+  }
+  for (const [name, needs] of Object.entries({'diagnostic-policy': undefined,
+    'diagnostic-production': 'diagnostic-policy', 'diagnostic-pair': ['diagnostic-policy', 'diagnostic-production']})) {
+    assert.equal(value.jobs[name].if, diagnosticGuard, name + ' exact diagnostic guard');
+    assert.deepEqual(value.jobs[name].needs, needs);
+    assert.equal(value.jobs[name]['continue-on-error'], undefined);
+    assert.equal(ancestors[indices.get(name)] & ~diagnosticMask, 0, name + ' has no release ancestors');
+  }
   const weights = names.map(name => {
     const strategy = value.jobs[name].strategy;
     if (!strategy) return 1;
@@ -430,13 +464,47 @@ function releaseRunnerBudget(value) {
     const bit = available & -available, i = 31 - Math.clz32(bit);
     return Math.max(maximum(available & ~bit), weights[i] + maximum(available & ~comparable[i]));
   };
-  const runners = maximum((1 << names.length) - 1);
-  assert(runners <= 15, `release graph permits ${runners} concurrent runners; planned limit is 15`);
+  const selected = mode === 'diagnostic' ? diagnosticJobs : releaseJobs;
+  const selectedMask = selected.reduce((mask, name) => mask | 1 << indices.get(name), 0);
+  const runners = maximum(selectedMask), limit = mode === 'diagnostic' ? 2 : 15;
+  assert(runners <= limit, `${mode} graph permits ${runners} concurrent runners; planned limit is ${limit}`);
   return runners;
 }
 
-test('release graph caps every weighted antichain at fifteen runners per execution', () => {
+test('exclusive execution modes cap every weighted antichain at fifteen release or two diagnostic runners', () => {
   assert.equal(releaseRunnerBudget(workflow('release')), 15);
+  assert.equal(releaseRunnerBudget(workflow('release'), 'diagnostic'), 2);
+});
+
+test('mode selection cannot hide unknown edges, cycles or weakened isolation guards', () => {
+  const bypasses = ['always()', 'failure()', '${{ always() }}', '${{ failure() }}'];
+  for (const mutate of [
+    value => { delete value.jobs.policy.if; },
+    value => { value.jobs.policy.if = diagnosticGuard; },
+    value => { value.jobs['diagnostic-policy'].if = releaseGuard; },
+    ...releaseJobs.flatMap(name => bypasses.map(guard => value => { value.jobs[name].if = guard; })),
+    ...diagnosticJobs.map(name => value => { delete value.jobs[name].if; }),
+    value => { value.jobs['image-platforms'].needs = []; },
+    value => { value.jobs.images.needs = []; },
+    value => { value.jobs['diagnostic-policy'].needs = 'policy'; },
+    value => { value.jobs['image-platforms'].needs = ['policy', 'diagnostic-policy']; },
+    value => { value.jobs['diagnostic-pair'].needs.push('unknown'); },
+    value => { value.jobs.images.needs.push('unknown'); },
+    value => { value.jobs['diagnostic-policy'].needs = 'diagnostic-pair'; },
+    value => { value.jobs.policy.needs = 'release'; },
+    value => { value.jobs.untracked = {needs: 'policy'}; },
+  ]) for (const mode of ['release', 'diagnostic']) {
+    const value = workflow('release'); mutate(value);
+    assert.throws(() => releaseRunnerBudget(value, mode));
+  }
+  const value = workflow('release');
+  for (const name of ['diagnostic-production', 'diagnostic-pair']) {
+    const changed = structuredClone(value);
+    changed.jobs[name].strategy['max-parallel'] = 3;
+    changed.jobs[name].strategy.matrix.include.push({os: 'ubuntu-24.04', arch: 'unexpected'});
+    assert.throws(() => releaseRunnerBudget(changed, 'diagnostic'), /planned limit is 2/);
+  }
+  assert.throws(() => releaseRunnerBudget(value, 'unknown'), /closed execution mode/);
 });
 
 test('release runner planning rejects excess concurrency, unknown edges and cycles', () => {

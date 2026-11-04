@@ -3,6 +3,11 @@ name: PrismPM OCI/native and Cargo publication
 on:
   workflow_dispatch:
     inputs:
+      resource-diagnostic-source:
+        description: Exact workflow/source SHA for the isolated unpublished native resource diagnostic; leave empty for ordinary release owners
+        required: false
+        default: ""
+        type: string
       version:
         description: Exact SemVer without a leading v
         required: true
@@ -39,6 +44,7 @@ env:
 
 jobs:
   policy:
+    if: ${{ inputs.resource-diagnostic-source == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -1892,5 +1898,189 @@ jobs:
         with:
           name: artifact-selection-${{ github.job }}-${{ matrix.arch || 'all' }}-${{ github.run_attempt }}
           path: target/release-selection/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # Explicitly exclusive from all release, acceptance and publication owners.
+  diagnostic-policy:
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      source: ${{ steps.plan.outputs.source }}
+      work-end-ms: ${{ steps.plan.outputs.work-end-ms }}
+      whole-end-ms: ${{ steps.plan.outputs.whole-end-ms }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - id: plan
+        name: Admit only the exact unpublished diagnostic source and common deadline
+        env:
+          DIAGNOSTIC_SOURCE: ${{ inputs.resource-diagnostic-source }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          node scripts/native-resource-diagnostic.mjs policy >> "$GITHUB_OUTPUT"
+      - name: Check diagnostic isolation and refusal contracts without construction
+        run: node --test scripts/native-resource-diagnostic.test.mjs scripts/native-resource-command.test.mjs scripts/native-resource-driver.test.mjs
+
+  diagnostic-production:
+    name: Native resource production (${{ matrix.arch }})
+    needs: diagnostic-policy
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Free only standard runner tools before the measured baseline
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup             /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft             /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
+          df --block-size=1 /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          use: false
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Run the bounded unpublished production owner
+        env:
+          NATIVE_DIAGNOSTIC_PLAN: ${{ needs.diagnostic-policy.outputs.plan }}
+          RESOURCE_ARCH: ${{ matrix.arch }}
+          RESOURCE_SOURCE: ${{ needs.diagnostic-policy.outputs.source }}
+          RESOURCE_WORK_END: ${{ needs.diagnostic-policy.outputs.work-end-ms }}
+          RESOURCE_WHOLE_END: ${{ needs.diagnostic-policy.outputs.whole-end-ms }}
+        run: |
+          set -euo pipefail
+          bash scripts/native-resource-diagnostic.sh production "$RESOURCE_ARCH" "$RESOURCE_SOURCE" \
+            "$RESOURCE_WORK_END" "$RESOURCE_WHOLE_END" "$RUNNER_TEMP/resource-production-$RESOURCE_ARCH"
+      - name: Retain the bounded original native production subject
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-production-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/resource-production-${{ matrix.arch }}/production-${{ matrix.arch }}.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain bounded resource observations and original failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-records-production-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/resource-production-${{ matrix.arch }}/
+            !${{ runner.temp }}/resource-production-${{ matrix.arch }}/.control/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  diagnostic-pair:
+    name: Native resource pair (${{ matrix.arch }})
+    needs: [diagnostic-policy, diagnostic-production]
+    if: ${{ inputs.resource-diagnostic-source != '' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Free only standard runner tools before the measured baseline
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup             /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft             /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
+          df --block-size=1 /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          use: false
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - id: subjects
+        name: Select only exact successful current-attempt production records
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/resource-selection
+          node scripts/release-artifact-metadata.mjs target/resource-selection/provider.json "$GITHUB_RUN_ID"
+          node scripts/native-resource-diagnostic.mjs select target/resource-selection/provider.json \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" target/resource-selection/selection.json
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/resource-selection/selection.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.subjects.outputs.ids }}
+          merge-multiple: true
+          path: target/resource-subjects
+      - name: Run the bounded unpublished pair owner
+        env:
+          NATIVE_DIAGNOSTIC_PLAN: ${{ needs.diagnostic-policy.outputs.plan }}
+          RESOURCE_ARCH: ${{ matrix.arch }}
+          RESOURCE_SOURCE: ${{ needs.diagnostic-policy.outputs.source }}
+          RESOURCE_WORK_END: ${{ needs.diagnostic-policy.outputs.work-end-ms }}
+          RESOURCE_WHOLE_END: ${{ needs.diagnostic-policy.outputs.whole-end-ms }}
+        run: |
+          set -euo pipefail
+          bash scripts/native-resource-diagnostic.sh pair "$RESOURCE_ARCH" "$RESOURCE_SOURCE" \
+            "$RESOURCE_WORK_END" "$RESOURCE_WHOLE_END" "$RUNNER_TEMP/resource-pair-$RESOURCE_ARCH" "$PWD/target/resource-subjects"
+      - name: Retain bounded resource observations and original failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-records-pair-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/resource-pair-${{ matrix.arch }}/
+            !${{ runner.temp }}/resource-pair-${{ matrix.arch }}/.control/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Retain exact provider originals and subject selection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resource-diagnostic-selection-${{ matrix.arch }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: target/resource-selection/*.json
           if-no-files-found: error
           retention-days: 30

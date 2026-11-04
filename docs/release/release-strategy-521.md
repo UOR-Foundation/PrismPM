@@ -98,24 +98,141 @@ Before merging or launching another full rehearsal:
    results, including failures. Resolve the local Linux process-owner test
    environment limitation on a runner exposing `/proc/.../children`; do not
    weaken process retirement checks.
-2. Authorize a focused native experiment for one SDK producer and one SDK
-   reproducibility pair per architecture, with at most two concurrent runners.
-   Use the exact workflow pins and no publication/discovery/Cargo operations.
-   Retain original build logs, input manifests, builder/cache reports, command
-   timings and allocated storage at every phase; sample available bytes and
-   memory throughout builds/exports, not merely at phase boundaries.
-3. Enforce a 12 GiB free-space reserve on every participating filesystem and
-   evaluate actual content, snapshots, materialized inputs and exporter peaks.
-   Require at least thirty minutes below the existing six-hour deadline; stop
-   the experiment if either bound is lost. Retire only owned builders/state and
-   re-measure available space before B. These are admission criteria for the
-   experiment, not claims that existing measurements already meet them.
+2. Freeze the reviewed release source, including the accepted #529 BinaryProgram
+   counterpart and its separate original acceptance owners. The Binary owner
+   must consume the existing authenticated SDK supply on both architectures and
+   join the final acceptance fan-in; it must not add another construction family.
+   The legacy `raw-file-cli/1` profile does not qualify #519's full streaming profile.
+3. Review and authorize the exact diagnostic dispatch below. Retain failures and
+   complete resource observations. The proposed limits are admission criteria,
+   not claims that the SDK fits them. Retire only owned builders/state and prove
+   their absence before B. If measurements are unavailable or incomplete, fail.
 4. If a pair cannot fit with margin, keep small shards and revise staging or
    producer placement with independent review. Do not batch all products, raise
    deadlines, replace byte verification with manifest equality, or reuse an
    accepted receipt to make the measurement green.
 5. Only after measured native feasibility and release-owner review, admit one
    complete exact-source rehearsal with every original owner and final gate.
+
+### Prepared diagnostic dispatch (not launched)
+
+The registered `.github/workflows/release.yml` has an exclusive
+`resource-diagnostic-source` mode. Its policy admits only `workflow_dispatch` on
+`fix/521-release-build-sets`, with the input, checked-out commit, workflow commit
+and run source all equal. The normal policy and every transitive release job
+are skipped in this mode. Diagnostic jobs have read permissions and bounded
+artifact uploads; no signing, registry upload, acceptance or publication occurs.
+
+After the final source is frozen, a reviewed invocation is:
+
+```sh
+source_head=$(git rev-parse HEAD)
+gh workflow run release.yml --repo UOR-Foundation/PrismPM \
+  --ref fix/521-release-build-sets \
+  -f resource-diagnostic-source="$source_head" \
+  -f version=0.4.0 -f publish-crates=false -f rehearsal=true
+```
+
+This command has not been run. The source must still be that remote branch's
+exact head when GitHub creates the dispatch. Source changes require a new review;
+the exact-source policy refuses a stale input. The #529 owner/code and its final
+fan-in remain prerequisites to launch; parent review of raw #528 evidence is
+complete, as recorded below.
+
+Two native production jobs run first, one per architecture. Each constructs only
+the SDK `runtime` target and CLI archive in one authenticated build set. Two
+native pair jobs then independently reconstruct only `runtime` in cold A/B roots.
+A's builder retires before B starts; both raw layouts remain until the unchanged
+byte verifier and final custody sweep finish. Provider originals select only the
+current run/attempt's successful native production records. Their metadata names
+an unpublished diagnostic subject and grants no installed or release acceptance.
+This experiment does not measure the other four SDK-family exports, the separate
+runtime Dockerfile, registry exporter storage or complete release fit.
+
+The policy sets one common work deadline at 5h30 and a supervised-command/cleanup
+deadline at six hours; downstream jobs inherit both. GitHub action setup/uploads
+have separate job timeouts and are not covered by the private command owner.
+At most two native runners operate at once. Every runner must initially have at least 54 GiB on the backing
+filesystem: a fully allocated 40 GiB ext4 loop file, 12 GiB backing reserve and
+2 GiB allowance for observed growth in Docker/output allocations outside the loop
+after a source-bound complete post-pull baseline. Gross baseline allocations are
+retained; deletion on one filesystem cannot offset growth on another. ext4
+formatting and mounting disable discard, and the backing inode and allocated
+blocks are repeatedly checked. A deliberate bounded ENOSPC probe must demonstrate
+the store's limit before any SDK work. The sampled 12 GiB reserve applies to every
+participating outer filesystem, including a separately mounted Docker storage
+device; the inner filesystem instead has a sampled 1 GiB stop threshold.
+ENOSPC and temporary sampling gaps cannot qualify a successful measurement.
+
+All source roots, private input materializations, Buildx configuration, builder
+state/run directories, temporary files and OCI exports live inside that hard
+store. The exact pinned BuildKit container has a read-only root, 256 MiB `/tmp`
+tmpfs, two CPUs, at most 12 GiB memory while leaving 2 GiB host memory, no extra
+swap, 4,096 PIDs and bounded Docker logs. Its exact CID, label, image, configuration,
+live cgroup limits and actual bind inodes are checked before/after bootstrap and
+throughout observation. A disposable tiny export checks that arrangement before
+the SDK builds. Inherited Docker credentials/proxy configuration is preserved.
+
+One-second observations check actual Docker storage, participating filesystem
+capacities, backing allocation, memory, cgroup OOM/PID events and owner custody.
+Complete allocated-block scans have 30-second and two-million-entry bounds;
+unavailable or over-budget scans fail. Allocations are reported by filesystem,
+with inode aliases deduplicated and merged overlay views explicitly excluded.
+The backing file and its inner filesystem are separate accounting layers, not
+summed as a physical total. These are interval observations and sampled minima,
+not instantaneous peak claims.
+
+The original private Linux command owner supervises commands and the privileged
+observer, including descendants. A stale/dead observer, lost reserve, sparse or
+replaced backing file, limit event, deadline, custody failure or uncertain process
+retirement stops the diagnostic. Cleanup requires proven process exhaustion,
+exact stopped container identity, emptiness or absence of its originally observed
+BuildKit cgroup before container/state deletion, ordinary unmount, exact loop
+detachment and the original backing inode. Uncertain cleanup preserves the
+remaining owned storage and records failure; there is no broad prune or lazy unmount.
+The required observation interval includes the final scan/sample before stopping
+the builder. Post-stop cgroup counters are retained when available; an exhausted
+cgroup removed by Docker is explicitly unavailable, never reported as zero.
+Observed terminal OOM/PID events fail the diagnostic while permitting proven safe
+cleanup. This does not waive any missing observation during construction/export.
+
+Expected retained output comprises create-only `result.json`, bounded original
+command/cleanup logs, the policy/owner plans, post-pull outside-storage baseline,
+before/after snapshots, interval samples, original-cgroup retirement proofs and
+explicit stop/finish receipts. Production also retains fully read
+manifest/config/index metadata and the complete CLI archive digest. Pair output
+retains the unchanged verifier's result and original provider selection records.
+Private command-control files and full OCI/archive payloads are not uploaded.
+Successful resource records remain diagnostic evidence only.
+
+### Reader fix provenance and evidence status
+
+The #528 commit `70943f419f4af2a619d74ea9943549305eeb6d23`, based directly
+on frozen c302, is included with its original commit provenance. It closes #526
+and binds runtime declarations to the hash-bound source-derived runtime closure.
+The integrated library workflow test now follows the independent native browser/
+library owners while preserving both architectures, full evidence and final gates.
+Its exact imported patch is independently reviewed; local available library and
+browser units pass. Original Cargo-dependent qualification cannot run in this
+executor and is not treated as accepted evidence.
+
+The producer froze the private raw-log bundle at version 1, 50,816 bytes;
+its persistent Library identity remains in the private artifact index. Its ZIP
+SHA-256 is `25cb2ee0a602b0e3fe3a2c72fbc43cf33a775c578c58ee36eb0a93adf1174828`
+and expected `INDEX.json` SHA-256 is
+`0b10c82ce3651de7c00e5f578f60ff34a3e4a1c2a6730dabd918b3a4d85a2eb8`.
+Both supported consumer-local transfer attempts failed before installing a file.
+The parent independently materialized the exact frozen version through the
+supported Library helper, verified both hashes and all 19 indexed payloads, and
+checked 20 unique safe CRC-checked members. Its raw-log review confirms fresh
+DK-17 passed (1/0/0, 207 filtered, 134.94 seconds); the exact native owner invokes
+the bounded real replay and requires baseline pass, 16 mutations rejected and
+restored baseline pass. The retained replay has that receipt. Library/shell units
+have 19 passes and targeted browser capture has three, with no failures or skips.
+This is parent independent review, not a successful local download here. The
+bundle contains no separate retained fresh native package and does not prove full
+SDK or rehearsal acceptance. Compatible retained pre-fix outputs remain
+separately labeled compatibility evidence.
 
 ## Observed focused validation
 
