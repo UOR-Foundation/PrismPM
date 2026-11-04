@@ -14,7 +14,7 @@ sha256 = "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf"
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "599bd8614cbe7cfc7638b557272a9d3c408bbc801bbff9609c8da43ac81a1325"
+sha256 = "a83cfa4065db3e13c6af3c47633b1bb3cce9cf5cf808c7c53ddc9ff92bfcdc1c"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
@@ -25,7 +25,7 @@ sha256 = "3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "fb9485ad2f5623021ead0f6fd157ec938a8c178c8627c5f706b223d2c266a166"
+sha256 = "1a77c7a3aac588a50bce314130c82b54b8377d942302a0601536c798179d6782"
 
 [[dependency.artifact]]
 kind = "file"

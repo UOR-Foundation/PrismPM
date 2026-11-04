@@ -5,7 +5,9 @@ const module = await WebAssembly.compile(await readFile(process.argv[2]));
 const fallible = process.argv[3] === "fallible";
 assert.deepEqual(WebAssembly.Module.imports(module), []);
 const guest = (await WebAssembly.instantiate(module, {})).exports;
-assert.deepEqual(Object.keys(guest).sort(), ["holo_alloc", "holo_run", "memory"]);
+assert.deepEqual(Object.keys(guest).sort(), process.argv[4] === "bounded"
+  ? ["__stack_high", "__stack_low", "holo_alloc", "holo_run", "memory"]
+  : ["holo_alloc", "holo_run", "memory"]);
 
 function invoke(bytes) {
   const pointer = guest.holo_alloc(bytes.length);

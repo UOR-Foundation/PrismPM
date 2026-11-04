@@ -7,9 +7,41 @@ const fresh = () => new WebAssembly.Instance(module, {}).exports;
 const read = (e, pointer, length) => new Uint8Array(e.memory.buffer, pointer, length);
 const reserve = (e, size, alignment) => {
   const pointer = e.test_alloc(size, alignment) >>> 0;
-  assert.equal(pointer % alignment, 0);
+  assert.notEqual(pointer, 0);assert.equal(pointer % alignment, 0);
   return pointer;
 };
+
+// Reuse previously acquired capacity for growth; a second live copy would
+// exceed the bound. Allocator page-acquisition granularity is not prescribed.
+{
+  const e = fresh(), seed = reserve(e, 360000, 8);
+  e.test_free(seed, 360000, 8);
+  const first = reserve(e, 280000, 8);
+  read(e, first, 280000).fill(37);
+  const grown = e.test_realloc(first, 280000, 8, 360000) >>> 0;
+  assert.equal(grown, first);
+  assert.ok(read(e, grown, 280000).every(x => x === 37));
+  read(e, grown, 360000).fill(41);
+  const shrunk = e.test_realloc(grown, 360000, 8, 100000) >>> 0;
+  assert.equal(shrunk, grown);assert.ok(read(e, shrunk, 100000).every(x => x === 41));
+  const after = reserve(e, 260000, 8);read(e, after, 260000).fill(55);
+  assert.ok(read(e, shrunk, 100000).every(x => x === 41));
+}
+
+// Growth consumes an adjacent hole or moves without corrupting live neighbors.
+{
+  const e = fresh(), a = reserve(e, 32768, 256), b = reserve(e, 32768, 8), c = reserve(e, 32768, 8);
+  read(e, a, 32768).fill(17);read(e, c, 32768).fill(29);
+  e.test_free(b, 32768, 8);
+  const grown = e.test_realloc(a, 32768, 256, 49152) >>> 0;
+  assert.equal(grown % 256, 0);assert.ok(read(e, grown, 32768).every(x => x === 17));
+  read(e, grown, 49152).fill(31);
+  const moved = e.test_realloc(grown, 49152, 256, 98304) >>> 0;
+  assert.notEqual(moved, grown);assert.equal(moved % 256, 0);
+  assert.ok(read(e, moved, 49152).every(x => x === 31));
+  assert.ok(read(e, c, 32768).every(x => x === 29));
+  e.test_free(moved, 98304, 256);e.test_free(c, 32768, 8);
+}
 
 // Fragmentation: adjacent holes combine and a free tail can grow again.
 {
@@ -33,6 +65,18 @@ const reserve = (e, size, alignment) => {
     const slot = random() % 32, old = live.get(slot);
     if (old) {
       assert.ok(read(e, old.pointer, old.size).every(x => x === old.value));
+      if (random() % 3 === 0) {
+        const size = 1 + random() % 4096;
+        const pointer = e.test_realloc(old.pointer, old.size, old.alignment, size) >>> 0;
+        assert.equal(pointer % old.alignment, 0);
+        assert.ok(read(e, pointer, Math.min(size, old.size)).every(x => x === old.value));
+        for (const [otherSlot, other] of live) if (otherSlot !== slot) {
+          assert.ok(pointer + size <= other.pointer || other.pointer + other.size <= pointer);
+          assert.ok(read(e, other.pointer, other.size).every(x => x === other.value));
+        }
+        read(e, pointer, size).fill(old.value);
+        live.set(slot, {...old, pointer, size});total += size;continue;
+      }
       e.test_free(old.pointer, old.size, old.alignment); live.delete(slot);
     }
     const size = 1 + random() % 2048, alignment = 2 ** (random() % 13);
@@ -67,6 +111,9 @@ const reserve = (e, size, alignment) => {
   // Caller allocations are deliberately cumulative; exceeding the real
   // declared memory bound still traps, with no import or automatic reset.
   assert.throws(() => { for (let i = 0; i < 100; i++) e.holo_alloc(65536); }, WebAssembly.RuntimeError);
-  assert.equal(e.memory.buffer.byteLength, 8 * 65536);
+  assert.ok(e.memory.buffer.byteLength <= 8 * 65536);
+  for (const [pointer, byte] of saved) assert.ok(read(e, pointer, 1024).every(x => x === byte));
+  e.memory.grow(8 - e.memory.buffer.byteLength / 65536);
+  assert.throws(() => e.memory.grow(1), RangeError);
 }
-console.log('Core-Wasm allocator: churn, alignment, coalescing, ABI lifetime, and bound exhaustion passed');
+console.log('Core-Wasm allocator: allocation/resize churn, alignment, coalescing, ABI lifetime, and bound exhaustion passed');

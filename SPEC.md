@@ -505,16 +505,20 @@ LLVM guest must have exactly one mutable global: its unexported i32 stack
 pointer, initialized to the aligned upper boundary. Captured
 target and generation metadata must agree with the accepted application model.
 Changing a metadata hash alone cannot authorize a different binary resource
-budget. The explicitly bounded guest reuses dropped Rust-owned allocations through
-an address-ordered, coalescing free list. Caller-owned `holo_alloc` inputs and
-returned ABI buffers remain resident and are never reclaimed implicitly.
-Allocation sizes and free fragments are rounded to eight bytes; alignment
-padding is reusable. A free tail returns to the allocation frontier; memory
-growth never exceeds the declared page limit. This changes neither the ABI
-nor the unshared, import-free execution contract. The original V1 generator
-retains its cumulative bump allocator and byte-identical generation. Declared
-capacity remains a limit; executable acceptance establishes sufficiency for
-the corpus, including allocation churn in the actual Core-Wasm guest.
+budget. The explicitly bounded guest uses `std::alloc::System` from the pinned
+Rust wasm32 toolchain for both Rust-owned values and ABI allocations. Dropped
+Rust values release their storage; caller-owned `holo_alloc` inputs and returned
+ABI buffers remain resident and are never reclaimed implicitly. The adapter
+links the toolchain's allocation and abort support, without another Cargo
+dependency. Modeled code remains allocation-library based. Actual binary
+validation still requires the closed import-free ABI, one unshared memory,
+the exact maximum, and the declared stack interval. Allocator metadata,
+fragmentation, page-acquisition granularity, and temporary copies consume that
+finite bound; a live-payload size alone does not establish sufficiency.
+The original V1 generator retains its cumulative bump allocator and
+byte-identical generation. Executable acceptance establishes sufficiency for
+the corpus, including allocation, resize, and release churn in the actual
+Core-Wasm guest. Failure to allocate traps at the ABI boundary.
 
 The text View transports strictly encode UTF-8 requests and display strictly
 decoded UTF-8 responses, with byte limits derived from the application.
