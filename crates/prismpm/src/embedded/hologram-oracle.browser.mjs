@@ -594,21 +594,35 @@ if (app.session) {
     rows.push({index,vector,...row});
   }
   assert.ok(rows.length>0);
-  const step=async(name,run)=>{activeJourney=name;await run();cases.push({name,status:'passed',attempts:1});};
+  const step=async(name,run)=>{activeJourney=name;try{await run();}catch(error){throw sanitizedFailure(error,name);}cases.push({name,status:'passed',attempts:1});};
   const ready=()=>page.waitForFunction(()=>document.querySelector('#guided-submit')?.disabled===false);
   const openPage=async()=>{await page.goto(origin);await ready();};
   const saved=async()=>{const pending=page.waitForEvent('download');await page.locator('#save-session').click();const file=await pending;return readFileSync(await file.path(),'utf8');};
   const submitRow=async(row,{reset=true,fileBinding=null}={})=>{
+    let phase='navigation',requests=0,responses=0,matchedResponses=0;
+    try{
     if(reset)await openPage();
+    phase='fill';
     if(!row.restore){if(row.raw){await page.locator('#raw-editor').evaluate(node=>{node.open=true;});await page.locator('#request').fill(row.values[0]);}
     else{await page.locator('#operation').selectOption(row.operation.id);for(const [at,field]of row.operation.fields.entries()){if(field.id===session.state_field)continue;const node=page.locator('#field-'+field.id);if(field.kind==='choice')await node.selectOption(row.values[at]);else if(fileBinding?.field===field.id){await page.locator('#file-'+field.id).setInputFiles({name:'source.txt',mimeType:'text/plain',buffer:Buffer.from(row.values[at])});await page.waitForFunction(({id,value})=>document.querySelector('#field-'+id)?.value===value.replace(/\r\n?/g,'\n'),{id:field.id,value:row.values[at]});}else await node.fill(row.values[at]);}}}
-    let requests=0;const observed=request=>{if(request.url()===origin+'/_hologram/intent')requests++;};page.on('request',observed);
+    const observed=request=>{if(request.url()===origin+'/_hologram/intent')requests++;};
+    const observedResponse=reply=>{if(reply.url()===origin+'/_hologram/intent'){responses++;try{if(reply.request().postDataJSON()?.payload===row.request)matchedResponses++;}catch{/* Diagnostics must not replace request-correlation failure. */}}};
+    page.on('request',observed);page.on('response',observedResponse);
     try{const response=page.waitForResponse(reply=>reply.url()===origin+'/_hologram/intent'&&reply.request().postDataJSON()?.payload===row.request);
+      phase='dispatch';
       if(row.restore)await page.locator('#open-session').setInputFiles({name:session.file_name,mimeType:'application/octet-stream',buffer:Buffer.from(row.values[0])});else await page.locator(row.raw?'#submit':'#guided-submit').click();
-      const reply=await response;assert.equal(reply.status(),200);const body=await bounded(reply.body());assert.deepEqual(JSON.parse(body.toString()),{version:1,outputs:[decode.decode(Uint8Array.from(row.vector.response))]});
+      phase='response';const reply=await response;assert.equal(reply.status(),200);
+      phase='body';const body=await bounded(reply.body());assert.deepEqual(JSON.parse(body.toString()),{version:1,outputs:[decode.decode(Uint8Array.from(row.vector.response))]});
+      phase='render';
       const expected=JSON.parse(decode.decode(Uint8Array.from(row.vector.response)));await ready();await page.waitForFunction(message=>document.querySelector('#result-message')?.textContent===message,expected.message);assert.equal(requests,1);
-      if(expected.status==='ok'){assert.equal(await page.locator('#result').textContent(),expected.response);if(expected.response)assert.equal(await saved(),expected.response);}return expected;
-    }finally{page.off('request',observed);}
+      if(expected.status==='ok'){assert.equal(await page.locator('#result').textContent(),expected.response);if(expected.response){phase='save';assert.equal(await saved(),expected.response);}}return expected;
+    }finally{page.off('request',observed);page.off('response',observedResponse);}
+    }catch(error){
+      if(/Network\.getResponseBody.*No data found for resource/.test(error?.message??''))unavailableBodies.add(error);
+      emitDiagnostic({schema:'prismpm/file-session-submission-diagnostic/1',journey:activeJourney,
+        vectorIndex:Number.isInteger(row.index)?row.index:null,phase,requests,responses,matchedResponses,failure:failureKind(error)});
+      throw sanitizedFailure(error,activeJourney);
+    }
   };
   await step('attachment-assets',async()=>{await openPage();for(const path of ['/','/index.html','/app.css','/app.js']){const response=await fetch(origin+path);assert.equal(response.status,200);}assert.equal(await page.locator('#open-session').count(),1);assert.equal(await page.locator('#save-session').count(),1);assert.equal(await page.locator('#field-'+session.state_field).isVisible(),false);});
   await step('file-session-vectors',async()=>{for(const index of directVectorIndexes){const vector=app.acceptance_vectors[index],request=decode.decode(Uint8Array.from(vector.request));const response=await fetch(origin+'/_hologram/intent',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({version:1,name:'application.invoke',payload:request})});assert.equal(response.status,200);assert.deepEqual(await response.json(),{version:1,outputs:[decode.decode(Uint8Array.from(vector.response))]});}for(const row of rows){await submitRow(row);vectorIndexes.push(row.index);}});
