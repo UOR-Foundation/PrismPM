@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {chmodSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, linkSync, statSync, rmSync} from 'node:fs';
+import {chmodSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, linkSync, lstatSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -34,7 +34,12 @@ test('fd-relative scan handles hostile names without exposing names or following
   assert.equal(result.status, 'complete');
   assert.equal(result.symlinks, 3);
   assert.equal(result.entriesVisited, 7);
-  assert.equal(result.allocatedBytes, (statSync(source).blocks + statSync(file).blocks) * 512);
+  // The scanner counts the allocated inode blocks of links and FIFOs too.
+  // Some filesystems allocate blocks to symlinks; deduplicate the hard link.
+  const entries = [source, file, join(source, 'hardlink'), join(source, 'directory-link'),
+    join(source, 'file-link'), join(source, 'loop'), join(source, 'pipe')];
+  const unique = new Map(entries.map(path => { const item = lstatSync(path); return [`${item.dev}:${item.ino}`, item.blocks]; }));
+  assert.equal(result.allocatedBytes, [...unique.values()].reduce((sum, blocks) => sum + blocks * 512, 0));
   assert(!JSON.stringify(result).includes(secret));
   assert(!JSON.stringify(result).includes(root));
   symlinkSync(source, join(root, 'alias'));
