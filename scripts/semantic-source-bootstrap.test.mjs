@@ -20,7 +20,7 @@ function fixture(t){
  writeFileSync(join(root,'bin/rustup'),String.raw`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),a=process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS,JSON.stringify({args:a,offline:process.env.CARGO_NET_OFFLINE})+'\n');
-if(a.join(' ')==='toolchain install 1.97.1 --profile minimal')process.exit(0);
+if(a.join(' ')==='toolchain install 1.97.1 --profile minimal --no-self-update')process.exit(0);
 if(a[0]==='which'&&a[1]==='--toolchain'&&a[2]==='1.97.1'&&['rustc','cargo'].includes(a[3])){console.log(__filename);process.exit(0);}
 if(a[0]!=='run'||a[1]!=='1.97.1')process.exit(65);
 if(a[3]==='--version'){console.log(a[2]+' recording version');process.exit(0);}
@@ -43,7 +43,7 @@ process.exit(66);
 test('bootstrap selects pinned tools, acquires locked inputs, then builds offline before readiness',t=>{
  const f=fixture(t),result=f.run();assert.equal(result.status,0,result.stderr+readFileSync(join(f.evidence,'bootstrap.log'),'utf8'));
  const calls=f.calls();assert.deepEqual(calls.map(row=>row.args),[
-  ['toolchain','install','1.97.1','--profile','minimal'],['run','1.97.1','rustc','--version'],['run','1.97.1','cargo','--version'],
+  ['toolchain','install','1.97.1','--profile','minimal','--no-self-update'],['run','1.97.1','rustc','--version'],['run','1.97.1','cargo','--version'],
   ['which','--toolchain','1.97.1','rustc'],['which','--toolchain','1.97.1','cargo'],
   ['run','1.97.1','cargo','fetch','--locked'],['run','1.97.1','cargo','build','--locked','--offline','--jobs','2','--package','repo-conformance','--bin','prismpm-semantic-source','--target-dir',f.target],
  ]);assert.equal(calls[5].offline,'false');assert.equal(calls[6].offline,'true');

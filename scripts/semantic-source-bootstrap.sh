@@ -25,7 +25,7 @@ assert tomllib.loads(pathlib.Path("rust-toolchain.toml").read_text())["toolchain
 PYTHON
 # Follow the existing M0 host acquisition path. Only acquisition uses the
 # network; Cargo validates registry bytes against the unchanged source lock.
-rustup toolchain install 1.97.1 --profile minimal
+rustup toolchain install 1.97.1 --profile minimal --no-self-update
 rustup run 1.97.1 rustc --version > "$evidence/rustc-version.txt"
 rustup run 1.97.1 cargo --version > "$evidence/cargo-version.txt"
 rustup which --toolchain 1.97.1 rustc > "$evidence/rustc-path.txt"
