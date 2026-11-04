@@ -110,7 +110,7 @@ export function checkAccepted(project,receipt,sourceAuthority,language='1.1'){
  const declarations=snapshot.modules.flatMap(module=>module.declarations.map(declaration=>({name:module.lean_module+'.'+declaration.lean_name,policy:declaration.axiom_policy})));
  const names=[...['AdapterFailure','AdapterFailureResult','BinaryAcceptanceVector','BinaryProgram','PublicationOutcome','RawFileCli','adapterFailureResult','failurePublication'].map(name=>'LibraryProbe.Foundation.Binary.V1.Model.'+name),'LibraryProbe.Probe.identity','LibraryProbe.Probe.probeProgram'].sort();
  same(declarations.map(row=>row.name).sort(),names,'complete selected declaration closure');
- assert.equal(lexAttestation.spec,language==='1.1'?'lexlean/attestation/1':'lexlean/attestation/2');assert.equal(lexAttestation.status,'verified');assert.equal(lexAttestation.build_id,inputs.lexlean_build_id);assert.equal(lexAttestation.lexlean?.compiler_semantics,model.provenance.compiler_semantics_id);assert.equal(lexAttestation.build_manifest?.sha256,hash(regularBytes(join(build,'lexlean/build/manifest.json'))));assert.equal(lexAttestation.source_id,inputs.lexlean_source_id);assert.equal(lexAttestation.semantic_id,inputs.lexlean_semantic_id);
+ assert.equal(lexAttestation.spec,language==='1.1'?'lexlean/attestation/1':'lexlean/attestation/2','exact qualification attestation version');assert.equal(lexAttestation.status,'verified');assert.equal(lexAttestation.build_id,inputs.lexlean_build_id);assert.equal(lexAttestation.lexlean?.compiler_semantics,model.provenance.compiler_semantics_id);assert.equal(lexAttestation.build_manifest?.sha256,hash(regularBytes(join(build,'lexlean/build/manifest.json'))));assert.equal(lexAttestation.source_id,inputs.lexlean_source_id);assert.equal(lexAttestation.semantic_id,inputs.lexlean_semantic_id);
  const runtime=boundRuntimeAudit(build,artifacts);if(language==='1.1')same(runtime,[],'original frozen fixture has no imported runtime');else assert(runtime.length>0,'language-1.2 fixture must exercise imported runtime');
  assert.ok(Array.isArray(lexAttestation.declarations));same(lexAttestation.declarations.map(row=>row.name).sort(),[...names,...runtime.map(row=>row.name)].sort(),'complete published declaration audit');
  for(const row of lexAttestation.declarations){keys(row,['name','observed','policy','result']);assert.equal(row.result,'ok');const declaration=declarations.find(declaration=>declaration.name===row.name);if(declaration){same(row.policy,declaration.policy);same(row.policy,{axioms:[],kind:'none'});same(row.observed,[],'fixture has no observed axioms');}else same(row,runtime.find(expected=>expected.name===row.name),'exact source-owned runtime axiom audit');}
@@ -171,7 +171,11 @@ export function rejectRuntimeAuditMutations(project,receipt,sourceAuthority){
   value=>{value.spec='lexlean/attestation/1';},
  ];
  assert.equal(mutations.length,runtimeAuditChecks.length);
- for(const mutate of mutations){
+ const expectedMessages=['complete published declaration audit','complete published declaration audit','complete published declaration audit',
+  'exact source-owned runtime axiom audit','exact source-owned runtime axiom audit','exact source-owned runtime axiom audit','exact source-owned runtime axiom audit',
+  'complete published declaration audit','complete published declaration audit','fixture has no observed axioms','exact qualification attestation version'];
+ assert.equal(expectedMessages.length,mutations.length);
+ for(const [index,mutate]of mutations.entries()){
   const changedAudit=structuredClone(audit);mutate(changedAudit);changedAudit.attestation_id=auditIdentity(changedAudit);
   const changedAcceptance=structuredClone(acceptance);changedAcceptance.lexlean_attestation_id=changedAudit.attestation_id;
   const changed=structuredClone(manifest),auditBody=Buffer.from(canonical(changedAudit)),acceptanceBody=Buffer.from(canonical(changedAcceptance));
@@ -181,7 +185,7 @@ export function rejectRuntimeAuditMutations(project,receipt,sourceAuthority){
   try{
    writeFileSync(join(directory,'manifest.json'),body,{flag:'wx'});writeFileSync(join(directory,'lexlean-attestation.json'),auditBody,{flag:'wx'});
    writeFileSync(join(directory,'binary-acceptance.json'),acceptanceBody,{flag:'wx'});
-   assert.throws(()=>checkAccepted(project,{...receipt,attestation_id:id,verified_root:'.prism/verified/'+id},sourceAuthority,'1.2'));
+   assert.throws(()=>checkAccepted(project,{...receipt,attestation_id:id,verified_root:'.prism/verified/'+id},sourceAuthority,'1.2'),error=>error instanceof assert.AssertionError&&error.message.includes(expectedMessages[index]),runtimeAuditChecks[index]);
   }finally{rmSync(directory,{recursive:true});}
  }
  assert(regularBytes(join(original,'manifest.json')).equals(manifestBytes));assert(regularBytes(join(original,'lexlean-attestation.json')).equals(auditBytes));
