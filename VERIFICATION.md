@@ -3643,7 +3643,7 @@ introduced.
 
 Local component checks use the repository-pinned Rust 1.97.1 and Node 22.23.2:
 workspace/all-target offline check, all-feature strict Clippy, workspace format,
-17 model tests, six Binary contract tests, five raw CLI tests (including actual
+17 model tests, nine Binary contract/source tests, five raw CLI tests (including actual
 generated native/Core-Wasm failure execution), and two Binary exporter-owner
 reader controls passed. The complete Binary Node wrapper passed its 20
 parser/transport cases and 19 additional ownership cases, with no skips.
@@ -3659,8 +3659,28 @@ the authored input register. Generated shared/native proof records remain the
 reviewed main records and require fresh owning generation and independent
 review; no process or proof expectation was hand-edited.
 
-The complete DK-36 runtime owner has not completed successfully. Fresh
-current-source source/security/reproducibility gates, complete shared and both
+The complete DK-36 runtime owner initially stopped during setup. After the
+exact pinned toolchain was acquired, its genuine existing local owner passed in
+164.67 seconds, exercising native std/no_std, Core-Wasm, raw CLI transports,
+independent regeneration and its original negative cases. This is local
+component evidence, not source-free installed-SDK acceptance.
+
+Three additional front-end tests check real locked language-1.1 and language-1.2
+snapshots, exact model/snapshot identity and read-only behavior. Eight negative
+cases first obtain valid typed LexLean snapshots, then require their intended
+Prism diagnostics; parser/type-check failures cannot satisfy those controls. A
+mixed Binary/NativeLibrary case independently projects both real descriptors
+before requiring rejection. Independent source review found no blocking issue.
+
+The unchanged fixture owner exposed stale authored application bindings in CT-02
+and TM-01. Exactly four bindings were corrected to the genuinely observed
+current digest; expected successful exits and all controls remain unchanged.
+The normal writer and subsequent independent check completed all 35 fixtures
+and reproduced the committed expectation bytes without a generated-file change. The golden owner retains its
+registered Debian 12 development environment requirement; no alternate platform
+identity or expected native/proof record was supplied.
+
+Fresh current-source source/security/reproducibility gates, complete shared and both
 native writer closures, source-free installed Binary qualification on AMD64 and
 ARM64, both complete consecutive V&V passes, immutable SDK acquisition and
 applicable downstream acceptance remain required. Issues #62 and #194, the
