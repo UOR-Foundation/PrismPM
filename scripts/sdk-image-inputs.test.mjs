@@ -780,6 +780,26 @@ test('all SDK targets preserve accepted flags and reject conflicting source/cont
   assert.throws(() => dockerArguments('/fixture/source', revision, 'unregistered', '/fixture/inputs', []));
 });
 
+test('GHA cache transport preserves the pinned build and rejects alternate services or overrides', () => {
+  const revision = '1'.repeat(40);
+  const flags = ['--cache-from', 'type=gha,version=2,scope=sdk-linux-amd64',
+    '--cache-to', 'type=gha,version=2,scope=sdk-linux-amd64,mode=max'];
+  const result = dockerArguments('/fixture/source', revision, 'runtime', '/fixture/inputs', flags);
+  assert.deepEqual(result.slice(-5, -1), flags);
+  assert.equal(result[result.indexOf('--build-arg') + 1], `SDK_SOURCE_REVISION=${revision}`);
+  assert.equal(result[result.indexOf('--build-context') + 1], 'vv-inputs=/fixture/inputs');
+  for (const flags of [
+    ['--cache-from'], ['--cache-to', ''],
+    ['--cache-from', 'type=registry,ref=elsewhere'],
+    ['--cache-from', 'type=local,src=/tmp/cache'],
+    ['--cache-from', 'type=gha,version=2,scope=x,url=https://elsewhere'],
+    ['--cache-from', 'type=gha,version=2,scope=x,token=override'],
+    ['--cache-to', 'type=gha,version=2,scope=x,mode=max,ignore-error=true'],
+    ['--cache-to', 'type=gha,version=2,scope=x,mode=other'],
+    ['--cache-to', 'type=gha,version=2,scope=x\n,mode=max'],
+  ]) assert.throws(() => dockerArguments('/fixture/source', revision, 'runtime', '/fixture/inputs', flags));
+});
+
 test('inventory binds actual sealed data and source policy/helpers without mutable checkout metadata', t => {
   const f = fixture(t), closure = join(f.work, 'closure'), policy = f.capture(closure);
   const bytes = readFileSync(join(closure, 'manifest.json')), manifest = JSON.parse(bytes), policyDigest = `sha256:${hash(canonical(policy))}`;
