@@ -25,7 +25,7 @@ import {
 // reply (52), send (55), receive (56). HTTP errors need the separately captured
 // response status; every other curl error and every integrity failure is final.
 export const TRANSIENT_CURL_STATUS = new Set([6, 7, 18, 28, 35, 52, 55, 56]);
-const TRANSIENT_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const TRANSIENT_HTTP_STATUS = new Set(['408', '429', '500', '502', '503', '504']);
 
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
@@ -47,7 +47,7 @@ export function withTransientRetry(
     } catch (error) {
       const transient =
         TRANSIENT_CURL_STATUS.has(error?.status) ||
-        (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.httpStatus));
+        (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.stdout?.toString()));
       if (attempt >= attempts || !transient) throw error;
       process.stderr.write(
         `download failed with curl status ${error.status}${error.httpStatus ? ` (HTTP ${error.httpStatus})` : ''}; retry ${attempt}/${attempts - 1}\n`,
@@ -134,7 +134,7 @@ export function installRuntime(destination = RUNTIME, cache = null) {
                 '--output',
                 archive,
               ],
-              { timeout: 310000, stdio: ['ignore', 'pipe', 'inherit'] },
+              { timeout: 310000, stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 1024 },
             );
           } catch (error) {
             rmSync(archive, { force: true });
