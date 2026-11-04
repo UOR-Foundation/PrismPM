@@ -1,0 +1,17 @@
+// Use the allocator supplied by the pinned Rust wasm32 toolchain. Rust-owned
+// values are reclaimed normally; ABI allocations have no free export and remain
+// resident. The actual binary is validated as import-free with the modeled
+// memory maximum and stack interval; the linker enforces that memory maximum.
+fn allocate(size: u32, alignment: u32) -> u32 {
+    let layout = Layout::from_size_align(size.max(1) as usize, alignment.max(8) as usize)
+        .unwrap_or_else(|_| trap());
+    // SAFETY: the layout has nonzero size and valid alignment. All Rust and
+    // ABI allocations use this same System allocator; no second heap exists.
+    let pointer = unsafe { GLOBAL_ALLOCATOR.alloc(layout) };
+    if pointer.is_null() { trap(); }
+    let start = pointer as u32;
+    let end = start.checked_add(size.max(1)).unwrap_or_else(|| trap());
+    let pages = core::arch::wasm32::memory_size::<0>() as u32;
+    if pages > MAXIMUM_PAGES || u64::from(end) > u64::from(pages) * 65_536 { trap(); }
+    start
+}

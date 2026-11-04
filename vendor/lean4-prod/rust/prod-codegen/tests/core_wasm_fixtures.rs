@@ -625,6 +625,114 @@ fn compile_resource_fixture(package: prod_codegen::GeneratedPackage) -> FixtureD
     fixture
 }
 
+// HO-16 / PrismPM #507: exercise the actual generated allocator, not the
+// browser adapter's allocator. Test-only hooks expose valid Rust layouts.
+#[test]
+fn text_v2_resource_bounds_allocator_preserves_checked_failure_and_model_names() {
+    use prod_codegen::{generate_core_wasm_package_v2, validate_core_wasm_resources};
+    let ir = r#"(module BoundedFailure
+      (type "std" (ctor "std.mk" (bytes Bytes)))
+      (type "System" (ctor "System.mk" (bytes Bytes)))
+      (def entry ((input Bytes)) Bytes
+        (if (eq input (bytes 255))
+          (if (eq (add 18446744073709551615 1) 0) input (bytes))
+          (proj "std" "bytes" (ctor "std.mk" input)))))"#;
+    let (_, module) = parse_module(ir).unwrap();
+    let spec = CoreWasmSpec {
+        crate_name: "resource-guest".into(),
+        entry: "entry".into(),
+        export_name: "holo_run".into(),
+        input_allocation_cap: 128,
+        output_allocation_cap: 64,
+        maximum_pages: 4,
+        input_ir_sha256: format!("{:x}", Sha256::digest(ir.as_bytes())),
+    };
+    let fixture =
+        compile_resource_fixture(generate_core_wasm_package_v2(&module, &spec, 65_536).unwrap());
+    let wasm = fixture
+        .0
+        .join("target/wasm32-unknown-unknown/release/resource_guest.wasm");
+    validate_core_wasm_resources(&fs::read(&wasm).unwrap(), 4, Some(65_536)).unwrap();
+    run(Command::new("node")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/core_wasm_bytes_test.mjs"
+        ))
+        .arg(wasm)
+        .arg("fallible")
+        .arg("bounded"));
+}
+
+#[test]
+fn text_v2_resource_bounds_reuse_dropped_allocations_without_reclaiming_abi_buffers() {
+    use prod_codegen::generate_core_wasm_package_v2;
+    let ir = "(module Fixture (def entry ((input Bytes)) Bytes input))";
+    let (_, module) = parse_module(ir).unwrap();
+    let mut spec = CoreWasmSpec {
+        crate_name: "resource-guest".into(),
+        entry: "entry".into(),
+        export_name: "holo_run".into(),
+        input_allocation_cap: 100_000,
+        output_allocation_cap: 100_000,
+        maximum_pages: 4,
+        input_ir_sha256: "0".repeat(64),
+    };
+    let legacy = generate_core_wasm_package(&module, &spec).unwrap();
+    let manifest = &legacy
+        .files
+        .iter()
+        .find(|f| f.path == "generation-manifest.json")
+        .unwrap()
+        .bytes;
+    // Captured from the previous generator, covering every generated file.
+    assert_eq!(
+        format!("{:x}", Sha256::digest(manifest)),
+        "3270a7a02112687d8639fbb1df4fa96b2697e1075c8b1cab255de0dc7bee5b10"
+    );
+    spec.maximum_pages = 8;
+    let mut package = generate_core_wasm_package_v2(&module, &spec, 65_536).unwrap();
+    let source = package
+        .files
+        .iter_mut()
+        .find(|f| f.path == "src/lib.rs")
+        .unwrap();
+    let text = String::from_utf8(source.bytes.clone()).unwrap();
+    source.bytes = text
+        .replace(
+            "#[no_mangle]\npub extern \"C\" fn holo_alloc",
+            r#"
+#[no_mangle]
+pub extern "C" fn test_alloc(size: u32, alignment: u32) -> u32 {
+    let layout = Layout::from_size_align(size as usize, alignment as usize).unwrap();
+    unsafe { GLOBAL_ALLOCATOR.alloc(layout) as u32 }
+}
+#[no_mangle]
+pub extern "C" fn test_free(pointer: u32, size: u32, alignment: u32) {
+    let layout = Layout::from_size_align(size as usize, alignment as usize).unwrap();
+    unsafe { GLOBAL_ALLOCATOR.dealloc(pointer as *mut u8, layout); }
+}
+#[no_mangle]
+pub extern "C" fn test_realloc(pointer: u32, size: u32, alignment: u32, new_size: u32) -> u32 {
+    let layout = Layout::from_size_align(size as usize, alignment as usize).unwrap();
+    unsafe { GLOBAL_ALLOCATOR.realloc(pointer as *mut u8, layout, new_size as usize) as u32 }
+}
+#[no_mangle]
+pub extern "C" fn holo_alloc"#,
+        )
+        .into_bytes();
+    let fixture = compile_resource_fixture(package);
+    run(Command::new("node")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/core_wasm_allocator_test.mjs"
+        ))
+        .arg(
+            fixture
+                .0
+                .join("target/wasm32-unknown-unknown/release/resource_guest.wasm"),
+        ));
+}
+
 #[test]
 fn text_v2_resource_bounds_reject_binary_forgery() {
     use prod_codegen::validate_core_wasm_resources;
