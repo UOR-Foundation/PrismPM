@@ -93,7 +93,7 @@ Feature: holo
     And a returning visitor's cached prior Wasm is not reused by the modeled no-store worker acquisition
 
   @HO-16 @build
-  Scenario: The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults.
+  Scenario: The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification with reuse of dropped Rust allocations and stable caller-owned ABI buffers while retaining the text/1 profile and legacy guest resource defaults.
     Given a source-owned text/2 application with explicit Core-Wasm memory and stack bounds
     When the generated guest executes and ordinary and source-free verification inspect its actual binary limits
     Then declared and actual limits agree and malformed or substituted budgets are rejected

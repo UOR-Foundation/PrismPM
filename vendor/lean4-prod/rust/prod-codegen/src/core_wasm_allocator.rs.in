@@ -1,0 +1,111 @@
+// Rust-owned allocations are reusable; ABI allocations are never released.
+// The guest has one unshared memory, no imports, and no reentrant execution.
+// Free blocks are address-ordered, disjoint, coalesced, and 8-byte aligned.
+// Their first two u32 words store size and next; live blocks have no header.
+static FREE: AtomicU32 = AtomicU32::new(0);
+
+fn allocation_size(size: u32) -> u32 {
+    align_to(size.max(8), 8)
+}
+
+unsafe fn block_size(pointer: u32) -> u32 {
+    core::ptr::read(pointer as *const u32)
+}
+
+unsafe fn block_next(pointer: u32) -> u32 {
+    core::ptr::read((pointer + 4) as *const u32)
+}
+
+unsafe fn write_block(pointer: u32, size: u32, next: u32) {
+    core::ptr::write(pointer as *mut u32, size);
+    core::ptr::write((pointer + 4) as *mut u32, next);
+}
+
+unsafe fn link(previous: u32, next: u32) {
+    if previous == 0 {
+        FREE.store(next, Ordering::Relaxed);
+    } else {
+        core::ptr::write((previous + 4) as *mut u32, next);
+    }
+}
+
+// Only the allocator calls this with a whole, live, rounded allocation or
+// an aligned fragment removed from a free block. The ABI exposes no free.
+unsafe fn release(mut pointer: u32, mut size: u32) {
+    let mut previous = 0;
+    let mut current = FREE.load(Ordering::Relaxed);
+    while current != 0 && current < pointer {
+        previous = current;
+        current = block_next(current);
+    }
+    if current != 0 && pointer + size == current {
+        size += block_size(current);
+        current = block_next(current);
+    }
+    if previous != 0 && previous + block_size(previous) == pointer {
+        size += block_size(previous);
+        pointer = previous;
+        write_block(pointer, size, current);
+    } else {
+        write_block(pointer, size, current);
+        link(previous, pointer);
+    }
+    // Return a free tail to the frontier. This also allows a later, larger
+    // request to grow from the tail instead of stranding its free capacity.
+    if pointer + size == NEXT.load(Ordering::Relaxed) {
+        NEXT.store(pointer, Ordering::Relaxed);
+        let mut before = 0;
+        let mut cursor = FREE.load(Ordering::Relaxed);
+        while cursor != pointer {
+            before = cursor;
+            cursor = block_next(cursor);
+        }
+        link(before, current);
+    }
+}
+
+fn allocate(size: u32, alignment: u32) -> u32 {
+    let size = allocation_size(size);
+    let alignment = alignment.max(8);
+    // align_to validates power-of-two alignment before any list traversal.
+    let _ = align_to(0, alignment);
+    let mut previous = 0;
+    let mut current = FREE.load(Ordering::Relaxed);
+    unsafe {
+        while current != 0 {
+            let available = block_size(current);
+            let next = block_next(current);
+            let start = align_to(current, alignment);
+            let prefix = start - current;
+            if prefix <= available && size <= available - prefix {
+                link(previous, next);
+                if prefix != 0 { release(current, prefix); }
+                let suffix = available - prefix - size;
+                if suffix != 0 { release(start + size, suffix); }
+                return start;
+            }
+            previous = current;
+            current = next;
+        }
+        let prior = NEXT.load(Ordering::Relaxed).max(heap_base());
+        let start = align_to(prior, alignment);
+        let end = start.checked_add(size).unwrap_or_else(|| trap());
+        ensure_memory(end);
+        NEXT.store(end, Ordering::Relaxed);
+        if start != prior { release(prior, start - prior); }
+        start
+    }
+}
+
+unsafe impl GlobalAlloc for RecyclingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let size = u32::try_from(layout.size()).unwrap_or_else(|_| trap());
+        let alignment = u32::try_from(layout.align()).unwrap_or_else(|_| trap());
+        allocate(size, alignment) as *mut u8
+    }
+
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        let size = u32::try_from(layout.size()).unwrap_or_else(|_| trap());
+        release(pointer as u32, allocation_size(size));
+    }
+}

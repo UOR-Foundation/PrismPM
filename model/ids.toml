@@ -256,7 +256,7 @@ statement = "The modeled primary-only component profile emits exact source-bound
 id = "HO-16"
 suite = "holo"
 level = "build"
-statement = "The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults."
+statement = "The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification with reuse of dropped Rust allocations and stable caller-owned ABI buffers while retaining the text/1 profile and legacy guest resource defaults."
 
 [[id]]
 id = "HO-17"

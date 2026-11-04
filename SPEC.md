@@ -505,8 +505,16 @@ LLVM guest must have exactly one mutable global: its unexported i32 stack
 pointer, initialized to the aligned upper boundary. Captured
 target and generation metadata must agree with the accepted application model.
 Changing a metadata hash alone cannot authorize a different binary resource
-budget. The bump allocator is cumulative per guest instance; declared capacity
-is a limit, and executable acceptance establishes sufficiency for the corpus.
+budget. The explicitly bounded guest reuses dropped Rust-owned allocations through
+an address-ordered, coalescing free list. Caller-owned `holo_alloc` inputs and
+returned ABI buffers remain resident and are never reclaimed implicitly.
+Allocation sizes and free fragments are rounded to eight bytes; alignment
+padding is reusable. A free tail returns to the allocation frontier; memory
+growth never exceeds the declared page limit. This changes neither the ABI
+nor the unshared, import-free execution contract. The original V1 generator
+retains its cumulative bump allocator and byte-identical generation. Declared
+capacity remains a limit; executable acceptance establishes sufficiency for
+the corpus, including allocation churn in the actual Core-Wasm guest.
 
 The text View transports strictly encode UTF-8 requests and display strictly
 decoded UTF-8 responses, with byte limits derived from the application.
@@ -3995,7 +4003,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-13` | `holo` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. | §3 |
 | `HO-14` | `holo` | Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage. | §3 |
 | `HO-15` | `holo` | The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application. | §3 |
-| `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
+| `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification with reuse of dropped Rust allocations and stable caller-owned ABI buffers while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
 | `HO-18` | `holo` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. | §3 |
 | `HO-19` | `holo` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. | §3 |

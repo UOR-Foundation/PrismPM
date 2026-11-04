@@ -182,6 +182,41 @@ fn generate_package(
             "let generated_output = {entry}(input.to_vec()){result_adapter};\n    if generated_output.len() > OUTPUT_CAP as usize {{ trap(); }}\n    let output_len = generated_output.len();\n    let output_ptr = allocate(u32::try_from(output_len).unwrap_or_else(|_| trap()), 8);\n    let output_end = output_ptr.checked_add(u32::try_from(output_len).unwrap_or_else(|_| trap())).unwrap_or_else(|| trap());\n    if input_ptr < output_end && output_ptr < input_end {{ trap(); }}\n    unsafe {{ core::ptr::copy_nonoverlapping(generated_output.as_ptr(), output_ptr as *mut u8, output_len); }}",
         )
     };
+    // Preserve the original v1 package byte-for-byte. Explicitly bounded
+    // guests reuse dropped Rust values while keeping ABI buffers resident.
+    let (allocator_name, allocator_impl) = if stack_bytes.is_some() {
+        (
+            "RecyclingAllocator",
+            include_str!("core_wasm_allocator.rs.in"),
+        )
+    } else {
+        (
+            "BumpAllocator",
+            r#"fn allocate(size: u32, alignment: u32) -> u32 {
+    loop {
+        let prior = NEXT.load(Ordering::Relaxed);
+        let start = align_to(prior.max(heap_base()), alignment.max(8));
+        let end = start.checked_add(size).unwrap_or_else(|| trap());
+        let required = if size == 0 { start.checked_add(1).unwrap_or_else(|| trap()) } else { end };
+        ensure_memory(required);
+        if NEXT.compare_exchange_weak(prior, end, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            return start;
+        }
+    }
+}
+
+unsafe impl GlobalAlloc for BumpAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let size = u32::try_from(layout.size()).unwrap_or_else(|_| trap());
+        let alignment = u32::try_from(layout.align()).unwrap_or_else(|_| trap());
+        allocate(size, alignment) as *mut u8
+    }
+
+    unsafe fn dealloc(&self, _pointer: *mut u8, _layout: Layout) {}
+}
+"#,
+        )
+    };
     let source = format!(
         r#"#![no_std]
 #![allow(dead_code, non_snake_case, unused_parens, unused_variables)]
@@ -209,10 +244,10 @@ const OUTPUT_CAP: u32 = {output_cap};
 const MAXIMUM_PAGES: u32 = {maximum_pages};
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
-struct BumpAllocator;
+struct {allocator_name};
 
 #[global_allocator]
-static GLOBAL_ALLOCATOR: BumpAllocator = BumpAllocator;
+static GLOBAL_ALLOCATOR: {allocator_name} = {allocator_name};
 
 extern "C" {{ static __heap_base: u8; }}
 
@@ -245,29 +280,7 @@ fn ensure_memory(required: u32) {{
     if core::arch::wasm32::memory_grow::<0>(grow as usize) == usize::MAX {{ trap(); }}
 }}
 
-fn allocate(size: u32, alignment: u32) -> u32 {{
-    loop {{
-        let prior = NEXT.load(Ordering::Relaxed);
-        let start = align_to(prior.max(heap_base()), alignment.max(8));
-        let end = start.checked_add(size).unwrap_or_else(|| trap());
-        let required = if size == 0 {{ start.checked_add(1).unwrap_or_else(|| trap()) }} else {{ end }};
-        ensure_memory(required);
-        if NEXT.compare_exchange_weak(prior, end, Ordering::Relaxed, Ordering::Relaxed).is_ok() {{
-            return start;
-        }}
-    }}
-}}
-
-unsafe impl GlobalAlloc for BumpAllocator {{
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {{
-        let size = u32::try_from(layout.size()).unwrap_or_else(|_| trap());
-        let alignment = u32::try_from(layout.align()).unwrap_or_else(|_| trap());
-        allocate(size, alignment) as *mut u8
-    }}
-
-    unsafe fn dealloc(&self, _pointer: *mut u8, _layout: Layout) {{}}
-}}
-
+{allocator_impl}
 #[no_mangle]
 pub extern "C" fn holo_alloc(size: i32) -> i32 {{
     if size < 0 {{ trap(); }}
