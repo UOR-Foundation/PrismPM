@@ -27,6 +27,7 @@ include = [
     "sdk/oracles/asyncapi-parser.mjs",
     "sdk/oracles/kubernetes-validator.mjs",
     "sdk/oracles/go/intoto-statement-validator/main.go",
+    "sdk/oracles/oscal/src/main.rs",
     "sdk/stdlib-sources.tar",
     "sdk/platform-lock.mjs",
     "sdk/sdk-index-extensions.json",

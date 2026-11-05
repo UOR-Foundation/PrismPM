@@ -183,6 +183,14 @@
       "expect": { "ok": false, "error": { "code": "verification_failed", "check": "policy.invalid" } }
     },
     {
+      "id": "verify.policy.statements-refused",
+      "title": "A policy cannot carry statements or claim their signature was checked: a level comes from the holo, never from an option.",
+      "op": "verify",
+      "archive": "reference",
+      "input": { "policy": { "minimum": "P0", "statements": { "proof": { "statement": {}, "envelope": { "verified": true } } } } },
+      "expect": { "ok": false, "error": { "code": "verification_failed", "check": "policy.invalid" } }
+    },
+    {
       "id": "verify.env.sets-minimum",
       "title": "PRISM_MINIMUM_LEVEL sets the minimum when the call names none.",
       "op": "verify",

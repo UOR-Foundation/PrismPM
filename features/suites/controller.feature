@@ -65,3 +65,10 @@ Feature: controller
     Given a Prism project with a configured output directory
     When Controller cleanup is called
     Then only that real directory is removed and a symlink in its place is rejected
+
+  @CT-12 @build
+  Scenario: The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes.
+    Given the prism-code package, ERRORS.md, model/errors.toml and the committed list of unregistered codes
+    When the owning Node suites compare the namespace with the package exports and scan the codes raised in sdk/npm/prism-code/src and crates/prismpm/src
+    Then the namespace holds the same objects and stable codes, its import closure is errors.mjs and the vendored spec, and every PP code is registered
+    And a new unregistered code, or a listed code that is no longer unregistered, fails the case

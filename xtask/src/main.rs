@@ -15,6 +15,7 @@ mod formatting;
 mod gate_driver;
 mod gate_root;
 mod golden_preflight;
+mod modules;
 mod source_copy;
 mod spec_links;
 mod stdlib;
@@ -140,6 +141,7 @@ fn main() -> ExitCode {
         "validate-model" => codegen::check_model(&root, write),
         "validate-spec-links" => spec_links::validate(&root),
         "validate-contract" => validate_contract(),
+        "check-modules" => modules::validate(&root),
         "verify-examples" => verify_examples(&root, write),
         "check-golden" => check_golden(&root, write),
         "check-reproducibility" => check_reproducibility(&root),
@@ -283,6 +285,7 @@ fn run_unit_tests(root: &Path) -> Result<(), Fail> {
 fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
     codegen::check_model(root, write)?;
     spec_links::validate(root)?;
+    modules::validate(root)?;
     audit_all(root)
 }
 
@@ -385,6 +388,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/refresh-osv.test.mjs",
             "scripts/qualify-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
+            "scripts/ci-disk-components.test.mjs",
+            "scripts/ci-disk-checkpoint.test.mjs",
             "scripts/ci-capacity.test.mjs",
             "scripts/vv-sdk-session.test.mjs",
             "scripts/reconcile-lexlean.test.mjs",

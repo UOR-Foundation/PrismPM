@@ -37,6 +37,7 @@ The three honesty levels:
 | `AL-03` | `build` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. |
 | `AL-05` | `build` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. |
 | `AL-06` | `build` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. |
+| `AL-07` | `build` | The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors. |
 
 ## authorities
 
@@ -49,6 +50,7 @@ The three honesty levels:
 | `AU-05` | `build` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. |
 | `AU-06` | `build` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. |
 | `AU-07` | `build` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. |
+| `AU-08` | `build` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. |
 
 ## controller
 
@@ -65,6 +67,7 @@ The three honesty levels:
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
 | `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
+| `CT-12` | `build` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. |
 
 ## deployment
 
@@ -109,6 +112,8 @@ The three honesty levels:
 | `FT-11` | `build` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. |
 | `FT-12` | `build` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. |
 | `FT-13` | `build` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. |
+| `FT-14` | `build` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. |
+| `FT-15` | `build` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. |
 
 ## holo
 
@@ -243,6 +248,8 @@ The three honesty levels:
 | `DK-37` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
 | `DK-38` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 | `DK-35` | `build` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. |
+| `DK-39` | `build` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. |
+| `DK-40` | `build` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. |
 
 ## security
 
@@ -256,6 +263,7 @@ The three honesty levels:
 | `SE-06` | `build` | Memory safety is enforced across all Rust crates with unsafe code forbidden. |
 | `SE-07` | `build` | Input parsing rejects excessively large inputs before memory exhaustion. |
 | `SE-08` | `build` | Dependency audits with cargo-deny enforce license and advisory policies. |
+| `SE-09` | `build` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. |
 
 ## stdlib
 
@@ -304,7 +312,7 @@ The three honesty levels:
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
 | `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
 | `SY-08` | `build` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. |
-| `SY-09` | `build` | Host-effect service system releases declare the effects of a server application, and project Compose services whose published ports bind loopback only and pass the locked Compose oracle. |
+| `SY-09` | `build` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. |
 
 ## template-ci
 
@@ -349,6 +357,9 @@ The three honesty levels:
 | `OCI-RUNTIME-1-3-0` | `1.3.0` | https://codeload.github.com/opencontainers/runtime-spec/tar.gz/92249139eea7161e13745abd4cb6d0ea02a3227a | `fbed724a4bbdce2260eea9a4d6dcf534a5e2446e581ed1b8bf27abe536cee17a` | `AU-01`, `LC-03` |
 | `OPENAPI-3-2-0` | `3.2.0` | https://codeload.github.com/OAI/OpenAPI-Specification/tar.gz/99710bcb26cbe4be646565eebeb04348f02374b5 | `0b4ae65636d0335ec9fd758d11cb2cb6097ace0490c1eaefaa951c723494e788` | `AU-01`, `SY-04` |
 | `OPENAPI-SCHEMA-3-2-2025-11-23` | `3.2@2025-11-23` | https://spec.openapis.org/oas/3.2/schema/2025-11-23 | `7d48f01f37eeae4799041b371ad5f533f9f533fd2b0caa1011a8ba27c5b48b70` | `AU-01`, `SY-04` |
+| `OSCAL-1-1-0` | `1.1.0` | https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_complete_schema.json | `c57fe854b05dd6c249343349ea76aaf59cca87289e5c791ba832eedc2a0ae653` | `AU-07`, `AU-08` |
+| `OSCAL-COMPONENT-SCHEMA-1-1-0` | `1.1.0` | https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_component_schema.json | `41c14d6a7d6798a7cc3b87d07bf2888b2027210acd79d27f10b6579610f3afd2` | `AU-07`, `AU-08` |
+| `JSONSCHEMA-ENGINE-0-58-2` | `0.58.2` | https://static.crates.io/crates/jsonschema/jsonschema-0.58.2.crate | `657c6a38b0e00dda091d9c006cc1741957ba2377f00dccfd6e79df4c95619bb1` | `AU-07`, `AU-08` |
 | `JSON-SCHEMA-2020-12` | `2020-12@c9510e3b` | https://codeload.github.com/json-schema-org/JSON-Schema-Test-Suite/tar.gz/c9510e3bf8a896c3cba4e08509cf752b4f30dff8 | `cf0e16252ef08add662b9db2b7f0f099644cdaffd1c429b1ce9212cebf086aba` | `AU-05`, `SY-04` |
 | `UNICODE-17-0-0` | `17.0.0` | https://www.unicode.org/Public/17.0.0/ucd/UCD.zip | `2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e` | `AU-01`, `SY-05` |
 | `OIDC-1-0-ERRATA1` | `1.0-errata1` | https://codeload.github.com/openid/connect/tar.gz/a173cb87c85c9b8d1bc11e2b8a84ed9271e97d6d | `2da00079757a1e699cc7072df23f262dbedb360b4677fde2eb4f875fb480c8af` | `AU-01`, `SY-05` |

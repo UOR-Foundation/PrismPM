@@ -86,6 +86,8 @@ Nothing is Stable today.
 | `prism-code` middleware: `Application.experimental_middleware` (the stack, its four steps and the `Pluggable` shape), `MIDDLEWARE_STEPS`, `experimental_tracing`, `MiddlewareError` and the `middleware.*` codes | `sdk/npm/prism-code` | Experimental |
 | SDK image contract: the digest-pinned OCI index for `linux/amd64` and `linux/arm64` | [SPEC.md](SPEC.md) section 1 | Experimental |
 | `prism-code` containers ([#348](https://github.com/UOR-Foundation/PrismPM/issues/348)): `prism.containers`, the `prism/container/1` shape, `EXIT_CODES`, `run <holo> <input>`, `--rm`, `rm` and the `PRISM_HOME` store | `sdk/npm/prism-code` | Experimental |
+| `prism-code setup` and `prism-code open`: the agent ids, the `holo://build?agent=<id>&q=<sentence>` link, the `prism/open-ticket/1` ticket, `$PRISM_HOME/config.json` `preferredAgent`, and the `open.*` and `setup.*` codes | `sdk/npm/prism-code` | Experimental |
+| `prism-code setup` machine rows (`node`, `docker`, `image`, `cache`, `endings`), `--machine-only`, `--agents-only`, `--json` and `prism/setup-report/1`, `$PRISM_HOME/config.json` `docker` and `cache`, `PRISM_DOCKER`, `PRISM_DOCKER_MOUNT`, `PRISM_CODE_NO_CACHE`, `verify --lean`, `axioms` and `prism/axioms-report/1`, and the `docker.*`, `tier.*` and `axioms.*` codes | `sdk/npm/prism-code` | Experimental |
 | `prism-code` CLI plugins ([#293](https://github.com/UOR-Foundation/PrismPM/issues/293)): `prism-<name>` on the PATH runs as `prism-code <name>`, the `prism-cli-plugin-metadata` and `prism-cli-plugin-hooks` calls (schema version 1), `errorHooks`, `PRISM_CODE_NO_HOOKS`, and the first-party `prism-doctor` | `sdk/npm/prism-code` | Experimental |
 | `@prism-code/conformance` 0.1.0: the `prism-conformance` CLI, the scenarios and check ids, the shim contract `prism/conformance-shim/1`, the `prism/conformance-declaration/1` and `prism/conformance-results/1` shapes | `sdk/npm/conformance` | Experimental |
 
@@ -98,8 +100,8 @@ The Verification API ships in v0.5 as Experimental, issue [#277](https://github.
 Pin the exact version if you use any surface in this section.
 Each moves up one tier at the v0.6 feature freeze ([#291](https://github.com/UOR-Foundation/PrismPM/issues/291)) and is Stable at 1.0 ([#306](https://github.com/UOR-Foundation/PrismPM/issues/306)).
 
-The CLI has no `--unstable-<feature>` flag yet.
-Until it has, this list is the marker: every verb and flag below is Experimental whether or not it carries the prefix.
+The CLI has one `--unstable-<feature>` flag so far, `--unstable-author`.
+For the rest, this list is the marker: every verb and flag below is Experimental whether or not it carries the prefix.
 A flag marked planned is named here so you can plan for it; its spelling may change before it ships.
 
 ### 6.1 CLI verbs and flags
@@ -138,6 +140,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code providers <up\|down> [<dir>]`, `--target <browser\|node>`, `--json`; the `prism-provider-kv` binary, its flags and file layout | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The provider wire protocol: `prism-provider-<type>` on the PATH, its arguments, the `info`, `debug`, `error` and `setenv` messages, `PRISM_PROVIDER_MESSAGES`; the `provider-` prefix reserved from plugin names | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The `prism.toml` manifest and its `prism.browser.toml` and `prism.node.toml` overlays, read by the Rust CLI | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | Planned |
+| `prism-code build --unstable-author`, `--check`, `--no-cache`, `--project`, `--author-command`, `--author-model`, `--author-timeout`, `--author-max-tokens`, `--max-iterations`; `prism-code check <holo> --unstable-author`, `--project`, `--reference`; `intent.md` and `examples/` formats; the `authoring` member of `prismpm/sdk-lock/3`; `prism/author-request/1` and `prism/author-response/1` | [#325](https://github.com/UOR-Foundation/PrismPM/issues/325) | On main |
 | `prism-code export <name@sha256:digest>`, `--out <dir>`, `--tar <file>`, `--project <dir>`, `--json`, and the `<name>.attestations.jsonl` file beside the output | [#290](https://github.com/UOR-Foundation/PrismPM/issues/290) | On main |
 | `attest <path.holo> --predicate <file> --type <uri> --key <pem>`, `--subject`, `--output` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `verify-attestation <path.holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
@@ -179,15 +182,17 @@ Until then the old spelling runs as before and prints a warning naming the repla
 | `prism-code` | `Application.world` (`contract`, `within`, `pure`, `effects`), `CapabilityGrant.members`, the `capabilities` option of `experimental_verify`, and `CapabilityDeniedError` with check `world.capabilities` at load | [#283](https://github.com/UOR-Foundation/PrismPM/issues/283) |
 | `prism-code` | `parseManifest`, `validateManifest`, `lintManifest`, `mergeOverlay`, `manifestCapabilities`, `resolveVariables`, `parseToml`, `MANIFEST_FILE`, `MANIFEST_TARGETS`, `MANIFEST_VERSION`, and the `manifest.*` error codes; `readManifest` in `prism-code/node` | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) |
 | `prism-code` | `manifestProviders`, `ProviderError`, `ProviderNotFoundError`, `ProviderReplyError`, `ProviderFailedError` and their `code`s and `provider.*` checks, the `provider-not-granted` lint warning, the `providers` capability kind and the check `capabilities.providers`; `resolveProviders`, `releaseProviders`, `PROVIDER_MESSAGES`, `PROVIDER_MESSAGES_ENV`, `PROVIDER_TIMEOUT_MS` in `prism-code/node` | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) |
+| `prism-code` | `src/volumes.mjs`: `createVolumes`, its `create`, `list`, `inspect` and `remove`, `attachVolume`, `refusalRecord`, `HOST_EFFECTS`, and the `capabilities.host-folder` and `capabilities.host-effects` checks of `CapabilityDeniedError`. Not exported until #441 connects the modules | [#445](https://github.com/UOR-Foundation/PrismPM/issues/445) |
 | `prism-code` | `PolicyParseError`, `PolicyEvaluationError`, `PolicyDeniedError` and their `code`s, and the `rego` option of `experimental_verify` | [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) |
 | `@prism-code/verify` | `POLICIES`, `POLICY_INPUT_SCHEMA`, `parsePolicy`, `evaluatePolicy`, `policyInput`, `policy.rego`, the accepted Rego subset, and the `policy.parse` and `policy.evaluation` codes | [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) |
 | `@prism-code/verify` | `worldPolicy`, `policy.capabilities`, the `world.capabilities` reason (`PP5602`), and the inspection's `world.pure` and `world.effects` | [#283](https://github.com/UOR-Foundation/PrismPM/issues/283) |
 | `@prism-code/verify` | `verify`, `inspect`, `verifyTransparency`, `ASSURANCE`, `VerifyError`, `FORMAT_REVISION`, `INSPECTION_SCHEMA` | [#273](https://github.com/UOR-Foundation/PrismPM/issues/273), [#275](https://github.com/UOR-Foundation/PrismPM/issues/275) |
 | `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas, the `prism/capabilities/1` schema and types, the `prism/manifest/1` schema and types, each with its provider members, the `prism/policy-input/1` schema and types, `POLICY` and the shipped policy files, the `prism/replay/v1` types and schema, and the `prism/history/1` schema and types | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279), [#280](https://github.com/UOR-Foundation/PrismPM/issues/280), [#294](https://github.com/UOR-Foundation/PrismPM/issues/294), [#285](https://github.com/UOR-Foundation/PrismPM/issues/285), [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) |
 | `@prism-code/conformance` | `runSuite`, `renderMatrix`, `runGate`, `loadScenarios`, the shim contract `prism/conformance-shim/1`, every check id, and `COMPLIANCE.md`'s cells | [#287](https://github.com/UOR-Foundation/PrismPM/issues/287) |
+| `@prism-code/testing` | `createMockHost`, `createClock`, `createRandom`, `scriptedDispatch`, `historyScript`, `readHistory`, `writeHistory`, `recordHistory`, `assertReplays`, `referenceArchive`, `referenceArchives`, `runCli`, the re-exported runtime calls, `UnexpectedCallError`, `ScriptIncompleteError`, `TestSetupError` and their `code`s (`unexpected_call`, `script_incomplete`, `test_setup`) | [#286](https://github.com/UOR-Foundation/PrismPM/issues/286) |
 
 `prism-code` entries land in the first release after 0.2.0.
-`@prism-code/verify`, `@prism-code/spec` and `@prism-code/conformance` are not published yet.
+`@prism-code/verify`, `@prism-code/spec`, `@prism-code/conformance` and `@prism-code/testing` are not published yet.
 
 ### 6.3 Verdict fields
 

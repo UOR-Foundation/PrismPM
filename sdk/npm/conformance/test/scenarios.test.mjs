@@ -16,7 +16,7 @@ const checks = allChecks(features);
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 test('the suite covers each part of the runtime contract the issue names', () => {
-  assert.deepEqual(features.map((feature) => feature.feature), ['capabilities', 'digests', 'dispatch', 'errors', 'load', 'replay', 'verify', 'world']);
+  assert.deepEqual(features.map((feature) => feature.feature), ['auth', 'capabilities', 'digests', 'dispatch', 'errors', 'load', 'replay', 'verify', 'world']);
   for (const feature of features) assert.ok(feature.checks.length >= 5, `${feature.feature} has few checks`);
   assert.equal(new Set(checks.map((check) => check.id)).size, checks.length);
 });

@@ -1,6 +1,6 @@
 {
   "name": "prism-code",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "description": "JavaScript runtime and CLI for Prism SDK (PrismPM) applications: load .holo archives and browser closures, dispatch bytes through Core-Wasm, replay acceptance vectors, read proof provenance.",
   "license": "MIT",
   "type": "module",
@@ -41,11 +41,15 @@
     },
     "./package.json": "./package.json"
   },
+  "browser": {
+    "./src/node.mjs": false
+  },
   "files": [
     "bin",
     "src",
     "types",
     "templates",
+    "skill",
     "fixtures/Calculator.holo",
     "fixtures/Calculator.history.json",
     "README.md",

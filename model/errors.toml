@@ -141,6 +141,34 @@ exit = 1
 statement = "A feature or journey is not a closed literal record, a feature statement is out of bounds, or a call or acceptance row of a feature names no declaration."
 
 [[error]]
+code = "PP2019"
+title = "Threat without a control or an accepted risk"
+class = "semantic"
+exit = 1
+statement = "A threat of a threat model has no mapped control and no accepted risk."
+
+[[error]]
+code = "PP2020"
+title = "Control without evidence"
+class = "semantic"
+exit = 1
+statement = "A control of a threat model names no evidence that realizes it."
+
+[[error]]
+code = "PP2021"
+title = "Threat without a STRIDE category"
+class = "semantic"
+exit = 1
+statement = "A threat of a threat model has no modeled threat row, so it has no STRIDE category."
+
+[[error]]
+code = "PP2022"
+title = "Invalid threat model declaration"
+class = "semantic"
+exit = 1
+statement = "A threat model row is not a closed literal record, is repeated, is blank or out of bounds, names no record of the model document, or the model does not declare exactly one control set with a valid time, or an asset has no row."
+
+[[error]]
 code = "PP3001"
 title = "Malformed Hologram archive header or version"
 class = "holo"

@@ -21,6 +21,7 @@ mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
 mod text_cli;
+mod threat_model;
 mod workbench;
 
 use node_suite::verify as verify_node_suite;
@@ -388,6 +389,8 @@ pub fn run_at(root: &Path, id: &str) {
         "FT-11" => design_views::verify_entries(root),
         "FT-12" => feature_journeys::verify_entries(root),
         "FT-13" => feature_journeys::verify_check(root),
+        "FT-14" => threat_model::verify_declarations(root),
+        "FT-15" => threat_model::verify_check(root),
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
         | "HO-10" | "HO-11" | "HO-12" => {
@@ -405,6 +408,14 @@ pub fn run_at(root: &Path, id: &str) {
         // Build provenance (#268): the statement `prismpm build` writes, held against the
         // lock, the archive and the bytes of the JavaScript reference.
         "HO-32" | "HO-33" | "HO-34" | "HO-35" => verify_build_provenance(root, id),
+        // prism.verify (#449) is the existing checks under one namespace; its complete
+        // owning file holds it to them on the conformance corpus and the signed fixtures.
+        "AL-07" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/verify-namespace.test.mjs", 15)],
+            "600000",
+        ),
         // The JavaScript runtime reads the composed archive, the HOLOVIEW
         // bundle and the exported closure without the Rust SDK; its complete
         // owning suite is the acceptance, file by file.
@@ -531,6 +542,17 @@ pub fn run_at(root: &Path, id: &str) {
             verify_controller(root, id);
         }
 
+        // The `errors` module of #440, and the codes prism-code raises against the register.
+        "CT-12" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("sdk/npm/prism-code/test/errors-namespace.test.mjs", 8),
+                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 4),
+            ],
+            "600000",
+        ),
+
         "ST-01" | "ST-02" | "ST-03" | "ST-04" | "ST-05" | "ST-06" | "ST-07" | "ST-08" | "ST-09"
         | "ST-10" => {
             verify_stdlib(root, id);
@@ -569,6 +591,14 @@ pub fn run_at(root: &Path, id: &str) {
             verify_verification(root, id);
         }
 
+        // prism.auth (#447): login, logout and the no-secret rule; its complete owning
+        // file needs no optional package, and what really signs runs in the npm workflow.
+        "SE-09" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/auth.test.mjs", 20)],
+            "600000",
+        ),
         "SE-01" | "SE-02" | "SE-03" | "SE-04" | "SE-05" | "SE-06" | "SE-07" | "SE-08" => {
             verify_security(root, id);
         }
@@ -584,6 +614,7 @@ pub fn run_at(root: &Path, id: &str) {
             9,
             "1200000",
         ),
+        "AU-08" => threat_model::verify_emission(root),
         "SY-08" => browser_system::verify(root),
         "SY-09" => host_effect_system::verify(root),
         "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" | "SY-07" => {
@@ -679,6 +710,13 @@ pub fn run_at(root: &Path, id: &str) {
             60,
             "120000",
         ),
+        // The `volumes` module of #440.
+        "DK-40" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/volumes.test.mjs", 25)],
+            "600000",
+        ),
         "DK-35" => verify_node_suite(
             root,
             id,
@@ -693,6 +731,13 @@ pub fn run_at(root: &Path, id: &str) {
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),
+        // The `networks` module of #440, a view over a capability file.
+        "DK-39" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/networks.test.mjs", 18)],
+            "600000",
+        ),
         "DK-32" => verify_node_suite(
             root,
             id,

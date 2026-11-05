@@ -3,7 +3,7 @@ title: Write the model
 description: Write the model files yourself when examples and intent are not enough.
 available_in: "0.6"
 ---
-This is the fourth and last level of authoring. You write the files in `model/` directly, instead of having `build` write them from examples and intent. You do it when you need a component the generated model does not reach, or when you want to read every line of what is proved.
+This is level 3, the last level of authoring. You write the files in `model/` directly, instead of having `build` write them from examples and intent. You do it when you need a component the generated model does not reach, or when you want to read every line of what is proved.
 
 ## When to write the model
 

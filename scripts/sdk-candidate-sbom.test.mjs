@@ -30,7 +30,7 @@ function fixture(sbom = rawSpdx()) {
   return {candidate, child, sbom, record, manifest};
 }
 
-function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main') {
+function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main', event) {
   const config = encode({architecture, os: 'linux', config: {Labels: {
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
@@ -43,16 +43,17 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
     manifests: ['amd64', 'arm64'].map(arch => ({...subject, platform: {os: 'linux', architecture: arch},
       digest: arch === architecture ? subject.digest : `sha256:${'b'.repeat(64)}`}))});
   const repository = `ghcr.io/uor-foundation/prismpm-${imageName}`;
-  const options = releaseTransportPolicy(repository, ref);
+  const options = releaseTransportPolicy(repository, ref, event);
   const record = releaseSbomRecord(`${repository}@${digest(index)}`, index, child, config, sbom, architecture, revision);
   return {child, sbom, record, options, manifest: encode(artifactManifest(record, options))};
 }
 
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
-  for (const ref of ['refs/heads/main', 'refs/tags/v0.4.0']) {
+  for (const [ref, event] of [['refs/heads/main', 'workflow_dispatch'],
+    ['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
     for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
       for (const architecture of ['amd64', 'arm64']) {
-        const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref);
+        const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref, event);
         validateArtifact(manifest, digest(manifest), record, sbom, options);
         const subject = `ghcr.io/uor-foundation/prismpm-${name}@${digest(manifest)}`;
         const args = verificationArguments(record, digest(manifest), '/trusted-root', options);
@@ -60,7 +61,7 @@ test('release transport has exact repository/ref/signer policies without pretend
           `https://github.com/UOR-Foundation/PrismPM/.github/workflows/release.yml@${ref}`,
           '--certificate-oidc-issuer', issuer, '--certificate-github-workflow-repository', 'UOR-Foundation/PrismPM',
           '--certificate-github-workflow-ref', ref, '--certificate-github-workflow-sha', revision,
-          '--certificate-github-workflow-trigger', ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+          '--certificate-github-workflow-trigger', event,
           '--certificate-github-workflow-name', 'PrismPM OCI/native and Cargo publication', subject]);
         assert.equal(signingArguments(digest(manifest), '/trusted-root', '/bundle', options).at(-1), subject);
         const annotation = JSON.parse(manifest).annotations;
@@ -74,6 +75,9 @@ test('release transport has exact repository/ref/signer policies without pretend
   }
   const {record, manifest, options, sbom} = releaseFixture();
   for (const bad of [{...options, repository: 'registry.attacker.test/sdk'}, {...options, ref: 'refs/heads/feature'},
+    {...options, event: 'push'}, {...options, event: 'pull_request'},
+    {...options, ref: 'refs/heads/release/v0.4', event: 'push|workflow_dispatch'},
+    {...options, ref: 'refs/tags/v0.4.0', event: 'workflow_dispatch'}, {...options, event: null},
     {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.3.0'}]) {
     assert.throws(() => artifactManifest(record, bad));
     assert.throws(() => verificationArguments(record, digest(manifest), '/root', bad));

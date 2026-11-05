@@ -14,6 +14,11 @@ on:
       - sdk/npm/prism-code/**
       # test/inspect.test.mjs checks its format revision table against the spec's.
       - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
       # src/vendor/verify.mjs is a copy of this file; test/verify.test.mjs checks it.
       - sdk/npm/verify/browser.js
       # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
@@ -28,12 +33,19 @@ on:
       # templates/text-request is a byte copy of this fixture (#281); sync-templates --check holds them equal.
       - tests/fixtures/holo/ho-11-text-application/project/**
       - sdk/npm/create-prism-code/**
+      # test/reference-archives.test.mjs is written with @prism-code/testing (#286).
+      - sdk/npm/testing/**
       - .github/workflows/npm-prism-code.yml
   push:
     branches: [main]
     paths:
       - sdk/npm/prism-code/**
       - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
       - sdk/npm/verify/browser.js
       # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
       - sdk/npm/spec/test/fixtures/manifest/**
@@ -47,6 +59,8 @@ on:
       # templates/text-request is a byte copy of this fixture (#281); sync-templates --check holds them equal.
       - tests/fixtures/holo/ho-11-text-application/project/**
       - sdk/npm/create-prism-code/**
+      # test/reference-archives.test.mjs is written with @prism-code/testing (#286).
+      - sdk/npm/testing/**
       - .github/workflows/npm-prism-code.yml
     tags:
       - prism-code-v*
@@ -93,8 +107,12 @@ jobs:
       # verify-attestation (#272); the attest tests need them installed.
       - name: Install the optional sigstore packages
         run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
+      # test/reference-archives.test.mjs imports @prism-code/testing, which resolves prism-code through a link.
+      - name: Link prism-code for @prism-code/testing
+        working-directory: sdk/npm/testing
+        run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
       - name: Unit tests
-        run: node --test "test/*.test.mjs"
+        run: npm test
       - name: The init templates are their fixtures
         run: node scripts/sync-templates.mjs --check
       - name: create-prism-code
@@ -107,8 +125,9 @@ jobs:
           npm pack --dry-run --json > pack.json
           size=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("pack.json","utf8"))[0].unpackedSize)')
           echo "unpacked size: $size bytes"
-          # 1 MiB is the prism-code package cap. prism-code vendors the @prism-code/verify build (src/vendor/verify.mjs, about 288 KiB, so holo.verify() has no dependency) and adds its own code. Raised from 768 KiB to fit the M3 features in flight (export, middleware, generate, replay, about 115 KiB together); the next lever is depending on @prism-code/verify once it is published instead of vendoring it.
-          test "$size" -le 1048576
+          # 1208 KiB is the prism-code package cap. prism-code vendors the @prism-code/verify build (src/vendor/verify.mjs, about 288 KiB, so holo.verify() has no dependency) and adds its own code. Raised from 768 KiB to fit the M3 features in flight (export, middleware, generate, replay, about 115 KiB together), then to 1088 KiB for the authoring front door (#325, about 65 KiB), then to 1160 KiB for setup and open: the agent configuration, the bundled prism skill (16 KB) and the holo:// handler (about 63 KiB), then to 1208 KiB for the machine half of setup, the build tiers, axioms and init's next steps (about 44 KiB); the next lever is depending on @prism-code/verify once it is published instead of vendoring it.
+          test "$size" -le 1236992
+          node scripts/check-package.mjs pack.json
           rm pack.json
       - name: The entry points import cleanly
         shell: bash

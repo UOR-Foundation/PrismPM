@@ -217,9 +217,9 @@ export interface PushResult {
 export interface PullOptions extends RegistryOptions {
   /** A path, or a `dir://` reference to store the holo with all its referrers. Without one, nothing is written. */
   output?: string;
-  /** A policy file path or object, as `check` takes. Default: P0 or `PRISM_MINIMUM_LEVEL`. */
+  /** A policy file path, a shipped name, or an object of the same members. Default: P0 or `PRISM_MINIMUM_LEVEL`. */
   policy?: string | object;
-  /** With any of these, at least one attestation must pass, as `experimental_verifyAttestations`. */
+  /** With any of these, at least one attestation must pass, as `experimental_verifyAttestations`, and the signed statements in the holo count toward the level, as in `check`. */
   key?: string | KeyObject;
   certificateIdentity?: string;
   certificateIdentityRegexp?: string | RegExp;

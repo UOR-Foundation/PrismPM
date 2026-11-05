@@ -22,6 +22,7 @@ export const OPERATIONS = Object.freeze({
   dispatch: true,
   acceptance: true,
   capabilities: false,
+  auth: false,
 });
 
 const ID = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;

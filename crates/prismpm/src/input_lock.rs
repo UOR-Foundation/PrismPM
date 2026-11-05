@@ -32,7 +32,8 @@ const CORE_WASM_WORLD_SHA256: &str =
 const SPEC_DOMAIN: &[u8] = b"prismpm/spec-inputs/1\n";
 const SPEC_MAX_FILES: usize = 4096;
 const SPEC_MAX_BYTES: u64 = 512 * 1024 * 1024;
-const SPEC_TREES: [&str; 3] = ["examples", "intent", "types"];
+const SPEC_INTENT: &str = "intent.md";
+const SPEC_TREES: [&str; 2] = ["examples", "types"];
 
 /// Everything a build knows that the input lock pins.
 pub(crate) struct InputSources<'a> {
@@ -49,6 +50,8 @@ pub(crate) fn sdk_projection(lock: &Value) -> Value {
     let mut value = lock.clone();
     if let Some(object) = value.as_object_mut() {
         object.remove("inputs");
+        // Written by `prism-code build --unstable-author` (#325); the SDK rules never read it.
+        object.remove("authoring");
         object.insert("schema".to_owned(), Value::String(SDK_LOCK_V2.to_owned()));
     }
     value
@@ -267,6 +270,9 @@ fn spec_files(
     let mut files = SpecFiles::default();
     if exists(&root.join("prism.toml"))? {
         files.add(root, "prism.toml")?;
+        if exists(&root.join(SPEC_INTENT))? {
+            files.add(root, SPEC_INTENT)?;
+        }
         for tree in SPEC_TREES {
             if exists(&root.join(tree))? {
                 files.walk(root, tree, |_| true)?;
@@ -593,12 +599,32 @@ mod tests {
         calculator_like(root.path());
         write(root.path(), "prism.toml", b"name = \"calculator\"\n");
         write(root.path(), "examples/add.json", b"{}");
-        write(root.path(), "intent/README.md", b"intent");
+        write(root.path(), "intent.md", b"add never overflows.\n");
+        write(root.path(), "types/calculator.ts", b"export type T = 1;\n");
+        write(root.path(), "intent/README.md", b"not part of the spec");
         let (basis, files) = spec_files(root.path(), "lexlean.toml").unwrap();
         assert_eq!(basis, "prism-toml");
         assert_eq!(
             files.keys().map(String::as_str).collect::<Vec<_>>(),
-            ["examples/add.json", "intent/README.md", "prism.toml"]
+            [
+                "examples/add.json",
+                "intent.md",
+                "prism.toml",
+                "types/calculator.ts"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_calculator_authoring_fixture_has_the_digest_javascript_pins() {
+        // sdk/npm/prism-code/test/author.test.mjs pins the same value, so the two readers cannot drift.
+        let root =
+            manifest_dir().join("../../sdk/npm/prism-code/test/fixtures/authoring/calculator");
+        let (basis, files) = spec_files(&root, "lexlean.toml").unwrap();
+        assert_eq!(basis, "prism-toml");
+        assert_eq!(
+            spec_digest(&files),
+            "5487513160c873eb0dcf02a42146fc8bbadc06d1d701ea2b08a3169d4c814d1a"
         );
     }
 
@@ -638,6 +664,29 @@ mod tests {
             changed_fields(&locked, &current),
             ["inputs.model", "inputs.spec"]
         );
+    }
+
+    #[test]
+    fn the_authoring_record_stays_in_the_lock_and_out_of_the_projection() {
+        let v2 = CanonicalDocument::from_value(SDK_LOCK_V2, platform_lock()).unwrap();
+        let mut value = with_inputs(v2.value(), sample_inputs())
+            .unwrap()
+            .value()
+            .clone();
+        value["authoring"] = json!({
+            "agent": {"adapter": "anthropic", "model": "claude-opus-5-5"},
+            "model_tree": {"blake3": "a".repeat(64)},
+            "spec": {"blake3": "b".repeat(64)}
+        });
+        let v3 = CanonicalDocument::from_value(SDK_LOCK_V3, value.clone()).unwrap();
+        assert_eq!(
+            crate::sdk::parse_lock(v3.bytes()).unwrap().bytes(),
+            v2.bytes()
+        );
+        let updated = with_inputs(v3.value(), sample_inputs()).unwrap();
+        assert_eq!(updated.value()["authoring"], value["authoring"]);
+        value["authoring"]["surprise"] = json!(true);
+        assert!(CanonicalDocument::from_value(SDK_LOCK_V3, value).is_err());
     }
 
     #[test]

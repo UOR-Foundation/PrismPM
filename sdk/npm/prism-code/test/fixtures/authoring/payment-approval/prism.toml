@@ -1,0 +1,9 @@
+[application]
+name = "payment-approval"
+version = "0.1.0"
+description = "Approves a payment when it is within the limit and a second person approves it."
+
+[model]
+source = "model"
+
+[capabilities]

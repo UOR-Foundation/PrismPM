@@ -15,6 +15,27 @@ const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
 const source = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
 const workflow = () => load(source);
+
+test('canonical Cargo Git caches retain every object and real locked offline submodule builds', () => {
+  execFileSync('python3', ['-I', '-B', new URL('./normalize-cargo-git_test.py', import.meta.url).pathname],
+    {timeout: 120000});
+});
+
+test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
+  execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
+  const steps = workflow().jobs.reproducibility.steps;
+  const compare = steps.find(step => step.env?.DOCKERFILE);
+  assert.match(compare.run, /cmp root-a.digest root-b.digest\n/);
+  assert.match(compare.run, /cmp root-a.oci\/index.json root-b.oci\/index.json\n/);
+  const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
+  assert.equal(diagnostic.if, 'failure()');
+  assert.equal(diagnostic['timeout-minutes'], 5);
+  assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
+  const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
+  assert.equal(retained.if, 'failure()');
+  assert.equal(retained.with.path, 'reproducibility-diagnostics.*');
+});
+
 const revision = 'a'.repeat(40);
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/main',
@@ -84,6 +105,13 @@ function validateWorkflow(value) {
   execFileSync('bash', ['-n'], {input: publicationStep.run, stdio: ['pipe', 'pipe', 'pipe']});
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
+  const sourceSteps = value.jobs.gate.steps;
+  const preflight = sourceSteps.findIndex(step => step.run === 'node --test scripts/release-native-contract.test.mjs');
+  assert(preflight >= 0 && preflight < sourceSteps.findIndex(step => step.with?.runCmd));
+  assert(sourceSteps.some(step => step.id === 'cache' && step.uses === './.github/actions/devcontainer-cache'));
+  const sourceBuild = sourceSteps.find(step => step.with?.runCmd).with;
+  assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
+  assert.equal(sourceBuild.cacheTo, undefined);
   const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
   assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
     `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
@@ -309,26 +337,31 @@ test('explicit OCI-only dispatch is distinct from Cargo publication and rejects 
 test('image-index signatures require the exact current source, ref, trigger, name, issuer and repository', () => {
   const imageDigest = `sha256:${'b'.repeat(64)}`;
   for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
-    for (const ref of ['refs/heads/main', 'refs/tags/v0.4.0']) {
+    for (const [ref, event] of [['refs/heads/main', 'workflow_dispatch'], ['refs/heads/release/v0.4', 'workflow_dispatch'],
+      ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
       const image = `ghcr.io/uor-foundation/prismpm-${name}@${imageDigest}`;
-      assert.deepEqual(imageVerificationArguments(image, revision, ref, '/trusted-root'), [
+      assert.deepEqual(imageVerificationArguments(image, revision, ref, '/trusted-root', event), [
         'verify', '--trusted-root', '/trusted-root', '--certificate-identity',
         `https://github.com/UOR-Foundation/PrismPM/.github/workflows/release.yml@${ref}`,
         '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
         '--certificate-github-workflow-repository', 'UOR-Foundation/PrismPM',
         '--certificate-github-workflow-ref', ref, '--certificate-github-workflow-sha', revision,
-        '--certificate-github-workflow-trigger', ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+        '--certificate-github-workflow-trigger', event,
         '--certificate-github-workflow-name', 'PrismPM OCI/native and Cargo publication', image,
       ]);
     }
   }
   const image = `ghcr.io/uor-foundation/prismpm-sdk@${imageDigest}`;
+  for (const [ref, event] of [['refs/heads/main', 'push'], ['refs/heads/release/v0.4', 'pull_request'],
+    ['refs/heads/release/v0.4', 'push|workflow_dispatch'], ['refs/tags/v0.4.0', 'workflow_dispatch']]) {
+    assert.throws(() => imageVerificationArguments(image, revision, ref, '/trusted-root', event));
+  }
   for (const [subject, source, ref] of [
-    [image.replace('uor-foundation', 'other'), revision, 'refs/heads/main'],
-    [image.replace('prismpm-sdk', 'prismpm-sdk-candidate'), revision, 'refs/heads/main'],
-    [image.replace(imageDigest, 'latest'), revision, 'refs/heads/main'],
-    [`${image}@${imageDigest}`, revision, 'refs/heads/main'],
-    [image, 'main', 'refs/heads/main'], [image, revision, 'refs/heads/feature'],
+    [image.replace('uor-foundation', 'other'), revision, 'refs/heads/release/v0.4'],
+    [image.replace('prismpm-sdk', 'prismpm-sdk-candidate'), revision, 'refs/heads/release/v0.4'],
+    [image.replace(imageDigest, 'latest'), revision, 'refs/heads/release/v0.4'],
+    [`${image}@${imageDigest}`, revision, 'refs/heads/release/v0.4'],
+    [image, 'main', 'refs/heads/release/v0.4'], [image, revision, 'refs/heads/feature'],
     [image, revision, 'refs/tags/v0.3.0'],
   ]) assert.throws(() => imageVerificationArguments(subject, source, ref, '/trusted-root'));
 });
@@ -341,15 +374,22 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
     const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
     const trust = new URL('../standards/trust/sigstore-trusted-root-cosign-3.1.3.json', import.meta.url).pathname;
     const image = `ghcr.io/uor-foundation/prismpm-sdk@sha256:${'b'.repeat(64)}`;
-    const args = imageVerificationArguments(image, revision, 'refs/heads/main', trust);
+    const args = imageVerificationArguments(image, revision, 'refs/heads/release/v0.4', trust);
     const executable = join(directory, 'cosign');
     writeFileSync(executable, `#!${process.execPath}\nrequire('node:assert/strict').deepEqual(process.argv.slice(2), JSON.parse(process.env.EXPECTED_ARGS));\nprocess.stdout.write('verified-command-fixture\\n');\nprocess.exit(Number(process.env.VERIFIER_STATUS));\n`);
     chmodSync(executable, 0o700);
-    const invoke = (status, root = trust, sourceRevision = revision) => execFileSync(process.execPath,
-      [helper, 'image-verify', image, sourceRevision, 'refs/heads/main', root], {stdio: 'pipe', encoding: 'utf8',
-        env: {...process.env, PATH: `${directory}:${process.env.PATH}`, EXPECTED_ARGS: JSON.stringify(args),
+    const invoke = (status, root = trust, sourceRevision = revision, event = 'workflow_dispatch', expected = args, ref = 'refs/heads/release/v0.4') => execFileSync(process.execPath,
+      [helper, 'image-verify', image, sourceRevision, ref, root], {stdio: 'pipe', encoding: 'utf8',
+        env: {...process.env, PATH: `${directory}:${process.env.PATH}`, EXPECTED_ARGS: JSON.stringify(expected), GITHUB_EVENT_NAME: event,
           VERIFIER_STATUS: String(status)}});
     assert.equal(invoke(0), 'verified-command-fixture\n');
+    const mainArgs = imageVerificationArguments(image, revision, 'refs/heads/main', trust);
+    assert.equal(invoke(0, trust, revision, 'workflow_dispatch', mainArgs, 'refs/heads/main'), 'verified-command-fixture\n');
+    assert.throws(() => invoke(0, trust, revision, 'push', mainArgs, 'refs/heads/main'), error => error.status !== 0 && error.stdout === '');
+    const pushArgs = imageVerificationArguments(image, revision, 'refs/heads/release/v0.4', trust, 'push');
+    assert.equal(invoke(0, trust, revision, 'push', pushArgs), 'verified-command-fixture\n');
+    assert.throws(() => invoke(0, trust, revision, 'push'), error => error.status !== 0);
+    assert.throws(() => invoke(0, trust, revision, 'pull_request'), error => error.status !== 0 && error.stdout === '');
     assert.throws(() => invoke(1), error => error.status !== 0);
     assert.throws(() => invoke(0, trust, 'c'.repeat(40)), error => error.status !== 0);
     const changedRoot = join(directory, 'untrusted.json'); writeFileSync(changedRoot, '{}');
@@ -604,9 +644,23 @@ test('release SBOM input binds exact index, child, config, platform, source and 
       ['sbom.spdx.json', spdx]]) writeFileSync(join(directory, name), bytes);
     const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
     const invoke = (command, ...extra) => execFileSync(process.execPath,
-      [helper, command, directory, 'amd64', revision, image, 'refs/heads/main', ...extra], {stdio: 'pipe'});
+      [helper, command, directory, 'amd64', revision, image, 'refs/heads/release/v0.4', ...extra],
+      {stdio: 'pipe', env: {...process.env, GITHUB_EVENT_NAME: 'workflow_dispatch'}});
     invoke('sbom-record');
     assert.deepEqual(JSON.parse(readFileSync(join(directory, 'sbom-record.json'))), record);
+    const trust = new URL('../standards/trust/sigstore-trusted-root-cosign-3.1.3.json', import.meta.url).pathname;
+    const executable = join(directory, 'cosign');
+    writeFileSync(executable, `#!${process.execPath}\nconst args=process.argv.slice(2);\nrequire('node:assert/strict').equal(args[args.indexOf('--certificate-github-workflow-trigger')+1],process.env.GITHUB_EVENT_NAME);\nprocess.stderr.write('exact-event-verified\\n');\nprocess.exit(19);\n`);
+    chmodSync(executable, 0o700);
+    for (const event of ['workflow_dispatch', 'push', 'pull_request']) {
+      // Stop at the verifier: no registry interaction or fabricated signature acceptance.
+      assert.throws(() => execFileSync(process.execPath,
+        [helper, 'sbom-verify', directory, 'amd64', revision, image, 'refs/heads/release/v0.4', trust],
+        {stdio: 'pipe', env: {...process.env, GITHUB_EVENT_NAME: event, PATH: `${directory}:${process.env.PATH}`}}),
+      error => event === 'pull_request' ? error.stderr.toString().includes('exact release ref/event pair required')
+        : error.stderr.toString().includes('exact-event-verified'));
+    }
+
     writeFileSync(join(directory, 'sbom-record.json'), JSON.stringify({...record, production_accepted: true}));
     assert.throws(() => invoke('sbom-verify', '/absent-trusted-root'));
     invoke('sbom-record');

@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { createHash, generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { inspect } from 'node:util';
 import {
   PrismError,
   SigningError,
@@ -249,6 +250,58 @@ const TOKEN = `x.${Buffer.from(JSON.stringify({ iss: 'https://oidc.test', sub: '
 
 test('keyless attest with a token that is not a JWT is a SigningError about the identity', async () => {
   await rejects(attest(holo, { type: PROOF, predicate: {}, signingConfig: FULCIO_ONLY, identityToken: 'not-a-jwt' }), SigningError, 'sign.identity');
+});
+
+/** Everything a caller could see of an error, however it prints it. */
+const seenIn = (error) => [error.message, error.stack, inspect(error, { depth: null, showHidden: true }), JSON.stringify(error)].join('\n');
+
+test('a token that is not a JWT stays out of the error, whichever source gave it', async () => {
+  const malformed = 'test-malformed-token-a4b7c2';
+  const given = await rejects(attest(holo, { type: PROOF, predicate: {}, signingConfig: FULCIO_ONLY, identityToken: malformed }), SigningError, 'sign.identity');
+  assert.match(given.message, /^the OIDC identity token cannot be used: invalid identity token: \[redacted\]$/);
+  assert.equal(given.cause, undefined);
+  assert.equal(seenIn(given).includes(malformed), false);
+
+  const saved = process.env.SIGSTORE_ID_TOKEN;
+  process.env.SIGSTORE_ID_TOKEN = malformed;
+  try {
+    const ambient = await rejects(attest(holo, { type: PROOF, predicate: {}, signingConfig: FULCIO_ONLY }), SigningError, 'sign.identity');
+    assert.equal(ambient.cause, undefined);
+    assert.equal(seenIn(ambient).includes(malformed), false);
+  } finally {
+    if (saved === undefined) delete process.env.SIGSTORE_ID_TOKEN;
+    else process.env.SIGSTORE_ID_TOKEN = saved;
+  }
+});
+
+test('a service that quotes the token back is reported by its status, with the token and its payload replaced', async () => {
+  const payload = TOKEN.split('.')[1];
+  const server = createServer((request, response) => {
+    request.resume();
+    response.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ code: 400, message: `refused ${TOKEN} with payload ${payload}` }));
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  try {
+    const config = { ...FULCIO_ONLY, caUrls: [{ ...FULCIO_ONLY.caUrls[0], url: `http://127.0.0.1:${server.address().port}` }] };
+    const error = await rejects(attest(holo, { type: PROOF, predicate: {}, signingConfig: config, identityToken: TOKEN }), SigningError, 'sign.service');
+    assert.match(error.message, /400/);
+    assert.match(error.message, /refused \[redacted\] with payload \[redacted\]/);
+    assert.equal(error.cause, undefined);
+    assert.equal(seenIn(error).includes(payload), false);
+  } finally {
+    await new Promise((done) => server.close(done));
+  }
+});
+
+test('with no token read, a failure still carries its cause', async () => {
+  const saved = Object.fromEntries(['SIGSTORE_ID_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN'].map((k) => [k, process.env[k]]));
+  for (const k of Object.keys(saved)) delete process.env[k];
+  try {
+    const error = await rejects(attest(holo, { type: PROOF, predicate: {}, signingConfig: FULCIO_ONLY }), SigningError, 'sign.identity');
+    assert.notEqual(error.cause, undefined);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+  }
 });
 
 test('keyless attest reports an unusable signing configuration and a refusing service', async () => {
