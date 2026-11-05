@@ -16,6 +16,27 @@ output and design references. Source, TypeScript types, templates and
 Calculator fixtures ship here. `prism-code --help` lists CLI arguments.
 Experimental APIs remain experimental; repository `SPEC.md` is normative.
 
+## Set up your agents (experimental)
+
+```sh
+npx prism-code setup --dry-run
+npx prism-code setup
+prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
+```
+
+`setup` adds the MCP server `lexlean` at `https://mcp.uor.foundation/` to
+each agent it finds: Claude Code at user scope, Codex, Cursor and VS Code.
+For Claude Desktop it prints the Connectors step. It installs the Prism
+skills uor.foundation serves, each checked against its digest, into
+`~/.claude/skills` and `~/.agents/skills`. It registers the
+`holo://` handler for the OS and remembers the preferred agent
+(`--agent <id>`). Existing servers, files it cannot parse, and a `holo://`
+handler another program owns, such as the Hologram app, are left alone.
+`open` hands the sentence (at most 2000 characters) to the agent: a terminal
+that runs `claude` or `codex` after Enter, the install link and clipboard
+for Cursor and VS Code, or the Claude and ChatGPT prompt URL. Another host or
+parameter exits 2. [Details and a check per OS][guide-setup].
+
 ## Load, dispatch and replay vectors
 
 ```js
@@ -534,3 +555,4 @@ JavaScript-only holo production is promised here.
 MIT.
 
 [guide]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md
+[guide-setup]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md#set-up-your-agents-experimental

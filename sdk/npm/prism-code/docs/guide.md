@@ -19,6 +19,94 @@ packages, which need Node 22.22.2 or newer; nothing else loads them.
 npm install prism-code
 ```
 
+## Set up your agents (experimental)
+
+```
+npx prism-code setup
+```
+
+One run gets this machine ready for the build box on uor.foundation. It does four things:
+
+1. It adds the UOR MCP server, `lexlean` at `https://mcp.uor.foundation/`, to every agent it finds, and prints one line per agent.
+2. It installs the Prism skills, so the agent knows how to build a Prism app.
+3. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
+4. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
+
+The skills are the ones `npx skills add https://uor.foundation` installs. Setup reads the discovery index at `https://uor.foundation/.well-known/agent-skills/index.json` and fetches each `SKILL.md` it lists. A file whose sha256 differs from the index, a file on another origin, or a name that is not a plain slug is refused. Setup writes each skill to `~/.claude/skills/<name>/` when Claude Code is found. It writes to the shared `~/.agents/skills/<name>/`, which Codex, Cursor and VS Code read, when any of those is found. A `.prism-code.json` beside each `SKILL.md` marks it as setup's, so a later run updates it. A skill folder setup did not write is `left alone`. Offline, the skills row says `skipped` and everything else still runs. `PRISM_SKILLS_INDEX` points at another index. Claude Desktop, claude.ai and ChatGPT take skills only through their own settings.
+
+| Agent | Found by | What setup writes |
+| --- | --- | --- |
+| `claude-code` | `claude` on the PATH, or `~/.claude.json` | `claude mcp add --transport http --scope user lexlean https://mcp.uor.foundation/`; without the CLI, `mcpServers.lexlean` in `~/.claude.json` |
+| `codex` | `codex` on the PATH, or `~/.codex` (`$CODEX_HOME`) | a `[mcp_servers.lexlean]` table with `url`, appended to `config.toml` |
+| `cursor` | `~/.cursor`, or `cursor` on the PATH | `mcpServers.lexlean` with `url` in `~/.cursor/mcp.json` |
+| `vscode` | the VS Code user directory, or `code` on the PATH | `servers.lexlean` with `type: "http"` in the user `mcp.json` |
+| `claude-desktop` | its config directory | nothing. Its config file takes no remote server, so setup prints the step: Settings > Connectors > Add custom connector |
+
+The user scope matters for Claude Code: without `--scope user`, `claude mcp add` configures only the current directory.
+A server already named `lexlean` with the same URL is `already configured`.
+One with another URL is `left alone`.
+A file that does not parse, such as a VS Code `mcp.json` with comments, is `skipped` and never rewritten.
+Before setup changes an existing JSON file, it copies the file to `<file>.prism-backup`.
+`--agent <id>` limits setup to that agent, and also takes `claude` or `chatgpt`, which print their one manual step.
+`--dry-run` prints every file and command and changes nothing:
+
+```
+$ npx prism-code setup --dry-run
+prism-code setup --dry-run: the UOR MCP server lexlean at https://mcp.uor.foundation/
+  claude-code     would configure     C:\Users\you\.claude.json
+      set mcpServers.lexlean = {"type":"http","url":"https://mcp.uor.foundation/"} in C:\Users\you\.claude.json (backup C:\Users\you\.claude.json.prism-backup)
+  codex           not found
+  cursor          would configure     C:\Users\you\.cursor\mcp.json
+  ...
+  holo://         would register      HKCU\Software\Classes\holo -> "C:\Program Files\nodejs\node.exe" "C:\Users\you\.prism\handler\handler.mjs" "%1"
+  preferred agent claude-code
+```
+
+The handler is a copy of five files of this package in `$PRISM_HOME/handler` (default `~/.prism/handler`), so it keeps working after npx clears its cache. It runs with the `node` that ran setup, so run setup again after you move Node.
+
+| OS | How the handler is registered |
+| --- | --- |
+| Windows | `HKCU\Software\Classes\holo`, with `shell\open\command` set to `"<node>" "<handler>" "%1"`, written by `reg.exe` |
+| macOS | `~/Applications/Prism Open.app`, an AppleScript applet from `osacompile` with a `holo` URL type, signed again with `codesign --sign -` and registered with `lsregister` |
+| Linux | `~/.local/share/applications/prism-open.desktop` with `MimeType=x-scheme-handler/holo`, made the default with `xdg-mime` |
+
+`holo://` may already belong to another program, such as the Hologram app. Taking it over would send that program's links to a handler that opens only `holo://build`. So setup checks first, on Windows with `HKCR\holo\shell\open\command` and on Linux with `xdg-mime query default x-scheme-handler/holo`. When `holo://` already opens something else, setup prints `left alone` with the program it found, and registers nothing. It still installs the handler, and writes where it is to `$PRISM_HOME/handler.json`:
+
+```json
+{ "schema": "prism/handler/1", "scheme": "holo", "host": "build", "node": "<the node that ran setup>", "entry": "<$PRISM_HOME>/handler/handler.mjs" }
+```
+
+An app that owns `holo://`, such as the Hologram app, forwards a `holo://build` link by running `node` with two arguments, `entry` and the link, without a shell. The handler checks the link itself. `prism-code open <link>` does the same by hand. macOS has no simple query for this. When two apps claim `holo`, LaunchServices picks one, so check with `open "holo://build?agent=claude-code&q=hi"`.
+
+### Open a link
+
+```
+prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
+```
+
+The handler runs this for every link the browser hands it.
+
+- **Claude Code and Codex** get a new terminal: Windows Terminal, or a console from `start`; Terminal.app; `$TERMINAL` or the first of `x-terminal-emulator`, `gnome-terminal`, `konsole` and the rest. It shows the sentence and runs `claude "<sentence>"` or `codex "<sentence>"` after you press Enter.
+- **Cursor and VS Code** get their own MCP install link, and the sentence goes on the clipboard to paste into the agent panel.
+- **Claude and ChatGPT** get their prompt URL with the sentence in it.
+
+`agent` names one of `claude-code`, `codex`, `cursor`, `vscode`, `claude` or `chatgpt`, and defaults to the preferred agent.
+`q` is the sentence, at most 2000 characters on one line.
+A host other than `build`, an unknown agent or parameter, a repeated parameter, a control character or a sentence that starts with `-` exits 2 with an `open.*` code.
+`--dry-run` prints the files and commands.
+
+The sentence is never parsed by a shell. `open` writes it to a one-time ticket in `$PRISM_HOME/tickets`, and the new terminal runs only the handler with the ticket's path. The handler then starts the agent with the sentence as its one argument. An npm `.cmd` shim gets that argument escaped for `cmd.exe`, as plugins do. The terminal waits for Enter because any web page can write a `holo://` link, and the person should read what will run.
+
+### Check it by hand
+
+Run `npx prism-code setup`, then open the leap-year link above from a browser's address bar. The browser asks whether to open the link. Then a terminal shows the sentence, and Enter starts Claude Code. On each OS, confirm the registration first:
+
+- **Windows:** `reg query HKCR\holo\shell\open\command` prints the handler command. A Windows Terminal tab titled Prism opens.
+- **macOS:** `open "holo://build?agent=claude-code&q=hi"` opens Terminal.app. `~/Applications/Prism Open.app/Contents/Info.plist` lists `holo` under `CFBundleURLSchemes`.
+- **Linux:** `xdg-mime query default x-scheme-handler/holo` prints `prism-open.desktop`, and `xdg-open "holo://build?agent=claude-code&q=hi"` opens a terminal.
+
+A link the handler refuses on macOS or Linux has no terminal to show the refusal in, so the refusal is also written to `$PRISM_HOME/handler.log`.
+
 ## Write from examples (experimental)
 
 `prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See [docs/proposals/325-authoring-front-door.md](../../../../docs/proposals/325-authoring-front-door.md).

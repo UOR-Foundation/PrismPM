@@ -34,6 +34,9 @@
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
  *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
+ *   prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server to every agent here, register holo:// (experimental)
+ *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
+ *                                                     hand the sentence to the agent the link names (experimental)
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
  *
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, a replay diverged,
@@ -142,6 +145,13 @@ Usage:
                                                     an unchanged spec never calls the agent
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
   prism-code conformance [args]                     prismpm conformance
+  prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server (lexlean, https://mcp.uor.foundation/) to every
+                                                    agent found here: Claude Code, Codex, Cursor, VS Code; say how for
+                                                    Claude Desktop; register the holo:// handler; remember the agent
+  prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
+                                                    hand the sentence to the agent: a terminal running claude or codex
+                                                    (after Enter), Cursor's or VS Code's install link with the sentence
+                                                    on the clipboard, or the Claude or ChatGPT prompt URL
   prism-code <plugin> [args]                        run prism-<plugin> from the PATH; a built-in verb always wins
   prism-code --version | --help
 
@@ -214,6 +224,12 @@ Options for export:   --out <dir>                  a new directory name in the p
                       --project <dir>              the project holding .prism/oci, default the current directory
                       --json                       print the prismpm/browser-export/1 receipt
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
+Options for setup:    --agent <id>                 configure only this agent and make it the preferred one: claude-code,
+                                                   codex, cursor, vscode, claude-desktop, claude, chatgpt
+                      --dry-run                    print what it would write and run; change nothing
+Options for open:     --dry-run                    print the files and commands; open nothing
+                      the link: agent one of claude-code, codex, cursor, vscode, claude, chatgpt (default: the
+                      preferred agent), q the sentence, at most 2000 characters; any other host or parameter is refused
 `;
 
 // The built-in verbs are the ones the usage text names and the delegated ones, so a new verb shadows a plugin of its name.
@@ -785,6 +801,14 @@ async function main(argv) {
     case 'dev': {
       const { runDev } = await import('../src/dev-cli.mjs');
       return runDev(rest);
+    }
+    case 'setup': {
+      const { runSetup } = await import('../src/setup-cli.mjs');
+      return runSetup(rest, usage);
+    }
+    case 'open': {
+      const { runOpen } = await import('../src/setup-cli.mjs');
+      return runOpen(rest, usage);
     }
     case 'attest':
     case 'verify-attestation':
