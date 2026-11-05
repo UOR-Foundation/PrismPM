@@ -217,6 +217,10 @@ path = "crates/prismpm/src/replay/"
 module = "verify"
 
 [[owner]]
+path = "crates/prismpm/src/resource_adapter/"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/sdk.rs"
 module = "verify"
 
