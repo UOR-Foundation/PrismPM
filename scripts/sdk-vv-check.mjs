@@ -5,7 +5,7 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
   realpathSync, statfsSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { validateVvEvidence } from './sdk-vv-run.mjs';
+import { sourceAuthoringFiles, validateVvEvidence } from './sdk-vv-run.mjs';
 import {bootstrapNames, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
 import {executeOwnedSdkCommand} from './sdk-command-owner.mjs';
 import { validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
@@ -23,6 +23,46 @@ const reference = value => assert.match(value, /^[a-z0-9][a-z0-9./:_-]*@sha256:[
 const architecture = value => assert(['amd64', 'arm64'].includes(value));
 const SHARED = '/opt/prismpm/share';
 const SOCKET = 'unix:///var/run/docker.sock';
+
+export function retainSourceAuthoringCaptureFailure(directory, run, error) {
+  mkdirSync(directory, {recursive: true, mode: 0o700});
+  writeFileSync(join(directory, 'capture-error.json'), canonical({
+    scope: 'diagnostic-retention-only', run, status: 'unavailable',
+    cause_category: error.code ?? error.name ?? 'Error',
+    message: String(error.message ?? error).slice(0, 8192),
+    original_process_result: 'unavailable',
+  }), {flag: 'wx', mode: 0o444});
+}
+
+export function retainSourceAuthoringBundle(directory, raw, run, failed) {
+  assert(raw.length <= 32 * 1024 * 1024, 'bounded diagnostic bundle before JSON decoding');
+  const bundle = JSON.parse(raw);
+  assert.equal(bundle.schema, 'prismpm/source-authoring-retention/1');
+  assert.equal(bundle.scope, 'diagnostic-retention-only'); assert.equal(bundle.run, run);
+  assert(['retained', 'not-produced'].includes(bundle.status));
+  assert(Array.isArray(bundle.files) && bundle.files.length <= sourceAuthoringFiles.length);
+  writeFileSync(join(directory, 'collection.json'), raw, {flag: 'wx', mode: 0o444});
+  if (!failed) {
+    assert.equal(bundle.status, 'retained'); assert.equal(bundle.execution_status, 0);
+    assert.deepEqual(bundle.files.map(file => file.path).sort(), [...sourceAuthoringFiles].sort(),
+      'successful VV must retain every original component process stream/status and receipt');
+  }
+  const seen = new Set(), originals = new Map(); let totalBytes = 0;
+  for (const file of bundle.files) {
+    assert(sourceAuthoringFiles.includes(file.path) && !seen.has(file.path)); seen.add(file.path);
+    assert.equal(typeof file.base64, 'string');
+    const bytes = Buffer.from(file.base64, 'base64');
+    totalBytes += bytes.length; assert(totalBytes <= 16 * 1024 * 1024);
+    assert(bytes.length <= 8 * 1024 * 1024); assert.equal(bytes.length, file.byte_length);
+    assert.equal(bytes.toString('base64'), file.base64); assert.equal(hash(bytes), file.sha256);
+    originals.set(file.path, bytes);
+    writeFileSync(join(directory, file.path), bytes, {flag: 'wx', mode: 0o444});
+  }
+  if (!failed) {
+    assert.equal(originals.get('receipt.sha256').toString(), hash(originals.get('receipt.json')) + '\n');
+    assert.deepEqual(originals.get('receipt.json'), originals.get('authoring.stdout'), 'receipt must be the original successful harness stdout');
+  }
+}
 
 function regular(path, limit = 1024 * 1024) {
   assert.equal(realpathSync(path), resolve(path), 'unaliased evidence path required');
@@ -290,7 +330,7 @@ export async function runOuter({image, revision, arch, destination, source, regi
     assert.equal(result.signal, null, 'Docker transport interrupted');
     return result;
   };
-  const owned = [], phases = []; let resultRecord, failure;
+  const owned = [], phases = []; let resultRecord, failure, sdkStarted = false;
   const own = async (kind, name, args) => {
     // A random name is not a substitute for proving fresh ownership.
     const prior = await call([kind, 'inspect', name]); assert.notEqual(prior.status, 0, 'resource already exists');
@@ -409,6 +449,7 @@ export async function runOuter({image, revision, arch, destination, source, regi
     const firstNamespace = await namespace(); phases.push('external-network-disconnected');
     const group = Number((await outer(['exec', names.daemon, 'stat', '-c', '%g', '/var/run/docker.sock'])).toString().trim());
     await inner(sdkContainerArguments(names.sdk, image, group, '/workspace')); await inner(['start', names.sdk]);
+    sdkStarted = true;
     const ownImage = (await sdk(['docker', '--host', SOCKET, 'inspect', names.sdk, '--format', '{{.Image}}'])).toString().trim();
     assert.equal(ownImage, loadedIdentities.sdk.id);
     const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs',
@@ -477,6 +518,32 @@ export async function runOuter({image, revision, arch, destination, source, regi
   } catch (error) { failure = error; }
   finally {
     cleaning = true;
+    // This destination is already retained by the normal native producer's
+    // always-upload owner. Collect before retiring the isolated SDK, including
+    // failed runs; the original command stdout/stderr/status remain unchanged.
+    if (sdkStarted) for (const run of [1, 2]) {
+      try {
+        const captured = await inside(['exec', names.sdk, 'cat', `/workspace/run/evidence/run-${run}-source-authoring.json`],
+          {limit: 32 * 1024 * 1024});
+        const directory = join(destination, 'source-authoring', `run-${run}`);
+        mkdirSync(directory, {recursive: true, mode: 0o700});
+        if (captured.status !== 0) {
+          writeFileSync(join(directory, 'collection.json'), canonical({
+            scope: 'diagnostic-retention-only', run, status: 'unavailable',
+            capture_exit_status: captured.status, stdout_sha256: hash(captured.stdout), stderr_sha256: hash(captured.stderr),
+          }), {flag: 'wx', mode: 0o444});
+          // call() already retained the original failed cat and status. A
+          // successful gate cannot silently omit mandatory component evidence.
+          assert(failure, 'source-authoring diagnostics absent after successful VV');
+          continue;
+        }
+        retainSourceAuthoringBundle(directory, captured.stdout, run, Boolean(failure));
+      } catch (error) {
+        try { retainSourceAuthoringCaptureFailure(join(destination, 'source-authoring', `run-${run}`), run, error); }
+        catch (recordError) { error.recording_failure = String(recordError.message ?? recordError).slice(0, 8192); }
+        failure ??= error;
+      }
+    }
     if (registryReader && !registryRetired) {
       try { closeSdkRegistryReader(registryReader); registryRetired = true; } catch (error) { failure ??= error; }
     }

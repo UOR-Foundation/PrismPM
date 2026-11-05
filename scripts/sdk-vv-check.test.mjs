@@ -10,8 +10,10 @@ import {execFileSync} from 'node:child_process';
 import {networkInterfaces} from 'node:os';
 import test from 'node:test';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
+import {sourceAuthoringFiles} from './sdk-vv-run.mjs';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
-  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests } from './sdk-vv-check.mjs';
+  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests,
+  retainSourceAuthoringBundle, retainSourceAuthoringCaptureFailure } from './sdk-vv-check.mjs';
 import { inspectNativeExecutable, connect, connectivity, validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
 
 const digest = bytes => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
@@ -231,7 +233,7 @@ test('SDK execution is same-daemon, read-only and unprivileged with only owned p
   assert.throws(() => sdkContainerArguments('prismpm-unit-sdk', image, 2375, '/'));
 });
 
-test('both original full-VV records and execution identity are independently required', () => {
+test('both original full-VV records and execution identity are independently required', t => {
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, index) => index + 1), status: 'passed'}));
   const runs = [1, 2].map(run => ({run, path: `run-${run}/vv-evidence.json`, byte_length: raw.length, sha256: digest(raw).slice(7)}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision,
@@ -244,6 +246,47 @@ test('both original full-VV records and execution identity are independently req
     assert.throws(() => validateExecution(Buffer.from(canonical(changed)), [raw, raw], image, revision, 'amd64'));
   }
   assert.throws(() => validateExecution(Buffer.from(canonical(record)), [raw, Buffer.from('{}')], image, revision, 'amd64'));
+  const work = mkdtempSync(join(tmpdir(), 'source-authoring-retention-unit-'));
+  t.after(() => rmSync(work, {recursive: true, force: true}));
+  const receipt = Buffer.from('unit-only original component receipt\n');
+  const complete = {schema: 'prismpm/source-authoring-retention/1', scope: 'diagnostic-retention-only',
+    run: 1, execution_status: 0, status: 'retained', files: sourceAuthoringFiles.map(path => {
+      const bytes = path === 'receipt.json' || path === 'authoring.stdout' ? receipt
+        : Buffer.from(path === 'receipt.sha256' ? digest(receipt).slice(7) + '\n' : 'original process ' + path + '\n');
+      return {path, byte_length: bytes.length, sha256: digest(bytes).slice(7), base64: bytes.toString('base64')};
+    })};
+  let index = 0;
+  const retain = (value, failed = false) => {
+    const directory = join(work, String(++index)); mkdirSync(directory);
+    retainSourceAuthoringBundle(directory, Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value)), 1, failed);
+    return directory;
+  };
+  const retained = retain(complete);
+  assert.deepEqual(readFileSync(join(retained, 'receipt.json')), receipt);
+  assert.deepEqual(readFileSync(join(retained, 'authoring.stdout')), receipt);
+  for (const mutate of [
+    value => {value.files.pop();}, value => {value.files[0] = value.files[1];},
+    value => {value.files[0].path = '../escape';}, value => {value.files[0].sha256 = '0'.repeat(64);},
+    value => {value.execution_status = 7;}, value => {value.status = 'not-produced';},
+    value => {
+      const row = value.files.find(file => file.path === 'receipt.sha256'), bytes = Buffer.from('wrong\n');
+      Object.assign(row, {byte_length: bytes.length, base64: bytes.toString('base64'), sha256: digest(bytes).slice(7)});
+    },
+  ]) {
+    const changed = structuredClone(complete); mutate(changed);
+    assert.throws(() => retain(changed));
+  }
+  assert.throws(() => retain(Buffer.alloc(32 * 1024 * 1024 + 1)), /bounded diagnostic bundle/);
+  const partial = {...complete, execution_status: 7, files: [complete.files[1]]};
+  assert.deepEqual(readFileSync(join(retain(partial, true), partial.files[0].path)),
+    Buffer.from(partial.files[0].base64, 'base64'));
+  retain({...complete, status: 'not-produced', execution_status: 7, files: []}, true);
+  const unavailable = join(work, 'no-process-result'), timeout = Object.assign(Error('controlled capture timeout'), {code: 'ETIMEDOUT'});
+  retainSourceAuthoringCaptureFailure(unavailable, 2, timeout);
+  const unknown = JSON.parse(readFileSync(join(unavailable, 'capture-error.json')));
+  assert.equal(unknown.status, 'unavailable'); assert.equal(unknown.cause_category, 'ETIMEDOUT');
+  assert.equal(unknown.original_process_result, 'unavailable');
+  for (const invented of ['stdout', 'stderr', 'exit_status', 'signal']) assert(!Object.hasOwn(unknown, invented));
 });
 
 test('runtime image authority has exact fixed members and no floating references', () => {
@@ -345,6 +388,19 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
     if (path.startsWith('/opt/prismpm/share/conformance-root/')) return ok(fault === 'source-mutation' ? 'changed' : readFileSync(join(source, path.slice('/opt/prismpm/share/conformance-root/'.length))));
     if (path.startsWith('/workspace/run/evidence/')) {
       if (!executed) return bad(1);
+      if (path.endsWith('-source-authoring.json')) {
+        const run = Number(/run-(\d)-source-authoring/.exec(path)[1]);
+        const bytes = Buffer.from('unit-only component receipt\n');
+        const files = sourceAuthoringFiles.map(path => {
+          const original = path === 'receipt.json' || path === 'authoring.stdout' ? bytes
+            : Buffer.from(path === 'receipt.sha256' ? digest(bytes).slice(7) + '\n' : 'unit-only raw process ' + path + '\n');
+          return {path, byte_length: original.length, sha256: digest(original).slice(7), base64: original.toString('base64')};
+        });
+        if (fault === 'component-missing-raw') files.splice(0, 1);
+        if (fault === 'component-receipt-hash') files.find(row => row.path === 'receipt.sha256').base64 = Buffer.from('wrong\n').toString('base64');
+        return ok({schema: 'prismpm/source-authoring-retention/1', scope: 'diagnostic-retention-only', run,
+          execution_status: 0, status: 'retained', files});
+      }
       const bootstrap = bootstrapFixture(revision), name = path.split('/').at(-1);
       if (name === 'bootstrap.json') return ok(bootstrap.manifest);
       if (bootstrap.retained.has(name)) return fault === 'bootstrap-missing' ? bad(1)
@@ -503,7 +559,7 @@ test('complete orchestration executes acquisition, disconnection, owning runner 
 });
 
 test('orchestration refuses each missing authority, isolation, execution, evidence and cleanup prerequisite', async t => {
-  for (const fault of ['wrong-platform', 'missing-image', 'connected', 'egress', 'run-one', 'run-two', 'omitted-execution', 'stale-evidence', 'partial-evidence', 'bootstrap-missing', 'bootstrap-changed', 'cleanup', 'create-timeout', 'probe-timeout', 'dns', 'dead-control', 'source-mutation', 'inventory-mutation', 'interrupted', 'wrong-namespace']) {
+  for (const fault of ['wrong-platform', 'missing-image', 'connected', 'egress', 'run-one', 'run-two', 'omitted-execution', 'stale-evidence', 'partial-evidence', 'bootstrap-missing', 'bootstrap-changed', 'cleanup', 'create-timeout', 'probe-timeout', 'dns', 'dead-control', 'source-mutation', 'inventory-mutation', 'interrupted', 'wrong-namespace', 'component-missing-raw', 'component-receipt-hash']) {
     const f = orchestrationFixture(t, fault); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'acceptance.json')), fault);
     if (fault !== 'cleanup') assert.equal(f.resources.size, 0, fault);

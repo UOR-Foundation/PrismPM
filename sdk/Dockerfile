@@ -420,6 +420,8 @@ RUN --network=none --mount=type=tmpfs,target=/tmp,size=805306368 \
     && grep -Fq '"schema":"prismpm/completion-result/1"' /tmp/prismpm-sdk-self-check.json \
     && setpriv --reuid=1000 --regid=1000 --clear-groups \
       node /opt/prismpm/share/conformance-root/scripts/semantic-source-runtime-check.mjs \
+    && setpriv --reuid=1000 --regid=1000 --clear-groups \
+      node /opt/prismpm/share/conformance-root/scripts/source-authoring-sdk-check.mjs construction \
     && /usr/local/bin/asyncapi-official --check \
     && rm /tmp/prismpm-sdk-self-check.json
 

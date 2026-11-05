@@ -309,6 +309,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/binary-sdk-format-shell.test.mjs",
             "scripts/semantic-source-bootstrap.test.mjs",
             "scripts/sdk-owned-session.test.mjs",
+            "scripts/source-authoring-sdk-check.test.mjs",
             "scripts/installed-exporter-concurrency.test.mjs",
             "sdk/migration-qualification.test.mjs",
             "sdk/npm/prism-code/test/archive.test.mjs",
@@ -607,7 +608,11 @@ fn check_sdk_runtime_boundary_for_image(image: &str) -> Result<(), Fail> {
     validate_sdk_runtime_reference(image)?;
 
     let process_resource_tests = Command::new("node")
-        .args(["--test", "scripts/sdk-runtime-exec.test.mjs"])
+        .args([
+            "--test",
+            "scripts/sdk-runtime-exec.test.mjs",
+            "scripts/source-authoring-sdk-installed.test.mjs",
+        ])
         .env("PRISMPM_TEST_SDK_IMAGE", image)
         .status()?;
     if !process_resource_tests.success() {

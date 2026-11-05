@@ -3,12 +3,14 @@
 
 # PrismPM machine contracts
 
-All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no insignificant whitespace, and SHA-256 over the canonical bytes. CLI JSON adds one framing newline after those bytes.
+Contracts with identity `sha256-canonical-json` use UTF-8, sorted object keys, shortest canonical integers, no insignificant whitespace, and SHA-256 over the canonical bytes. Their CLI JSON adds one framing newline after those bytes. Only the two source-authoring envelopes use `sha256-source-authoring-json`: compact pinned serde_json values with recursively sorted object keys, finite JSON numbers and SHA-256 including the framing LF. Their transport budgets are explicitly configurable within target addressability; see SPEC §12.15 and docs/source-authoring.md.
 
 ## Data contracts
 
 | Schema | JSON Schema | Media type | Limits | Compatibility |
 | --- | --- | --- | --- | --- |
+| `prismpm/source-authoring-request/1` | `schemas/source-authoring-request.schema.json` | `application/vnd.prismpm.source-authoring-request.v1+json` | 9223372036854775807 bytes / 9223372036854775807 items | `closed`; `exact-major` |
+| `prismpm/source-authoring-result/1` | `schemas/source-authoring-result.schema.json` | `application/vnd.prismpm.source-authoring-result.v1+json` | 9223372036854775807 bytes / 9223372036854775807 items | `closed`; `exact-major` |
 | `prismpm/workbench-view-projection/1` | `schemas/workbench-view-projection.schema.json` | `application/vnd.prismpm.workbench-view-projection.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/model-document/6` | `schemas/model-document-v6.schema.json` | `application/vnd.prismpm.model-document.v6+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/model-document/5` | `schemas/model-document-v5.schema.json` | `application/vnd.prismpm.model-document.v5+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
@@ -115,6 +117,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `run` | `ephemeral-runtime` | `true` | `prismpm/run-result/1` |
 | `sign` | `signed-local-evidence` | `true` | `prismpm/signature-result/1` |
 | `sign-evidence` | `signed-local-evidence` | `true` | `prismpm/evidence-signature-result/1` |
+| `source` | `never` | `false` | `prismpm/source-authoring-result/1` |
 | `status` | `never` | `true` | `prismpm/deployment-state/1` |
 | `template` | `explicit-update-only` | `false` | `prismpm/template-result/1` |
 | `update` | `explicit-update-only` | `false` | `prismpm/sdk-lock-change/1` |

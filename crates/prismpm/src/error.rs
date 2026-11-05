@@ -7,7 +7,7 @@ use std::fmt;
 pub struct DiagnosticCode(String);
 
 impl DiagnosticCode {
-    const REGISTERED: [&'static str; 121] = [
+    const REGISTERED: [&'static str; 125] = [
         "PP2019", "PP2020", "PP2021", "PP2022", "PP2010", "PP2011", "PP2012", "PP2014", "PP2015",
         "PP2016", "PP2017", "PP2018", "PP1001", "PP1002", "PP1003", "PP2001", "PP2002", "PP2003",
         "PP2004", "PP2005", "PP2006", "PP2007", "PP2008", "PP2009", "PP3001", "PP3002", "PP3003",
@@ -21,7 +21,7 @@ impl DiagnosticCode {
         "PP8002", "PP1101", "PP2101", "PP2102", "PP2103", "PP5401", "PP5402", "PP5403", "PP5404",
         "PP5405", "PP6101", "PP6201", "PP6301", "PP6401", "PP7001", "PP7101", "PP7901", "PP7201",
         "PP7301", "PP7401", "PP7501", "PP7601", "PP7701", "PP7801", "PP5701", "PP5702", "PP5703",
-        "PP5704", "PP5705", "PP5706", "PP9001",
+        "PP5704", "PP5705", "PP5706", "PP5801", "PP5802", "PP5803", "PP5804", "PP9001",
     ];
 
     fn parse(value: &str) -> Option<Self> {
@@ -155,7 +155,7 @@ impl PrismError {
         let code = self.code.as_str();
         match code {
             "PP9001" => 101,
-            "PP1101" | "PP5603" | "PP5706" => 2,
+            "PP1101" | "PP5603" | "PP5706" | "PP5801" => 2,
             "PP2101" | "PP2102" | "PP2103" | "PP3101" => 3,
             "PP5401" | "PP5402" | "PP5403" | "PP5404" | "PP5405" => 4,
             "PP6101" | "PP6301" => 5,
@@ -167,7 +167,7 @@ impl PrismError {
             "PP7301" => 11,
             "PP7401" => 12,
             "PP7501" | "PP7701" => 13,
-            "PP7601" => 14,
+            "PP7601" | "PP5803" => 14,
             _ if code.starts_with("PP100") => 2,
             _ => 1,
         }

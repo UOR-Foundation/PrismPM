@@ -5,12 +5,33 @@ use crate::holo::canonical::{content_id, decode_value, encode_value};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+// These two source-authoring envelopes use the pinned serde JSON Value codec,
+// including floats and LF framing. They are deliberately not CanonicalDocument.
+pub(crate) const SOURCE_AUTHORING_REQUEST_ID: &str = "prismpm/source-authoring-request/1";
+pub(crate) const SOURCE_AUTHORING_RESULT_ID: &str = "prismpm/source-authoring-result/1";
+
 struct Contract {
     id: &'static str,
     maximum_bytes: usize,
     maximum_items: usize,
     schema: &'static [u8],
 }
+
+#[cfg(test)]
+const SOURCE_AUTHORING_CONTRACTS: [Contract; 2] = [
+    Contract {
+        id: SOURCE_AUTHORING_REQUEST_ID,
+        maximum_bytes: 9_223_372_036_854_775_807,
+        maximum_items: 9_223_372_036_854_775_807,
+        schema: include_bytes!("../schemas/source-authoring-request.schema.json"),
+    },
+    Contract {
+        id: SOURCE_AUTHORING_RESULT_ID,
+        maximum_bytes: 9_223_372_036_854_775_807,
+        maximum_items: 9_223_372_036_854_775_807,
+        schema: include_bytes!("../schemas/source-authoring-result.schema.json"),
+    },
+];
 
 const CONTRACTS: [Contract; 72] = [
     Contract {
@@ -1209,10 +1230,42 @@ impl CanonicalDocument {
 
 #[cfg(test)]
 mod tests {
-    use super::{CanonicalDocument, CONTRACTS};
+    use super::{CanonicalDocument, CONTRACTS, SOURCE_AUTHORING_CONTRACTS};
     use serde_json::json;
 
     const LABELS_ID: &str = "prismpm/workspace-view-labels/1";
+
+    #[test]
+    fn source_authoring_schemas_preserve_json_values_and_closed_envelopes() {
+        for contract in SOURCE_AUTHORING_CONTRACTS {
+            let schema: serde_json::Value = serde_json::from_slice(contract.schema).unwrap();
+            let validator = jsonschema::validator_for(&schema).unwrap();
+            let positive = if contract.id == super::SOURCE_AUTHORING_REQUEST_ID {
+                json!({"schema":contract.id,"source":"source","value":{"float":1.25,"null":null}})
+            } else {
+                json!({"schema":contract.id,"operation":"read","value":{"float":1.25,"null":null}})
+            };
+            assert!(validator.is_valid(&positive));
+            let mut unknown = positive.clone();
+            unknown["extra"] = json!(true);
+            assert!(!validator.is_valid(&unknown));
+            let mut missing = positive.clone();
+            missing.as_object_mut().unwrap().remove("schema");
+            assert!(!validator.is_valid(&missing));
+            let mut integer_only = positive;
+            integer_only["value"]["float"] = json!(1);
+            let error = CanonicalDocument::parse(
+                contract.id,
+                &crate::holo::canonical::encode_value(&integer_only).unwrap(),
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "PP1101");
+            assert_eq!(
+                error.message,
+                format!("unsupported contract {}", contract.id)
+            );
+        }
+    }
 
     fn workspace_labels() -> serde_json::Value {
         let mut labels = serde_json::Map::new();
@@ -1362,6 +1415,7 @@ mod tests {
     fn runtime_contract_limits() -> std::collections::BTreeMap<String, (usize, usize)> {
         CONTRACTS
             .iter()
+            .chain(SOURCE_AUTHORING_CONTRACTS.iter())
             .map(|contract| {
                 (
                     contract.id.to_owned(),
@@ -1663,7 +1717,7 @@ mod tests {
 
     #[test]
     fn every_registered_schema_compiles_without_external_resolution() {
-        for contract in CONTRACTS {
+        for contract in CONTRACTS.iter().chain(SOURCE_AUTHORING_CONTRACTS.iter()) {
             let schema: serde_json::Value = serde_json::from_slice(contract.schema).unwrap();
             jsonschema::validator_for(&schema)
                 .unwrap_or_else(|error| panic!("{} does not compile: {error}", contract.id));
@@ -1677,7 +1731,11 @@ mod tests {
         let modeled = modeled_contract_limits(&modeled);
         let runtime = runtime_contract_limits();
         assert_eq!(modeled.len(), row_count, "duplicate modeled contract");
-        assert_eq!(runtime.len(), CONTRACTS.len(), "duplicate runtime contract");
+        assert_eq!(
+            runtime.len(),
+            CONTRACTS.len() + SOURCE_AUTHORING_CONTRACTS.len(),
+            "duplicate runtime contract"
+        );
         assert_eq!(runtime, modeled, "runtime and modeled contracts diverged");
     }
 

@@ -467,7 +467,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 72 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 74 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -502,7 +502,15 @@ impl Contracts {
                 || !(row.media_type.starts_with("application/vnd.prismpm.")
                     || row.media_type.starts_with("application/vnd.uor."))
                 || !row.media_type.ends_with("+json")
-                || row.identity != "sha256-canonical-json"
+                || row.identity
+                    != if matches!(
+                        row.schema.as_str(),
+                        "prismpm/source-authoring-request/1" | "prismpm/source-authoring-result/1"
+                    ) {
+                        "sha256-source-authoring-json"
+                    } else {
+                        "sha256-canonical-json"
+                    }
                 || row.maximum_bytes == 0
                 || row.maximum_items == 0
                 || row.extension_policy != "closed"
@@ -571,7 +579,7 @@ pub struct CommandRow {
 impl Commands {
     /// Validate the complete stable command surface.
     pub fn check(&self) -> Result<(), ModelError> {
-        const EXPECTED: [&str; 34] = [
+        const EXPECTED: [&str; 35] = [
             "backup",
             "attest",
             "authority",
@@ -598,6 +606,7 @@ impl Commands {
             "run",
             "sign",
             "sign-evidence",
+            "source",
             "status",
             "template",
             "update",

@@ -41,6 +41,7 @@ pub mod replay;
 #[cfg(test)]
 mod resource_adapter;
 pub mod sdk;
+mod source_authoring;
 pub mod supply_chain;
 pub mod system;
 pub mod template;

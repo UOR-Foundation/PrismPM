@@ -161,6 +161,12 @@ requires_digest = true
 result_schema = "prismpm/evidence-signature-result/1"
 
 [[command]]
+name = "source"
+mutates = "never"
+requires_digest = false
+result_schema = "prismpm/source-authoring-result/1"
+
+[[command]]
 name = "status"
 mutates = "never"
 requires_digest = true
