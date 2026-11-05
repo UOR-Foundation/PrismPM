@@ -3449,6 +3449,52 @@ ABI is enabled by this typed prerequisite. The owning generated native,
 no_std and Wasm tests cover all resource families, actual maxima, malformed
 binding/coverage and planted source guards; public `PP2011` remains unchanged.
 
+### 12.15 Installed lossless module authoring
+
+DK-41 exposes the pinned public LexLean authoring SDK as
+`prismpm --json source read|write|to-notation`. The command verifies the normal
+SDK environment and process resource setup, then operates without loading a
+project or lock, invoking an external parser/compiler, or performing network or
+filesystem publication. Checked snapshots, linking and proof acceptance remain
+separate. The precise caller contract and examples are in
+`docs/source-authoring.md`.
+
+One EOF-terminated UTF-8 request has schema
+`prismpm/source-authoring-request/1` and a `source` string. `write` additionally
+requires the complete replacement `value`, including an explicitly supplied
+null; read and notation conversion refuse that member. Envelope members are
+closed and unique. A success has schema `prismpm/source-authoring-result/1`,
+its exact operation and either complete `value` or exact SDK-returned `source`.
+The complete compact JSON envelope and final LF are staged before stdout.
+Raw SDK read values preserve unknown fields, annotations, explicit/default
+absence and floating-point values without a typed module or canonical-metadata
+round trip. Write and notation operations retain the pinned SDK's canonical-JSON
+refusals, including null and non-integer values; no value may be silently dropped
+or coerced to obtain success. This preserves parsed JSON values, not original
+JSON spelling or duplicate payload tokens. The existing canonical metadata
+contracts remain unchanged.
+Only these two schemas use `sha256-source-authoring-json`: SHA-256 of compact
+pinned serde_json serialization with recursive lexicographic object keys and
+the final LF included, preserving its finite-number representation. Other
+registered documents retain their existing canonical metadata identity.
+
+Input and complete encoded output budgets default to 16 MiB and 64 MiB and
+are explicitly overridable positive, target-addressable transport configuration.
+Bounded input lookahead and checked staging allocation do not bound all SDK
+allocations or make fatal runtime failures recoverable. Existing SDK and process
+limits remain in force. Registered PP5801/PP5802/PP5803/PP5804 distinguish request,
+SDK, known resource and I/O refusals. Before publication, the normal error
+envelope and nonzero status replace success. After any stdout write or flush
+failure, only stderr receives PP5804 with stdout disposition Unknown; no rollback
+or appended error on partially successful stdout is permitted.
+
+DK-41 owns the actual source-built CLI and transport regressions; the normal
+SDK recipe and native installed-runtime gate additionally execute the absolute
+installed command offline with source directories masked, preserved inventory
+validation and original image/source/toolchain-bound receipts. Those installed
+owners must pass at the exact candidate image before immutable SDK acceptance
+or downstream lock migration is claimed.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -4098,6 +4144,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-35` | `sdk` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. | §12 |
 | `DK-39` | `sdk` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. | §12 |
 | `DK-40` | `sdk` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. | §12 |
+| `DK-41` | `sdk` | The installed SDK exposes lossless official module reading, replacement and notation conversion through versioned project-free JSON stdio, preserving complete parsed values and field presence under explicit byte budgets and honest transport failure outcomes. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

@@ -150,6 +150,7 @@ integrity against the release's own evidence, not deployment acceptance.
 - [VERIFICATION.md](VERIFICATION.md) — Detailed verification evidence, digests, and test descriptions
 - [SPEC.md](SPEC.md) — Atomic release contract specification
 - [docs/vocabulary.md](docs/vocabulary.md) — Prism nouns and verbs mapped to Docker's
+- [docs/source-authoring.md](docs/source-authoring.md) — Versioned installed-SDK module read, write and notation conversion
 - [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
 - [COMPLIANCE.md](COMPLIANCE.md) — Generated matrix of which runtime passes which part of the runtime contract
 - [ERRORS.md](ERRORS.md) — Error code registry

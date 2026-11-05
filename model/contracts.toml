@@ -1,6 +1,26 @@
 spec = "prismpm/contracts/1"
 
 [[contract]]
+schema = "prismpm/source-authoring-request/1"
+path = "schemas/source-authoring-request.schema.json"
+media_type = "application/vnd.prismpm.source-authoring-request.v1+json"
+identity = "sha256-source-authoring-json"
+maximum_bytes = 9223372036854775807
+maximum_items = 9223372036854775807
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
+schema = "prismpm/source-authoring-result/1"
+path = "schemas/source-authoring-result.schema.json"
+media_type = "application/vnd.prismpm.source-authoring-result.v1+json"
+identity = "sha256-source-authoring-json"
+maximum_bytes = 9223372036854775807
+maximum_items = 9223372036854775807
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/workbench-view-projection/1"
 path = "schemas/workbench-view-projection.schema.json"
 media_type = "application/vnd.prismpm.workbench-view-projection.v1+json"
@@ -150,10 +170,14 @@ maximum_items = 65536
 extension_policy = "closed"
 compatibility = "exact-major"
 
-# Every public JSON contract is canonical UTF-8 JSON: no BOM, no insignificant
+# Every sha256-canonical-json contract is canonical UTF-8 JSON: no BOM, no insignificant
 # whitespace, object keys sorted by UTF-8 bytes, shortest canonical integers,
 # arrays in their schema-declared semantic order, and exactly one final LF only
 # in CLI framing (the content identity excludes that framing LF).
+# Only the two source-authoring envelopes use sha256-source-authoring-json:
+# pinned serde_json finite numbers, recursively sorted object keys, compact UTF-8
+# serialization and a final LF included in identity. Their runtime byte budgets
+# are configurable up to target addressability, not language-size restrictions.
 
 [[contract]]
 schema = "prismpm/system-model/1"

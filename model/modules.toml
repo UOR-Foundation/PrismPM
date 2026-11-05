@@ -213,6 +213,10 @@ path = "crates/prismpm/src/sdk/"
 module = "verify"
 
 [[owner]]
+path = "crates/prismpm/src/source_authoring.rs"
+module = "client"
+
+[[owner]]
 path = "crates/prismpm/src/supply_chain.rs"
 module = "images"
 

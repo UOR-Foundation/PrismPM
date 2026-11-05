@@ -15,9 +15,32 @@ import {bootstrapNames, captureBootstrap, readOriginal, validateBootstrapRetenti
 
 const SHARED = '/opt/prismpm/share';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+export const sourceAuthoringFiles = ['authoring', 'inventory-path', 'inventory-binary']
+  .flatMap(name => ['stdout', 'stderr', 'status.json'].map(extension => name + '.' + extension))
+  .concat(['receipt.json', 'receipt.sha256']);
+const sourceAuthoringDirectory = source => join(source, 'target/source-authoring-sdk-evidence',
+  'linux-' + ({x64: 'amd64', arm64: 'arm64'}[process.arch]));
 export const canonical = value => JSON.stringify(value, (_, item) =>
   item && typeof item === 'object' && !Array.isArray(item)
     ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
+
+// Diagnostic custody only: retain original component process bytes even when
+// the VV executor fails. A missing component is recorded, never called passed.
+export function retainSourceAuthoring(source, output, run, status) {
+  const files = []; let rawBytes = 0;
+  for (const path of sourceAuthoringFiles) {
+    const original = join(sourceAuthoringDirectory(source), path);
+    if (!lstatSync(original, {throwIfNoEntry: false})) continue;
+    const bytes = readOriginal(original, 8 * 1024 * 1024);
+    rawBytes += bytes.length;
+    assert(rawBytes <= 16 * 1024 * 1024, 'bounded component diagnostic bytes required');
+    files.push({path, byte_length: bytes.length, sha256: hash(bytes), base64: bytes.toString('base64')});
+  }
+  writeFileSync(join(output, `run-${run}-source-authoring.json`), canonical({
+    schema: 'prismpm/source-authoring-retention/1', scope: 'diagnostic-retention-only', run,
+    execution_status: status ?? null, status: files.length ? 'retained' : 'not-produced', files,
+  }), {flag: 'wx', mode: 0o444});
+}
 
 function regular(path, limit) {
   assert(lstatSync(path).isFile(), 'expected a regular, non-symlink file');
@@ -99,14 +122,30 @@ export async function retainTwoRuns(source, output, revision, execute) {
   for (const run of [1, 2]) {
     const directory = join(output, `run-${run}`);
     mkdirSync(directory, { mode: 0o700 });
-    for (const path of [evidencePath, ...bootstrapNames.map(name => join(source, 'target', name))]) {
+    for (const path of [evidencePath, ...bootstrapNames.map(name => join(source, 'target', name)),
+      ...sourceAuthoringFiles.map(name => join(sourceAuthoringDirectory(source), name))]) {
       const stale = lstatSync(path, { throwIfNoEntry: false });
       if (stale) {
         assert(stale.isFile() && stale.nlink === 1, 'refusing aliased or non-file stale evidence');
         unlinkSync(path);
       }
     }
-    assert.equal(await execute(run, directory), 0, `VV execution ${run} failed`);
+    let status, primary, retentionFailure;
+    try {
+      status = await execute(run, directory);
+      assert.equal(status, 0, `VV execution ${run} failed`);
+    } catch (error) { primary = error; }
+    try { retainSourceAuthoring(source, output, run, status); }
+    catch (error) {
+      retentionFailure = error;
+      const diagnostic = {scope: 'diagnostic-retention-only', run, execution_status: status ?? null,
+        status: 'retention-failed', message: String(error.message ?? error).slice(0, 8192)};
+      try { writeFileSync(join(output, `run-${run}-source-authoring-retention-error.json`), canonical(diagnostic), {flag: 'wx', mode: 0o444}); }
+      catch (recordError) { error.recording_failure = String(recordError.message ?? recordError).slice(0, 8192); }
+      if (primary && typeof primary === 'object') primary.retention_failure = diagnostic;
+    }
+    if (primary) throw primary;
+    if (retentionFailure) throw retentionFailure;
     const bytes = readOriginal(evidencePath, 4096);
     validateVvEvidence(bytes, revision);
     const path = `run-${run}/vv-evidence.json`;

@@ -37,6 +37,18 @@ pub struct Cli {
 /// Available CLI subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Read, rewrite or convert source through the pinned LexLean authoring SDK.
+    Source {
+        /// Project-free authoring operation; one versioned JSON request on stdin.
+        #[command(subcommand)]
+        command: SourceCommands,
+        /// Positive maximum UTF-8 JSON request bytes, including all fields.
+        #[arg(long, global = true, default_value_t = crate::source_authoring::DEFAULT_INPUT_BYTES)]
+        max_input_bytes: u64,
+        /// Positive maximum serialized success envelope bytes, including LF.
+        #[arg(long, global = true, default_value_t = crate::source_authoring::DEFAULT_OUTPUT_BYTES)]
+        max_output_bytes: u64,
+    },
     /// Generate shell completion from the executable command contract.
     Completion {
         /// Shell whose native completion syntax is emitted.
@@ -476,6 +488,17 @@ pub enum TemplateCommands {
     },
 }
 
+/// Project-free source authoring operations, without linking or elaboration.
+#[derive(Subcommand, Debug)]
+pub enum SourceCommands {
+    /// Read a data-form or notation module to its complete parsed JSON value.
+    Read,
+    /// Replace module data while retaining the source's existing surface.
+    Write,
+    /// Convert a supported module to its canonical authoring notation.
+    ToNotation,
+}
+
 /// Immutable standards authority lifecycle operations.
 #[derive(Subcommand, Debug)]
 pub enum AuthorityCommands {
@@ -747,6 +770,7 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
     }
     let controller = Controller::load(root)?;
     match &cli.command {
+        Commands::Source { .. } => unreachable!("source returns before project loading"),
         Commands::Completion { .. } => unreachable!("completion returns before project loading"),
         Commands::Replay { .. } => unreachable!("replay returns before project loading"),
         Commands::Lock {
@@ -1509,6 +1533,68 @@ fn inspection_summary(inspection: &serde_json::Value) -> String {
     summary
 }
 
+fn source_stderr(error: &PrismError, machine: bool) {
+    if machine {
+        if let Ok(bytes) = canonical(&json!({"diagnostic":error,"schema":"prismpm/error-result/1"}))
+        {
+            let _ = write_line(std::io::stderr().lock(), &bytes);
+        }
+    } else {
+        let _ = writeln!(std::io::stderr().lock(), "{error}");
+    }
+}
+
+fn source_command(cli: &Cli, command: &SourceCommands, input: u64, output: u64) -> ExitCode {
+    use crate::source_authoring::{self, Operation};
+    let prepared = crate::process_resources::configure()
+        .and_then(|()| crate::sdk::verify_environment().map(|_| ()))
+        .and_then(|()| {
+            if !cli.json {
+                return Err(PrismError::new(
+                    "PP5801",
+                    "source authoring requires --json",
+                ));
+            }
+            let operation = match command {
+                SourceCommands::Read => Operation::Read,
+                SourceCommands::Write => Operation::Write,
+                SourceCommands::ToNotation => Operation::ToNotation,
+            };
+            source_authoring::prepare(operation, input, output, std::io::stdin().lock())
+        });
+    match prepared {
+        Ok(bytes) => match source_authoring::publish(&bytes, std::io::stdout().lock()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                // Some success bytes may already have escaped. Never append a
+                // diagnostic to that stream or claim they were rolled back.
+                source_stderr(&error, cli.json);
+                ExitCode::from(error.exit_code())
+            }
+        },
+        Err(error) => {
+            let exit = error.exit_code();
+            if cli.json {
+                match canonical(&json!({"diagnostic":error,"schema":"prismpm/error-result/1"})) {
+                    Ok(mut bytes) => {
+                        bytes.push(b'\n');
+                        if let Err(error) =
+                            source_authoring::publish(&bytes, std::io::stdout().lock())
+                        {
+                            source_stderr(&error, true);
+                            return ExitCode::from(error.exit_code());
+                        }
+                    }
+                    Err(error) => source_stderr(&error, true),
+                }
+            } else {
+                source_stderr(&error, false);
+            }
+            ExitCode::from(exit)
+        }
+    }
+}
+
 /// Parse process arguments, execute one command, and emit stable output.
 #[must_use]
 pub fn run() -> ExitCode {
@@ -1536,6 +1622,15 @@ pub fn run() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    if let Commands::Source {
+        command,
+        max_input_bytes,
+        max_output_bytes,
+    } = &cli.command
+    {
+        return source_command(&cli, command, *max_input_bytes, *max_output_bytes);
+    }
 
     if let Commands::Check {
         holo: Some(holo),
