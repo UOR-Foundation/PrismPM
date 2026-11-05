@@ -32,6 +32,13 @@ function transientDownload(error) {
     (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.stdout?.toString()));
 }
 
+// snapshot.debian.org answers bursts of parallel CI builds with 503 for longer
+// than a few seconds (rehearsals 41872713783 and 42070834717). Six attempts
+// with a 10 s doubling backoff wait at most 10+20+40+80+160 s = 310 s in total;
+// every attempt keeps its own time, size and digest limits.
+export const DOWNLOAD_ATTEMPTS = 6;
+export const DOWNLOAD_DELAY_MS = 10000;
+
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
@@ -40,7 +47,7 @@ const pause = (milliseconds) =>
 // caller checks the digest of whatever the successful attempt produced.
 export function withTransientRetry(
   download,
-  { attempts = 4, delay = 2000, sleep = pause } = {},
+  { attempts = DOWNLOAD_ATTEMPTS, delay = DOWNLOAD_DELAY_MS, sleep = pause } = {},
 ) {
   assert(
     Number.isInteger(attempts) && attempts >= 1,
@@ -53,7 +60,9 @@ export function withTransientRetry(
       if (attempt >= attempts || !transientDownload(error))
         throw error;
       process.stderr.write(
-        `download failed with curl status ${error.status}; retry ${attempt}/${attempts - 1}\n`,
+        `download failed with curl status ${error.status}` +
+          (error.status === 22 ? ` (HTTP ${error.stdout})` : '') +
+          `; retry ${attempt}/${attempts - 1}\n`,
       );
       sleep(delay * 2 ** (attempt - 1));
     }
