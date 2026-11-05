@@ -24,7 +24,14 @@ export function dockerToolchain(root) {
     run: (command, args = []) =>
       new Promise((resolve) => {
         const image = sdkImageFromLock(readFileSync(join(root, 'prismpm.lock'), 'utf8'));
-        const child = spawn('docker', hostDockerArguments({ image, cwd: root, command, args }), { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        let docker;
+        try {
+          docker = hostDockerArguments({ image, cwd: root, command, args });
+        } catch (error) {
+          if (error.code === 'docker.missing') return resolve({ code: NO_DOCKER, output: error.message });
+          throw error;
+        }
+        const child = spawn(docker.command, docker.args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
         let output = '';
         const collect = (chunk) => {
           process.stderr.write(chunk);

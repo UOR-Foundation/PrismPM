@@ -283,7 +283,7 @@ test('the committed verdict goldens are what check prints; the Rust CLI holds it
 test('check without a holo is the deprecated build --check: it warns and still runs', () => {
   const project = mkdtempSync(join(tmpdir(), 'prism-code-lock-'));
   writeFileSync(join(project, 'prismpm.lock'), JSON.stringify({ spec: 'prismpm/sdk-lock/2', sdk_image: IMAGE }));
-  const env = { PRISM_CODE_DRY_RUN: '1' };
+  const env = { PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) };
   const old = run(['check', '--verbose'], { cwd: project, env });
   assert.equal(old.code, 0, old.err);
   assert.match(old.err, /prism-code check without a holo is deprecated and is removed in 0\.4\.0; use prism-code build --check/);

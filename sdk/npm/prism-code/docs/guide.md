@@ -670,6 +670,66 @@ npx prism-code build
 Nothing in this package can produce a `.holo` without the image, and no
 native `prismpm` binary ships in this release.
 
+### Set up this machine (experimental)
+
+```
+npx prism-code setup --machine-only
+```
+
+Before the agents, `setup` gets the machine ready for the build, one row each.
+
+| Row | What it checks | What it does |
+| --- | --- | --- |
+| `node` | 22 or later | nothing; an older Node fails the row |
+| `docker` | `docker` or `podman` on the PATH; on Windows without Docker Desktop, the first WSL distribution whose `docker version` answers | records the program in `$PRISM_HOME/config.json`, so every later `check`, `build` and `verify` spawns it, and mounts the project under `/mnt/<drive>/...` when the daemon lives in WSL |
+| `image` | the SDK image `prismpm.lock` pins, or `--image <ref>` | `docker pull` with its progress when the image is not here; `--no-pull` reports instead |
+| `cache` | a volume named by the image digest | creates it; later runs mount it at `/tmp` in place of the 2 GB in-memory tmpfs, so the SDK's 1.2 GB Cargo home is on disk instead of in memory beside the build. A full verify of the chess example took 814 s with the tmpfs and 284 s with the volume |
+| `endings` | `.gitattributes` keeps sources LF | writes `* text eol=lf`; files already CRLF are counted and `git add --renormalize .` named, because LexLean refuses a CRLF source (`LLC0101`) |
+
+`PRISM_DOCKER="<command>"` overrides the probe, for example
+`PRISM_DOCKER="wsl.exe -d Ubuntu -- docker"`, with `PRISM_DOCKER_MOUNT=wsl|native`
+for how host paths are spelled; `PRISM_CODE_NO_CACHE=1` restores the tmpfs for
+one run. Without Docker the row is a manual step that says what to install, and
+the agents are still set up. A delegated verb that finds no Docker exits 69 and
+points here. `--json` prints the rows as data.
+
+### Verify in tiers (experimental)
+
+Three gates of rising cost, so an edit is judged by the cheapest one that can
+refuse it:
+
+| Tier | Command | What it proves | How long |
+| --- | --- | --- | --- |
+| T0 | `prism-code build --check` | `prismpm check`: the model is well formed and locked | seconds |
+| T1 | `prism-code verify --lean` | `lexlean verify`: every theorem through Lean and leanchecker, every axiom policy exact | about a minute for one module |
+| T2 | `prism-code verify` | `prismpm verify`: T1, then LCNF, the generated Rust, the guest and the holo with its vectors | minutes |
+
+`verify --lean` runs `lexlean` in the image on the project's `lexlean.toml`,
+which it finds at the project root or between `[model] source` of `prism.toml`
+and the root, as in a UOR template instance's `app/`. It mounts no Docker socket.
+The arguments after `--lean` go to `lexlean verify`.
+
+### Settle the axioms in one pass (experimental)
+
+```
+npx prism-code axioms
+npx prism-code axioms --write
+```
+
+Language 1.2 needs an exact axiom policy on every definition and theorem, and
+`lexlean verify` reports the first wrong one per run. LexLean's own audit
+already asks Lean `#print axioms` for every declaration, and records each
+module's answer before it enforces any policy. `axioms` runs `lexlean verify` in
+the image and copies those records under `.lexlean/axioms` as soon as every
+module has one, then stops the verify before its certificate stage; a verify
+that already passed is read from the published set its attestation names. So the
+sets are exactly the ones LexLean's policy check judges. It prints the observed set
+beside the declared one, `ok` or `FIX` per declaration, and exits 1 while any
+differs. `--write` sets each `axioms` member to the observed set, in the
+member's canonical place, and runs `lexlean fmt` on the project. `--json`
+prints `prism/axioms-report/1`. A project that does not compile exits 2 with
+the tail of the verify log.
+
 ## Plugins (experimental, #293)
 
 An executable named `prism-<name>` on the PATH runs as `prism-code <name>`,
