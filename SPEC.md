@@ -1980,8 +1980,15 @@ admitted. `build` and `verify` recompute `inputs` before compiling and reject a
 disagreeing `/3` lock with PP5401, naming the changed fields. Only the explicit
 `build --update`, never with `-t` or `--locked`, rewrites `inputs` (and upgrades
 a `/2` lock to `/3`); it never changes an SDK field. Absent, `/1` and `/2` locks
-build as before. The product-release provenance names the complete lock bytes
-as `urn:prismpm:sdk-lock`.
+keep their input rules. The product-release provenance names the complete lock
+bytes as `urn:prismpm:sdk-lock`.
+A plain `build` of an application writes one unsigned SLSA provenance v1 statement
+into the attestation section of its holo, derived from the `/2` or `/3` lock
+(docs/proposals/268-build-provenance.md). `--provenance=min`, the default, is
+deterministic; `--provenance=max` adds the arguments, platform, invocation id and
+timestamps; `--no-provenance` writes none and warns. An absent or `/1` lock is
+refused with PP3018 before compiling unless `--no-provenance` is given. A product
+release (`-t`) and the archive `verify` builds carry no statement.
 `lock` and `update` rewrite `prismpm.lock` without building and report the change
 as `prismpm/sdk-lock-change/1` (docs/proposals/265-lock-update.md). `lock` computes
 `inputs` like a build and rewrites only the pins the project determines (model,
@@ -3854,6 +3861,10 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-28` | `holo` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. | §3 |
 | `HO-29` | `holo` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. | §3 |
 | `HO-30` | `holo` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. | §3 |
+| `HO-32` | `holo` | A build stamped with provenance carries exactly one unsigned SLSA provenance v1 statement in the attestation section with no flag, keeps every other row byte for byte, records the identities of the stamped archive, writes in min mode the same bytes as the JavaScript reference on every run, and stays at P0. | §3 |
+| `HO-33` | `holo` | The provenance statement's subjects, build type, external parameters, builder and dependencies equal the lock and the archive, and PP3018 refuses a lock that does not describe the build and an archive that already has a statement. | §3 |
+| `HO-34` | `holo` | --provenance=max adds exactly the arguments, platform, invocation id and whole-second timestamps, and min records none of them. | §3 |
+| `HO-35` | `holo` | --no-provenance writes no statement and needs no lock, and an application build that asked for provenance with nothing to derive it from is refused with PP3018 before compiling. | §3 |
 | `AL-03` | `assurance` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. | §8 |
 | `AL-05` | `assurance` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. | §8 |
 | `AL-06` | `assurance` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. | §8 |

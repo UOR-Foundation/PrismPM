@@ -21,7 +21,7 @@
 //! attest`) until the Rust CLI gains an OIDC client.
 
 mod certificate;
-mod clock;
+pub(crate) mod clock;
 mod crypto;
 mod der;
 mod transparency;

@@ -10,6 +10,7 @@ mod facets;
 pub mod library;
 pub mod model_document;
 pub mod projector;
+pub mod provenance;
 pub mod text_cli;
 pub mod validate;
 pub mod workbench;

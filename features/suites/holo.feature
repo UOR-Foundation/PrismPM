@@ -1,5 +1,33 @@
 Feature: holo
 
+  @HO-35 @build
+  Scenario: --no-provenance writes no statement and needs no lock, and an application build that asked for provenance with nothing to derive it from is refused with PP3018 before compiling.
+    Given a project with no prismpm.lock
+    When a build asks for no provenance, and then for min provenance
+    Then the first needs no lock and plans no statement
+    And the second is refused with PP3018 before any compilation and names --no-provenance
+
+  @HO-34 @build
+  Scenario: --provenance=max adds exactly the arguments, platform, invocation id and whole-second timestamps, and min records none of them.
+    Given the Calculator reference archive and its /3 lock
+    When the statement is made in min mode and in max mode
+    Then min records no argument, platform, time or invocation, and removing the members of max mode from the max statement gives the min statement
+    And a max stamp records whole-second UTC times and a UUID URN that differs between runs
+
+  @HO-33 @build
+  Scenario: The provenance statement's subjects, build type, external parameters, builder and dependencies equal the lock and the archive, and PP3018 refuses a lock that does not describe the build and an archive that already has a statement.
+    Given the Calculator reference archive, its /3 lock and locks that do not describe it
+    When the provenance statement is made
+    Then every subject names a content blob with both digests, and the build type, model, spec, builder and dependency rows equal the lock
+    And another model, an unpinned image, a /1 lock, unparseable bytes and a second statement are each refused with PP3018
+
+  @HO-32 @build
+  Scenario: A build stamped with provenance carries exactly one unsigned SLSA provenance v1 statement in the attestation section with no flag, keeps every other row byte for byte, records the identities of the stamped archive, writes in min mode the same bytes as the JavaScript reference on every run, and stays at P0.
+    Given the Calculator reference archive and its /3 lock
+    When a build's artifacts are stamped with provenance in min mode, twice
+    Then the archive carries one unsigned statement, stripping returns the reference archive, the recorded identities are the stamped archive's and both runs give the same bytes
+    And the bundle line equals the JavaScript golden and the verdict is P0
+
   @HO-31 @build
   Scenario: A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build.
     Given the released Calculator archive, the history recorded from its acceptance vectors, and a coherent archive whose guest and vectors both changed

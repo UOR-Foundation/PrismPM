@@ -260,6 +260,13 @@ exit = 1
 statement = "An attestation bundle is not a Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1 whose subjects carry exactly sha256 and blake3, or it names the OCI manifest."
 
 [[error]]
+code = "PP3018"
+title = "Build provenance refused"
+class = "holo"
+exit = 1
+statement = "prismpm build could not make the provenance statement of the holo it built: prismpm.lock is absent or not /2 or /3, pins no image by digest, or does not describe this archive, or the archive already carries a statement."
+
+[[error]]
 code = "PP3101"
 title = "Attestation signing failure"
 class = "attestation"

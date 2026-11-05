@@ -5,6 +5,7 @@ use crate::error::PrismError;
 use crate::holo::canonical::{content_id, encode_canonical, encode_value};
 use crate::holo::model_document::ModelDocument;
 use crate::holo::projector::project_snapshot;
+use crate::holo::provenance::{BuildProvenance, Stamp};
 use camino::Utf8PathBuf;
 use fs4::fs_std::FileExt;
 use lexlean::{
@@ -772,14 +773,16 @@ impl Controller {
 
     /// Build one named system release after reconciling the committed input
     /// lock: a stale `prismpm/sdk-lock/3` is refused unless `update` is set,
-    /// in which case only its pinned `inputs` are rewritten.
+    /// in which case only its pinned `inputs` are rewritten. `provenance` says
+    /// what the built archive records about itself (#268).
     pub fn build_release_updating_lock(
         &self,
         request: BuildRequest,
         release: Option<&str>,
         update: bool,
+        provenance: &BuildProvenance,
     ) -> Result<BuildResult, PrismError> {
-        self.build_release_in(request, release, None, update)
+        self.build_release_in(request, release, None, update, provenance)
     }
 
     pub(crate) fn build_release_with_owner(
@@ -788,7 +791,13 @@ impl Controller {
         release: Option<&str>,
         exporter_owner: Option<&mut crate::exporter::VerifyExporterOwner>,
     ) -> Result<BuildResult, PrismError> {
-        self.build_release_in(request, release, exporter_owner, false)
+        self.build_release_in(
+            request,
+            release,
+            exporter_owner,
+            false,
+            &BuildProvenance::Omit,
+        )
     }
 
     fn build_release_in(
@@ -797,9 +806,10 @@ impl Controller {
         release: Option<&str>,
         exporter_owner: Option<&mut crate::exporter::VerifyExporterOwner>,
         update: bool,
+        provenance: &BuildProvenance,
     ) -> Result<BuildResult, PrismError> {
         self.with_prepared_release(request.config_path.as_deref(), release, |prepared| {
-            self.build_prepared(prepared, exporter_owner, update)
+            self.build_prepared(prepared, exporter_owner, update, provenance)
         })
     }
 
@@ -808,9 +818,16 @@ impl Controller {
         prepared: &Prepared,
         mut exporter_owner: Option<&mut crate::exporter::VerifyExporterOwner>,
         update_lock: bool,
+        provenance: &BuildProvenance,
     ) -> Result<BuildResult, PrismError> {
         // Before any compilation: a stale input lock fails fast and writes nothing.
         crate::input_lock::enforce(&self.root, update_lock, || self.pinned_inputs(prepared))?;
+        // Only an application build writes a holo to describe.
+        let stamp = if prepared.model.application.is_some() {
+            Stamp::begin(&self.root, provenance)?
+        } else {
+            None
+        };
         if let Some(application) = &prepared.model.application {
             crate::holo::browser_application::require_runtime(application)?;
         }
@@ -958,7 +975,7 @@ impl Controller {
                         .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
                 ));
             }
-            let application_artifacts = match exporter_owner.as_deref_mut() {
+            let mut application_artifacts = match exporter_owner.as_deref_mut() {
                 Some(owner) => {
                     crate::application_build::generate_owned(
                         &self.root,
@@ -979,6 +996,10 @@ impl Controller {
                     &application_lex_manifest,
                 )?,
             };
+            // Before anything hashes the closure: the build identity binds the stamped bytes.
+            if let Some(stamp) = &stamp {
+                stamp.apply(&mut application_artifacts)?;
+            }
             for (path, bytes) in &application_artifacts {
                 if path.ends_with(".holo") {
                     prepared.config.limits.check_holo_length(bytes.len())?;

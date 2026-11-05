@@ -402,6 +402,9 @@ pub fn run_at(root: &Path, id: &str) {
         // Assurance levels (#269) as `prismpm check` computes them (#270): the Rust
         // regressions hold the verdict against the spec fixtures and the JavaScript goldens.
         "AL-03" | "AL-05" | "AL-06" => verify_assurance(root, id),
+        // Build provenance (#268): the statement `prismpm build` writes, held against the
+        // lock, the archive and the bytes of the JavaScript reference.
+        "HO-32" | "HO-33" | "HO-34" | "HO-35" => verify_build_provenance(root, id),
         // The JavaScript runtime reads the composed archive, the HOLOVIEW
         // bundle and the exported closure without the Rust SDK; its complete
         // owning suite is the acceptance, file by file.
@@ -3510,6 +3513,18 @@ fn verify_attestation(root: &Path, id: &str) {
         "HO-29" => ("attest::tests::ho_29_", 2),
         "HO-30" => ("attest::tests::ho_30_", 2),
         _ => unreachable!("HO-23 to HO-30 only"),
+    };
+    rust_regressions(root, id, filter, expected, "target/conformance-attestation");
+}
+
+/// HO-32 to HO-35: run the named Rust regressions with their exact inventory.
+fn verify_build_provenance(root: &Path, id: &str) {
+    let (filter, expected) = match id {
+        "HO-32" => ("holo::provenance::tests::ho_32_", 3),
+        "HO-33" => ("holo::provenance::tests::ho_33_", 2),
+        "HO-34" => ("holo::provenance::tests::ho_34_", 2),
+        "HO-35" => ("holo::provenance::tests::ho_35_", 2),
+        _ => unreachable!("HO-32 to HO-35 only"),
     };
     rust_regressions(root, id, filter, expected, "target/conformance-attestation");
 }
