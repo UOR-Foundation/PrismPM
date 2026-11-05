@@ -7,6 +7,7 @@
   "fixtures/Calculator.history.json",
   "fixtures/Calculator.holo",
   "package.json",
+  "skill/SKILL.md",
   "src/agents.mjs",
   "src/archive.mjs",
   "src/attest-cli.mjs",

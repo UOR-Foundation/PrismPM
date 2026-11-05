@@ -49,6 +49,7 @@
     "src",
     "types",
     "templates",
+    "skill",
     "fixtures/Calculator.holo",
     "fixtures/Calculator.history.json",
     "README.md",

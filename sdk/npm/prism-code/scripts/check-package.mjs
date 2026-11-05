@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export const PACKAGE_LIMIT = 1220608; // 1192 KiB: 1088 KiB plus 56 KiB for setup, open and the skills step (about 47 KiB), plus 48 KiB for the machine half of setup, the build tiers, axioms and init's next steps (about 44 KiB).
+export const PACKAGE_LIMIT = 1236992; // 1208 KiB: 1088 KiB plus 72 KiB for setup, open and the bundled prism skill (about 63 KiB), plus 48 KiB for the machine half of setup, the build tiers, axioms and init's next steps (about 44 KiB).
 export const PACKAGE_FILES = JSON.parse(readFileSync(new URL('../test/fixtures/package-files.json', import.meta.url), 'utf8'));
 
 export function checkPackage(pack) {

@@ -5,7 +5,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatSteps, hostContext, openLink } from './open.mjs';
-import { SKILLS_INDEX, applySetup, fetchSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
+import { applySetup, bundledSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
 import { applyMachine, formatMachine, hostMachineContext, machineFailed, machineReport, planMachine } from './setup-machine.mjs';
 
 const HANDLER = join(dirname(fileURLToPath(import.meta.url)), 'handler.mjs');
@@ -39,8 +39,8 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
   const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull: !named['no-pull'] }, machineContext);
   if (machine && !dryRun) applyMachine(machine);
   const agentsHalf = !named['machine-only'];
-  // The skills are read from uor.foundation even with --dry-run: reading changes nothing here.
-  const skills = agentsHalf ? await fetchSkills(context.env.PRISM_SKILLS_INDEX || SKILLS_INDEX) : undefined;
+  // The skill ships in the package, so there is nothing to fetch.
+  const skills = agentsHalf ? bundledSkills() : undefined;
   const plan = agentsHalf ? planSetup({ agent: named.agent, skills }, context) : { agents: [], handler: { status: 'not-found', steps: [] }, preferred: { agent: null, steps: [] } };
   if (!dryRun && agentsHalf) applySetup(plan);
   const rows = [...plan.agents, plan.handler, ...(plan.skills ? [plan.skills] : [])];
