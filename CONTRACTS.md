@@ -3,7 +3,7 @@
 
 # PrismPM machine contracts
 
-Contracts with identity `sha256-canonical-json` use UTF-8, sorted object keys, shortest canonical integers, no insignificant whitespace, and SHA-256 over the canonical bytes. Their CLI JSON adds one framing newline after those bytes. Only the two source-authoring envelopes use `sha256-source-authoring-json`: compact pinned serde_json values with recursively sorted object keys, finite JSON numbers and SHA-256 including the framing LF. Their transport budgets are explicitly configurable within target addressability; see SPEC §12.15 and docs/source-authoring.md.
+Contracts with identity `sha256-canonical-json` use UTF-8, sorted object keys, shortest canonical integers, no insignificant whitespace, and SHA-256 over the canonical bytes. Their CLI JSON adds one framing newline after those bytes. Only the two source-authoring envelopes use `sha256-source-authoring-json`: compact pinned serde_json values with recursively sorted object keys, finite JSON numbers and SHA-256 including the framing LF. Their transport budgets are explicitly configurable within target addressability; see SPEC §12.16 and docs/source-authoring.md.
 
 ## Data contracts
 
