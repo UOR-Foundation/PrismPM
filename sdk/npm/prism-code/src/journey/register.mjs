@@ -19,7 +19,8 @@ export const JOURNEY_NAME = 'prism';
 /** How an agent starts the server: npx at this version from the npx cache, else this Node and this package. */
 export function journeyServer(context) {
   const bin = join(context.sourceDir, '..', 'bin', 'prism-code.mjs');
-  if (/[\\/]_npx[\\/]/.test(bin)) {
+  // Read the npx cache off the source folder: on POSIX, join folds a Windows path into its `..`.
+  if (/[\\/]_npx[\\/]/.test(context.sourceDir)) {
     const args = ['-y', `prism-code@${VERSION}`, 'mcp'];
     return context.platform === 'win32' ? { command: 'cmd', args: ['/c', 'npx', ...args] } : { command: 'npx', args };
   }
