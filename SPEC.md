@@ -3103,7 +3103,10 @@ The generic adapter preserves exact input bytes, native labels, autofill/paste,
 reading order, focus visibility, responsive reflow and forced-color overrides.
 Secret metadata changes clear prior drafts. Complete metadata/catalogue preflight
 precedes DOM mutation; a changed equal-revision envelope cannot replace context.
-Shape validity is neither authority nor contrast/usability evidence.
+Shape validity is neither authority nor contrast/usability evidence. Catalogue
+admission additionally requires the source-stated WCAG text and focus contrast
+pairs; the Hologram catalogue is admitted by a kernel-checked theorem. Passing
+those pairs is not complete contrast or usability evidence.
 
 Acceptance requires independent complete source/kernel/native/no_std/Wasm
 corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
