@@ -21,6 +21,7 @@ import { fail } from './errors.mjs';
 import { commandLine } from './open.mjs';
 import { invocation } from './plugins.mjs';
 import { parseToml } from './toml.mjs';
+import { JOURNEY_NAME, planJourney } from './journey/register.mjs';
 import { VERSION } from './version.mjs';
 
 /** The files `setup` copies out of the package as the holo:// handler: the entry and what it imports. */
@@ -339,7 +340,7 @@ export function planSetup({ agent, skills } = {}, context) {
   if (agent !== undefined && !Object.hasOwn(AGENTS, agent)) fail('setup.agent', `${agent} is not an agent; one of ${Object.keys(AGENTS).join(', ')}`);
   const paths = agentPaths(context);
   const agents = (agent === undefined ? LOCAL_AGENTS : [agent]).map((id) => planAgent(id, context, paths));
-  const plan = { agents, handler: planHandler(context), preferred: planPreferred(agent, agents, context) };
+  const plan = { agents, journey: planJourney(agents, context, paths), handler: planHandler(context), preferred: planPreferred(agent, agents, context) };
   if (skills !== undefined) plan.skills = planSkills(skills, agents, context);
   return plan;
 }
@@ -423,7 +424,7 @@ export function applyStep(step, { run = spawnSync } = {}) {
 
 /** Carry out a plan. A step that fails marks its row failed and the rest still run. */
 export function applySetup(plan, options) {
-  for (const row of [...plan.agents, plan.handler, ...(plan.skills ? [plan.skills] : []), plan.preferred]) {
+  for (const row of [...plan.agents, ...(plan.journey ?? []), plan.handler, ...(plan.skills ? [plan.skills] : []), plan.preferred]) {
     try {
       for (const step of row.steps ?? []) applyStep(step, options);
     } catch (error) {
@@ -472,6 +473,10 @@ export function formatSetup(plan, { dryRun = false } = {}) {
     if (dryRun) for (const step of steps ?? []) lines.push(`      ${formatStep(step)}`);
   };
   for (const a of plan.agents) row(a.agent, WORDS, a.status, a.detail, a.steps);
+  if (plan.journey?.length) {
+    lines.push(`  the Prism server ${JOURNEY_NAME}, local on stdio (prism-code mcp):`);
+    for (const a of plan.journey) row(a.agent, WORDS, a.status, a.detail, a.steps);
+  }
   row('holo://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);
   if (plan.skills) row('skills', SKILL_WORDS, plan.skills.status, plan.skills.detail, plan.skills.steps);
   const preferred = plan.preferred.agent ? `${plan.preferred.agent}${plan.preferred.steps.length ? '' : ' (unchanged)'}` : 'none: pass --agent <id>';
