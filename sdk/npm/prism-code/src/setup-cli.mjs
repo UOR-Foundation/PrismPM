@@ -5,7 +5,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatSteps, hostContext, openLink } from './open.mjs';
-import { SKILLS_INDEX, applySetup, fetchSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
+import { applySetup, bundledSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
 
 const HANDLER = join(dirname(fileURLToPath(import.meta.url)), 'handler.mjs');
 
@@ -30,9 +30,7 @@ export async function runSetup(argv, usage, context = hostSetupContext()) {
   const { problem, positional, named } = options(argv, { values: ['agent'], flags: ['dry-run'] });
   if (problem) return usage(problem);
   if (positional.length > 0) return usage('setup takes no arguments');
-  // The skills are read from uor.foundation even with --dry-run: reading changes nothing here.
-  const skills = await fetchSkills(context.env.PRISM_SKILLS_INDEX || SKILLS_INDEX);
-  const plan = planSetup({ agent: named.agent, skills }, context);
+  const plan = planSetup({ agent: named.agent, skills: bundledSkills() }, context);
   const dryRun = named['dry-run'] === true;
   if (!dryRun) applySetup(plan);
   process.stdout.write(formatSetup(plan, { dryRun }));
