@@ -52,7 +52,9 @@ function product(root) {
   put(root, 'source.json', {revision: context.source_revision});
   for (const name of ['build.json', 'prismpm.lock']) put(root, name, {sdk_image: context.image_reference});
   put(root, 'image.json', [{Architecture: context.architecture, Os: 'linux', Config: {Labels: {'org.opencontainers.image.revision': context.source_revision}}}]);
-  const files = ['app.css', 'app.js', 'index.html', 'prism_calculator.js', 'prism_calculator_bg.wasm', 'provenance.json']
+  const files = ['Archivo-SemiBold.woff2', 'Geist-Medium.woff2', 'Geist-Regular.woff2', 'Geist-SemiBold.woff2',
+    'GeistMono-Regular.woff2', 'OFL-Archivo.txt', 'OFL-Geist.txt', 'app.css', 'app.js', 'icon-512.png', 'icon.svg',
+    'index.html', 'manifest.webmanifest', 'prism_calculator.js', 'prism_calculator_bg.wasm', 'provenance.json']
     .map(path => ({path, size: 1, digest: 'sha256:' + 'c'.repeat(64)}));
   put(root, 'result.json', {schema: 'prismpm/installed-product-cli-check/1', scope: 'installed-cli-product-build-and-source-free-integrity',
     status: 'passed', sdk_image: context.image_reference, releases: ['A', 'B'].map((release, index) => ({release,

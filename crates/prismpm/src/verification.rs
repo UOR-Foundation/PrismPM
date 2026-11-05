@@ -2676,14 +2676,8 @@ fn run_application(
     };
 
     let browser = build_root.join("view/browser");
-    let expected_browser = [
-        "app.css",
-        "app.js",
-        "index.html",
-        &format!("{}.js", application.cargo_name().replace('-', "_")),
-        &format!("{}_bg.wasm", application.cargo_name().replace('-', "_")),
-        "provenance.json",
-    ];
+    // This compiler writes closure v2: the six-file page plus the brand files.
+    let expected_browser = crate::brand::closure_v2(&application.cargo_name().replace('-', "_"));
     let observed_browser = std::fs::read_dir(&browser)
         .map_err(|error| PrismError::new("PP5203", format!("browser output: {error}")))?
         .map(|entry| {
@@ -2705,7 +2699,7 @@ fn run_application(
                 })
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
-    if observed_browser != expected_browser.into_iter().map(str::to_owned).collect() {
+    if observed_browser != expected_browser.into_iter().collect() {
         return Err(PrismError::new(
             "PP5203",
             "browser production file closure is not exact",

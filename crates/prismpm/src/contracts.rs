@@ -12,7 +12,7 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 67] = [
+const CONTRACTS: [Contract; 69] = [
     Contract {
         id: "prismpm/workbench-view-projection/1",
         maximum_bytes: 1_048_576,
@@ -50,6 +50,12 @@ const CONTRACTS: [Contract; 67] = [
         schema: include_bytes!("../schemas/browser-publication-integrity.schema.json"),
     },
     Contract {
+        id: "prismpm/browser-publication-integrity/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-publication-integrity-v2.schema.json"),
+    },
+    Contract {
         id: "prismpm/library-build-binding/1",
         maximum_bytes: 4_194_304,
         maximum_items: 4_096,
@@ -84,6 +90,12 @@ const CONTRACTS: [Contract; 67] = [
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/browser-export.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-export/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-export-v2.schema.json"),
     },
     Contract {
         id: "prismpm/workspace-view-labels/1",
@@ -626,7 +638,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1" => {
+        "prismpm/browser-export/1"
+        | "prismpm/browser-publication-integrity/1"
+        | "prismpm/browser-export/2"
+        | "prismpm/browser-publication-integrity/2" => {
             vec![("files", "path")]
         }
         "prismpm/capability-coverage/1" => {
@@ -991,7 +1006,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1"
+        "prismpm/browser-export/1"
+            | "prismpm/browser-publication-integrity/1"
+            | "prismpm/browser-export/2"
+            | "prismpm/browser-publication-integrity/2"
     ) {
         let reference = value["reference"]
             .as_str()
@@ -1005,7 +1023,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             ));
         }
     }
-    if id == "prismpm/browser-publication-integrity/1" {
+    if matches!(
+        id,
+        "prismpm/browser-publication-integrity/1" | "prismpm/browser-publication-integrity/2"
+    ) {
         crate::oci::validate_browser_publication_receipt(value)?;
     }
     Ok(())

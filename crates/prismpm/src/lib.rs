@@ -12,6 +12,7 @@ mod application_build;
 pub mod attest;
 pub mod authority;
 mod binary_cli;
+mod brand;
 mod browser_build;
 mod browser_oracle;
 pub mod cli;

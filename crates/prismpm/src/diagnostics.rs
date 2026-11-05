@@ -303,6 +303,7 @@ probes!(
     ("PP3015", "prism-provenance-disagreement", Exact),
     ("PP3016", "attestation-section-disagreement", Exact),
     ("PP3017", "attestation-bundle-disagreement", Exact),
+    ("PP3018", "build-provenance-refused", Exact),
     ("PP3101", "attestation-signing-failure", Complete),
     ("PP3102", "attestation-signature-invalid", Exact),
     ("PP3103", "attestation-identity-mismatch", Exact),

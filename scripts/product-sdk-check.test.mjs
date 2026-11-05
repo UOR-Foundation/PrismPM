@@ -25,7 +25,7 @@ const result=release=>({schema:'prismpm/product-release-result/1',reference:'ghc
  product_digest:'sha256:'+'c'.repeat(64),release_digest:'sha256:'+(release==='A'?'d':'e').repeat(64),model_digest:'sha256:'+'f'.repeat(64),build_digest:'sha256:'+'1'.repeat(64),
  evidence_path:'.prism/releases/'+(release==='A'?'d':'e').repeat(64)+'/result.json'});
 function completed(){
- const files=['app.css','app.js','index.html','prism_calculator.js','prism_calculator_bg.wasm','provenance.json'].map(path=>({path,digest:sha(path),size:Buffer.byteLength(path)}));
+ const files=['Archivo-SemiBold.woff2','Geist-Medium.woff2','Geist-Regular.woff2','Geist-SemiBold.woff2','GeistMono-Regular.woff2','OFL-Archivo.txt','OFL-Geist.txt','app.css','app.js','icon-512.png','icon.svg','index.html','manifest.webmanifest','prism_calculator.js','prism_calculator_bg.wasm','provenance.json'].map(path=>({path,digest:sha(path),size:Buffer.byteLength(path)}));
  return{schema:'prismpm/installed-product-cli-check/1',scope:'installed-cli-product-build-and-source-free-integrity',status:'passed',sdk_image:image,
   releases:['A','B'].map(release=>({release,release_digest:result(release).release_digest,model_digest:result(release).model_digest,build_digest:result(release).build_digest,
    files,tree_digest:sha(canonical(files)),checks:['source-free-proof-replay','exact-browser-export','missing-proof-refused','changed-proof-refused','restored-export']})),

@@ -1,7 +1,8 @@
 # prism-code
 
 JavaScript runtime/CLI for Prism SDK applications: open `.holo` archives and
-six-file browser closures, verify identities, dispatch Core-Wasm and replay
+browser closures (v1, six files; v2, plus Hologram fonts, icons and a web app
+manifest), verify identities, dispatch Core-Wasm and replay
 acceptance vectors. Compilation/proofs/artifact production stay in the SDK image.
 
 ESM, Node 22+ or browser, no required dependencies. Only signing/attestation
@@ -514,10 +515,11 @@ prism-code export ghcr.io/acme/calculator@sha256:<digest> --tar site.tar
 `export` reads a verified release in `.prism/oci` from `prismpm build`/`pull`,
 not a copied folder or holo (which lacks the browser adapter). Output:
 `index.html`, `app.js`, `app.css`, `<stem>.js`, `<stem>_bg.wasm`,
-`provenance.json`. `--tar`: deterministic ustar, sorted, mode 0644,
+`provenance.json`, and for closure v2 the brand fonts, their licences, `icon.svg`,
+`icon-512.png` and `manifest.webmanifest`. `--tar`: deterministic ustar, sorted, mode 0644,
 owner/mtime 0, no directory entry. Bundles go unchanged alongside to
 `<name>.attestations.jsonl`. Default `--out` is `export`; destinations must
-be new. `--project` defaults to cwd; `--json` prints `prismpm/browser-export/1`.
+be new. `--project` defaults to cwd; `--json` prints `prismpm/browser-export/2`.
 
 Files are checked against stored blobs, layer digests and manifest then
 read back. Mismatch removes output and throws `ExportMismatchError`

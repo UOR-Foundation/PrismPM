@@ -119,7 +119,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code check` signer flags: `--key <public.pem>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--trusted-root <file>`, and the `statements` option of `@prism-code/verify` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `prismpm check <path.holo>` signer flags: `--key <public.pem>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--trusted-root <file>` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `check <path.holo>` as a typed verdict in the Rust CLI, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
-| `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | Planned |
+| `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | On main |
 | `prism-code attest <holo> --predicate <file> --type <uri>`, `--subject`, `--key`, `--output`, `--signing-config` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code verify-attestation <holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code push <holo> <reference>`, `--key`, `--keyless`, `--no-attestations`, `--signing-config`, `--store`, `--plain-http`, `--json` | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) | On main |

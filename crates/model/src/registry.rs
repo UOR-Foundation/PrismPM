@@ -467,7 +467,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 67 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 69 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -493,7 +493,9 @@ impl Contracts {
                     || row.schema == "prismpm/sdk-lock/2"
                     || row.schema == "prismpm/sdk-lock/3"
                     || row.schema == "prismpm/sdk-lock-update/2"
-                    || row.schema == "prismpm/library-verification-manifest/2")
+                    || row.schema == "prismpm/library-verification-manifest/2"
+                    || row.schema == "prismpm/browser-export/2"
+                    || row.schema == "prismpm/browser-publication-integrity/2")
                 || !row.path.starts_with("schemas/")
                 || !row.path.ends_with(".schema.json")
                 || !root.join(&row.path).is_file()
@@ -643,6 +645,12 @@ impl Commands {
                     || !row.result_schema.starts_with("prismpm/")
                     || if row.name == "lock" {
                         row.result_schema != "prismpm/sdk-lock-change/1"
+                    } else if matches!(
+                        row.name.as_str(),
+                        "export-browser" | "verify-browser-publication"
+                    ) {
+                        // Closure v2 receipts; their /2 schemas admit closure v1 or v2.
+                        !row.result_schema.ends_with("/2")
                     } else {
                         !row.result_schema.ends_with("/1")
                     }

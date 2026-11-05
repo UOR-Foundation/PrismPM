@@ -65,6 +65,30 @@ The immutable LexLean and `lean4-prod` revisions and source/crate hashes are in
 `model/dependencies.toml`; adjacent repositories and mutable references are not
 dependencies.
 
+#### 1.2.1 Browser closure v2
+
+Every generated browser page (the Text/1 page and the Text/3 workbench) is
+closure v2: the six-file page `index.html`, `app.css`, `app.js`, `<stem>.js`,
+`<stem>_bg.wasm` and `provenance.json`, plus ten brand files beside them:
+`Geist-Regular.woff2`, `Geist-Medium.woff2`, `Geist-SemiBold.woff2`,
+`GeistMono-Regular.woff2`, `Archivo-SemiBold.woff2`, `OFL-Geist.txt`,
+`OFL-Archivo.txt`, `icon.svg`, `icon-512.png` and `manifest.webmanifest`. All
+sixteen are flat and same-origin. The fonts, licences and icons are the
+`hologram-brand` vendored dependency (`vendor/hologram-brand`, pinned by tree
+manifest in `model/dependencies.toml`); `crates/prismpm/src/brand.rs` owns
+the names, `@font-face` rules, head links and the per-application web app
+manifest, whose bytes are a pure function of the view title. No remote font,
+image or script is loaded. The HOLOVIEW bundle carries the same files.
+
+`provenance.json` is `prismpm/browser-provenance/2`: every v1 field plus
+`files`, the SHA-256 of every other closure file. `export-browser` and
+`verify-browser-publication` return `prismpm/browser-export/2` and
+`prismpm/browser-publication-integrity/2`, whose file lists hold exactly
+closure v1 (six files, from releases built before closure v2) or exactly
+closure v2 (sixteen). Release verification accepts either and, for v2, checks
+every `files` digest. The `/1` contracts remain registered for existing
+receipts.
+
 ### 1.3 Compiler pipeline
 
 PrismPM operates through a verification-oriented multi-stage pipeline:
@@ -322,7 +346,7 @@ response without assuming that it equals an empty-request response.
 
 The closed `Foundation.View.Text.V3.Model.TextApplication` (text/3, below) also
 declares one optional field, `workbench : Option WorkbenchView` (HO-19). `none`
-keeps the Text/1 six-file page and the generated command line exactly as without
+keeps the Text/1 page (closure v2, below) and the generated command line exactly as without
 the field. `some` replaces only the browser and Hologram page with the generated
 workbench; the `view`, `cli`, byte-guest, package, empty-capability, layer and
 independent input-allocation/output-response resource contracts are unchanged,
@@ -387,7 +411,7 @@ Comfortable/Compact, Balanced/Wide and System/Light/Dark are finite token choice
 finite automated/keyboard/layout checks are not a universal accessibility claim.
 
 Browser computation runs in a module Worker loaded from the same `app.js` URL,
-without blob URLs or a seventh asset. Its required source-owned
+without blob URLs or any asset beyond the closure v2 files. Its required source-owned
 `Execution.wasmCachePolicy` has the single closed `WasmCachePolicy.NoStore`
 constructor, projected as `execution.wasm_cache_policy: "no-store"`. The worker
 explicitly fetches its same-origin generated Wasm with that HTTP cache policy,
@@ -1067,7 +1091,7 @@ coverage/lexicon-closure artifact below `lexlean/build/`, and
 `manifest.json`. For an application, the tree additionally contains named-root LCNF/coverage, the
 generated Cargo package and `.crate`, Core-Wasm package and guest, evaluated
 View and projection manifest, Hologram assets/bundle, browser adapter/lock/
-Wasm/six-file production closure, source manifest, capability/manifest/
+Wasm/closure v2 production closure, source manifest, capability/manifest/
 directory/provenance values, `ApplicationName.holo`, identities, and build
 manifest. Each file row fixes its relative path, kind, byte length, and
 SHA-256; undeclared extras and symlinks fail reuse.
@@ -1658,7 +1682,7 @@ Presence of ownership text does not authenticate an owner.
 application digest and exact ordered artifact path/size/SHA-256 rows.
 Rows cover all generated build artifacts except the containing system,
 system projections and the self-identifying build manifest. The generated
-Holo/1 application and exact supported six-file browser projection are
+Holo/1 application and exact supported closure v1 or v2 browser projection are
 required, and a declared `cli` component additionally requires both static
 programs and `cli/sbom.spdx.json` in the closure; the SPDX projection then
 describes both packages. This profile accepts only the existing Legacy and Text application
@@ -2090,8 +2114,15 @@ admitted. `build` and `verify` recompute `inputs` before compiling and reject a
 disagreeing `/3` lock with PP5401, naming the changed fields. Only the explicit
 `build --update`, never with `-t` or `--locked`, rewrites `inputs` (and upgrades
 a `/2` lock to `/3`); it never changes an SDK field. Absent, `/1` and `/2` locks
-build as before. The product-release provenance names the complete lock bytes
-as `urn:prismpm:sdk-lock`.
+keep their input rules. The product-release provenance names the complete lock
+bytes as `urn:prismpm:sdk-lock`.
+A plain `build` of an application writes one unsigned SLSA provenance v1 statement
+into the attestation section of its holo, derived from the `/2` or `/3` lock
+(docs/proposals/268-build-provenance.md). `--provenance=min`, the default, is
+deterministic; `--provenance=max` adds the arguments, platform, invocation id and
+timestamps; `--no-provenance` writes none and warns. An absent or `/1` lock is
+refused with PP3018 before compiling unless `--no-provenance` is given. A product
+release (`-t`) and the archive `verify` builds carry no statement.
 `lock` and `update` rewrite `prismpm.lock` without building and report the change
 as `prismpm/sdk-lock-change/1` (docs/proposals/265-lock-update.md). `lock` computes
 `inputs` like a build and rewrites only the pins the project determines (model,
@@ -3206,7 +3237,10 @@ The generic adapter preserves exact input bytes, native labels, autofill/paste,
 reading order, focus visibility, responsive reflow and forced-color overrides.
 Secret metadata changes clear prior drafts. Complete metadata/catalogue preflight
 precedes DOM mutation; a changed equal-revision envelope cannot replace context.
-Shape validity is neither authority nor contrast/usability evidence.
+Shape validity is neither authority nor contrast/usability evidence. Catalogue
+admission additionally requires the source-stated WCAG text and focus contrast
+pairs; the Hologram catalogue is admitted by a kernel-checked theorem. Passing
+those pairs is not complete contrast or usability evidence.
 
 Acceptance requires independent complete source/kernel/native/no_std/Wasm
 corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
@@ -3526,7 +3560,7 @@ integrity only. Independent producer authorization, target policy, readiness,
 publication and deployed-product acceptance remain mandatory and separate.
 
 `verify-browser-publication NAME@sha256:DIGEST --url HTTPS_BASE` compares the
-source-free, reverified six-file browser closure and the base URL's index bytes
+source-free, reverified closure v1 or v2 browser files and the base URL's index bytes
 against HTTPS responses. It accepts no caller receipt or local exported tree as
 authority. The base is an explicitly selected target, not proof of target
 authorization: lowercase DNS labels, HTTPS default port, and a slash-terminated
@@ -3966,6 +4000,10 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-28` | `holo` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. | §3 |
 | `HO-29` | `holo` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. | §3 |
 | `HO-30` | `holo` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. | §3 |
+| `HO-32` | `holo` | A build stamped with provenance carries exactly one unsigned SLSA provenance v1 statement in the attestation section with no flag, keeps every other row byte for byte, records the identities of the stamped archive, writes in min mode the same bytes as the JavaScript reference on every run, and stays at P0. | §3 |
+| `HO-33` | `holo` | The provenance statement's subjects, build type, external parameters, builder and dependencies equal the lock and the archive, and PP3018 refuses a lock that does not describe the build and an archive that already has a statement. | §3 |
+| `HO-34` | `holo` | --provenance=max adds exactly the arguments, platform, invocation id and whole-second timestamps, and min records none of them. | §3 |
+| `HO-35` | `holo` | --no-provenance writes no statement and needs no lock, and an application build that asked for provenance with nothing to derive it from is refused with PP3018 before compiling. | §3 |
 | `AL-03` | `assurance` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. | §8 |
 | `AL-05` | `assurance` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. | §8 |
 | `AL-06` | `assurance` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. | §8 |

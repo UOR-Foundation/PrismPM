@@ -251,6 +251,12 @@ An attestation bundle is not a Sigstore bundle v0.3 with a DSSE envelope over an
 
 Class: `holo`. Exit code: 1.
 
+## `PP3018` --- Build provenance refused
+
+prismpm build could not make the provenance statement of the holo it built: prismpm.lock is absent or not /2 or /3, pins no image by digest, or does not describe this archive, or the archive already carries a statement.
+
+Class: `holo`. Exit code: 1.
+
 ## `PP3101` --- Attestation signing failure
 
 An attestation could not be signed: the key, the predicate, its type or a subject cannot be used.

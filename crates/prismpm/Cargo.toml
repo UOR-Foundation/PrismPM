@@ -82,6 +82,7 @@ include = [
     "tests/workspace_functional_core.rs",
     "tests/data/holo-codec-v1.json",
     "vendor/hologram-live.tar",
+    "vendor/hologram-brand/**",
     "vendor/lean4-prod/lean.tar",
     "vendor/registry.tar",
 ]

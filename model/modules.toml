@@ -49,6 +49,10 @@ path = "crates/prismpm/src/application_build.rs"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/brand.rs"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/attest/"
 module = "verify"
 

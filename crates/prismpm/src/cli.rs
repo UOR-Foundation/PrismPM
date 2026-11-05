@@ -6,6 +6,7 @@ use crate::controller::{
 };
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
+use crate::holo::provenance::BuildProvenance;
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 use serde_json::json;
@@ -115,6 +116,13 @@ pub enum Commands {
         /// A product release (-t) or a --locked build never rewrites the lock.
         #[arg(long, conflicts_with_all = ["locked", "tag"])]
         update: bool,
+        /// How much the holo's provenance statement records. `min`, the default, is deterministic;
+        /// `max` adds the arguments, platform, invocation id and timestamps, which can leak.
+        #[arg(long, value_enum, require_equals = true, conflicts_with_all = ["no_provenance", "tag"])]
+        provenance: Option<ProvenanceMode>,
+        /// Write no provenance statement. Unsafe: the holo can never reach P1.
+        #[arg(long, conflicts_with = "tag")]
+        no_provenance: bool,
         /// Named system release from the authoritative source graph.
         #[arg(long)]
         release: Option<String>,
@@ -406,6 +414,15 @@ pub enum Commands {
     },
 }
 
+/// What a holo's provenance statement records.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ProvenanceMode {
+    /// Only what the lock and the model say.
+    Min,
+    /// Also the arguments, platform, invocation id and timestamps.
+    Max,
+}
+
 /// Supported native shell-completion formats.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum CompletionShell {
@@ -635,6 +652,20 @@ fn holo_check(
             let _ = writeln!(std::io::stderr().lock(), "{}", no_verdict.diagnostic());
             ExitCode::from(verdict::EXIT_NO_VERDICT)
         }
+    }
+}
+
+/// The provenance `prismpm build` asks for: on by default, with an explicit way out.
+fn build_provenance(mode: Option<ProvenanceMode>, omit: bool) -> BuildProvenance {
+    match mode {
+        _ if omit => BuildProvenance::Omit,
+        Some(ProvenanceMode::Max) => BuildProvenance::Max {
+            arguments: std::env::args_os()
+                .skip(1)
+                .map(|argument| argument.to_string_lossy().into_owned())
+                .collect(),
+        },
+        Some(ProvenanceMode::Min) | None => BuildProvenance::Min,
     }
 }
 
@@ -883,6 +914,8 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             tag,
             locked,
             update,
+            provenance,
+            no_provenance,
             release,
             ..
         } => {
@@ -906,12 +939,20 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
                         "--locked requires -t for a product release build",
                     ));
                 }
+                let provenance = build_provenance(*provenance, *no_provenance);
+                if provenance == BuildProvenance::Omit {
+                    write_line(
+                        std::io::stderr().lock(),
+                        b"warning: --no-provenance writes no statement; this holo can never reach P1",
+                    )?;
+                }
                 let result = controller.build_release_updating_lock(
                     BuildRequest {
                         config_path: cli.config.clone(),
                     },
                     release.as_deref(),
                     *update,
+                    &provenance,
                 )?;
                 let human = format!("build published: {}", result.build_id);
                 Ok((
@@ -1591,7 +1632,8 @@ pub fn run() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{inspection_summary, Cli, Commands};
+    use super::{build_provenance, inspection_summary, Cli, Commands};
+    use crate::holo::provenance::BuildProvenance;
     use clap::Parser;
 
     #[test]
@@ -1651,6 +1693,39 @@ mod tests {
             lines[2],
             "  https://slsa.dev/provenance/v1: core-wasm/prism_calculator_core_wasm.wasm, view/prism_calculator.holoview"
         );
+    }
+
+    #[test]
+    fn build_provenance_is_on_by_default_with_an_explicit_way_out() {
+        let parsed = |arguments: &[&str]| match Cli::try_parse_from(arguments).unwrap().command {
+            Commands::Build {
+                provenance,
+                no_provenance,
+                ..
+            } => build_provenance(provenance, no_provenance),
+            _ => unreachable!("every case is a build"),
+        };
+        assert_eq!(parsed(&["prismpm", "build"]), BuildProvenance::Min);
+        assert_eq!(
+            parsed(&["prismpm", "build", "--provenance=min"]),
+            BuildProvenance::Min
+        );
+        assert!(matches!(
+            parsed(&["prismpm", "build", "--provenance=max"]),
+            BuildProvenance::Max { .. }
+        ));
+        assert_eq!(
+            parsed(&["prismpm", "build", "--no-provenance"]),
+            BuildProvenance::Omit
+        );
+        for refused in [
+            &["prismpm", "build", "--provenance=max", "--no-provenance"][..],
+            &["prismpm", "build", "--provenance=other"][..],
+            &["prismpm", "build", "-t", "product:tag", "--no-provenance"][..],
+            &["prismpm", "build", "-t", "product:tag", "--provenance=min"][..],
+        ] {
+            assert!(Cli::try_parse_from(refused).is_err(), "{refused:?}");
+        }
     }
 
     #[test]

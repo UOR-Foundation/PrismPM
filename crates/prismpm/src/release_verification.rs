@@ -1762,26 +1762,14 @@ fn application_archive(
         "application LCNF evidence differs",
     )?;
     let stem = application.cargo_name().replace('-', "_");
-    let expected_browser: BTreeSet<_> = [
-        "app.css".to_owned(),
-        "app.js".to_owned(),
-        "index.html".to_owned(),
-        format!("{stem}.js"),
-        format!("{stem}_bg.wasm"),
-        "provenance.json".to_owned(),
-    ]
-    .into_iter()
-    .map(|name| format!("view/browser/{name}"))
-    .collect();
-    ensure(
-        files
-            .keys()
-            .filter(|name| name.starts_with("view/browser/"))
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            == expected_browser,
-        "application browser closure differs",
-    )?;
+    // Exactly closure v1 (the six-file page) or closure v2 (v1 plus the brand files).
+    let browser_names = files
+        .keys()
+        .filter_map(|name| name.strip_prefix("view/browser/"))
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let closure = crate::brand::closure_version(&browser_names, &stem);
+    ensure(closure.is_some(), "application browser closure differs")?;
     let browser_bytes = file(files, "view/browser/provenance.json")?;
     let browser = canonical_json(browser_bytes, false)?;
     ensure(
@@ -1797,6 +1785,28 @@ fn application_archive(
             && browser["view_model_id"] == provenance["view_binding"]["view_model_id"],
         "application browser provenance differs",
     )?;
+    if closure == Some(2) {
+        // Closure v2 provenance names the digest of every other closure file.
+        let mut listed = BTreeSet::new();
+        for name in browser_names
+            .iter()
+            .filter(|name| name.as_str() != "provenance.json")
+        {
+            ensure(
+                browser["schema"] == "prismpm/browser-provenance/2"
+                    && browser["files"][name.as_str()]
+                        == hex(file(files, &format!("view/browser/{name}"))?),
+                "application browser provenance differs",
+            )?;
+            listed.insert(name.as_str());
+        }
+        ensure(
+            browser["files"].as_object().is_some_and(|rows| {
+                rows.len() == listed.len() && rows.keys().all(|name| listed.contains(name.as_str()))
+            }),
+            "application browser provenance differs",
+        )?;
+    }
     Ok(identities)
 }
 
