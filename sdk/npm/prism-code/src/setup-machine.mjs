@@ -19,8 +19,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { commandDisplay, sdkImageFromLock } from './docker.mjs';
-import { cacheVolumeName, hostConfigEntry, readHostConfig, resolveDocker } from './host.mjs';
+import { cacheVolumeName, commandDisplay, sdkImageFromLock } from './docker.mjs';
+import { hostConfigEntry, readHostConfig, resolveDocker } from './host.mjs';
 
 export const GITATTRIBUTES_LINE = '* text eol=lf';
 /** The files a project is known by. */

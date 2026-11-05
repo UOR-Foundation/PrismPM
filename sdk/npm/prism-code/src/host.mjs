@@ -23,41 +23,20 @@
  * `find` and a `run` and never touch this machine.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { join } from 'node:path';
-import { which } from './agents.mjs';
+import { prismHome, which } from './agents.mjs';
 import { fail } from './errors.mjs';
+import { DELEGATED, MOUNT_STYLES, cacheVolumeName, commandDisplay, dockerArguments } from './docker.mjs';
 
 export const HOST_CONFIG_SCHEMA = 'prism/host-config/1';
-export const MOUNT_STYLES = Object.freeze(['native', 'wsl']);
-
 /** Split a command line on spaces, honouring double quotes, for `PRISM_DOCKER`. */
 export function splitCommandLine(text) {
   const out = [];
   const re = /"([^"]*)"|(\S+)/g;
   for (const m of text.matchAll(re)) out.push(m[1] ?? m[2]);
   return out;
-}
-
-/** `C:\a\b` or `C:/a/b` as the WSL daemon sees it: `/mnt/c/a/b`. A path without a drive letter is left alone. */
-export function wslMountPath(hostPath) {
-  const m = /^([A-Za-z]):[\\/](.*)$/.exec(hostPath);
-  if (!m) return hostPath.replace(/\\/g, '/');
-  return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
-}
-
-/** The host path as the daemon's bind mount source, by mount style. */
-export function mountPath(hostPath, style) {
-  if (style === 'wsl') return wslMountPath(hostPath);
-  if (style === 'native') return hostPath;
-  fail('docker.mount', `unknown mount style ${JSON.stringify(style)}; one of ${MOUNT_STYLES.join(', ')}`);
-}
-
-/** The cache volume for an SDK image: one per image digest, so two lockfiles never share a cache. */
-export function cacheVolumeName(image) {
-  const m = /@sha256:([0-9a-f]{64})$/.exec(image);
-  if (!m) fail('lock.image', `not an immutable SDK image: ${image}`);
-  return `prism-sdk-cache-${m[1].slice(0, 12)}`;
 }
 
 const DAEMON_ARGS = ['version', '--format', '{{.Server.Version}}'];
@@ -144,4 +123,33 @@ export function hostDocker({ configDir, env = process.env, platform = process.pl
   const resolved = resolveDocker({ platform, env, find, run });
   if (resolved.kind === 'missing') fail('docker.missing', resolved.reason);
   return { ...resolved, cache: false };
+}
+
+/**
+ * The Docker invocation for one delegated command on this host: the program
+ * `setup` recorded (or a fresh resolution), its arguments, and `run ...` with
+ * this host's user, Docker socket group, mount style and cache volume.
+ * Returns `{ command, args, display }`; `display` is the whole line for
+ * `PRISM_CODE_DRY_RUN` and error messages.
+ */
+export function hostDockerArguments({ image, cwd, command, args = [], program = 'prismpm', env = process.env, docker = null, probe = !env.PRISM_CODE_DRY_RUN }) {
+  const { build = false } = program === 'prismpm' ? (DELEGATED[command] ?? {}) : {};
+  const host = docker ?? hostDocker({ configDir: prismHome(env), env, probe });
+  let dockerSocketGid = null;
+  let uid = null;
+  let gid = null;
+  if (process.platform !== 'win32') {
+    ({ uid, gid } = userInfo());
+    if (build) {
+      try {
+        dockerSocketGid = statSync('/var/run/docker.sock').gid;
+      } catch {
+        dockerSocketGid = null;
+      }
+    }
+  }
+  const cache = host.cache && env.PRISM_CODE_NO_CACHE !== '1' ? cacheVolumeName(image) : null;
+  const runArgs = dockerArguments({ image, cwd, command, args, uid, gid, build, dockerSocketGid, program, cache, mount: host.mount });
+  const all = [...host.args, ...runArgs];
+  return { command: host.command, args: all, display: commandDisplay(host.command, all) };
 }

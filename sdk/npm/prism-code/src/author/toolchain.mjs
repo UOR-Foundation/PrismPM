@@ -8,7 +8,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { hostDockerArguments, sdkImageFromLock } from '../docker.mjs';
+import { sdkImageFromLock } from '../docker.mjs';
+import { hostDockerArguments } from '../host.mjs';
 import { parseToml } from '../toml.mjs';
 
 const MAX_OUTPUT = 256 * 1024;

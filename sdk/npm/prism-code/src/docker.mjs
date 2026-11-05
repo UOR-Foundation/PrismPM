@@ -4,7 +4,8 @@
  * UOR-Foundation/template's `bootstrap.yml` uses, minus the Docker socket and
  * Buildx lines, which only `build` needs. Pure functions here; `bin/` spawns.
  *
- * Two things `setup` adds (host.mjs): the program that reaches the daemon,
+ * Two things `setup` adds: the program that reaches the daemon (host.mjs, which
+ * resolves it and builds the whole invocation),
  * which on Windows without Docker Desktop is `wsl.exe -d <distro> -- docker`
  * with host paths spelled `/mnt/<drive>/...`, and a cache volume per SDK
  * image, mounted at `/tmp` in place of the 2 GB in-memory tmpfs. The SDK seeds a
@@ -13,11 +14,7 @@
  * Measured on the chess example (WSL, 2026-11-05): a full verify took 814 s with
  * the tmpfs, 317 s on an empty volume and 284 s on a warm one.
  */
-import { statSync } from 'node:fs';
-import { userInfo } from 'node:os';
 import { fail } from './errors.mjs';
-import { cacheVolumeName, hostDocker, mountPath } from './host.mjs';
-import { prismHome } from './agents.mjs';
 
 /** The template's admission test for an immutable SDK image reference. */
 export const SDK_IMAGE_PATTERN = /^[a-z0-9.-]+(:[0-9]{1,5})?\/[a-z0-9./_-]+@sha256:[0-9a-f]{64}$/;
@@ -26,6 +23,29 @@ export const CONTAINER_HOME = '/tmp/prismpm-home';
 export const WINDOWS_WORKDIR = '/work';
 /** The tmpfs every run gets when no cache volume is mounted. */
 export const TMPFS = '/tmp:rw,exec,nosuid,size=2g';
+
+export const MOUNT_STYLES = Object.freeze(['native', 'wsl']);
+
+/** `C:\a\b` or `C:/a/b` as the WSL daemon sees it: `/mnt/c/a/b`. A path without a drive letter is left alone. */
+export function wslMountPath(hostPath) {
+  const m = /^([A-Za-z]):[\\/](.*)$/.exec(hostPath);
+  if (!m) return hostPath.replace(/\\/g, '/');
+  return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
+}
+
+/** The host path as the daemon's bind mount source, by mount style. */
+export function mountPath(hostPath, style) {
+  if (style === 'wsl') return wslMountPath(hostPath);
+  if (style === 'native') return hostPath;
+  fail('docker.mount', `unknown mount style ${JSON.stringify(style)}; one of ${MOUNT_STYLES.join(', ')}`);
+}
+
+/** The cache volume for an SDK image: one per image digest, so two lockfiles never share a cache. */
+export function cacheVolumeName(image) {
+  const m = /@sha256:([0-9a-f]{64})$/.exec(image);
+  if (!m) fail('lock.image', `not an immutable SDK image: ${image}`);
+  return `prism-sdk-cache-${m[1].slice(0, 12)}`;
+}
 
 /** Read `sdk_image` from a `prismpm.lock` text and admit only an immutable reference. */
 export function sdkImageFromLock(lockText) {
@@ -87,35 +107,6 @@ export function dockerArguments({
 /** The path of `cwd` inside the container, where `--workdir` points. */
 export function containerWorkdir(cwd, platform = process.platform) {
   return platform === 'win32' ? WINDOWS_WORKDIR : cwd;
-}
-
-/**
- * The Docker invocation for one delegated command on this host: the program
- * `setup` recorded (or a fresh resolution), its arguments, and `run ...` with
- * this host's user, Docker socket group, mount style and cache volume.
- * Returns `{ command, args, display }`; `display` is the whole line for
- * `PRISM_CODE_DRY_RUN` and error messages.
- */
-export function hostDockerArguments({ image, cwd, command, args = [], program = 'prismpm', env = process.env, docker = null, probe = !env.PRISM_CODE_DRY_RUN }) {
-  const { build = false } = program === 'prismpm' ? (DELEGATED[command] ?? {}) : {};
-  const host = docker ?? hostDocker({ configDir: prismHome(env), env, probe });
-  let dockerSocketGid = null;
-  let uid = null;
-  let gid = null;
-  if (process.platform !== 'win32') {
-    ({ uid, gid } = userInfo());
-    if (build) {
-      try {
-        dockerSocketGid = statSync('/var/run/docker.sock').gid;
-      } catch {
-        dockerSocketGid = null;
-      }
-    }
-  }
-  const cache = host.cache && env.PRISM_CODE_NO_CACHE !== '1' ? cacheVolumeName(image) : null;
-  const runArgs = dockerArguments({ image, cwd, command, args, uid, gid, build, dockerSocketGid, program, cache, mount: host.mount });
-  const all = [...host.args, ...runArgs];
-  return { command: host.command, args: all, display: commandDisplay(host.command, all) };
 }
 
 /** One line for a command and its arguments, quoting what has spaces. */

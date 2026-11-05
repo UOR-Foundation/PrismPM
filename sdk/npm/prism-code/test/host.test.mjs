@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cacheVolumeName, hostConfigEntry, hostDocker, mountPath, parseDistributions, readHostConfig, resolveDocker, splitCommandLine, wslMountPath } from '../src/host.mjs';
-import { dockerArguments, hostDockerArguments } from '../src/docker.mjs';
+import { hostConfigEntry, hostDocker, hostDockerArguments, parseDistributions, readHostConfig, resolveDocker, splitCommandLine } from '../src/host.mjs';
+import { cacheVolumeName, dockerArguments, mountPath, wslMountPath } from '../src/docker.mjs';
 
 const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
 

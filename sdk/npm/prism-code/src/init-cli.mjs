@@ -14,7 +14,8 @@ import { dirname, join, resolve } from 'node:path';
 import { userInfo } from 'node:os';
 import { DEFAULT_TEMPLATE, TEMPLATES, bindCommands, nameFromDirectory, nextSteps, planInit } from './init.mjs';
 import { PrismCodeError } from './errors.mjs';
-import { cacheVolumeName, hostDocker } from './host.mjs';
+import { cacheVolumeName } from './docker.mjs';
+import { hostDocker } from './host.mjs';
 import { prismHome } from './agents.mjs';
 
 export const INIT_USAGE = `Usage: init [<dir>] [--name <name>] [--template <name>] [--sdk-image <ref>] [--force]

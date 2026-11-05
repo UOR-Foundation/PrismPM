@@ -309,6 +309,10 @@ path = "sdk/npm/prism-code/src/author/"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/axioms.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/blake3.mjs"
 module = "verify"
 
@@ -378,6 +382,10 @@ module = "client"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/handler.mjs"
+module = "client"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/host.mjs"
 module = "client"
 
 [[owner]]
@@ -469,6 +477,10 @@ path = "sdk/npm/prism-code/src/setup-cli.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/setup-machine.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/setup.mjs"
 module = "client"
 
@@ -478,6 +490,10 @@ module = "verify"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/studio/"
+module = "client"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/tiers.mjs"
 module = "client"
 
 [[owner]]
