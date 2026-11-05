@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MCP_URL } from '../src/agents.mjs';
 import { parseToml } from '../src/toml.mjs';
-import { HANDLER_FILES, LSREGISTER, OPEN_COMMAND_KEY, REGISTRY_KEY, SKILLS_INDEX, agentPaths, applySetup, fetchSkills, formatSetup, planSetup } from '../src/setup.mjs';
+import { HANDLER_FILES, LSREGISTER, OPEN_COMMAND_KEY, REGISTRY_KEY, RETIRED_SKILLS, SKILL_FILE, agentPaths, applySetup, bundledSkills, formatSetup, planSetup } from '../src/setup.mjs';
 import { createHash } from 'node:crypto';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
@@ -263,8 +263,7 @@ test('--dry-run prints every step under its agent and writes nothing', () => {
 
 test('prism-code setup --dry-run reads the home it is given, and refuses an unknown option', () => {
   const home = fixtureHome({ '.cursor': null });
-  // A closed local port stands in for uor.foundation, so the test never reaches the network.
-  const env = { PATH: '', Path: '', SystemRoot: process.env.SystemRoot ?? '', HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), XDG_CONFIG_HOME: join(home, '.config'), XDG_DATA_HOME: join(home, '.local', 'share'), PRISM_HOME: join(home, '.prism'), PRISM_SKILLS_INDEX: 'http://127.0.0.1:9/index.json' };
+  const env = { PATH: '', Path: '', SystemRoot: process.env.SystemRoot ?? '', HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), XDG_CONFIG_HOME: join(home, '.config'), XDG_DATA_HOME: join(home, '.local', 'share'), PRISM_HOME: join(home, '.prism') };
   const result = spawnSync(process.execPath, [bin, 'setup', '--dry-run'], { encoding: 'utf8', env });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /\n {2}cursor {10}would configure {5}/);
@@ -275,31 +274,43 @@ test('prism-code setup --dry-run reads the home it is given, and refuses an unkn
   assert.equal(spawnSync(process.execPath, [bin, 'setup', '--agent'], { encoding: 'utf8', env }).status, 64);
 });
 
-// The skills step: uor.foundation's discovery index, each SKILL.md held to its digest, written where agents read skills.
+// The skills step: the one `prism` skill this package ships, written where agents read skills.
 const SKILL = '---\nname: prism-new-app\ndescription: Build a Prism app.\n---\n\n# New Prism app\n';
 const sha = (text) => `sha256:${createHash('sha256').update(text).digest('hex')}`;
-/** A stand-in for fetch that serves `files` by URL and refuses anything else. */
-const serve = (files) => async (url) => {
-  const body = files[String(url)];
-  if (body === undefined) return { ok: false, status: 404 };
-  return { ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode(body).buffer };
-};
-const index = (skills) => JSON.stringify({ skills });
-const ORIGIN = 'https://uor.foundation/.well-known/agent-skills/';
+const ORIGIN = 'prism-code@test/';
 
-test('skills come from the index, each checked against its digest, never from another origin or under a name that is a path', async () => {
-  const listed = [
-    { name: 'prism-new-app', type: 'skill-md', url: 'prism-new-app/SKILL.md', digest: sha(SKILL) },
-    { name: '../escape', type: 'skill-md', url: '../escape/SKILL.md', digest: sha(SKILL) },
-    { name: 'elsewhere', type: 'skill-md', url: 'https://example.com/SKILL.md', digest: sha(SKILL) },
-    { name: 'archive', type: 'archive', url: 'archive.zip', digest: sha(SKILL) },
-  ];
-  const fetched = await fetchSkills(SKILLS_INDEX, serve({ [SKILLS_INDEX]: index(listed), [`${ORIGIN}prism-new-app/SKILL.md`]: SKILL }));
-  assert.deepEqual(fetched, { skills: [{ name: 'prism-new-app', markdown: SKILL, digest: sha(SKILL), url: `${ORIGIN}prism-new-app/SKILL.md` }] });
-  const tampered = await fetchSkills(SKILLS_INDEX, serve({ [SKILLS_INDEX]: index([listed[0]]), [`${ORIGIN}prism-new-app/SKILL.md`]: `${SKILL}rm -rf ~\n` }));
-  assert.match(tampered.error, /does not match the digest/);
-  assert.match((await fetchSkills(SKILLS_INDEX, serve({}))).error, /answered 404/);
-  assert.match((await fetchSkills(SKILLS_INDEX, async () => { throw Object.assign(new Error('fetch failed'), { cause: { code: 'ENOTFOUND' } }); })).error, /ENOTFOUND/);
+test('the skill setup installs is the one prism skill, the repository skill byte for byte', () => {
+  const bundled = bundledSkills();
+  assert.equal(bundled.skills.length, 1);
+  const [skill] = bundled.skills;
+  assert.equal(skill.name, 'prism');
+  assert.match(skill.markdown, /^---\nname: prism\ndescription: Build a new Prism app/);
+  assert.match(skill.markdown, /\n## Build a new app\n/);
+  assert.match(skill.markdown, /npx prism-code@latest setup/);
+  const repository = readFileSync(fileURLToPath(new URL('../../../../skills/prism/SKILL.md', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(skill.markdown, repository, 'node sdk/docs/skill.mjs writes both copies');
+  assert.equal(skill.digest, sha(repository));
+  assert.ok(existsSync(SKILL_FILE));
+  assert.match(bundledSkills(join(tmpdir(), 'no-such-skill.md')).error, /ENOENT/);
+});
+
+test('setup removes a skill it installed and prism replaces, and never one it did not install', () => {
+  const home = fixtureHome({
+    '.claude.json': '{}',
+    '.claude/skills/prism-sdk/SKILL.md': 'old\n',
+    '.claude/skills/prism-sdk/.prism-code.json': '{}\n',
+    '.cursor': null,
+    '.agents/skills/prism-sdk/SKILL.md': 'the user wrote this\n',
+  });
+  assert.deepEqual(RETIRED_SKILLS, ['prism-sdk']);
+  const plan = planSetup({ skills: bundledSkills() }, context('linux', home));
+  assert.deepEqual(plan.skills.steps.filter((s) => s.kind === 'remove').map((s) => s.path), [join(home, '.claude', 'skills', 'prism-sdk')]);
+  assert.match(plan.skills.detail, /; replaces prism-sdk/);
+  applySetup(plan, recorder());
+  assert.equal(existsSync(join(home, '.claude', 'skills', 'prism-sdk')), false);
+  assert.equal(readFileSync(join(home, '.agents', 'skills', 'prism-sdk', 'SKILL.md'), 'utf8'), 'the user wrote this\n');
+  assert.ok(existsSync(join(home, '.claude', 'skills', 'prism', 'SKILL.md')));
+  assert.equal(planSetup({ skills: bundledSkills() }, context('linux', home)).skills.status, 'already');
 });
 
 test('skills go to ~/.claude/skills for Claude Code and ~/.agents/skills for Codex, Cursor and VS Code, once', () => {
@@ -330,7 +341,7 @@ test('a skill folder prism-code did not write is left alone, and no skills is no
   assert.equal(plan.skills.status, 'conflict');
   assert.deepEqual(plan.skills.steps, []);
   assert.match(plan.skills.detail, /left alone, not written by prism-code: .*prism-new-app[\\/]SKILL\.md$/);
-  assert.deepEqual(planSetup({ skills: { error: 'offline' } }, context('linux', home)).skills, { status: 'unreadable', detail: 'not fetched: offline; run setup again when online', steps: [] });
+  assert.deepEqual(planSetup({ skills: { error: 'skill/SKILL.md: ENOENT' } }, context('linux', home)).skills, { status: 'unreadable', detail: 'not read: skill/SKILL.md: ENOENT', steps: [] });
   assert.equal(planSetup({ skills: fetched }, context('linux', fixtureHome())).skills.status, 'not-found');
   assert.equal(planSetup({}, context('linux', home)).skills, undefined, 'without fetched skills there is no row');
 });

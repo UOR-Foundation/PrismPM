@@ -21,6 +21,7 @@ import { fail } from './errors.mjs';
 import { commandLine } from './open.mjs';
 import { invocation } from './plugins.mjs';
 import { parseToml } from './toml.mjs';
+import { VERSION } from './version.mjs';
 
 /** The files `setup` copies out of the package as the holo:// handler: the entry and what it imports. */
 export const HANDLER_FILES = Object.freeze(['handler.mjs', 'open.mjs', 'agents.mjs', 'errors.mjs', 'plugins.mjs']);
@@ -272,59 +273,47 @@ function planPreferred(requested, agents, context) {
   return { agent, steps: [{ kind: 'write', path: file, content: `${JSON.stringify({ ...config, preferredAgent: agent }, null, 2)}\n` }] };
 }
 
-/**
- * The skills that teach an agent to build Prism apps, as uor.foundation serves them for `npx skills add`:
- * the v2 discovery index, each SKILL.md checked against its digest. `PRISM_SKILLS_INDEX` points elsewhere.
- */
-export const SKILLS_INDEX = 'https://uor.foundation/.well-known/agent-skills/index.json';
-const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** The one Prism skill, shipped in this package beside the CLI it describes (generated from skills/prism/SKILL.md). */
+export const SKILL_FILE = fileURLToPath(new URL('../skill/SKILL.md', import.meta.url));
 const SKILL_MARKER = '.prism-code.json';
+/** Skills an earlier setup installed and the one `prism` skill replaces; removed only where setup's marker is. */
+export const RETIRED_SKILLS = Object.freeze(['prism-sdk']);
 
 /**
- * Fetch every skill the index lists. A name that is not a plain slug, a file on another origin, and a file whose
- * sha256 differs from the index are refused. Never throws: a failure is `{ error }`, and setup goes on without skills.
- * @returns {Promise<{ skills: { name: string, markdown: string, digest: string, url: string }[] } | { error: string }>}
+ * The skill this package ships. Never throws: an unreadable file is `{ error }`, and setup goes on without it.
+ * @returns {{ skills: { name: string, markdown: string, digest: string, url: string }[] } | { error: string }}
  */
-export async function fetchSkills(index = SKILLS_INDEX, get = globalThis.fetch) {
-  const fetched = async (url) => {
-    const response = await get(url, { signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`${url} answered ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
-  };
+export function bundledSkills(file = SKILL_FILE) {
   try {
-    const listed = JSON.parse((await fetched(index)).toString('utf8')).skills;
-    if (!Array.isArray(listed)) return { error: `${index} lists no skills` };
-    const skills = [];
-    for (const entry of listed) {
-      if (entry?.type !== 'skill-md' || !SKILL_NAME.test(entry.name ?? '')) continue;
-      const url = new URL(entry.url, index);
-      if (url.origin !== new URL(index).origin) continue;
-      const bytes = await fetched(url);
-      const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-      if (digest !== entry.digest) return { error: `${url} does not match the digest ${index} lists` };
-      skills.push({ name: entry.name, markdown: bytes.toString('utf8'), digest, url: url.href });
-    }
-    return { skills };
+    const markdown = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    const digest = `sha256:${createHash('sha256').update(markdown).digest('hex')}`;
+    return { skills: [{ name: 'prism', markdown, digest, url: `prism-code@${VERSION}` }] };
   } catch (error) {
-    return { error: `${index}: ${error.cause?.code ?? error.message}` };
+    return { error: `${file}: ${error.code ?? error.message}` };
   }
 }
 
 /**
  * Write each skill where the agents found here read skills: `~/.claude/skills` for Claude Code, and the shared
  * `~/.agents/skills` for Codex, Cursor and VS Code. A skill folder prism-code did not write is left alone; one it
- * wrote (it holds the marker) is brought up to date.
+ * wrote (it holds the marker) is brought up to date, and a retired one it wrote is removed.
  */
 export function planSkills(fetched, agents, context) {
-  if (fetched.error) return { status: 'unreadable', detail: `not fetched: ${fetched.error}; run setup again when online`, steps: [] };
+  if (fetched.error) return { status: 'unreadable', detail: `not read: ${fetched.error}`, steps: [] };
   const found = new Set(agents.filter((a) => a.status !== 'not-found').map((a) => a.agent));
   const dirs = [];
   if (found.has('claude-code')) dirs.push(join(context.env.CLAUDE_CONFIG_DIR || join(context.home, '.claude'), 'skills'));
   if (['codex', 'cursor', 'vscode'].some((a) => found.has(a))) dirs.push(join(context.home, '.agents', 'skills'));
-  if (dirs.length === 0 || fetched.skills.length === 0) return { status: 'not-found', detail: dirs.length ? 'the index lists no skills' : 'no agent here reads skill folders', steps: [] };
+  if (dirs.length === 0 || fetched.skills.length === 0) return { status: 'not-found', detail: dirs.length ? 'no skill to install' : 'no agent here reads skill folders', steps: [] };
   const steps = [];
   const kept = [];
+  const retired = [];
   for (const dir of dirs) {
+    for (const name of RETIRED_SKILLS) {
+      if (context.readFile(join(dir, name, SKILL_MARKER)) === null) continue;
+      steps.push({ kind: 'remove', path: join(dir, name) });
+      retired.push(name);
+    }
     for (const skill of fetched.skills) {
       const file = join(dir, skill.name, 'SKILL.md');
       const current = context.readFile(file);
@@ -336,7 +325,8 @@ export function planSkills(fetched, agents, context) {
       steps.push({ kind: 'write', path: file, content: skill.markdown }, { kind: 'write', path: join(dir, skill.name, SKILL_MARKER), content: `${JSON.stringify({ source: skill.url, digest: skill.digest })}\n` });
     }
   }
-  const detail = `${fetched.skills.map((s) => s.name).join(', ')} in ${dirs.join(', ')}${kept.length ? `; left alone, not written by prism-code: ${kept.join(', ')}` : ''}`;
+  const replaced = [...new Set(retired)];
+  const detail = `${fetched.skills.map((s) => s.name).join(', ')} in ${dirs.join(', ')}${replaced.length ? `; replaces ${replaced.join(', ')}` : ''}${kept.length ? `; left alone, not written by prism-code: ${kept.join(', ')}` : ''}`;
   return { status: steps.length > 0 ? 'configure' : kept.length > 0 ? 'conflict' : 'already', detail, steps };
 }
 

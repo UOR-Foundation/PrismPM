@@ -8,6 +8,9 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+### Features Added
+- `setup` installs one skill, `prism`, which ships in the package (`skill/SKILL.md`, the repository's `skills/prism/SKILL.md` byte for byte). It now covers building a new app from one sentence, every command, and the `lexlean` MCP server. It replaces the `prism-sdk` skill 0.4.0 fetched from uor.foundation: setup reads no network for skills, and removes the `prism-sdk` folder it installed, only where its marker is. The skill's generated tables are no longer padded, so it is 16 KB instead of 39 KB.
+
 ## [0.4.0] - 2026-11-05
 
 ### Features Added
