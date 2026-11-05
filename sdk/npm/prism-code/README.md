@@ -16,6 +16,21 @@ output and design references. Source, TypeScript types, templates and
 Calculator fixtures ship here. `prism-code --help` lists CLI arguments.
 Experimental APIs remain experimental; repository `SPEC.md` is normative.
 
+## Set up this machine (experimental)
+
+```sh
+npx prism-code@latest setup --machine-only # Node, Docker (also inside WSL), the SDK image, its cache, LF endings
+npx prism-code build --check        # T0: the model is well formed, seconds
+npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute
+npx prism-code axioms --write       # set every declaration's axiom policy in one pass
+npx prism-code verify               # T2: the guest, the vectors and the holo, minutes
+```
+
+`setup` records the program that reaches Docker, so later commands spawn it,
+and moves `/tmp` off memory onto a cache volume: a full verify of the chess
+example went from 814 s to 284 s on WSL. Judge each edit by the cheapest tier
+that can refuse it. [Rows, tiers and overrides][guide-machine].
+
 ## Set up your agents (experimental)
 
 ```sh
@@ -556,3 +571,4 @@ MIT.
 
 [guide]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md
 [guide-setup]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md#set-up-your-agents-experimental
+[guide-machine]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md#set-up-this-machine-experimental

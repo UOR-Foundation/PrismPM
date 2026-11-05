@@ -100,15 +100,38 @@ export function nameFromDirectory(directory) {
 }
 
 /**
- * Everything `init` writes before binding an SDK: the template's files and
- * `prism.toml`, as path to bytes. Throws `manifest.invalid` for a name the
- * manifest refuses.
+ * A new project's `.gitattributes`. LexLean refuses a source with CRLF
+ * (`LLC0101`), and Git on Windows writes CRLF unless told not to, so every
+ * project keeps its text LF from its first commit.
+ */
+export const GITATTRIBUTES = '* text eol=lf\n';
+
+/**
+ * Everything `init` writes before binding an SDK: the template's files,
+ * `prism.toml` and `.gitattributes`, as path to bytes. Throws
+ * `manifest.invalid` for a name the manifest refuses.
  */
 export function planInit({ name, template = DEFAULT_TEMPLATE }) {
   const files = templateFiles(template);
-  if (files.has(MANIFEST_FILE)) fail('init.template', `template ${template} already has a ${MANIFEST_FILE}`);
+  for (const generated of [MANIFEST_FILE, '.gitattributes']) {
+    if (files.has(generated)) fail('init.template', `template ${template} already has a ${generated}`);
+  }
   files.set(MANIFEST_FILE, new TextEncoder().encode(manifestText(name, template)));
+  files.set('.gitattributes', new TextEncoder().encode(GITATTRIBUTES));
   return files;
+}
+
+/** The tiers a new project's author runs next, cheapest first, as `init` prints them. */
+export function nextSteps(directory) {
+  return [
+    'Next, from the cheapest gate to the whole build:',
+    `  cd ${directory}`,
+    '  npx prism-code build --check     T0: the model is well formed and locked (seconds)',
+    '  npx prism-code verify --lean     T1: every proof and its exact axioms (about a minute)',
+    '  npx prism-code axioms --write    when T1 names an axiom policy: set every one in one pass',
+    '  npx prism-code verify            T2: the guest, the vectors and the holo (minutes)',
+    '',
+  ].join('\n');
 }
 
 /**
@@ -116,12 +139,12 @@ export function planInit({ name, template = DEFAULT_TEMPLATE }) {
  * image's standards lock, then `prismpm update --toolchain <image>` in the
  * project. Returns `{ standards, update }`, argument lists for `docker`.
  */
-export function bindCommands({ image, cwd, uid = null, gid = null, platform = process.platform }) {
+export function bindCommands({ image, cwd, uid = null, gid = null, platform = process.platform, mount = 'native', cache = null }) {
   if (typeof image !== 'string' || !SDK_IMAGE_PATTERN.test(image)) {
     fail('lock.image', `--sdk-image must be an immutable reference, NAME@sha256:DIGEST; got ${JSON.stringify(image)}`);
   }
   return {
     standards: ['run', '--rm', '--network', 'none', '--entrypoint', 'cat', image, IMAGE_STANDARDS_LOCK],
-    update: dockerArguments({ image, cwd, command: 'update', args: ['--toolchain', image], uid, gid, platform }),
+    update: dockerArguments({ image, cwd, command: 'update', args: ['--toolchain', image], uid, gid, platform, mount, cache }),
   };
 }

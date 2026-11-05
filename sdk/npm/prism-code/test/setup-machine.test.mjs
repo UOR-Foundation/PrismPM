@@ -1,0 +1,200 @@
+// The machine half of prism-code setup: Node, Docker (native or inside WSL), the SDK image, its cache volume
+// and line endings, planned on stand-in contexts and applied on fixture directories. No test probes this
+// machine's Docker: the command line tests point PRISM_DOCKER at a stub that answers like a daemon.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { GITATTRIBUTES_LINE, applyMachine, applyMachineStep, formatMachine, planMachine } from '../src/setup-machine.mjs';
+import { readHostConfig } from '../src/host.mjs';
+
+const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
+const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
+const VOLUME = 'prism-sdk-cache-36da25ef924d';
+
+const scratch = (prefix = 'prism-machine-') => mkdtempSync(join(tmpdir(), prefix));
+const readText = (path) => {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+};
+
+const NATIVE = { kind: 'native', command: '/usr/bin/docker', args: [], mount: 'native', version: '29.1.3', distro: null };
+const WSL = { kind: 'wsl', command: 'C:\\Windows\\System32\\wsl.exe', args: ['-d', 'Ubuntu', '--', 'docker'], mount: 'wsl', version: '29.1.3', distro: 'Ubuntu' };
+
+/** A context over a fixture project directory. `answers` maps a docker argument line to its stdout. */
+function context({ cwd, configDir, resolved = NATIVE, answers = {}, nodeVersion = '22.21.0' }) {
+  const calls = [];
+  return {
+    calls,
+    platform: resolved.kind === 'wsl' ? 'win32' : 'linux',
+    env: {},
+    cwd,
+    configDir,
+    nodeVersion,
+    exists: (path) => readText(path) !== null,
+    readFile: readText,
+    run: (command, args) => {
+      const line = args.slice(resolved.args.length).join(' ');
+      calls.push(line);
+      const hit = Object.entries(answers).find(([key]) => line.startsWith(key));
+      return hit ? { status: 0, stdout: hit[1], stderr: '' } : { status: 1, stdout: '', stderr: 'no' };
+    },
+    resolveDocker: () => resolved,
+  };
+}
+
+const rows = (plan) => Object.fromEntries(plan.rows.map((row) => [row.id, row]));
+const project = (lock = { sdk_image: IMAGE }) => {
+  const dir = scratch();
+  writeFileSync(join(dir, 'prismpm.lock'), JSON.stringify(lock));
+  return dir;
+};
+
+test('a fresh machine: Docker is recorded, the image pulled, the cache created, and sources kept LF', () => {
+  const cwd = project();
+  const configDir = join(scratch(), '.prism');
+  const ctx = context({ cwd, configDir, resolved: WSL });
+  const plan = planMachine({}, ctx);
+  const r = rows(plan);
+  assert.equal(r.node.status, 'already');
+  assert.equal(r.docker.status, 'configure');
+  assert.match(r.docker.detail, /inside WSL Ubuntu/);
+  assert.deepEqual(r.docker.steps[0].patch.docker, { command: WSL.command, args: WSL.args, mount: 'wsl' });
+  assert.equal(r.image.status, 'configure');
+  assert.match(r.image.detail, /prismpm\.lock/);
+  assert.deepEqual(r.image.steps[0].args, [...WSL.args, 'pull', IMAGE]);
+  assert.equal(r.image.steps[0].inherit, true, 'a pull streams its progress');
+  assert.equal(r.cache.status, 'configure');
+  assert.deepEqual(r.cache.steps.map((s) => s.kind), ['command', 'merge-json']);
+  assert.deepEqual(r.cache.steps[0].args, [...WSL.args, 'volume', 'create', VOLUME]);
+  assert.equal(r.endings.status, 'configure');
+  assert.equal(r.endings.steps[0].content, `${GITATTRIBUTES_LINE}\n`);
+  assert.ok(ctx.calls.includes(`image inspect --format {{.Id}} ${IMAGE}`));
+  assert.ok(ctx.calls.includes(`volume inspect --format {{.Name}} ${VOLUME}`));
+});
+
+test('a machine already set up changes nothing, and a second run says so', () => {
+  const cwd = project();
+  const configDir = join(scratch(), '.prism');
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, 'config.json'), JSON.stringify({ preferredAgent: 'codex', docker: { command: NATIVE.command, args: [], mount: 'native' }, cache: true }));
+  writeFileSync(join(cwd, '.gitattributes'), '*.png binary\n* text eol=lf\n');
+  const plan = planMachine({}, context({ cwd, configDir, answers: { 'image inspect': 'sha256:abcdef0123456789\n', 'volume inspect': `${VOLUME}\n` } }));
+  assert.deepEqual(plan.rows.map((row) => [row.id, row.status]), [['node', 'already'], ['docker', 'already'], ['image', 'already'], ['cache', 'already'], ['endings', 'already']]);
+  assert.equal(plan.rows.every((row) => (row.steps ?? []).length === 0), true);
+  assert.match(formatMachine(plan), /^prism-code setup: this machine\n {2}node {12}ok {18}node 22\.21\.0\n/);
+});
+
+test('no Docker: the row is a manual step with the reason, the image and cache are not checked, and the rest still runs', () => {
+  const cwd = project();
+  const plan = planMachine({}, context({ cwd, configDir: join(scratch(), '.prism'), resolved: { kind: 'missing', reason: 'docker is not on the PATH' } }));
+  const r = rows(plan);
+  assert.equal(r.docker.status, 'manual', 'agents can still be set up without Docker');
+  assert.match(r.docker.detail, /not on the PATH.*PRISM_DOCKER/);
+  assert.equal(r.image.status, 'manual');
+  assert.match(r.image.detail, /Docker is missing/);
+  assert.equal(r.cache.status, 'not-found');
+  assert.equal(r.endings.status, 'configure');
+  assert.equal(rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism'), nodeVersion: '20.11.0' }))).node.status, 'failed');
+});
+
+test('outside a project: no lockfile means no image unless --image names one; --no-pull reports instead of pulling', () => {
+  const cwd = scratch();
+  const configDir = join(scratch(), '.prism');
+  const none = rows(planMachine({}, context({ cwd, configDir })));
+  assert.equal(none.image.status, 'not-found');
+  assert.match(none.image.detail, /--image <ref>/);
+  assert.equal(none.cache.status, 'not-found');
+  assert.equal(none.endings.status, 'not-found');
+  const named = rows(planMachine({ image: IMAGE, pull: false }, context({ cwd, configDir })));
+  assert.equal(named.image.status, 'manual');
+  assert.match(named.image.detail, /docker pull ghcr\.io/);
+  assert.equal(named.cache.status, 'configure', 'the cache volume is created for the named image even before it is pulled');
+  const bad = rows(planMachine({}, context({ cwd: project({ sdk_image: 'ghcr.io/x/y:latest' }), configDir })));
+  assert.equal(bad.image.status, 'failed');
+  assert.match(bad.image.detail, /prismpm\.lock/);
+});
+
+test('line endings: a project with CRLF sources is told to renormalize, and an existing .gitattributes is appended to', () => {
+  const cwd = project();
+  mkdirSync(join(cwd, 'src'));
+  writeFileSync(join(cwd, 'src', 'App.lex.tex'), '\\begin{lexlean}{App}\r\n\\end{lexlean}\r\n');
+  writeFileSync(join(cwd, '.gitattributes'), '*.png binary');
+  const row = rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism') }))).endings;
+  assert.equal(row.status, 'configure');
+  assert.match(row.detail, /1 file has CRLF already.*git add --renormalize/);
+  assert.equal(row.steps[0].content, `*.png binary\n${GITATTRIBUTES_LINE}\n`);
+  writeFileSync(join(cwd, '.gitattributes'), '* text eol=lf\n');
+  const warned = rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism') }))).endings;
+  assert.equal(warned.status, 'manual', 'the rule is there, but the file on disk is still CRLF');
+});
+
+test('applying a plan: the config merge keeps keys another writer set, a failed command marks its row and the next row still runs', () => {
+  const cwd = project();
+  const configDir = join(scratch(), '.prism');
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, 'config.json'), JSON.stringify({ preferredAgent: 'claude-code' }));
+  const plan = planMachine({}, context({ cwd, configDir, resolved: WSL }));
+  const calls = [];
+  applyMachine(plan, {
+    run: (command, args) => {
+      calls.push(args.join(' '));
+      return args.includes('pull') ? { status: 1, stdout: '', stderr: 'no space left' } : { status: 0, stdout: '', stderr: '' };
+    },
+  });
+  const r = rows(plan);
+  assert.equal(r.docker.status, 'configure');
+  assert.equal(r.image.status, 'failed');
+  assert.match(r.image.detail, /docker pull .* failed: exit 1: no space left/);
+  assert.equal(r.cache.status, 'configure', 'the cache row ran after the failed pull');
+  assert.ok(calls.some((line) => line.endsWith(`volume create ${VOLUME}`)));
+  const config = JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf8'));
+  assert.equal(config.preferredAgent, 'claude-code', 'the agent half\'s key survives');
+  assert.deepEqual(config.docker, { command: WSL.command, args: WSL.args, mount: 'wsl' });
+  assert.equal(config.cache, true);
+  assert.deepEqual(readHostConfig(configDir), { command: WSL.command, args: WSL.args, mount: 'wsl', cache: true });
+  assert.equal(readFileSync(join(cwd, '.gitattributes'), 'utf8'), `${GITATTRIBUTES_LINE}\n`);
+  assert.throws(() => applyMachineStep({ kind: 'frobnicate' }), /unknown step/);
+});
+
+test('--dry-run prints every step and writes nothing; --json prints the rows; --agents-only skips the machine', () => {
+  const cwd = project();
+  const home = scratch('prism-machine-home-');
+  const stub = join(scratch(), 'docker-stub.mjs');
+  // A daemon stand-in: answers `version`, knows no image and no volume, and records a pull it must never be asked for.
+  writeFileSync(stub, `const a = process.argv.slice(2);
+if (a[0] === 'version') { process.stdout.write('29.1.3\\n'); process.exit(0); }
+if (a[0] === 'pull') { require('node:fs').writeFileSync(process.env.PULLED, 'yes'); process.exit(0); }
+process.exit(1);
+`);
+  const pulled = join(scratch(), 'pulled');
+  const env = { ...process.env, HOME: home, USERPROFILE: home, PRISM_HOME: join(home, '.prism'), PRISM_DOCKER: `"${process.execPath}" "${stub}"`, PULLED: pulled };
+  const dry = spawnSync(process.execPath, [bin, 'setup', '--dry-run'], { cwd, env, encoding: 'utf8' });
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.match(dry.stdout, /^prism-code setup --dry-run: this machine\n/);
+  assert.match(dry.stdout, /docker {10}would configure {5}docker 29\.1\.3/);
+  assert.match(dry.stdout, new RegExp(`image {11}would configure {5}${IMAGE.replace(/[.@]/g, '\\$&')} \\(prismpm\\.lock\\): pull`));
+  assert.match(dry.stdout, new RegExp(`run docker pull ${IMAGE.replace(/[.@]/g, '\\$&')}`));
+  assert.match(dry.stdout, new RegExp(`run docker volume create ${VOLUME}`));
+  assert.match(dry.stdout, /endings {9}would configure {5}\.gitattributes/);
+  assert.match(dry.stdout, /prism-code setup --dry-run: the UOR MCP server/);
+  assert.equal(readText(join(home, '.prism', 'config.json')), null, 'a dry run writes nothing');
+  assert.equal(readText(pulled), null);
+
+  const json = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--json'], { cwd, env, encoding: 'utf8' });
+  const report = JSON.parse(json.stdout);
+  assert.equal(report.schema, 'prism/setup-report/1');
+  assert.equal(report.dryRun, true);
+  assert.deepEqual(report.machine.map((row) => row.id), ['node', 'docker', 'image', 'cache', 'endings']);
+  assert.ok(Array.isArray(report.agents));
+
+  const agents = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--agents-only', '--json'], { cwd, env, encoding: 'utf8' });
+  assert.equal(JSON.parse(agents.stdout).machine, null);
+  assert.equal(spawnSync(process.execPath, [bin, 'setup', '--image'], { cwd, env, encoding: 'utf8' }).status, 64);
+});

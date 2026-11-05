@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { TEMPLATES, DEFAULT_TEMPLATE, IMAGE_STANDARDS_LOCK, templateFiles, manifestText, nameFromDirectory, planInit, bindCommands } from '../src/init.mjs';
+import { TEMPLATES, DEFAULT_TEMPLATE, IMAGE_STANDARDS_LOCK, templateFiles, manifestText, nameFromDirectory, nextSteps, planInit, bindCommands } from '../src/init.mjs';
 import { parseManifest } from '../src/manifest.mjs';
 import { parseToml } from '../src/toml.mjs';
 import { readManifest } from '../src/node.mjs';
@@ -74,10 +74,12 @@ test('a project name comes from the directory', () => {
   assert.equal(nameFromDirectory('/x/' + 'a'.repeat(80)), 'a'.repeat(63));
 });
 
-test('planInit is the template plus prism.toml; an unknown template is refused', () => {
+test('planInit is the template plus prism.toml and an LF-only .gitattributes; an unknown template is refused', () => {
   const files = planInit({ name: 'calc' });
   assert.ok(files.has('prism.toml') && files.has('lexlean.lock') && files.has('prismpm.toml') && files.has('src/TextRequest.lex.tex'));
-  assert.equal(files.size, templateFiles().size + 1);
+  assert.equal(files.size, templateFiles().size + 2);
+  assert.equal(Buffer.from(files.get('.gitattributes')).toString('utf8'), '* text eol=lf\n', 'LexLean refuses CRLF, so a new project never gets it');
+  assert.equal(nextSteps('calc').split('\n')[1], '  cd calc');
   assert.throws(() => planInit({ name: 'calc', template: 'nope' }), (e) => e.code === 'init.template' && /text-request/.test(e.message));
 });
 
@@ -130,12 +132,12 @@ test('init: --name, a bad name, an unknown template, usage errors', () => {
 
 test('init --sdk-image prints the two docker commands under PRISM_CODE_DRY_RUN', () => {
   const dir = join(scratch(), 'bound');
-  const r = run(bin, ['init', dir, '--sdk-image', IMAGE], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1' } });
+  const r = run(bin, ['init', dir, '--sdk-image', IMAGE], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(r.code, 0, r.err);
   const lines = r.out.trim().split('\n').slice(-2);
   assert.match(lines[0], new RegExp(`^docker run --rm --network none --entrypoint cat ${IMAGE.replace(/[.@]/g, '\\$&')} /opt/prismpm/share/standards\\.lock > standards\\.lock$`));
   assert.match(lines[1], new RegExp(`prismpm update --toolchain ${IMAGE.replace(/[.@]/g, '\\$&')}$`));
-  const refused = run(bin, ['init', join(scratch(), 'x'), '--sdk-image', 'ghcr.io/x/y:latest'], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1' } });
+  const refused = run(bin, ['init', join(scratch(), 'x'), '--sdk-image', 'ghcr.io/x/y:latest'], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(refused.code, 2);
   assert.match(refused.err, /^lock\.image:/);
 });
@@ -160,6 +162,8 @@ test('a bound project points at build --check, the model check, not the deprecat
     [
       '#!/bin/sh',
       'case "$*" in',
+      // init asks the daemon for its version first, as every command that reaches Docker does.
+      '  "version --format {{.Server.Version}}") echo 29.1.3 ;;',
       '  *"--entrypoint cat"*) printf \'{"stub":"standards"}\' ;;',
       '  *"prismpm update --toolchain"*) prev=; for a in "$@"; do [ "$prev" = --workdir ] && d="$a"; prev="$a"; done; printf \'{"stub":"lock"}\' > "$d/prismpm.lock" ;;',
       '  *) exit 9 ;;',
@@ -169,10 +173,10 @@ test('a bound project points at build --check, the model check, not the deprecat
     { mode: 0o755 },
   );
   const dir = join(scratch(), 'bound');
-  const r = run(bin, ['init', dir, '--sdk-image', IMAGE], { env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}` } });
+  const r = run(bin, ['init', dir, '--sdk-image', IMAGE], { env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}`, PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(r.code, 0, r.err);
   assert.equal(readFileSync(join(dir, 'standards.lock'), 'utf8'), '{"stub":"standards"}');
   assert.ok(existsSync(join(dir, 'prismpm.lock')));
-  assert.match(r.out, /Done\. Next: cd .* && npx prism-code build --check\n$/);
+  assert.match(r.out, /Done\. Next, from the cheapest gate to the whole build:\n {2}cd .*\n {2}npx prism-code build --check {5}T0[^\n]*\n {2}npx prism-code verify --lean {5}T1[^\n]*\n {2}npx prism-code axioms --write {4}when T1[^\n]*\n {2}npx prism-code verify {12}T2[^\n]*\n$/);
   assert.doesNotMatch(r.out, /prism-code check\n/);
 });

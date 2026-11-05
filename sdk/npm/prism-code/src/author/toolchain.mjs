@@ -8,7 +8,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { hostDockerArguments, sdkImageFromLock } from '../docker.mjs';
+import { sdkImageFromLock } from '../docker.mjs';
+import { hostDockerArguments } from '../host.mjs';
 import { parseToml } from '../toml.mjs';
 
 const MAX_OUTPUT = 256 * 1024;
@@ -24,7 +25,14 @@ export function dockerToolchain(root) {
     run: (command, args = []) =>
       new Promise((resolve) => {
         const image = sdkImageFromLock(readFileSync(join(root, 'prismpm.lock'), 'utf8'));
-        const child = spawn('docker', hostDockerArguments({ image, cwd: root, command, args }), { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        let docker;
+        try {
+          docker = hostDockerArguments({ image, cwd: root, command, args });
+        } catch (error) {
+          if (error.code === 'docker.missing') return resolve({ code: NO_DOCKER, output: error.message });
+          throw error;
+        }
+        const child = spawn(docker.command, docker.args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
         let output = '';
         const collect = (chunk) => {
           process.stderr.write(chunk);

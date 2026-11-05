@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatSteps, hostContext, openLink } from './open.mjs';
 import { applySetup, bundledSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
+import { applyMachine, formatMachine, hostMachineContext, machineFailed, machineReport, planMachine } from './setup-machine.mjs';
 
 const HANDLER = join(dirname(fileURLToPath(import.meta.url)), 'handler.mjs');
 
@@ -25,16 +26,43 @@ function options(argv, { values = [], flags = [] }) {
   return { positional, named };
 }
 
-/** @returns {Promise<number>} the exit code */
-export async function runSetup(argv, usage, context = hostSetupContext()) {
-  const { problem, positional, named } = options(argv, { values: ['agent'], flags: ['dry-run'] });
+/**
+ * `setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
+ * The machine half runs first and is applied first, so the agent half's write of
+ * `config.json` sees the Docker record. @returns {Promise<number>} the exit code
+ */
+export async function runSetup(argv, usage, context = hostSetupContext(), machineContext = hostMachineContext({ env: context.env, platform: context.platform, configDir: context.configDir })) {
+  const { problem, positional, named } = options(argv, { values: ['agent', 'image'], flags: ['dry-run', 'no-pull', 'agents-only', 'machine-only', 'json'] });
   if (problem) return usage(problem);
   if (positional.length > 0) return usage('setup takes no arguments');
-  const plan = planSetup({ agent: named.agent, skills: bundledSkills() }, context);
   const dryRun = named['dry-run'] === true;
-  if (!dryRun) applySetup(plan);
-  process.stdout.write(formatSetup(plan, { dryRun }));
-  return [...plan.agents, plan.handler, plan.skills].some((row) => row.status === 'failed') ? 1 : 0;
+  const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull: !named['no-pull'] }, machineContext);
+  if (machine && !dryRun) applyMachine(machine);
+  const agentsHalf = !named['machine-only'];
+  // The skill ships in the package, so there is nothing to fetch.
+  const skills = agentsHalf ? bundledSkills() : undefined;
+  const plan = agentsHalf ? planSetup({ agent: named.agent, skills }, context) : { agents: [], handler: { status: 'not-found', steps: [] }, preferred: { agent: null, steps: [] } };
+  if (!dryRun && agentsHalf) applySetup(plan);
+  const rows = [...plan.agents, plan.handler, ...(plan.skills ? [plan.skills] : [])];
+  const failed = (machine ? machineFailed(machine) : false) || rows.some((row) => row.status === 'failed');
+  if (named.json) {
+    const row = ({ agent, status, detail }) => ({ agent, status, detail: detail ?? null });
+    const report = {
+      schema: 'prism/setup-report/1',
+      dryRun,
+      machine: machine ? machineReport(machine) : null,
+      agents: plan.agents.map(row),
+      handler: { status: plan.handler.status, detail: plan.handler.detail ?? null },
+      skills: plan.skills ? { status: plan.skills.status, detail: plan.skills.detail ?? null } : null,
+      preferredAgent: plan.preferred.agent,
+      failed,
+    };
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return failed ? 1 : 0;
+  }
+  if (machine) process.stdout.write(formatMachine(machine, { dryRun }));
+  if (agentsHalf) process.stdout.write(formatSetup(plan, { dryRun }));
+  return failed ? 1 : 0;
 }
 
 /** @returns {Promise<number>} the exit code */
