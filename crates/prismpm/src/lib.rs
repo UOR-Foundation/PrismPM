@@ -38,6 +38,7 @@ mod process_resources;
 mod release_verification;
 pub mod replay;
 pub mod sdk;
+mod source_authoring;
 pub mod supply_chain;
 pub mod system;
 pub mod template;

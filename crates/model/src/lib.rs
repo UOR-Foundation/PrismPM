@@ -573,7 +573,7 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 67);
+        assert_eq!(model.contracts.contract.len(), 69);
         for (schema, path) in [
             (
                 "prismpm/model-document/6",
@@ -662,6 +662,31 @@ mod tests {
             .check(&root)
             .expect_err("duplicate rows cannot satisfy the exact contract count");
         assert!(error.to_string().contains("invalid public contract row"));
+    }
+
+    #[test]
+    fn source_authoring_identity_is_scoped_to_its_two_envelopes() {
+        let model = Model::load_from_repo_root().unwrap();
+        for index in 0..model.contracts.contract.len() {
+            let mut planted = model.contracts.clone();
+            let row = &mut planted.contract[index];
+            let source = row.schema.starts_with("prismpm/source-authoring-");
+            assert_eq!(
+                row.identity,
+                if source {
+                    "sha256-source-authoring-json"
+                } else {
+                    "sha256-canonical-json"
+                }
+            );
+            row.identity = if source {
+                "sha256-canonical-json"
+            } else {
+                "sha256-source-authoring-json"
+            }
+            .to_owned();
+            assert!(planted.check(&super::repo_root()).is_err());
+        }
     }
 
     #[test]

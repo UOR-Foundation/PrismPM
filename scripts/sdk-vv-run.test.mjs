@@ -57,11 +57,20 @@ test('two consecutive executions retain separate unchanged raw evidence after re
     assert(!existsSync(f.input), 'previous success must be invalidated before each execution');
     calls.push(index);
     writeResult(f, bytes);
+    const component = join(f.source, 'target/source-authoring-sdk-evidence', 'linux-' + ({x64: 'amd64', arm64: 'arm64'}[process.arch]));
+    mkdirSync(component, {recursive: true});
+    writeFileSync(join(component, 'receipt.json'), `unit component run ${index}\n`);
     return 0;
   });
   assert.deepEqual(calls, [1, 2]);
   assert.deepEqual(retained, [1, 2].map(run => ({ run, path: `run-${run}/vv-evidence.json`, byte_length: bytes.length, sha256: sha(bytes) })));
   for (const row of retained) assert.deepEqual(readFileSync(join(f.output, row.path)), bytes);
+  for (const run of [1, 2]) {
+    const bundle = JSON.parse(readFileSync(join(f.output, `run-${run}-source-authoring.json`)));
+    assert.equal(bundle.execution_status, 0);
+    assert.equal(bundle.files[0].path, 'receipt.json');
+    assert.equal(Buffer.from(bundle.files[0].base64, 'base64').toString(), `unit component run ${run}\n`);
+  }
 });
 
 test('failed, missing, wrong-commit or aliased results cannot promote a first success', async t => {
@@ -71,7 +80,14 @@ test('failed, missing, wrong-commit or aliased results cannot promote a first su
     await assert.rejects(retainTwoRuns(f.source, f.output, revision, async index => {
       calls++;
       if (index === 1) { writeResult(f, bytes); return 0; }
-      if (mode === 'nonzero') { writeFileSync(f.input, bytes); return 7; }
+      if (mode === 'nonzero') {
+        writeFileSync(f.input, bytes);
+        const component = join(f.source, 'target/source-authoring-sdk-evidence', 'linux-' + ({x64: 'amd64', arm64: 'arm64'}[process.arch]));
+        mkdirSync(component, {recursive: true});
+        writeFileSync(join(component, 'authoring.stderr'), 'original failing stderr\n');
+        writeFileSync(join(component, 'authoring.status.json'), '{"status":7}\n');
+        return 7;
+      }
       if (mode === 'missing') return 0;
       if (mode === 'directory') mkdirSync(f.input);
       if (mode === 'wrong-commit') writeFileSync(f.input, canonical({ ...evidence(), commit: '4'.repeat(40) }));
@@ -81,7 +97,24 @@ test('failed, missing, wrong-commit or aliased results cannot promote a first su
     assert.equal(calls, 2);
     assert.deepEqual(readFileSync(join(f.output, 'run-1/vv-evidence.json')), bytes);
     assert(!existsSync(join(f.output, 'run-2/vv-evidence.json')));
+    const bundle = JSON.parse(readFileSync(join(f.output, 'run-2-source-authoring.json')));
+    assert.equal(bundle.execution_status, mode === 'nonzero' ? 7 : 0);
+    if (mode === 'nonzero') {
+      assert.equal(Buffer.from(bundle.files.find(row => row.path === 'authoring.stderr').base64, 'base64').toString(), 'original failing stderr\n');
+      assert.equal(Buffer.from(bundle.files.find(row => row.path === 'authoring.status.json').base64, 'base64').toString(), '{"status":7}\n');
+    }
   }
+  const f = fixture(t), primary = Error('original executor rejection');
+  await assert.rejects(retainTwoRuns(f.source, f.output, revision, async () => {
+    const component = join(f.source, 'target/source-authoring-sdk-evidence', 'linux-' + ({x64: 'amd64', arm64: 'arm64'}[process.arch]));
+    mkdirSync(component, {recursive: true});
+    writeFileSync(f.input, 'aliased diagnostic');
+    symlinkSync(f.input, join(component, 'authoring.stderr'));
+    throw primary;
+  }), error => error === primary && error.retention_failure.status === 'retention-failed');
+  const secondary = JSON.parse(readFileSync(join(f.output, 'run-1-source-authoring-retention-error.json')));
+  assert.equal(secondary.status, 'retention-failed');
+  assert.equal(secondary.execution_status, null);
 });
 
 test('second execution cannot alter, delete or alias the first retained receipt', async t => {

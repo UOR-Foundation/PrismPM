@@ -1,5 +1,15 @@
 Feature: sdk
 
+  @DK-41 @build
+  Scenario: The installed SDK exposes lossless official module reading, replacement and notation conversion through versioned project-free JSON stdio, preserving complete parsed values and field presence under explicit byte budgets and honest transport failure outcomes.
+    Given the pinned LexLean authoring SDK and complete data and notation module values
+    When the actual CLI reads, replaces and converts modules without loading a project or invoking a helper
+    Then raw reads preserve annotations, unknown payload fields, floating-point values and explicit or absent defaults
+    And SDK-supported replacements and notation conversions preserve complete parsed module values
+    And invalid envelopes, SDK refusals and transport budgets produce typed failures before a successful result
+    And partial writes and flush failures retain Unknown disposition without adding errors to stdout
+    And the normal native SDK gate exercises the absolute installed command offline with source directories masked and binds its original receipt to the actual image and inventory
+
   @DK-32 @build
   Scenario: Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority.
     Given canonical source-owned envelopes and an exact independently selected expected context and public key

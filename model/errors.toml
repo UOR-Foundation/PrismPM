@@ -645,6 +645,34 @@ exit = 2
 statement = "A history is not prism/history/1, is repeated or cannot be read, or the holo cannot be read or fails its own integrity checks, so nothing was compared."
 
 [[error]]
+code = "PP5801"
+title = "Invalid source-authoring request"
+class = "configuration"
+exit = 2
+statement = "The source-authoring request has an unsupported schema, invalid envelope or UTF-8, or a zero or unaddressable byte budget. No successful source result has been published."
+
+[[error]]
+code = "PP5802"
+title = "Source-authoring SDK refusal"
+class = "semantic"
+exit = 1
+statement = "The pinned LexLean authoring SDK refused module reading, replacement or notation conversion. Its available source byte offset is retained; this operation does not establish checked semantics, linking or proof acceptance."
+
+[[error]]
+code = "PP5803"
+title = "Source-authoring resource refusal"
+class = "resource"
+exit = 14
+statement = "The source request or complete encoded result including its framing LF exceeds the caller-selected transport budget, or a checked transport allocation was refused before publication. SDK-internal allocations retain their actual failure behavior; the byte budgets are not a whole-process heap bound."
+
+[[error]]
+code = "PP5804"
+title = "Source-authoring transport failure"
+class = "io"
+exit = 1
+statement = "Reading source stdin or writing or flushing source stdout failed. A write or flush failure is reported on stderr with stdout disposition Unknown; already published bytes are not rolled back and no error envelope is appended to that stdout stream."
+
+[[error]]
 code = "PP6002"
 title = "Incomplete application acceptance"
 class = "acceptance"

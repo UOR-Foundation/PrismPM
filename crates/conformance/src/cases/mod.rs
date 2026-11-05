@@ -20,6 +20,7 @@ mod organization_lifecycle;
 mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
+mod source_authoring;
 mod text_cli;
 mod threat_model;
 mod workbench;
@@ -714,6 +715,7 @@ pub fn run_at(root: &Path, id: &str) {
             &[("sdk/npm/prism-code/test/volumes.test.mjs", 25)],
             "600000",
         ),
+        "DK-41" => source_authoring::verify(root),
         "DK-35" => verify_node_suite(
             root,
             id,

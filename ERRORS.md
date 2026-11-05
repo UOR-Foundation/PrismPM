@@ -557,6 +557,30 @@ A history is not prism/history/1, is repeated or cannot be read, or the holo can
 
 Class: `configuration`. Exit code: 2.
 
+## `PP5801` --- Invalid source-authoring request
+
+The source-authoring request has an unsupported schema, invalid envelope or UTF-8, or a zero or unaddressable byte budget. No successful source result has been published.
+
+Class: `configuration`. Exit code: 2.
+
+## `PP5802` --- Source-authoring SDK refusal
+
+The pinned LexLean authoring SDK refused module reading, replacement or notation conversion. Its available source byte offset is retained; this operation does not establish checked semantics, linking or proof acceptance.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP5803` --- Source-authoring resource refusal
+
+The source request or complete encoded result including its framing LF exceeds the caller-selected transport budget, or a checked transport allocation was refused before publication. SDK-internal allocations retain their actual failure behavior; the byte budgets are not a whole-process heap bound.
+
+Class: `resource`. Exit code: 14.
+
+## `PP5804` --- Source-authoring transport failure
+
+Reading source stdin or writing or flushing source stdout failed. A write or flush failure is reported on stderr with stdout disposition Unknown; already published bytes are not rolled back and no error envelope is appended to that stdout stream.
+
+Class: `io`. Exit code: 1.
+
 ## `PP6002` --- Incomplete application acceptance
 
 A required application acceptance gate is missing, skipped, stale, conditional, failed, or not bound to current artifacts.
