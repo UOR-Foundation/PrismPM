@@ -25,6 +25,8 @@ npm install prism-code
 npx prism-code@latest setup
 ```
 
+Spell it `prism-code@latest`. `npx` prefers a `prism-code` installed in any folder above the one you run it in, so a project with an older `prism-code` would otherwise run that version, which may have no `setup`.
+
 One run gets this machine ready for the build box on uor.foundation. It does four things:
 
 1. It adds the UOR MCP server, `lexlean` at `https://mcp.uor.foundation/`, to every agent it finds, and prints one line per agent.

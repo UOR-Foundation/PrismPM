@@ -159,7 +159,8 @@ Usage:
                                                     image the lockfile pins, create its cache volume, keep sources LF;
                                                     then add the UOR MCP server (lexlean, https://mcp.uor.foundation/)
                                                     to every agent found here: Claude Code, Codex, Cursor, VS Code; say
-                                                    how for Claude Desktop; register the holo:// handler; remember the agent
+                                                    how for Claude Desktop; install the Prism skills; register the
+                                                    holo:// handler; remember the agent. Run it as npx prism-code@latest setup
   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
                                                     hand the sentence to the agent: a terminal running claude or codex
                                                     (after Enter), Cursor's or VS Code's install link with the sentence
