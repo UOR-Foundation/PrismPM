@@ -405,6 +405,10 @@ path = "sdk/npm/prism-code/src/inspect.mjs"
 module = "images"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/journey/"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/manifest.mjs"
 module = "client"
 
