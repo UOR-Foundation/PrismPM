@@ -8,6 +8,9 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+### Features Added
+- `prism-code mcp`, the local Prism MCP server, and its place in `setup` (#325, `docs/proposals/325-prism-journey.md`, experimental). The server asks six questions (purpose, fields, outcomes, rules, properties, examples) and checks each answer as it arrives: a property the rules break returns the request that breaks it, and an example the rules contradict returns the rule that decides it. The spec (`prism/spec/1`) becomes a LexLean text application written for the user, each property a `linear_arithmetic` theorem in a proofs module that the build does not compile, and acceptance vectors from an evaluator with the model's semantics. `prism_build` proves, corrects axiom sets, builds the holo in the SDK image through the Docker and cache volume `setup` recorded, and replays the vectors through the guest. Proving and building run as jobs that outlast an agent's tool timeout and are not started twice by a second server. `setup` adds `prism` beside `lexlean` in each agent it configures, Claude Desktop included, and the `prism` skill describes the guided path.
+
 ## [0.4.1] - 2026-11-05
 
 ### Features Added

@@ -52,6 +52,38 @@ that runs `claude` or `codex` after Enter, the install link and clipboard
 for Cursor and VS Code, or the Claude and ChatGPT prompt URL. Another host or
 parameter exits 2. [Details and a check per OS][guide-setup].
 
+Beside `lexlean`, `setup` adds the local server `prism` to the same agents,
+Claude Desktop included: `prism-code mcp` on stdio.
+
+## Build a verified app by answering six questions (experimental)
+
+With the `prism` server connected, ask the agent for a Prism app, or call
+its `prism_start` tool. It asks six questions, one at a time:
+
+| Step | Asks | Becomes |
+| --- | --- | --- |
+| purpose | what the app decides, in one sentence | the app's name and description |
+| fields | what goes into one request | a line of space-separated fields, each a number or a choice |
+| outcomes | what the answer can be | the answers, plus `invalid` for a malformed request |
+| rules | `when ... then ...`, in order, then `otherwise` | the decision the guest runs |
+| properties | what must `never` or `always` happen | one theorem each, proved by Lean |
+| examples | real requests and their answers | acceptance vectors |
+
+Each answer is checked as it arrives. A property the rules break comes back
+with the request that breaks it, and an example the rules contradict comes back
+with the rule that decides it. `prism_build` then writes the LexLean model in
+`prism/`, has Lean prove every property, builds the holo in the SDK image with
+the cache `setup` created, and replays its acceptance vectors through the
+guest. Wrong axiom sets are corrected without asking. Proving takes about a
+minute; a first build takes ten minutes or more. The properties are proved;
+the reading of requests and the examples are tested.
+
+The tools are `prism_start`, `prism_answer`, `prism_spec` (read or replace the
+whole spec as `prism/spec/1` JSON), `prism_prove`, `prism_build`, `prism_try`
+(answer one request) and `prism_status`. Proving and building run as jobs, so a
+call returns `running` and the next call picks the job up. Design:
+[docs/proposals/325-prism-journey.md](../../../docs/proposals/325-prism-journey.md).
+
 ## Load, dispatch and replay vectors
 
 ```js
