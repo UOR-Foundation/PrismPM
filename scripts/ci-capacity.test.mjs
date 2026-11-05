@@ -168,7 +168,7 @@ test('source trigger policy refuses missing filtered broadened or redundant exec
   }
 });
 
-test('all affected jobs have explicit bounds; the one normative pass retains six hours', () => {
+test('all affected jobs have explicit bounds; source parts and normative assembly retain six hours', () => {
   for (const name of ['ci-parallel', 'vv', 'bootstrap', 'reproducibility', 'sdk', 'release', 'sdk-candidate', 'native-golden']) {
     for (const [id, job] of Object.entries(workflow(name).jobs)) {
       const bound = job['timeout-minutes'];
@@ -177,13 +177,19 @@ test('all affected jobs have explicit bounds; the one normative pass retains six
   }
   assert.equal(workflow('vv').jobs.vv['timeout-minutes'], 360);
   assert.equal(workflow('bootstrap').jobs['native-gate']['timeout-minutes'], 360);
-  const run = workflow('vv').jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd;
-  assert.equal(run, `set -euo pipefail
-bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
-node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv
-PRISMPM_VV
-)"
-`);
+  const {['source-parts']: parts, vv} = workflow('vv').jobs;
+  assert.equal(parts['timeout-minutes'], 360);
+  assert.equal(parts.strategy['max-parallel'], 4);
+  assert.equal(parts.strategy['fail-fast'], false);
+  assert.equal(parts.strategy.matrix.part.length, 15);
+  assert.equal(new Set(parts.strategy.matrix.part).size, 15);
+  assert.equal(vv.needs, 'source-parts');
+  assert.equal(vv.name, 'Linux x86-64 normative acceptance');
+  assert.equal(vv.if, '${{ always() && !cancelled() }}');
+  assert(!('strategy' in vv) && !('continue-on-error' in vv));
+  assert.deepEqual(vv.steps[0], {name: 'Require every source part to succeed',
+    env: {SOURCE_PARTS_RESULT: '${{ needs.source-parts.result }}'},
+    run: 'set -euo pipefail\ntest "$SOURCE_PARTS_RESULT" = success\n'});
 });
 
 const readOnly = `contains(fromJSON('["check", "build", "verify", "test"]'), inputs.command)`;

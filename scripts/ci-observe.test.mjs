@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { boundedLog, compilerProcess, dockerUsage, keyNumbers, limits, monitor, pressure, redactor } from './ci-observe.mjs';
+import {parts} from './vv-assemble.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
 
 const script = fileURLToPath(new URL('./ci-observe.mjs', import.meta.url));
@@ -346,16 +347,17 @@ test('cancellation kills a resistant descendant even when it has no inherited ou
   assert.equal(readJson(join(directory, 'monitor-result.json')).reason, 'stopped');
 });
 
-test('actual normative single-pass VV workflow propagates failure and rejects a swallowed failure', t => {
-  const body = workflow('vv.yml').jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd;
+test('actual normative source-part workflow propagates failure and rejects a swallowed failure', t => {
+  const body = workflow('vv.yml').jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd;
   const check = candidate => {
     for (const status of [0, 19]) {
       const {root, env: baseEnv} = fixture(t);
       const env = sessionFixture(root, baseEnv, {readDuringPreparation: true, image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
       copyFileSync(script, join(root, 'scripts/ci-observe.mjs'));
-      const just = join(root, 'bin/just');
-      writeFileSync(just, `#!${process.execPath}\nconst fs=require('node:fs');const assert=require('node:assert/strict');assert.deepEqual(process.argv.slice(2),['vv']);const path='count';const count=fs.existsSync(path)?Number(fs.readFileSync(path))+1:1;fs.writeFileSync(path,String(count));process.stdout.write('call:'+count+'\\n');process.exit(${status});\n`);
-      chmodSync(just, 0o700);
+      Object.assign(env, {GITHUB_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2', VV_PART: 'conformance'});
+      const command = join(root, 'scripts/release-gate-evidence.mjs');
+      writeFileSync(command, `#!${process.execPath}\nconst {default:fs}=await import('node:fs');const {default:assert}=await import('node:assert/strict');assert.deepEqual(process.argv.slice(2),['source-part-run','.','target/source-vv-evidence','a'.repeat(40),'amd64','-','123','2','conformance']);const path='count';const count=fs.existsSync(path)?Number(fs.readFileSync(path))+1:1;fs.writeFileSync(path,String(count));process.stdout.write('call:'+count+'\\n');process.exit(${status});\n`);
+      chmodSync(command, 0o700);
       if (!status) assert.equal(execFileSync('bash', ['-c', candidate], {cwd: root, env, encoding: 'utf8', timeout: 20_000}), 'call:1\n');
       else assert.throws(() => execFileSync('bash', ['-c', candidate], {cwd: root, env, encoding: 'utf8', timeout: 20_000}), error => {
         assert.equal(error.status, status); return true;
@@ -367,11 +369,11 @@ test('actual normative single-pass VV workflow propagates failure and rejects a 
     }
   };
   check(body);
-  assert.throws(() => check(body.replace('-- just vv', '-- just vv || true')));
+  assert.throws(() => check(body.replace('\nPRISMPM_VV', ' || true\nPRISMPM_VV')));
 });
 
 test('all observed workflows retain their full gates, always stop/upload, and keep pinned actions', () => {
-  for (const [name, job, runs] of [['bootstrap.yml', 'native-gate', 1], ['vv.yml', 'vv', 1]]) {
+  for (const [name, job, command] of [['bootstrap.yml', 'native-gate', ' -- just vv'], ['vv.yml', 'source-parts', ' -- node scripts/release-gate-evidence.mjs source-part-run']]) {
     const steps = workflow(name).jobs[job].steps;
     const start = steps.findIndex(step => step.run?.includes('ci-observe.mjs start'));
     const gate = steps.findIndex(step => step.with?.runCmd);
@@ -381,7 +383,7 @@ test('all observed workflows retain their full gates, always stop/upload, and ke
     assert.equal(steps[stop].if, 'always()'); assert.equal(steps[upload].if, 'always()');
     assert.equal(steps[upload].with.path, 'target/ci-diagnostics/');
     assert.equal(steps[upload].with['retention-days'], 7);
-    assert.equal((steps[gate].with.runCmd.match(/ -- just vv/g) ?? []).length, runs);
+    assert.equal(steps[gate].with.runCmd.split(command).length - 1, 1);
     assert.equal(steps[gate]['continue-on-error'], undefined);
     for (const step of steps.filter(value => value.uses && !value.uses.startsWith('./'))) assert.match(step.uses, /@[0-9a-f]{40}$/);
   }
@@ -407,20 +409,50 @@ test('one normative workflow owns complete main acceptance and diagnostic owners
       group: '${{ github.workflow }}-${{ github.ref }}',
       'cancel-in-progress': true,
     });
-    assert.equal(normative.jobs.vv.if, undefined);
-    assert.equal(normative.jobs.vv['continue-on-error'], undefined);
-    assert.equal(normative.jobs.vv['timeout-minutes'], 360);
-    const checkout = normative.jobs.vv.steps.find(step => step.uses?.startsWith('actions/checkout@'));
-    assert.equal(checkout.with['fetch-depth'], 0);
-    assert.equal(checkout.with['persist-credentials'], false);
-    const gate = normative.jobs.vv.steps.find(step => step.with?.runCmd);
-    assert.equal(gate.if, undefined);
-    assert.equal(gate['continue-on-error'], undefined);
+    const source = normative.jobs['source-parts'], aggregate = normative.jobs.vv;
+    assert.deepEqual(Object.keys(normative.jobs).sort(), ['source-parts', 'vv']);
+    assert.equal(source.if, undefined);
+    assert.equal(aggregate.if, '${{ always() && !cancelled() }}');
+    for (const job of [source, aggregate]) {
+      assert.equal(job['continue-on-error'], undefined);
+      assert.equal(job['timeout-minutes'], 360);
+      const checkout = job.steps.find(step => step.uses?.startsWith('actions/checkout@'));
+      assert.equal(checkout.with['fetch-depth'], 0); assert.equal(checkout.with['persist-credentials'], false);
+    }
+    assert.equal(source.name, 'source-vv-part-${{ matrix.part }}');
+    assert.deepEqual([...source.strategy.matrix.part].sort(), [...parts].sort());
+    assert.equal(source.strategy['fail-fast'], false); assert.equal(source.strategy['max-parallel'], 4);
+    assert.equal(aggregate.name, 'Linux x86-64 normative acceptance');
+    assert.equal(aggregate.needs, 'source-parts');
+    const resultGuard = aggregate.steps[0];
+    assert.equal(resultGuard.if, undefined); assert.equal(resultGuard['continue-on-error'], undefined);
+    assert.deepEqual(resultGuard.env, {SOURCE_PARTS_RESULT: '${{ needs.source-parts.result }}'});
+    assert.equal(resultGuard.run, 'set -euo pipefail\n' + 'test "$SOURCE_PARTS_RESULT" = success\n');
+    for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+      const guard = () => execFileSync('bash', ['-c', resultGuard.run], {env: {...process.env, SOURCE_PARTS_RESULT: result}, stdio: 'pipe', timeout: 5000});
+      if (result === 'success') guard(); else assert.throws(guard, error => error.status !== 0);
+    }
+    const gate = source.steps.find(step => step.with?.runCmd);
+    assert.equal(gate.if, undefined); assert.equal(gate['continue-on-error'], undefined);
     assert.equal(gate.with.push, 'never');
+    assert.deepEqual(gate.env, {VV_PART: '${{ matrix.part }}'});
+    assert.equal(gate.with.env, 'GITHUB_SHA\nGITHUB_RUN_ID\nGITHUB_RUN_ATTEMPT\nVV_PART\n');
     assert.equal(gate.with.runCmd, 'set -euo pipefail\n'
       + 'bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<\'PRISMPM_VV\'\n'
-      + 'node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv\n'
+      + 'node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- node scripts/release-gate-evidence.mjs source-part-run . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$VV_PART"\n'
       + 'PRISMPM_VV\n)"\n');
+    const checkpoint = source.steps.find(step => step.name === 'Start disk checkpoints');
+    assert.deepEqual(checkpoint.env, {PRISMPM_CI_CHECKPOINT_PART: '${{ matrix.part }}'});
+    const diagnosticUpload = source.steps.find(step => step.with?.path === 'target/ci-diagnostics/');
+    assert.equal(diagnosticUpload.with.name, 'vv-diagnostics-${{ matrix.part }}-${{ github.run_id }}-${{ github.run_attempt }}');
+    const assemble = aggregate.steps.find(step => step.name === 'Assemble every original source part into normative evidence');
+    assert.equal(assemble.if, undefined); assert.equal(assemble['continue-on-error'], undefined);
+    assert.equal(assemble.run, 'set -euo pipefail\n'
+      + 'node scripts/release-gate-evidence.mjs source-part-assemble . target/source-vv-evidence \\\n'
+      + '  "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\\n'
+      + '  target/source-vv-selection/provider.json target/source-vv-selection/selection.json\n');
+    const download = aggregate.steps.find(step => step.uses?.startsWith('actions/download-artifact@'));
+    assert.deepEqual(download.with, {'artifact-ids': '${{ steps.selection.outputs.ids }}', 'merge-multiple': true, path: 'target/source-vv-evidence'});
     const events = [{workflow_dispatch: null}, {pull_request: null, merge_group: {branches: ['main']}, workflow_dispatch: null},
       {schedule: [{cron: '17 3 * * *'}], workflow_dispatch: null}];
     for (const [index, diagnostic] of diagnostics.entries()) assert.deepEqual(diagnostic.on, events[index]);
@@ -431,11 +463,27 @@ test('one normative workflow owns complete main acceptance and diagnostic owners
     value => { delete value.on.push; },
     value => { value.on.pull_request = {paths: ['crates/**']}; },
     value => { value.jobs.vv.if = 'false'; },
+    value => { delete value.jobs.vv.if; },
+    value => { value.jobs.vv.if = '${{ always() }}'; },
+    value => { value.jobs.vv.steps.shift(); },
+    value => { value.jobs.vv.steps.reverse(); },
+    value => { value.jobs.vv.steps[0].if = 'false'; },
+    value => { value.jobs.vv.steps[0]['continue-on-error'] = true; },
+    value => { value.jobs.vv.steps[0].env.SOURCE_PARTS_RESULT = 'success'; },
+    value => { value.jobs.vv.steps[0].run += 'true\n'; },
+    value => { value.jobs.vv.steps[0].run = value.jobs.vv.steps[0].run.replace('= success', '!= failure'); },
     value => { value.jobs.vv['continue-on-error'] = true; },
-    value => { value.jobs.vv.steps.find(step => step.with?.runCmd).if = 'false'; },
-    value => { value.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd = value.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd.replace('--with-sdk', '--without-sdk'); },
-    value => { value.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd += 'true\n'; },
-    value => { value.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd = value.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd.replace('just vv', 'just validate'); },
+    value => { value.jobs['source-parts'].steps.find(step => step.with?.runCmd).if = 'false'; },
+    value => { value.jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd = value.jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd.replace('--with-sdk', '--without-sdk'); },
+    value => { value.jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd += 'true\n'; },
+    value => { value.jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd = value.jobs['source-parts'].steps.find(step => step.with?.runCmd).with.runCmd.replace('source-part-run', 'source-run'); },
+    value => { value.jobs['source-parts'].strategy.matrix.part.pop(); },
+    value => { value.jobs['source-parts'].strategy.matrix.part.push(parts[0]); },
+    value => { value.jobs['source-parts'].strategy['fail-fast'] = true; },
+    value => { value.jobs['source-parts'].strategy['max-parallel'] = 15; },
+    value => { value.jobs['source-parts'].steps.find(step => step.name === 'Start disk checkpoints').env = {}; },
+    value => { value.jobs.vv.needs = []; },
+    value => { value.jobs.vv.steps.find(step => step.name === 'Assemble every original source part into normative evidence').run += 'true\n'; },
     value => { value.concurrency['cancel-in-progress'] = false; },
     value => { value.concurrency.group = '${{ github.ref }}'; },
     value => { value.concurrency.group = '${{ github.workflow }}-${{ github.run_id }}'; },

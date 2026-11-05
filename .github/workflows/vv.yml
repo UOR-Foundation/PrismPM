@@ -20,13 +20,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  vv:
-    name: Linux x86-64 normative acceptance
+  source-parts:
+    name: source-vv-part-${{ matrix.part }}
     runs-on: ubuntu-24.04
-    # One full pass was cancelled at the 6 hour limit before reaching gate 11
-    # (the 6th gate alone took 3.4 hours), so the bound stays at the platform
-    # maximum until the measured pass fits below it.
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        part: [source, gates, conformance, ho-oc, st-sy, dk-0-1, dk-2, dk-3, dk-4, standalone-projection, standalone-reservation, standalone-payload, standalone-recovery-frames, standalone-journal-recovery, standalone-retention]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -53,22 +55,40 @@ jobs:
       - name: Start disk checkpoints
         timeout-minutes: 1
         continue-on-error: true
+        env:
+          PRISMPM_CI_CHECKPOINT_PART: ${{ matrix.part }}
         run: |
           set -euo pipefail
           trap 'rm -rf .ci-checkpoint-uploader' EXIT
           cp .ci-checkpoint-uploader/dist/upload/index.js "$RUNNER_TEMP/ci-checkpoint-uploader.js"
           rm -rf .ci-checkpoint-uploader
           node scripts/ci-disk-checkpoint.mjs start "$RUNNER_TEMP/ci-disk-checkpoints" "$RUNNER_TEMP/ci-checkpoint-uploader.js"
-      - name: Run the complete pinned devcontainer gate
+      - id: evidence
+        env:
+          VV_PART: ${{ matrix.part }}
+        run: |
+          set -euo pipefail
+          name=$(node scripts/release-gate-evidence.mjs artifact-name "source-vv-part-$VV_PART" "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+      - name: Run the complete pinned devcontainer source part
         uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        env:
+          VV_PART: ${{ matrix.part }}
         with:
+          env: |
+            GITHUB_SHA
+            GITHUB_RUN_ID
+            GITHUB_RUN_ATTEMPT
+            VV_PART
           cacheFrom: ${{ steps.cache.outputs.cache-from }}
           cacheTo: ${{ steps.cache.outputs.cache-to }}
           push: never
+          # Temporary invocation-local SDK preparation repeats for each part.
+          # A shared internal handoff requires a separately reviewed contract.
           runCmd: |
             set -euo pipefail
             bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
-            node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv
+            node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- node scripts/release-gate-evidence.mjs source-part-run . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$VV_PART"
             PRISMPM_VV
             )"
       - name: Stop disk checkpoints
@@ -91,7 +111,77 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: vv-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: vv-diagnostics-${{ matrix.part }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: target/ci-diagnostics/
           if-no-files-found: warn
           retention-days: 7
+      - name: Retain original source part evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.evidence.outputs.name }}
+          path: target/source-vv-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+
+  vv:
+    name: Linux x86-64 normative acceptance
+    needs: source-parts
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require every source part to succeed
+        env:
+          SOURCE_PARTS_RESULT: ${{ needs.source-parts.result }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_PARTS_RESULT" = success
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/source-vv-selection
+          node scripts/release-artifact-metadata.mjs target/source-vv-selection/provider.json "$GITHUB_RUN_ID"
+          owners=$(node scripts/vv-assemble.mjs --list | sed 's/[^[:space:]]\+/source-vv-part-&/g')
+          node scripts/release-gate-evidence.mjs select-artifacts target/source-vv-selection/provider.json target/source-vv-selection/selection.json \
+            "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" $owners
+          ids=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts.map(a=>a.id).join(","))' target/source-vv-selection/selection.json)
+          printf 'ids=%s\n' "$ids" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.selection.outputs.ids }}
+          merge-multiple: true
+          path: target/source-vv-evidence
+      - name: Assemble every original source part into normative evidence
+        run: |
+          set -euo pipefail
+          node scripts/release-gate-evidence.mjs source-part-assemble . target/source-vv-evidence \
+            "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            target/source-vv-selection/provider.json target/source-vv-selection/selection.json
+      - name: Retain original source parts and immutable selection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vv-source-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/source-vv-evidence/
+            target/source-vv-selection/
+            target/vv-evidence.json
+          include-hidden-files: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30

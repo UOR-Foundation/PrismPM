@@ -1268,8 +1268,9 @@ Both the archive and complete LexLean tree must be registered. No other vendored
 Lean path is admitted, even when checksummed. This boundary cannot introduce
 handwritten PrismPM definitions, proofs or replacement application behavior.
 
-`cargo xtask vv` is the sole normative acceptance entry point and `just vv` is
-its alias. It performs these 15 non-mutating gates in order: formatting; model,
+`cargo xtask vv` is the complete normative acceptance entry point and `just vv`
+is its alias. Standalone and installed-SDK invocations perform these 15
+non-mutating gates in order: formatting; model,
 diagnostic, standards, and generated-document validation; SPEC/register/
 scenario/test links; source/error/unsafe/dependency/generated-file audits;
 Clippy with warnings denied; workspace unit and property tests; conformance and
@@ -1278,10 +1279,40 @@ format/lock plus Prism check/build/verify; Holo schema and reviewed goldens;
 named export/coverage/Rust/execution evidence; two-root reproducibility;
 authoritative upstream corpora/registry/runtime conformance; dependency policy;
 and packaged-crate/downstream-API checks. Golden and fixture
-rewriting require separate explicit commands and a review reason. Linux CI
-runs that exact command in the pinned devcontainer. Acceptance evidence is
-canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
-binds the exact full Git commit.
+rewriting require separate explicit commands and a review reason. Acceptance
+evidence is canonical `prismpm/vv-evidence/1`, lists all 15 gates, records
+`passed`, and binds the exact full Git commit.
+
+Main source CI may schedule the same complete acceptance through the closed
+`cargo xtask vv-part` dispatcher in separate pinned devcontainers. The exact
+part inventory in `scripts/vv-assemble.mjs` assigns gates 1–5 and the residual
+workspace targets to `source`, keeps gates 7–15 in one process to conserve
+shared build and verification identities, assigns every conformance execution
+and residual conformance library/bin/doc target exactly once, and separately
+executes all six original standalone browser pairs. Gate 12 still constructs
+two fresh absolute roots and compares their complete raw trees and identifiers.
+Independent bootstrap, exporter/compiler-driver and fixed-null fallback
+executions remain additional owners. Every Cargo owner verifies its actual
+executable target and test-list inventory; source registration strings alone
+cannot establish complete execution. Every original owner retains its deadline,
+complete files, exact counts, output custody and failure behavior. Each part
+requires clean source before and after execution and conserves the executing
+GateDriver identity. No prior owner success or acceptance receipt substitutes
+for fresh execution; the existing construction-cache policy remains unchanged.
+
+This source-only scheduling equivalence does not change the ordered standalone
+command or the installed SDK's two complete consecutive passes. Source CI runs
+at most four parts concurrently, retains the six-hour job cap and unchanged
+trigger/supersession policy, and admits the canonical 15-gate receipt only after
+the unchanged strict part assembler validates all current-source passed part
+receipts and their original command bytes. Fan-in uses original provider job
+and artifact records, exact run/source/architecture identities, immutable
+artifact IDs and the latest successful owning attempt; an incomplete or failed
+latest owner cannot fall back to an older success. Original selected attempts,
+outputs and failed diagnostics remain retained. Invocation-local SDK
+construction remains required wherever existing exact-source authenticated
+supply authority does not apply; this clause does not admit an unsigned image,
+a new signer context, shared caller cache or substituted qualification.
 
 The source audit first checks both retained native-record sets against the
 shared golden tree using the same closed composition rules as the later native
@@ -1408,9 +1439,12 @@ locked and offline; no caller cache, dependency refresh or host compiler is used
 Hosted CI qualifies each head once, where it matters. Every pull request, whatever
 its base, runs one fast set of at most three jobs (format, lint and dependency
 policy; model and audits; fixtures and reviewed goldens), each with a timeout and
-superseded by the next push to the same pull request. The complete 15-gate `just vv`
-executes once per main push or release tag, and on request for any head; it is
-not repeated for an unchanged head, and no consecutive second pass is required.
+superseded by the next push to the same pull request. The complete 15-gate source
+acceptance defined above executes once per main push or release tag, and on
+request for any head, either through ordered `just vv` or its closed source
+scheduling equivalent. It is not repeated for an unchanged head; source CI
+requires no consecutive second pass. Installed-SDK execution still requires
+both complete consecutive passes under its separate acceptance contract.
 Dual-architecture native source review runs on main pushes and release tags, and
 the standalone two-root reproducibility comparison runs nightly on main. Release
 evidence requirements are unchanged and are stated with the release gates.

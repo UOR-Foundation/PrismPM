@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { diskComponents } from './ci-disk-components.mjs';
+import { parts } from './vv-assemble.mjs';
 
 const script = fileURLToPath(import.meta.url);
 const uploaderHash = '0165b8a75330f3228f2c7a234b4ff8a107b9139c2b519147f4c8e9fe99b262d8';
@@ -43,12 +44,20 @@ export function sanitizeSample(raw) {
 
 // Keep only the artifact runtime and fixed GitHub context. Never echo child
 // output: it can contain service endpoints or credentials on a failed request.
+export function checkpointPart(env) {
+  if (!Object.hasOwn(env, 'PRISMPM_CI_CHECKPOINT_PART')) return undefined;
+  const part = env.PRISMPM_CI_CHECKPOINT_PART;
+  if (typeof part !== 'string' || !parts.includes(part)) throw new Error('invalid checkpoint part');
+  return part;
+}
 export function runtimeEnvironment(env) {
   const result = {};
   for (const key of ['PATH', 'HOME', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RUNTIME_URL', 'ACTIONS_RESULTS_URL',
     'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_REPOSITORY', 'GITHUB_SERVER_URL', 'GITHUB_WORKSPACE', 'RUNNER_TRACKING_ID']) {
     if (typeof env[key] === 'string') result[key] = env[key];
   }
+  const part = checkpointPart(env);
+  if (part !== undefined) result.PRISMPM_CI_CHECKPOINT_PART = part;
   return result;
 }
 export function uploadEnvironment(env, path, output, name) {
@@ -102,6 +111,8 @@ export async function checkpoint(directory, entry, {env = process.env, attempts 
   intervalMs = bounds.intervalMs, collect = diskComponents, upload = uploadOnce} = {}) {
   if (!Number.isSafeInteger(attempts) || attempts < 1 || attempts > bounds.attempts ||
       !Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > bounds.intervalMs) throw new Error('invalid checkpoint bounds');
+  const part = checkpointPart(env);
+  const namespace = part === undefined ? {} : {part};
   if (!numericId(env.GITHUB_RUN_ID) || !numericId(env.GITHUB_RUN_ATTEMPT)) throw new Error('missing run identity');
   let previous = 'none', made = 0;
   const deadline = performance.now() + 6 * 60 * 60_000;
@@ -111,7 +122,7 @@ export async function checkpoint(directory, entry, {env = process.env, attempts 
     try { sample = sanitizeSample(await collect({componentOffset: sequence % 5})); } catch { sample = sanitizeSample(null); }
     // The collector supplies only closed labels and numeric/status values. No
     // filesystem paths, filenames, environment or process output are retained.
-    const snapshot = Buffer.from(JSON.stringify({version: 1, sequence, time: new Date().toISOString(), previousUpload: previous, sample}) + '\n');
+    const snapshot = Buffer.from(JSON.stringify({version: 1, ...namespace, sequence, time: new Date().toISOString(), previousUpload: previous, sample}) + '\n');
     const path = join(directory, `snapshot-${sequence}.json`), output = join(directory, `output-${sequence}`);
     if (snapshot.length > bounds.snapshotBytes) { previous = 'oversize'; }
     else {
@@ -126,7 +137,7 @@ export async function checkpoint(directory, entry, {env = process.env, attempts 
         } catch {} finally { try { if (ownsLatest) rmSync(latest, {force: true}); } catch {} }
         writeFileSync(output, '', {mode: 0o600, flag: 'wx'}); ownsOutput = true;
         if (sequence === 0) writeFileSync(join(directory, 'ready'), '', {mode: 0o600, flag: 'wx'});
-        const name = `vv-disk-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}-${sequence}`;
+        const name = `vv-disk-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}-${sequence}${part === undefined ? '' : '-' + part}`;
         const result = await upload({entry, path, output, name, env, stopFile: join(directory, 'stop')});
         previous = ['uploaded', 'failed', 'timeout', 'unavailable', 'unconfirmed', 'cancelled'].includes(result?.status) ? result.status : 'unconfirmed';
       } catch { previous = 'failed'; }
@@ -138,7 +149,7 @@ export async function checkpoint(directory, entry, {env = process.env, attempts 
     const status = join(directory, `status-${sequence}`);
     let ownsStatus = false;
     try {
-      writeFileSync(status, JSON.stringify({attempts: made, lastUpload: previous}) + '\n', {mode: 0o600, flag: 'wx'});
+      writeFileSync(status, JSON.stringify({...namespace, attempts: made, lastUpload: previous}) + '\n', {mode: 0o600, flag: 'wx'});
       ownsStatus = true; renameSync(status, join(directory, 'status.json')); ownsStatus = false;
     } catch {} finally { try { if (ownsStatus) rmSync(status, {force: true}); } catch {} }
     if (made >= attempts) break;
@@ -161,6 +172,7 @@ async function main() {
     }
     return;
   }
+  checkpointPart(process.env);
   if (!entryArg) throw new Error('missing uploader');
   const entry = resolve(entryArg);
   if (mode === 'start') {

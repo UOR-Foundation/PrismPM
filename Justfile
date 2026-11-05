@@ -77,6 +77,10 @@ codegen:
 release-check:
     cargo run --package xtask -- release-check
 
+# Execute one closed part of the complete verification schedule.
+vv-part part:
+    ./scripts/vv.sh vv-part {{part}}
+
 # Stage release artifacts
 release-artifacts:
     cargo run --package xtask -- release-artifacts

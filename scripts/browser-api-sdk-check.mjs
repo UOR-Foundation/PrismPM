@@ -292,6 +292,19 @@ export async function runStandaloneSuites(root,launch=launchSuite,emit=text=>pro
  return runSuiteCollection(root,standaloneSuites,launch,emit);
 }
 
+// Source scheduling selects one unchanged original file pair. The complete
+// monolithic and installed paths above still execute all six owners.
+export const standaloneOwnerIds=Object.freeze({
+ projection:'Session Projection',reservation:'Session Reservation',payload:'Session Payload',
+ 'recovery-frames':'Session Recovery Frames','journal-recovery':'Session Journal Recovery',retention:'Session Retention',
+});
+export async function runStandaloneOwner(root,owner,launch=launchSuite,emit=text=>process.stdout.write(text)){
+ assert(Object.hasOwn(standaloneOwnerIds,owner),'closed standalone source owner');
+ const selected=standaloneSuites.filter(row=>row.id===standaloneOwnerIds[owner]);
+ assert.equal(selected.length,1,'exact original standalone source owner');
+ return runSuiteCollection(root,selected,launch,emit);
+}
+
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const[mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
@@ -310,5 +323,6 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);
  else if(mode==='run'&&args.length===0)console.log(JSON.stringify(await runSuites(resolve(dirname(fileURLToPath(import.meta.url)),'..'))));
  else if(mode==='standalone'&&args.length===0)console.log(JSON.stringify(await runStandaloneSuites(resolve(dirname(fileURLToPath(import.meta.url)),'..'))));
+ else if(mode==='standalone-owner'&&args.length===1)console.log(JSON.stringify(await runStandaloneOwner(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
  else throw Error('closed browser SDK test binding command');
 }

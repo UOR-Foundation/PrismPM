@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { bounds, checkpoint, sanitizeSample, uploadEnvironment, uploadOnce } from './ci-disk-checkpoint.mjs';
+import {parts} from './vv-assemble.mjs';
+import { bounds, checkpoint, checkpointPart, runtimeEnvironment, sanitizeSample, uploadEnvironment, uploadOnce } from './ci-disk-checkpoint.mjs';
 
 function temporary(t) {
   const path = mkdtempSync(join(tmpdir(), 'ci-checkpoints-'));
@@ -54,6 +55,7 @@ test('checkpoints bound attempts, expose previous failure, remove staging and do
     }});
   assert.deepEqual(names, ['vv-disk-123-1-0', 'vv-disk-123-1-1', 'vv-disk-123-1-2']);
   assert.deepEqual(offsets, [0, 1, 2]);
+  assert(!Object.hasOwn(snapshots[0], 'part'), 'default snapshot schema stays unchanged');
   assert.equal(snapshots[0].previousUpload, 'none'); assert.equal(snapshots[1].previousUpload, 'timeout');
   assert.equal(snapshots[2].previousUpload, 'uploaded');
   assert.ok(!readdirSync(root).some(name => /^snapshot-\d+\.json$|^output-\d+$|^latest-\d+$/.test(name)));
@@ -78,10 +80,43 @@ test('hostile collector output is filtered to bounded labels and numbers', async
   assert.deepEqual(JSON.parse(readFileSync(join(root, 'status.json'))), {attempts: 2, lastUpload: 'failed'});
 });
 
-test('workflow keeps complete pinned gate and brackets it with best-effort checkpoints', () => {
+test('all closed source parts namespace checkpoint names, snapshots, status and detached child environment', async t => {
+  assert.equal(parts.length, 15); assert.equal(new Set(parts).size, 15);
+  const names = [];
+  for (const part of parts) {
+    const root = temporary(t), selected = {...env, PRISMPM_CI_CHECKPOINT_PART: part};
+    const childEnv = runtimeEnvironment({...selected, PASSWORD: 'not-for-child'});
+    assert.equal(childEnv.PRISMPM_CI_CHECKPOINT_PART, part); assert(!('PASSWORD' in childEnv));
+    await checkpoint(root, 'unused', {env: childEnv, attempts: 1, intervalMs: 1, collect: async () => ({}),
+      upload: async ({name, path, env: uploadEnv}) => {
+        names.push(name); assert.equal(name, `vv-disk-123-1-0-${part}`);
+        assert.equal(JSON.parse(readFileSync(path)).part, part);
+        assert.equal(uploadEnv.PRISMPM_CI_CHECKPOINT_PART, part); return {status: 'uploaded'};
+      }});
+    assert.deepEqual(JSON.parse(readFileSync(join(root, 'status.json'))), {part, attempts: 1, lastUpload: 'uploaded'});
+    assert.equal(JSON.parse(readFileSync(join(root, 'latest.json'))).part, part);
+  }
+  assert.equal(new Set(names).size, 15);
+  assert.equal(checkpointPart(env), undefined);
+  assert(!Object.hasOwn(runtimeEnvironment(env), 'PRISMPM_CI_CHECKPOINT_PART'));
+});
+
+test('empty, unknown, unsafe or foreign part namespaces fail before collection or upload', async t => {
+  for (const part of ['', 'unknown', '../validate', 'validate/other', 'unit\nsecret', 'source-vv', '${{ matrix.part }}', 'sdk-amd64', null, 1, undefined]) {
+    const root = temporary(t), selected = {...env, PRISMPM_CI_CHECKPOINT_PART: part};
+    assert.throws(() => runtimeEnvironment(selected), /invalid checkpoint part/);
+    assert.throws(() => uploadEnvironment(selected, 'input', 'output', 'name'), /invalid checkpoint part/);
+    await assert.rejects(() => checkpoint(root, 'unused', {env: selected, attempts: 1, intervalMs: 1,
+      collect: async () => {assert.fail('invalid namespace collected');},
+      upload: async () => {assert.fail('invalid namespace uploaded');}}), /invalid checkpoint part/);
+    assert.deepEqual(readdirSync(root), []);
+  }
+});
+
+test('workflow brackets every original source part with pinned best-effort checkpoints', () => {
   const text = readFileSync(new URL('../.github/workflows/vv.yml', import.meta.url), 'utf8');
   const start = text.indexOf('      - name: Start disk checkpoints');
-  const gate = text.indexOf('      - name: Run the complete pinned devcontainer gate');
+  const gate = text.indexOf('      - name: Run the complete pinned devcontainer source part');
   const stop = text.indexOf('      - name: Stop disk checkpoints');
   assert.ok(start >= 0 && start < gate && gate < stop);
   assert.match(text.slice(start, gate), /continue-on-error: true/);
@@ -91,7 +126,9 @@ test('workflow keeps complete pinned gate and brackets it with best-effort check
   assert.match(text, /ref: ea165f8d65b6e75b540449e92b4886f43607fa02/);
   const gateText = text.slice(gate, stop);
   assert.match(gateText, /devcontainers\/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6/);
-  assert.match(gateText, /node scripts\/ci-observe\.mjs run target\/ci-diagnostics\/vv -- just vv/);
+  assert.match(gateText, /node scripts\/ci-observe\.mjs run target\/ci-diagnostics\/vv -- node scripts\/release-gate-evidence\.mjs source-part-run/);
+  assert.match(text.slice(start, gate), /PRISMPM_CI_CHECKPOINT_PART: \$\{\{ matrix\.part \}\}/);
+  assert.match(readFileSync(new URL('./ci-disk-checkpoint.mjs', import.meta.url), 'utf8'), /env: runtimeEnvironment\(process\.env\)/);
   assert.doesNotMatch(gateText, /continue-on-error|\|\| true/);
   assert.match(readFileSync(new URL('../xtask/src/main.rs', import.meta.url), 'utf8'), /"scripts\/ci-disk-checkpoint\.test\.mjs"/);
 });

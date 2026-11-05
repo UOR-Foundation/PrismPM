@@ -7,6 +7,8 @@ import {basename, dirname, join, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {bootstrapNames, canonical, captureBootstrap, hash, readOriginal, validateBootstrapBytes} from './sdk-bootstrap-retention.mjs';
 import {validateVvEvidence} from './sdk-vv-run.mjs';
+import {parts as sourceVvParts} from './vv-assemble.mjs';
+import {sourcePartCommand} from './source-vv-parts.mjs';
 
 export function releaseContext(revision, architecture, image, runId, attempt) {
   assert.match(revision, /^[0-9a-f]{40}$/); assert(['amd64', 'arm64'].includes(architecture));
@@ -17,14 +19,15 @@ export function releaseContext(revision, architecture, image, runId, attempt) {
 function evidenceOwner(owner, architecture) {
   assert(typeof owner === 'string');
   const nativeArchive = `native-${architecture === 'amd64' ? 'x86_64' : 'aarch64'}-unknown-linux-gnu`;
-  assert(['source-vv', `sdk-equivalence-${architecture}`, nativeArchive, `full-sdk-vv-sdk-${architecture}`].includes(owner), 'closed evidence owner');
+  assert(['source-vv', `sdk-equivalence-${architecture}`, nativeArchive, `full-sdk-vv-sdk-${architecture}`].includes(owner)
+    || sourceVvParts.some(part => owner === `source-vv-part-${part}`), 'closed evidence owner');
   return owner === 'source-vv' ? 'gate' : owner === nativeArchive ? `sdk-equivalence-${architecture}`
     : owner === `full-sdk-vv-sdk-${architecture}` ? `installed-sdk-${architecture}` : owner;
 }
 export function artifactName(owner, context) {
   releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
   evidenceOwner(owner, context.architecture);
-  assert(context.image_reference !== null || owner === 'source-vv', 'SDK owner requires an exact image');
+  assert(context.image_reference !== null || owner === 'source-vv' || owner.startsWith('source-vv-part-'), 'SDK owner requires an exact image');
   const image = context.image_reference === null ? 'source' : context.image_reference.split('@sha256:')[1];
   return ['prismpm-evidence-v1', owner, context.source_revision, context.architecture, image, context.run_id, context.run_attempt].join('--');
 }
@@ -267,7 +270,9 @@ async function nativeRun(root, output, context, archive) {
   validateNative(files, context);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (['artifact-name', 'select-artifacts'].includes(process.argv[2])) {
+  if (['source-part-run', 'source-part-assemble'].includes(process.argv[2])) {
+    await sourcePartCommand(process.argv.slice(2));
+  } else if (['artifact-name', 'select-artifacts'].includes(process.argv[2])) {
     const [operation, ...args] = process.argv.slice(2);
     if (operation === 'artifact-name') {
       const [owner, revision, architecture, image, runId, attempt, ...extra] = args;

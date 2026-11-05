@@ -19,6 +19,7 @@ mod modules;
 mod source_copy;
 mod spec_links;
 mod stdlib;
+mod vv_parts;
 
 /// General error type for xtask commands.
 pub type Fail = Box<dyn std::error::Error>;
@@ -154,6 +155,7 @@ fn main() -> ExitCode {
         "conformance" => run_conformance(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         "unit-tests" => run_unit_tests(&root),
         "vv" => run_vv(&root),
+        "vv-part" => vv_parts::run(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         _ => {
             eprintln!("Usage: cargo xtask <task>");
             return ExitCode::from(2);
@@ -300,6 +302,11 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/oracle-source-closure.test.mjs",
             "scripts/hologram-source-pins.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
+            "scripts/vv-assemble.test.mjs",
+            "scripts/main-vv-scheduling.test.mjs",
+            "scripts/main-vv-standalone.test.mjs",
+            "scripts/source-vv-parts.test.mjs",
+            "scripts/vv-cargo-inventory.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/product-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
@@ -713,6 +720,52 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     require_clean_worktree(root)?;
     let driver = gate_driver::GateDriver::capture(root)?;
 
+    run_vv_gates_1_to_5(root, &driver)?;
+
+    println!("VV gate 6/15: workspace unit and property tests");
+    driver.run_cargo(
+        root,
+        &[
+            "test",
+            "--workspace",
+            "--all-features",
+            "--locked",
+            "--offline",
+        ],
+    )?;
+
+    // Separate original standalone pairs are not implied by registered DK
+    // execution or by including their source files in an SDK inventory.
+    verify_standalone_browser_owners(root)?;
+
+    run_vv_gates_7_to_15(root)?;
+
+    require_clean_worktree(root)?;
+
+    let commit = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()?;
+    if !commit.status.success() {
+        return Err("cannot identify vv source commit".into());
+    }
+    let commit = String::from_utf8(commit.stdout)?.trim().to_owned();
+    let evidence = serde_json::json!({
+        "commit": commit,
+        "gates": (1_u8..=15).collect::<Vec<_>>(),
+        "schema": "prismpm/vv-evidence/1",
+        "status": "passed"
+    });
+    std::fs::create_dir_all(root.join("target"))?;
+    std::fs::write(
+        root.join("target/vv-evidence.json"),
+        prismpm::holo::canonical::encode_value(&evidence)?,
+    )?;
+    println!("All 15 VV gates PASSED for commit {commit}.");
+    Ok(())
+}
+
+fn run_vv_gates_1_to_5(root: &Path, driver: &gate_driver::GateDriver) -> Result<(), Fail> {
     println!("VV gate 1/15: formatting");
     for invocation in formatting::commands(root)? {
         command(root, invocation.program, &invocation.arguments)?;
@@ -781,22 +834,10 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         ],
     )?;
 
-    println!("VV gate 6/15: workspace unit and property tests");
-    driver.run_cargo(
-        root,
-        &[
-            "test",
-            "--workspace",
-            "--all-features",
-            "--locked",
-            "--offline",
-        ],
-    )?;
+    Ok(())
+}
 
-    // Separate original standalone pairs are not implied by registered DK
-    // execution or by including their source files in an SDK inventory.
-    verify_standalone_browser_owners(root)?;
-
+fn run_vv_gates_7_to_15(root: &Path) -> Result<(), Fail> {
     println!("VV gate 7/15: feature, conformance, and negative fixtures");
     check_fixtures(root, false)?;
     command(
@@ -875,28 +916,6 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     println!("VV gate 15/15: verified stdlib package, crate archives, and downstream public API");
     package_api_check(root)?;
 
-    require_clean_worktree(root)?;
-
-    let commit = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(root)
-        .output()?;
-    if !commit.status.success() {
-        return Err("cannot identify vv source commit".into());
-    }
-    let commit = String::from_utf8(commit.stdout)?.trim().to_owned();
-    let evidence = serde_json::json!({
-        "commit": commit,
-        "gates": (1_u8..=15).collect::<Vec<_>>(),
-        "schema": "prismpm/vv-evidence/1",
-        "status": "passed"
-    });
-    std::fs::create_dir_all(root.join("target"))?;
-    std::fs::write(
-        root.join("target/vv-evidence.json"),
-        prismpm::holo::canonical::encode_value(&evidence)?,
-    )?;
-    println!("All 15 VV gates PASSED for commit {commit}.");
     Ok(())
 }
 
