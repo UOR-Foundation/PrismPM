@@ -11,15 +11,42 @@ use std::collections::BTreeSet;
 
 /// Brand files, flat beside `index.html`, in the order they are documented.
 pub const BRAND_FILES: [(&str, &[u8]); 9] = [
-    ("Archivo-SemiBold.woff2", include_bytes!("../vendor/hologram-brand/fonts/Archivo-SemiBold.woff2")),
-    ("Geist-Medium.woff2", include_bytes!("../vendor/hologram-brand/fonts/Geist-Medium.woff2")),
-    ("Geist-Regular.woff2", include_bytes!("../vendor/hologram-brand/fonts/Geist-Regular.woff2")),
-    ("Geist-SemiBold.woff2", include_bytes!("../vendor/hologram-brand/fonts/Geist-SemiBold.woff2")),
-    ("GeistMono-Regular.woff2", include_bytes!("../vendor/hologram-brand/fonts/GeistMono-Regular.woff2")),
-    ("OFL-Archivo.txt", include_bytes!("../vendor/hologram-brand/fonts/OFL-Archivo.txt")),
-    ("OFL-Geist.txt", include_bytes!("../vendor/hologram-brand/fonts/OFL-Geist.txt")),
-    ("icon-512.png", include_bytes!("../vendor/hologram-brand/icon-512.png")),
-    ("icon.svg", include_bytes!("../vendor/hologram-brand/icon.svg")),
+    (
+        "Archivo-SemiBold.woff2",
+        include_bytes!("../vendor/hologram-brand/fonts/Archivo-SemiBold.woff2"),
+    ),
+    (
+        "Geist-Medium.woff2",
+        include_bytes!("../vendor/hologram-brand/fonts/Geist-Medium.woff2"),
+    ),
+    (
+        "Geist-Regular.woff2",
+        include_bytes!("../vendor/hologram-brand/fonts/Geist-Regular.woff2"),
+    ),
+    (
+        "Geist-SemiBold.woff2",
+        include_bytes!("../vendor/hologram-brand/fonts/Geist-SemiBold.woff2"),
+    ),
+    (
+        "GeistMono-Regular.woff2",
+        include_bytes!("../vendor/hologram-brand/fonts/GeistMono-Regular.woff2"),
+    ),
+    (
+        "OFL-Archivo.txt",
+        include_bytes!("../vendor/hologram-brand/fonts/OFL-Archivo.txt"),
+    ),
+    (
+        "OFL-Geist.txt",
+        include_bytes!("../vendor/hologram-brand/fonts/OFL-Geist.txt"),
+    ),
+    (
+        "icon-512.png",
+        include_bytes!("../vendor/hologram-brand/icon-512.png"),
+    ),
+    (
+        "icon.svg",
+        include_bytes!("../vendor/hologram-brand/icon.svg"),
+    ),
 ];
 
 /// The generated web app manifest's file name.
@@ -106,11 +133,14 @@ mod tests {
 
     #[test]
     fn the_manifest_names_the_application_and_its_brand_icons() {
-        let manifest: serde_json::Value = serde_json::from_slice(&web_manifest("Calculator \"v1\"")).unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&web_manifest("Calculator \"v1\"")).unwrap();
         assert_eq!(manifest["name"], "Calculator \"v1\"");
         assert_eq!(manifest["display"], "standalone");
         let icons = manifest["icons"].as_array().unwrap();
-        assert!(icons.iter().all(|icon| BRAND_FILES.iter().any(|(path, _)| *path == icon["src"])));
+        assert!(icons
+            .iter()
+            .all(|icon| BRAND_FILES.iter().any(|(path, _)| *path == icon["src"])));
         assert_eq!(web_manifest("A"), web_manifest("A"));
     }
 
@@ -119,7 +149,10 @@ mod tests {
         let names = closure_v2("core");
         for source in [FONT_FACES, HEAD_LINKS] {
             for part in source.split(['(', ')', '"']).filter(|part| {
-                part.ends_with(".woff2") || part.ends_with(".png") || part.ends_with(".svg") || part.ends_with(".webmanifest")
+                part.ends_with(".woff2")
+                    || part.ends_with(".png")
+                    || part.ends_with(".svg")
+                    || part.ends_with(".webmanifest")
             }) {
                 assert!(names.contains(part), "{part}");
             }

@@ -826,7 +826,9 @@ impl Controller {
         crate::input_lock::enforce(&self.root, update_lock, || self.pinned_inputs(prepared))?;
         // Only an application build writes a holo to describe.
         let stamp = if prepared.model.application.is_some() {
-            Stamp::begin(&self.root, provenance)?
+            Stamp::begin(provenance, || {
+                Ok(crate::sdk::committed_lock(&self.root)?.map(|(_, bytes)| bytes))
+            })?
         } else {
             None
         };

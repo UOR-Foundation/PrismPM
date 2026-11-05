@@ -1788,7 +1788,10 @@ fn application_archive(
     if closure == Some(2) {
         // Closure v2 provenance names the digest of every other closure file.
         let mut listed = BTreeSet::new();
-        for name in browser_names.iter().filter(|name| name.as_str() != "provenance.json") {
+        for name in browser_names
+            .iter()
+            .filter(|name| name.as_str() != "provenance.json")
+        {
             ensure(
                 browser["schema"] == "prismpm/browser-provenance/2"
                     && browser["files"][name.as_str()]

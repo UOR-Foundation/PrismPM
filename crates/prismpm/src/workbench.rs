@@ -117,7 +117,10 @@ pub(crate) fn generate(
         .collect::<String>();
     let index = index.replace(
         "<link rel=\"stylesheet\" href=\"app.css\">",
-        &format!("<link rel=\"stylesheet\" href=\"app.css\">{}", crate::brand::HEAD_LINKS),
+        &format!(
+            "<link rel=\"stylesheet\" href=\"app.css\">{}",
+            crate::brand::HEAD_LINKS
+        ),
     );
     let index=index.replace("<meta name=\"viewport\"",&format!("<meta name=\"description\" content=\"{}\"><link rel=\"canonical\" href=\"{}\"><meta name=\"viewport\"",html(&app.view.purpose),html(&app.cargo_homepage)))
         .replace("<p id=\"status\"",&format!("<p>{}</p><p>{}</p><ol class=\"guidance\">{}</ol><noscript><p>{}</p></noscript><p id=\"status\"",html(&app.view.purpose),html(&app.view.audience),guidance,html(&app.view.statuses.script_required)))
@@ -138,7 +141,11 @@ pub(crate) fn generate(
         let mut files = vec![
             PackageFile {
                 path: "app.css".into(),
-                bytes: [crate::brand::FONT_FACES.as_bytes(), include_bytes!("workbench/style.css")].concat(),
+                bytes: [
+                    crate::brand::FONT_FACES.as_bytes(),
+                    include_bytes!("workbench/style.css"),
+                ]
+                .concat(),
             },
             PackageFile {
                 path: "app.js".into(),
@@ -208,12 +215,19 @@ mod tests {
                 .collect::<Vec<_>>(),
             crate::brand::closure_v2("stem")
                 .into_iter()
-                .filter(|name| !["stem.js", "stem_bg.wasm", "provenance.json"].contains(&name.as_str()))
+                .filter(
+                    |name| !["stem.js", "stem_bg.wasm", "provenance.json"].contains(&name.as_str())
+                )
                 .collect::<Vec<_>>()
         );
         assert_eq!(generated.hologram_assets.len(), 13);
         let asset = |files: &[PackageFile], path: &str| {
-            files.iter().find(|file| file.path == path).unwrap().bytes.clone()
+            files
+                .iter()
+                .find(|file| file.path == path)
+                .unwrap()
+                .bytes
+                .clone()
         };
         let source = String::from_utf8(asset(&generated.browser_assets, "app.js")).unwrap();
         assert!(source.contains("new Worker(new URL(import.meta.url),{type:'module'})"));
@@ -226,7 +240,11 @@ mod tests {
         );
         let html = String::from_utf8(asset(&generated.browser_assets, "index.html")).unwrap();
         assert!(html.contains("<link rel=\"manifest\" href=\"manifest.webmanifest\">"));
-        assert!(String::from_utf8(asset(&generated.browser_assets, "app.css")).unwrap().starts_with("@font-face{font-family:Geist;"));
+        assert!(
+            String::from_utf8(asset(&generated.browser_assets, "app.css"))
+                .unwrap()
+                .starts_with("@font-face{font-family:Geist;")
+        );
         for text in [
             &app.view.purpose,
             &app.view.statuses.script_required,

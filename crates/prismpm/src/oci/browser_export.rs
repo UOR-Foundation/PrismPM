@@ -194,7 +194,9 @@ pub(crate) fn browser_files<T: AsRef<[u8]>>(
         })
         .collect::<BTreeMap<_, _>>();
     // Closure v1 (the six-file page) or closure v2 (v1 plus the brand files), exactly.
-    if crate::brand::closure_version(&files.keys().cloned().collect::<BTreeSet<_>>(), &stem).is_none() {
+    if crate::brand::closure_version(&files.keys().cloned().collect::<BTreeSet<_>>(), &stem)
+        .is_none()
+    {
         return Err(failure(
             "verified browser projection is neither the exact six-file nor the exact closure v2 profile",
         ));

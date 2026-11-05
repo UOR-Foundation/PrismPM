@@ -199,18 +199,48 @@ fn ho_34_a_max_stamp_records_the_run() {
 
 #[test]
 fn ho_35_omit_writes_nothing_and_needs_no_lock() {
-    let temporary = tempfile::tempdir().unwrap();
-    assert!(Stamp::begin(temporary.path(), &BuildProvenance::Omit)
-        .unwrap()
-        .is_none());
+    assert!(Stamp::begin(&BuildProvenance::Omit, || {
+        unreachable!("Omit never reads the lock")
+    })
+    .unwrap()
+    .is_none());
 }
 
 #[test]
 fn ho_35_a_build_without_a_lock_is_refused_before_compiling() {
     let temporary = tempfile::tempdir().unwrap();
-    let error = Stamp::begin(temporary.path(), &BuildProvenance::Min)
-        .err()
-        .unwrap();
+    let error = Stamp::begin(&BuildProvenance::Min, || {
+        Ok(crate::sdk::committed_lock(temporary.path())?.map(|(_, bytes)| bytes))
+    })
+    .err()
+    .unwrap();
     assert_eq!(error.code, "PP3018");
     assert!(error.message.contains("--no-provenance"));
+}
+
+#[test]
+fn whole_seconds_equals_the_attest_clock_without_fractions() {
+    for millis in [
+        0_i64,
+        999,
+        1_778_700_213_000,
+        1_672_531_199_999,
+        951_782_400_000,
+        -86_400_001,
+        253_402_300_799_999,
+    ] {
+        let expected =
+            crate::attest::clock::iso8601(millis - millis.rem_euclid(1000)).replace(".000Z", "Z");
+        assert_eq!(super::whole_seconds(millis), expected, "{millis}");
+    }
+}
+
+#[test]
+fn the_local_wire_constants_equal_their_owners() {
+    assert_eq!(super::SDK_LOCK_V2, crate::input_lock::SDK_LOCK_V2);
+    assert_eq!(super::SDK_LOCK_V3, crate::input_lock::SDK_LOCK_V3);
+    assert_eq!(
+        super::PROVENANCE_PREDICATE,
+        crate::inspect::verdict::PROVENANCE_PREDICATE
+    );
 }

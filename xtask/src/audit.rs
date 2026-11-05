@@ -1011,7 +1011,15 @@ pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
         .iter()
         .filter_map(|row| row.get("id").and_then(toml::Value::as_str))
         .collect::<Vec<_>>();
-    if ids != ["lean4-prod", "lexlean", "hologram-live", "uor-hologram", "hologram-brand"] {
+    if ids
+        != [
+            "lean4-prod",
+            "lexlean",
+            "hologram-live",
+            "uor-hologram",
+            "hologram-brand",
+        ]
+    {
         return Err("dependency rows are not the exact canonical set/order".into());
     }
     for row in rows {

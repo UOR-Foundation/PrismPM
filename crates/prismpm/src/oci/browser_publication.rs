@@ -86,7 +86,10 @@ pub(super) fn validate_receipt(value: &Value) -> Result<(), PrismError> {
             "browser publication receipt has no unique portable Wasm stem",
         ));
     }
-    let names = names.iter().map(|name| (*name).to_owned()).collect::<BTreeSet<_>>();
+    let names = names
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect::<BTreeSet<_>>();
     // Exactly closure v1 (six files) or closure v2 (v1 plus the brand files).
     if crate::brand::closure_version(&names, stems[0]).is_none() {
         return Err(PrismError::new(
