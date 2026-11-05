@@ -60,7 +60,7 @@ export function parsePrismUrl(raw, { preferred = null } = {}) {
     values.set(name, value);
   }
   const agent = values.get('agent') ?? preferred;
-  if (!agent) fail('open.agent', 'the link names no agent and no preferred agent is set; add agent=<id>, or run prism-code setup --agent <id>');
+  if (!agent) fail('open.agent', 'the link names no agent and no preferred agent is set; add agent=<id>, or run npx prism-code@latest setup --agent <id>');
   if (!OPEN_AGENTS.includes(agent)) fail('open.agent', `${agent} is not an agent prism-code opens; one of ${OPEN_AGENTS.join(', ')}`);
   return { agent, sentence: checkSentence(values.get('q')) };
 }

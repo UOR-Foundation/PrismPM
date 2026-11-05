@@ -19,8 +19,8 @@ Experimental APIs remain experimental; repository `SPEC.md` is normative.
 ## Set up your agents (experimental)
 
 ```sh
-npx prism-code setup --dry-run
-npx prism-code setup
+npx prism-code@latest setup --dry-run
+npx prism-code@latest setup
 prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
 ```
 

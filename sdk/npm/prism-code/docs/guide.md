@@ -22,8 +22,10 @@ npm install prism-code
 ## Set up your agents (experimental)
 
 ```
-npx prism-code setup
+npx prism-code@latest setup
 ```
+
+Spell it `prism-code@latest`. `npx` prefers a `prism-code` installed in any folder above the one you run it in, so a project with an older `prism-code` would otherwise run that version, which may have no `setup`.
 
 One run gets this machine ready for the build box on uor.foundation. It does four things:
 
@@ -51,7 +53,7 @@ Before setup changes an existing JSON file, it copies the file to `<file>.prism-
 `--dry-run` prints every file and command and changes nothing:
 
 ```
-$ npx prism-code setup --dry-run
+$ npx prism-code@latest setup --dry-run
 prism-code setup --dry-run: the UOR MCP server lexlean at https://mcp.uor.foundation/
   claude-code     would configure     C:\Users\you\.claude.json
       set mcpServers.lexlean = {"type":"http","url":"https://mcp.uor.foundation/"} in C:\Users\you\.claude.json (backup C:\Users\you\.claude.json.prism-backup)
@@ -99,7 +101,7 @@ The sentence is never parsed by a shell. `open` writes it to a one-time ticket i
 
 ### Check it by hand
 
-Run `npx prism-code setup`, then open the leap-year link above from a browser's address bar. The browser asks whether to open the link. Then a terminal shows the sentence, and Enter starts Claude Code. On each OS, confirm the registration first:
+Run `npx prism-code@latest setup`, then open the leap-year link above from a browser's address bar. The browser asks whether to open the link. Then a terminal shows the sentence, and Enter starts Claude Code. On each OS, confirm the registration first:
 
 - **Windows:** `reg query HKCR\holo\shell\open\command` prints the handler command. A Windows Terminal tab titled Prism opens.
 - **macOS:** `open "holo://build?agent=claude-code&q=hi"` opens Terminal.app. `~/Applications/Prism Open.app/Contents/Info.plist` lists `holo` under `CFBundleURLSchemes`.
