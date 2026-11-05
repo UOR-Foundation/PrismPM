@@ -257,3 +257,8 @@ Feature: sdk
     When prism.volumes creates, lists, inspects and removes stores, and a store is attached to a guest
     Then a host folder or anything outside the grant, the declared world or the active policy is refused with a typed error and no provider runs
     And attaching a store within all of them raises a typed error naming host effects #216 and #217, and never succeeds
+  @DK-36 @build
+  Scenario: Closed BinaryProgram packages preserve arbitrary bytes through native std, no_std, Core-Wasm and generated bounded raw file and stdio adapters, independently replayed without application or deployment claims.
+    Given a closed binary program with source-owned acceptance vectors
+    When independent generated packages and real transports execute every vector
+    Then byte mutation, omission, bound, root, ABI and artifact defects fail

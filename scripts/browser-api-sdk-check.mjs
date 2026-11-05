@@ -24,7 +24,7 @@ export const sourceRoots=Object.freeze([
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
  'crates/prismpm/src/browser_build.rs','crates/prismpm/src/browser_build','crates/prismpm/src/lifecycle.rs',
- 'crates/conformance/src/cases/browser_compiler.rs','crates/conformance/tests/conformance.rs',
+ 'crates/conformance/Cargo.toml','crates/conformance/src/cases/browser_compiler.rs','crates/conformance/tests/conformance.rs',
  'crates/conformance/src/cases/mod.rs','crates/conformance/src/cases/scheduling.rs',
  'crates/conformance/src/cases/node_suite.rs','schemas/model-document-v4.schema.json',
  'xtask/src/main.rs',
@@ -110,6 +110,7 @@ function boundedBytes(path,before){
 }
 
 export function capture(root,revision){
+ assert.equal(lstatSync(join(root,'crates/conformance/build.rs'),{throwIfNoEntry:false}),undefined,'unregistered conformance build script');
  hex(revision,40);root=resolve(root);const files=[];
  function walk(relative){
   const path=join(root,relative),stat=lstatSync(path);assert.ok(!stat.isSymbolicLink(),'source symlink '+relative);
@@ -152,7 +153,7 @@ export function verifyModules(root,installed){
  }
 }
 
-export function verifyImage(value,image,architecture,revision){
+export function verifyImage(value,image,architecture,revision,expectedVersion='0.3.0'){
  assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
  assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
  assert.ok(Array.isArray(value)&&value.length===1);const config=value[0];
@@ -163,7 +164,7 @@ export function verifyImage(value,image,architecture,revision){
  assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
  assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
- assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.3.0');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],expectedVersion);
 }
 
 export function verifyTap(tap,minimum){

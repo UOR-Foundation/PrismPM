@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::package_contracts::{ApplicationAcceptanceVector, ModelLibrary};
+
 /// Top-level Prism model document. Its domain sections contain only canonical
 /// arrays; verification evidence is deliberately kept outside this format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,36 +31,25 @@ pub struct ModelDocument {
         deserialize_with = "present_library"
     )]
     pub library: Option<ModelLibrary>,
+    /// Closed arbitrary-byte package; mutually exclusive with application/library.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_program"
+    )]
+    pub program: Option<super::binary_program::BinaryProgram>,
+}
+
+fn present_program<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<super::binary_program::BinaryProgram>, D::Error> {
+    super::binary_program::BinaryProgram::deserialize(deserializer).map(Some)
 }
 
 fn present_library<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<ModelLibrary>, D::Error> {
     ModelLibrary::deserialize(deserializer).map(Some)
-}
-
-/// Closed metadata for model-owned, typed native exports and finite acceptance roots.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ModelLibrary {
-    /// Exact native-library profile identifier.
-    pub profile: String,
-    /// Display name; not a filesystem path.
-    pub name: String,
-    /// Generated Cargo package name.
-    pub cargo_name: String,
-    /// Exact stable generated package version.
-    pub cargo_version: String,
-    /// Generated package description.
-    pub cargo_description: String,
-    /// HTTPS source repository.
-    pub cargo_repository: String,
-    /// HTTPS project homepage.
-    pub cargo_homepage: String,
-    /// Sorted fully qualified executable definitions in the bound semantic graph.
-    pub export_roots: Vec<String>,
-    /// Sorted exported zero-argument Boolean definitions that must all return true.
-    pub acceptance_roots: Vec<String>,
 }
 
 /// Closed application profiles. The legacy variant retains its original JSON shape.
@@ -482,16 +473,6 @@ pub struct ApplicationModel {
     pub actions: Vec<String>,
     /// Ordered presentation targets.
     pub targets: Vec<String>,
-}
-
-/// One canonical byte-level application acceptance vector.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ApplicationAcceptanceVector {
-    /// Canonical or deliberately malformed request bytes.
-    pub request: Vec<u8>,
-    /// Exact modeled response bytes.
-    pub response: Vec<u8>,
 }
 
 /// Evaluated View fields shared by Hologram and browser projections.

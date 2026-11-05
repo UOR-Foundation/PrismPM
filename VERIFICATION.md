@@ -3492,6 +3492,18 @@ refusal, the real xtask dispatcher binding, nonzero child propagation and the
 workflow's immutable source/read-only publication boundary. These are narrowly
 scoped preparation regressions, not evidence for any unexecuted SDK gate.
 
+BinaryProgram DK-36 verification is a distinct binary-package gate. Its source
+fixtures and generated adapters exercise arbitrary octets (including malformed
+UTF-8), native std/no_std, Core-Wasm and standard/file/mixed streams, exact
+maxima and first-over input bounds, and real argument/open/type/read/write,
+no-clobber, computation and output-limit failures. AdapterAllocation executes the generated adapter's real reservation helper
+with usize::MAX, exercising the standard library's deterministic capacity-overflow
+error without exhausting host memory. Physical allocator exhaustion remains
+unmeasured. Core OOM,
+abort or signals are failed processes, not typed recovery guarantees. Source
+checks and parser tests are not evidence that installed amd64/arm64 SDK lanes
+have passed.
+
 ### Selected LexLean adapter source boundary
 
 The actual preparation run
@@ -3657,3 +3669,161 @@ here; the Buildx test ("pinned Buildx pushes a genuine two-platform OCI index")
 needs `docker buildx`, which this environment lacks, and does not touch the
 `crates` job. The layout-custody test failed once when the file ran beside
 `crate-readiness.test.mjs` and passed alone and in the next full run.
+
+## BinaryProgram current-main source integration — 4 November 2026
+
+This candidate preserves the complete #186 history at
+`017a78f478d0fc938031f87ee24421a9466e3337` and integrates it with main
+`33953384ea84a6196a907982dc30f6a3c0d1a955`. It addresses #516's source
+integration scope. Historical executions recorded above retain their original
+source identities; none qualifies this candidate.
+
+BinaryProgram now uses closed `prismpm/model-document/7`, preserving the
+existing text `/5` and `/6` contracts. The generated raw CLI reuses the current
+shared input adapter, including the architecture-specific Linux no-follow flag;
+its complete source is charged to the binary generator identity. The original
+root allocation test name and all original adapter diagnostics are preserved.
+The raw-file-cli/1 protocol, 16 MiB request/response maxima, and explicit
+`OutputWrite:Unknown` behavior remain unchanged. No source-level Result grammar,
+stream executor, atomic output publication, or compression-specific dispatch is
+introduced.
+
+Local component checks use the repository-pinned Rust 1.97.1 and Node 22.23.2:
+workspace/all-target offline check, all-feature strict Clippy, workspace format,
+17 model tests, nine Binary contract/source tests, five raw CLI tests (including actual
+generated native/Core-Wasm failure execution), and two Binary exporter-owner
+reader controls passed. The complete Binary Node wrapper passed its 20
+parser/transport cases and 19 additional ownership cases, with no skips.
+Current shared library/metadata/candidate owners also passed all 37 cases,
+including the real pinned ORAS and Sigstore negatives. These are component
+results on the integration source, not installed-SDK or release acceptance.
+
+The genuine selected LexLean writer refreshed the Binary fixture lock; lock
+check/repeat and linked source check passed. The owning `validate-model --write`
+regenerated the documentation and deterministic SDK source archive, and the
+ordinary subsequent check passed. The production emitter computation matches
+the authored input register. Generated shared/native proof records remain the
+reviewed main records and require fresh owning generation and independent
+review; no process or proof expectation was hand-edited.
+
+The complete DK-36 runtime owner initially stopped during setup. After the
+exact pinned toolchain was acquired, its genuine existing local owner passed in
+164.67 seconds, exercising native std/no_std, Core-Wasm, raw CLI transports,
+independent regeneration and its original negative cases. This is local
+component evidence, not source-free installed-SDK acceptance.
+
+Three additional front-end tests check real locked language-1.1 and language-1.2
+snapshots, exact model/snapshot identity and read-only behavior. Eight negative
+cases first obtain valid typed LexLean snapshots, then require their intended
+Prism diagnostics; parser/type-check failures cannot satisfy those controls. A
+mixed Binary/NativeLibrary case independently projects both real descriptors
+before requiring rejection. Independent source review found no blocking issue.
+
+The unchanged fixture owner exposed stale authored application bindings in CT-02
+and TM-01. Exactly four bindings were corrected to the genuinely observed
+current digest; expected successful exits and all controls remain unchanged.
+The normal writer and subsequent independent check completed all 35 fixtures
+and reproduced the committed expectation bytes without a generated-file change. The golden owner retains its
+registered Debian 12 development environment requirement; no alternate platform
+identity or expected native/proof record was supplied.
+
+Fresh current-source source/security/reproducibility gates, complete shared and both
+native writer closures, source-free installed Binary qualification on AMD64 and
+ARM64, both complete consecutive V&V passes, immutable SDK acquisition and
+applicable downstream acceptance remain required. Issues #62 and #194, the
+original #186 qualification obligations, main integration and release approval
+remain open. The existing unpublished-SDK TLS bridge is retained without
+absorbing #193 or transferring its historical diagnostic results.
+
+### Reviewed public-source union
+
+The integration lineage now also preserves the already-public workbench source
+head `062d806e645f17636d803b0279b715f7696ca94e`, without changing that branch or
+the release branch. The only authored merge conflict was the emitter register:
+all 33 required inputs remain, and their union digest is
+`4176ad4e1488872ec0207d8f8f53df6b2e6d6fe7235a3d5410aa3fa57d31f9a4`.
+Genuine controller and threat-model owners independently observed application
+identity `3f579f239312ed1e2c15e1e4eace4869d8acd9c333218943d131815c10c3c0ce`;
+only their four authored bindings and the controller fixture comment changed.
+Expected outcomes and artifact declarations remain unchanged.
+
+Independent source review verified both feature deltas, `/1` preservation and
+the exact published workbench bytes. Nine source/contract tests, strict Clippy
+and formatting passed during union preparation. The five inherited shared
+golden files retain the public source head's original bytes and qualification
+scope; no native golden path changed. They do not qualify the combined emitter.
+Fresh union fixture, browser and DK-36 owner execution, the eventual authorized
+source correction, a single coordinated shared producer, independent generated
+review and all original native/installed/full-V&V/downstream obligations remain
+required. No producer, release rehearsal or new streaming profile is authorized
+by this source merge alone.
+
+
+### Current-main Binary and focus reconciliation
+
+The reviewed module repair follows the existing BinaryProgram lineage without
+adding a pending dependency or legacy cycle member. Pure package DTOs and
+metadata validation are an `errors`-owned leaf, preserving their original public
+paths and mandatory canonical-document checks. NativeLibrary and Binary share
+one attested Lean/export/Cargo-core authority; Binary verification remains a
+separate profile under the existing library verification owner. Native Boolean
+acceptance and Binary byte/vector/transport evidence remain distinct. The strict
+module gate reports nine modules, fifteen pending edges and nineteen existing
+cycle members, with no violations.
+
+The subsequent source union preserves actual main
+`ecb594bd5640f3cb4bdc567c096c20f03209bd0d` and the public workbench focus source
+`062d806e645f17636d803b0279b715f7696ca94e`. No authored implementation conflict
+occurred. The SDK source archive conflict was resolved by the normal metadata
+writer over all 325 authored stdlib/language files. The other three conflicts
+were shared generated records; the complete five-record shared manifest/model/
+attestation set and both native record sets retain actual main's authentic bytes
+and historical scope. They do not qualify this combined source. The previous
+public focus records remain preserved in ancestry. No pending #514 native record
+was imported.
+
+The emitter closure now includes the pure package leaf. Binary generator
+identity retains every original input and charges the actual shared native-core
+owner, runtime staging and emitted acceptance assets. Genuine controller and
+threat-model owners independently observed application digest
+`2c49ea741eff63bf4206bbf16e7099f4e3aa6a44dd4b327f46169b0e4fae77a7`.
+Only their four authored bindings and the controller fixture comment changed;
+all expected outcomes, diagnostics and artifact declarations remain unchanged.
+The ordinary read-only fixture owner passed all 35 cases. Twenty-nine existing
+Binary/native/text contract cases, both generator-identity controls, five
+host-only HostEffect controls and the 34 bounded disk/workflow checks passed.
+The locked HostEffect oracle remains separate from those host-only checks.
+
+Fresh owning NativeLibrary/Binary execution, the actual pinned-browser focus
+owner, one combined shared-golden proposal and independent review, both current
+native records, installed source-free acceptance, full V&V and downstream
+qualification remain required. Issue #500 is delivered only when equivalent
+accepted focus behavior is established; #514 is not superseded by historical
+records alone. The separate #519 private ownership component remains outside
+this source union and does not establish a production streaming SDK.
+
+
+### Native runtime declaration reader repair
+
+The first genuine NativeLibrary owner on the reconciled source completed
+compiler verification but its independent Node replay rejected the declaration
+audit. The language-1.2 compiler published the four fixture declarations and
+160 imported Portable runtime declarations; the reader still required only the
+four fixture rows. This was retained as a failed owner, not accepted evidence.
+
+The #520 repair derives runtime expectations through the pinned LexLean runtime
+API from the exact generated Lean buffers whose lengths and SHA256 values match
+the already-bound artifact rows. It preserves the four project declarations and
+their empty axiom policies, requires exact imported-runtime rows and policies,
+and rejects globally valid runtime declarations that were not imported. Both
+source captures bind the helper package manifest and refuse an unregistered
+Cargo build script. This is the scoped reader/build-input correction, not a
+claim of a new hermetic helper-executable attestation.
+
+All seven original authentic-output controls remain; eight runtime audit
+controls bring the replay to fifteen refusals followed by a restored genuine
+baseline. The focused library/Binary/recording-shell tests passed 36 cases and
+the browser capture checks passed three. No compiler/writer audit or generated
+expectation was altered. Fresh complete NativeLibrary and Binary owner reruns
+remain necessary after this repair; broader SDK/profile/release qualification
+is unchanged.

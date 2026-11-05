@@ -566,6 +566,44 @@ mod tests {
     }
 
     #[test]
+    fn binary_document_contract_preserves_text_versions_and_standard_media_identity() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        for version in [5, 6] {
+            let row = model
+                .contracts
+                .contract
+                .iter()
+                .find(|row| row.schema == format!("prismpm/model-document/{version}"))
+                .unwrap();
+            assert_eq!(
+                row.media_type,
+                format!("application/vnd.prismpm.model-document.v{version}+json")
+            );
+            assert_eq!(row.maximum_bytes, 16_777_216);
+            assert_eq!(row.maximum_items, 65_536);
+        }
+        let binary_index = model
+            .contracts
+            .contract
+            .iter()
+            .position(|row| row.schema == "prismpm/model-document/7")
+            .unwrap();
+        assert_eq!(
+            model.contracts.contract[binary_index].media_type,
+            "application/vnd.prismpm.model-document.v7+json"
+        );
+        for media_type in [
+            "text/plain",
+            "application/vnd.prismpm.model-document.v7+xml",
+            "application/vnd.prismpm.model-document.v6+json",
+        ] {
+            let mut changed = model.contracts.clone();
+            changed.contract[binary_index].media_type = media_type.to_owned();
+            assert!(changed.check(&super::repo_root()).is_err());
+        }
+    }
+
+    #[test]
     fn public_contract_registry_requires_complete_unique_registration() {
         let model = Model::load_from_repo_root().expect("load repository model");
         let root = super::repo_root();
@@ -573,8 +611,28 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 67);
+        assert_eq!(model.contracts.contract.len(), 72);
         for (schema, path) in [
+            (
+                "prismpm/model-document/7",
+                "schemas/model-document-v7.schema.json",
+            ),
+            (
+                "prismpm/binary-verification-manifest/2",
+                "schemas/binary-verification-manifest-v2.schema.json",
+            ),
+            (
+                "prismpm/binary-build-binding/1",
+                "schemas/binary-build-binding.schema.json",
+            ),
+            (
+                "prismpm/binary-acceptance/1",
+                "schemas/binary-acceptance.schema.json",
+            ),
+            (
+                "prismpm/binary-verification-manifest/1",
+                "schemas/binary-verification-manifest.schema.json",
+            ),
             (
                 "prismpm/model-document/6",
                 "schemas/model-document-v6.schema.json",

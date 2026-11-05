@@ -5,7 +5,7 @@ import {fixture} from './metadata-test-fixture.mjs';
 import {sha} from './metadata-layer.mjs';
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
-import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
+import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,renameSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -130,6 +130,10 @@ test('private native evidence survives two-lane roundtrip and refuses missing ch
     writeFileSync(join(directory,'inventory.json'),sdk.lock.platforms.find(row=>row.platform===binding.platform).inventory_document);
     writeFileSync(join(directory,'standards.lock'),sdk.standards);
     const acquisitionPath=join(directory,'acquisition.json'),raw=readFileSync(acquisitionPath);
+    const output=join(root,'target/library-sdk-evidence/linux-'+architecture);
+    // One identical positive baseline per native lane. All eight original
+    // malformed-byte controls still execute fresh admission and restore bytes.
+    await captureLane(directory,root,context);
     for(const changed of [
       Buffer.from('{"lock":{},'+raw.toString().slice(1)),
       Buffer.from('{"\\u006cock":{},'+raw.toString().slice(1)),
@@ -140,26 +144,44 @@ test('private native evidence survives two-lane roundtrip and refuses missing ch
       Buffer.from(JSON.stringify(values['acquisition.json'],null,2)),
       Buffer.concat([raw,Buffer.from('\n')]),
     ]) {
-      await captureLane(directory,root,context);
       writeFileSync(acquisitionPath,changed);
       await assert.rejects(captureLane(directory,root,context));
+      await assert.rejects(writeLane(directory,output,root,context));
+      assert(!existsSync(output),'malformed acquisition must not create an output');
       writeFileSync(acquisitionPath,raw);
+      assert(readFileSync(acquisitionPath).equals(raw));
     }
-    const output=join(root,'target/library-sdk-evidence/linux-'+architecture);
     await writeLane(directory,output,root,context);await readLane(output,root,context);
+    const retained=new Map(readdirSync(output).map(name=>[name,readFileSync(join(output,name))]));
     await assert.rejects(writeLane(directory,output,root,context));
+    for(const [name,bytes] of retained)assert(readFileSync(join(output,name)).equals(bytes),'existing lane bytes changed');
     const archive=join(work,architecture+'.tar'),repeat=join(work,architecture+'-repeat.tar');
     await packLane(output,archive,root,context);await packLane(output,repeat,root,context);
-    assert(readFileSync(archive).equals(readFileSync(repeat)));await assert.rejects(packLane(output,archive,root,context));
+    const packed=readFileSync(archive);assert(packed.equals(readFileSync(repeat)));await assert.rejects(packLane(output,archive,root,context));
+    assert(readFileSync(archive).equals(packed),'existing archive bytes changed');
     directories.push(output);
   }
   const joined=await joinLanes(directories,root,sdk.image,revision);
   assert.equal(joined.join.scope,'metadata-native-byte-equivalence-only');assert.equal(joined.lane_evidence.length,2);
   await assert.rejects(joinLanes(directories.slice().reverse(),root,sdk.image,revision));
   const second=directories[1],context={sdk_image:sdk.image,source_revision:revision,architecture:'arm64'};
+  for(const replacement of ['symlink','directory']){
+  const parent=join(work,'archive-parent-'+replacement),displaced=parent+'-original',outside=join(work,'outside-archive-parent-'+replacement);
+  mkdirSync(parent);mkdirSync(outside);writeFileSync(join(outside,'marker'),'outside must remain unchanged');
+  const raced=packLane(second,join(parent,'raced.tar'),root,context);
+  queueMicrotask(()=>{renameSync(parent,displaced);if(replacement==='symlink')symlinkSync(outside,parent);else{mkdirSync(parent);writeFileSync(join(parent,'foreign-marker'),'foreign directory must remain unchanged');}});
+  try {
+    await assert.rejects(raced);
+    assert.deepEqual(readdirSync(outside),['marker']);assert.equal(readFileSync(join(outside,'marker'),'utf8'),'outside must remain unchanged');
+    assert.deepEqual(readdirSync(displaced),[]);
+    if(replacement==='directory'){assert.deepEqual(readdirSync(parent),['foreign-marker']);assert.equal(readFileSync(join(parent,'foreign-marker'),'utf8'),'foreign directory must remain unchanged');}
+  } finally {rmSync(parent,{recursive:replacement==='directory'});renameSync(displaced,parent);}
+  }
   for(const name of ['inventory.json','evidence.json','acquisition.json']) {
     const path=join(second,name),bytes=readFileSync(path);rmSync(path);
     await assert.rejects(readLane(second,root,context));
+    const missingArchive=join(work,'missing-'+name+'.tar');
+    await assert.rejects(packLane(second,missingArchive,root,context));assert(!existsSync(missingArchive));
     symlinkSync(join(directories[0],name),path);await assert.rejects(readLane(second,root,context));rmSync(path);
     writeFileSync(path,Buffer.concat([bytes,Buffer.from('changed')]));await assert.rejects(readLane(second,root,context));
     writeFileSync(path,bytes);await readLane(second,root,context);

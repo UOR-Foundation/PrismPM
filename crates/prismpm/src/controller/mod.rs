@@ -87,6 +87,33 @@ fn library_generator_identity() -> String {
     content_id(&source)
 }
 
+// Charge the shared native-core authority and every Binary-only template.
+// This retains the original content hash convention and all original inputs.
+fn binary_generator_identity() -> String {
+    content_id(
+        &[
+            include_bytes!("../library_build/binary.rs").as_slice(),
+            include_bytes!("../binary_cli.rs").as_slice(),
+            include_bytes!("../binary_cli/main.rs.in").as_slice(),
+            include_bytes!("../binary_cli/input.rs.in").as_slice(),
+            include_bytes!("../library_build.rs").as_slice(),
+            include_bytes!("../library_verification.rs").as_slice(),
+            include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
+            include_bytes!("../lean_project.rs").as_slice(),
+            include_bytes!("../exporter.rs").as_slice(),
+            include_bytes!("../exporter/owner.rs").as_slice(),
+            include_bytes!("../exporter/custody.rs").as_slice(),
+            include_bytes!("../exporter/directory.rs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed-admission.mjs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed.mjs").as_slice(),
+            include_bytes!("../../sdk/inventory-metadata.mjs").as_slice(),
+            include_bytes!("../binary_verification/runner.mjs").as_slice(),
+            include_bytes!("../binary_verification/memory-inspector.mjs").as_slice(),
+        ]
+        .concat(),
+    )
+}
+
 thread_local! {
     static VERIFY_WORKER_ACTIVE: Cell<bool> = const { Cell::new(false) };
 }
@@ -279,6 +306,7 @@ impl ModelWorkerOutput for CheckResult {}
 impl ModelWorkerOutput for BuildResult {}
 impl ModelWorkerOutput for bool {}
 impl ModelWorkerOutput for serde_json::Value {}
+impl ModelWorkerOutput for (bool, bool) {}
 impl ModelWorkerOutput for Vec<crate::contracts::CanonicalDocument> {}
 
 #[cfg(test)]
@@ -335,6 +363,10 @@ fn utf8(path: PathBuf) -> Result<Utf8PathBuf, PrismError> {
 }
 
 fn count_entities(doc: &ModelDocument) -> Result<u64, PrismError> {
+    if let Some(program) = &doc.program {
+        return u64::try_from(program.export_roots.len())
+            .map_err(|_| PrismError::new("PP1003", "binary export count exceeds u64"));
+    }
     if let Some(library) = &doc.library {
         return u64::try_from(library.export_roots.len())
             .map_err(|_| PrismError::new("PP1003", "library export count exceeds u64"));
@@ -596,21 +628,29 @@ impl Controller {
         let application_model =
             crate::holo::application::project_application_with_facets(model_snapshot, &snapshot)?;
         let library_model = crate::holo::library::project_library(&snapshot)?;
-        let model = match (application_model, library_model) {
-            (Some(_), Some(_)) => {
-                return Err(PrismError::new(
-                    "PP4004",
-                    "a native library cannot also declare an application",
-                ))
-            }
-            (_, Some(_)) if system.is_some() => {
-                return Err(PrismError::new(
-                    "PP4004",
-                    "a native library cannot also declare a system release",
-                ))
-            }
-            (Some(model), None) | (None, Some(model)) => model,
-            (None, None) => project_snapshot(model_snapshot)?,
+        let program_model = crate::holo::binary_program::project_program(&snapshot)?;
+        let declared = usize::from(application_model.is_some())
+            + usize::from(library_model.is_some())
+            + usize::from(program_model.is_some());
+        if program_model.is_some() && (declared > 1 || system.is_some()) {
+            return Err(PrismError::new("PP4004", "a binary program cannot also declare a native library, application or system release"));
+        }
+        if application_model.is_some() && library_model.is_some() {
+            return Err(PrismError::new(
+                "PP4004",
+                "a native library cannot also declare an application",
+            ));
+        }
+        if library_model.is_some() && system.is_some() {
+            return Err(PrismError::new(
+                "PP4004",
+                "a native library cannot also declare a system release",
+            ));
+        }
+        let model = if let Some(model) = program_model.or(library_model).or(application_model) {
+            model
+        } else {
+            project_snapshot(model_snapshot)?
         };
         let model_bytes = encode_canonical(&model)?;
         let mut design_views = crate::design::render_snapshot(model_snapshot, &model)?;
@@ -988,6 +1028,29 @@ impl Controller {
             }
             artifacts.extend(application_artifacts);
         }
+        if prepared.model.program.is_some() {
+            artifacts.extend(match exporter_owner.as_deref_mut() {
+                Some(owner) => {
+                    crate::library_build::binary::generate_owned(
+                        &self.root,
+                        &prepared.model,
+                        &prepared.model_bytes,
+                        &lex_root,
+                        &lex_manifest_bytes,
+                        owner,
+                        crate::exporter::Phase::ControllerBuild,
+                    )?
+                    .artifacts
+                }
+                None => crate::library_build::binary::generate(
+                    &self.root,
+                    &prepared.model,
+                    &prepared.model_bytes,
+                    &lex_root,
+                    &lex_manifest_bytes,
+                )?,
+            });
+        }
         if prepared.model.library.is_some() {
             artifacts.extend(match exporter_owner {
                 Some(owner) => {
@@ -1059,6 +1122,11 @@ impl Controller {
             inputs["library_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
             inputs["library_generator_sha256"] = json!(library_generator_identity());
             inputs["schema"] = json!("prismpm/build-inputs/3");
+        }
+        if prepared.model.program.is_some() {
+            inputs["binary_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
+            inputs["binary_generator_sha256"] = json!(binary_generator_identity());
+            inputs["schema"] = json!("prismpm/build-inputs/4");
         }
         let build_id = content_id(&encode_value(&inputs)?);
         let manifest_value = serde_json::to_value(json!({
@@ -1153,11 +1221,23 @@ impl Controller {
                 "product release construction requires --locked",
             ));
         }
-        if self.with_prepared_release(
+        let (is_program, is_library) = self.with_prepared_release(
             request.config_path.as_deref(),
             request.release.as_deref(),
-            |prepared| Ok(prepared.model.library.is_some()),
-        )? {
+            |prepared| {
+                Ok((
+                    prepared.model.program.is_some(),
+                    prepared.model.library.is_some(),
+                ))
+            },
+        )?;
+        if is_program {
+            return Err(PrismError::new(
+                "PP6101",
+                "binary-package acceptance is not product-release or deployment acceptance",
+            ));
+        }
+        if is_library {
             return Err(PrismError::new(
                 "PP6101",
                 "native-library acceptance is not product-release or deployment acceptance",
@@ -1305,6 +1385,43 @@ mod tests {
         redistributed[1].insert(0, byte);
         assert_eq!(originals.concat(), redistributed.concat());
         assert_ne!(actual, encode(&redistributed, &paths));
+    }
+
+    #[test]
+    fn binary_generator_charges_original_templates_and_shared_core_authority() {
+        let parts = [
+            include_bytes!("../library_build/binary.rs").as_slice(),
+            include_bytes!("../binary_cli.rs").as_slice(),
+            include_bytes!("../binary_cli/main.rs.in").as_slice(),
+            include_bytes!("../binary_cli/input.rs.in").as_slice(),
+            include_bytes!("../library_build.rs").as_slice(),
+            include_bytes!("../library_verification.rs").as_slice(),
+            include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
+            include_bytes!("../lean_project.rs").as_slice(),
+            include_bytes!("../exporter.rs").as_slice(),
+            include_bytes!("../exporter/owner.rs").as_slice(),
+            include_bytes!("../exporter/custody.rs").as_slice(),
+            include_bytes!("../exporter/directory.rs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed-admission.mjs").as_slice(),
+            include_bytes!("../../sdk/exporter-seed.mjs").as_slice(),
+            include_bytes!("../../sdk/inventory-metadata.mjs").as_slice(),
+            include_bytes!("../binary_verification/runner.mjs").as_slice(),
+            include_bytes!("../binary_verification/memory-inspector.mjs").as_slice(),
+        ];
+        let actual = super::binary_generator_identity();
+        assert_eq!(actual, super::content_id(&parts.concat()));
+        for index in 0..parts.len() {
+            let mut changed = parts.map(<[u8]>::to_vec);
+            changed[index].push(0);
+            assert_ne!(actual, super::content_id(&changed.concat()));
+            let omitted = parts
+                .iter()
+                .enumerate()
+                .filter(|(at, _)| *at != index)
+                .flat_map(|(_, bytes)| bytes.iter().copied())
+                .collect::<Vec<_>>();
+            assert_ne!(actual, super::content_id(&omitted));
+        }
     }
 
     #[test]

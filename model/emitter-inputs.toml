@@ -1,9 +1,10 @@
 spec = "prismpm/emitter-inputs/1"
-digest = "3964c9c3578af9bf5917b5e317001ce67d62585b8b56dbef3effa872f53da915"
+digest = "d333c70f9de325278984c3f6e7bb16eb92d835e03c06383c7c44be0ad89827a0"
 inputs = [
     "crates/prismpm/src/application_build.rs",
     "crates/prismpm/src/holo/application.rs",
     "crates/prismpm/src/holo/application/workbench.rs",
+    "crates/prismpm/src/holo/binary_program.rs",
     "crates/prismpm/src/holo/browser_application.rs",
     "crates/prismpm/src/holo/browser_application/model.rs",
     "crates/prismpm/src/holo/browser_application/source.rs",
@@ -20,6 +21,7 @@ inputs = [
     "crates/prismpm/src/holo/text_cli.rs",
     "crates/prismpm/src/holo/validate.rs",
     "crates/prismpm/src/holo/workbench.rs",
+    "crates/prismpm/src/package_contracts.rs",
     "crates/prismpm/src/workbench.rs",
     "crates/prismpm/src/workbench/runtime.js",
     "crates/prismpm/src/workbench/style.css",
@@ -30,6 +32,7 @@ inputs = [
     "schemas/model-document-v4.schema.json",
     "schemas/model-document-v5.schema.json",
     "schemas/model-document-v6.schema.json",
+    "schemas/model-document-v7.schema.json",
     "schemas/model-document.schema.json",
     "schemas/workbench-view-projection.schema.json"
 ]

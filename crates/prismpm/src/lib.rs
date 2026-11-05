@@ -34,6 +34,7 @@ pub mod lifecycle;
 mod lock_command;
 pub mod oci;
 pub mod operations;
+mod package_contracts;
 mod process_resources;
 mod release_verification;
 pub mod replay;
