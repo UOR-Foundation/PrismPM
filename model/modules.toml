@@ -281,6 +281,10 @@ path = "sdk/npm/prism-code/bin/prism-provider-kv.mjs"
 module = "volumes"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/agents.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/archive.mjs"
 module = "verify"
 
@@ -373,6 +377,10 @@ path = "sdk/npm/prism-code/src/generate/"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/handler.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/index.mjs"
 module = "client"
 
@@ -425,6 +433,10 @@ path = "sdk/npm/prism-code/src/oci-store.mjs"
 module = "images"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/open.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/plugins.mjs"
 module = "system"
 
@@ -451,6 +463,14 @@ module = "verify"
 [[owner]]
 path = "sdk/npm/prism-code/src/replay.mjs"
 module = "verify"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/setup-cli.mjs"
+module = "client"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/setup.mjs"
+module = "client"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/sha256.mjs"

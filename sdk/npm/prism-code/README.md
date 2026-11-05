@@ -41,7 +41,9 @@ prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and
 
 `setup` adds the MCP server `lexlean` at `https://mcp.uor.foundation/` to
 each agent it finds: Claude Code at user scope, Codex, Cursor and VS Code.
-For Claude Desktop it prints the Connectors step. It registers the
+For Claude Desktop it prints the Connectors step. It installs the Prism
+skills uor.foundation serves, each checked against its digest, into
+`~/.claude/skills` and `~/.agents/skills`. It registers the
 `holo://` handler for the OS and remembers the preferred agent
 (`--agent <id>`). Existing servers, files it cannot parse, and a `holo://`
 handler another program owns, such as the Hologram app, are left alone.
