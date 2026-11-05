@@ -9,6 +9,14 @@ sdk/npm/**/*.mjs text eol=lf
 sdk/npm/**/*.rego text eol=lf
 sdk/npm/**/*.d.ts text eol=lf
 sdk/npm/**/*.json text eol=lf
+sdk/npm/**/*.md text eol=lf
+sdk/npm/**/*.css text eol=lf
+sdk/npm/**/*.html text eol=lf
+sdk/npm/**/*.toml text eol=lf
+sdk/npm/**/*.tex text eol=lf
+sdk/npm/**/*.sh text eol=lf
+sdk/npm/**/*.wit text eol=lf
+sdk/npm/**/*.lock text eol=lf
 schemas/**/*.json text eol=lf
 # The matrix is generated and compared byte for byte; the corpus is hashed (#287).
 COMPLIANCE.md text eol=lf
