@@ -28,7 +28,7 @@ npx prism-code setup
 One run gets this machine ready for the build box on uor.foundation. It does three things:
 
 1. It adds the UOR MCP server, `lexlean` at `https://mcp.uor.foundation/`, to every agent it finds, and prints one line per agent.
-2. It registers a `prism://` link handler for this OS, so the website's Build button can open your agent.
+2. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
 3. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
 
 | Agent | Found by | What setup writes |
@@ -55,7 +55,7 @@ prism-code setup --dry-run: the UOR MCP server lexlean at https://mcp.uor.founda
   codex           not found
   cursor          would configure     C:\Users\you\.cursor\mcp.json
   ...
-  prism://        would register      HKCU\Software\Classes\prism -> "C:\Program Files\nodejs\node.exe" "C:\Users\you\.prism\handler\handler.mjs" "%1"
+  holo://         would register      HKCU\Software\Classes\holo -> "C:\Program Files\nodejs\node.exe" "C:\Users\you\.prism\handler\handler.mjs" "%1"
   preferred agent claude-code
 ```
 
@@ -63,14 +63,16 @@ The handler is a copy of five files of this package in `$PRISM_HOME/handler` (de
 
 | OS | How the handler is registered |
 | --- | --- |
-| Windows | `HKCU\Software\Classes\prism`, with `shell\open\command` set to `"<node>" "<handler>" "%1"`, written by `reg.exe` |
-| macOS | `~/Applications/Prism Open.app`, an AppleScript applet from `osacompile` with a `prism` URL type, signed again with `codesign --sign -` and registered with `lsregister` |
-| Linux | `~/.local/share/applications/prism-open.desktop` with `MimeType=x-scheme-handler/prism`, made the default with `xdg-mime` |
+| Windows | `HKCU\Software\Classes\holo`, with `shell\open\command` set to `"<node>" "<handler>" "%1"`, written by `reg.exe` |
+| macOS | `~/Applications/Prism Open.app`, an AppleScript applet from `osacompile` with a `holo` URL type, signed again with `codesign --sign -` and registered with `lsregister` |
+| Linux | `~/.local/share/applications/prism-open.desktop` with `MimeType=x-scheme-handler/holo`, made the default with `xdg-mime` |
+
+`holo://` may already belong to another program, such as the Hologram app. Taking it over would send that program's links to a handler that opens only `holo://build`. So setup checks first, on Windows with `HKCR\holo\shell\open\command` and on Linux with `xdg-mime query default x-scheme-handler/holo`. When `holo://` already opens something else, setup prints `left alone` with the program it found, and registers nothing. `prism-code open <link>` still works by hand. macOS has no simple query for this. When two apps claim `holo`, LaunchServices picks one, so check with `open "holo://build?agent=claude-code&q=hi"`.
 
 ### Open a link
 
 ```
-prism-code open "prism://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
+prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
 ```
 
 The handler runs this for every link the browser hands it.
@@ -84,15 +86,15 @@ The handler runs this for every link the browser hands it.
 A host other than `build`, an unknown agent or parameter, a repeated parameter, a control character or a sentence that starts with `-` exits 2 with an `open.*` code.
 `--dry-run` prints the files and commands.
 
-The sentence is never parsed by a shell. `open` writes it to a one-time ticket in `$PRISM_HOME/tickets`, and the new terminal runs only the handler with the ticket's path. The handler then starts the agent with the sentence as its one argument. An npm `.cmd` shim gets that argument escaped for `cmd.exe`, as plugins do. The terminal waits for Enter because any web page can write a `prism://` link, and the person should read what will run.
+The sentence is never parsed by a shell. `open` writes it to a one-time ticket in `$PRISM_HOME/tickets`, and the new terminal runs only the handler with the ticket's path. The handler then starts the agent with the sentence as its one argument. An npm `.cmd` shim gets that argument escaped for `cmd.exe`, as plugins do. The terminal waits for Enter because any web page can write a `holo://` link, and the person should read what will run.
 
 ### Check it by hand
 
 Run `npx prism-code setup`, then open the leap-year link above from a browser's address bar. The browser asks whether to open the link. Then a terminal shows the sentence, and Enter starts Claude Code. On each OS, confirm the registration first:
 
-- **Windows:** `reg query HKCU\Software\Classes\prism\shell\open\command` prints the handler command. A Windows Terminal tab titled Prism opens.
-- **macOS:** `open "prism://build?agent=claude-code&q=hi"` opens Terminal.app. `~/Applications/Prism Open.app/Contents/Info.plist` lists `prism` under `CFBundleURLSchemes`.
-- **Linux:** `xdg-mime query default x-scheme-handler/prism` prints `prism-open.desktop`, and `xdg-open "prism://build?agent=claude-code&q=hi"` opens a terminal.
+- **Windows:** `reg query HKCR\holo\shell\open\command` prints the handler command. A Windows Terminal tab titled Prism opens.
+- **macOS:** `open "holo://build?agent=claude-code&q=hi"` opens Terminal.app. `~/Applications/Prism Open.app/Contents/Info.plist` lists `holo` under `CFBundleURLSchemes`.
+- **Linux:** `xdg-mime query default x-scheme-handler/holo` prints `prism-open.desktop`, and `xdg-open "holo://build?agent=claude-code&q=hi"` opens a terminal.
 
 A link the handler refuses on macOS or Linux has no terminal to show the refusal in, so the refusal is also written to `$PRISM_HOME/handler.log`.
 

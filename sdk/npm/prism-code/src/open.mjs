@@ -1,5 +1,5 @@
 /**
- * `prism-code open prism://build?agent=<id>&q=<sentence>` (experimental): hand
+ * `prism-code open holo://build?agent=<id>&q=<sentence>` (experimental): hand
  * one sentence to the agent the link names.
  *
  * A terminal agent (Claude Code, Codex) gets a new terminal that runs it with
@@ -7,7 +7,7 @@
  * no AppleScript ever sees the sentence: it goes into a ticket file, and the
  * terminal runs `node handler.mjs --run <ticket>`, which holds only paths this
  * package chose. The runner shows the sentence and starts the agent after
- * Enter, because any web page can write a prism:// link. Cursor and VS Code get
+ * Enter, because any web page can write a holo:// link. Cursor and VS Code get
  * their own MCP install link and the sentence on the clipboard. Claude and
  * ChatGPT get their prompt URL.
  *
@@ -32,14 +32,14 @@ const FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u
 export function checkSentence(sentence) {
   if (typeof sentence !== 'string' || sentence.trim() === '') fail('open.sentence', 'the link carries no sentence: give it as q=<urlencoded sentence>');
   const length = [...sentence].length;
-  if (length > MAX_SENTENCE) fail('open.sentence', `the sentence is ${length} characters; a prism:// link carries at most ${MAX_SENTENCE}`);
-  if (FORBIDDEN.test(sentence)) fail('open.sentence', 'the sentence holds a control or bidirectional character; a prism:// link carries one plain line');
+  if (length > MAX_SENTENCE) fail('open.sentence', `the sentence is ${length} characters; a holo:// link carries at most ${MAX_SENTENCE}`);
+  if (FORBIDDEN.test(sentence)) fail('open.sentence', 'the sentence holds a control or bidirectional character; a holo:// link carries one plain line');
   if (/^\s*-/.test(sentence)) fail('open.sentence', 'the sentence starts with "-", which an agent would read as a flag');
   return sentence;
 }
 
 /**
- * The agent and sentence of a prism://build link. `preferred` stands in when the link names no agent.
+ * The agent and sentence of a holo://build link. `preferred` stands in when the link names no agent.
  * @returns {{ agent: string, sentence: string }}
  */
 export function parsePrismUrl(raw, { preferred = null } = {}) {
@@ -47,15 +47,15 @@ export function parsePrismUrl(raw, { preferred = null } = {}) {
   try {
     url = new URL(String(raw));
   } catch {
-    fail('open.url', `${JSON.stringify(String(raw))} is not a URL; prism-code open takes prism://build?agent=<id>&q=<sentence>`);
+    fail('open.url', `${JSON.stringify(String(raw))} is not a URL; prism-code open takes holo://build?agent=<id>&q=<sentence>`);
   }
-  if (url.protocol !== 'prism:') fail('open.url', `${url.protocol}// is not prism://; prism-code open takes prism://build?agent=<id>&q=<sentence>`);
-  if (url.username || url.password || url.port || url.hash) fail('open.url', 'a prism:// link carries no user, password, port or fragment');
-  if (url.hostname !== 'build') fail('open.host', `prism://${url.hostname} is not a link prism-code opens; only prism://build is`);
-  if (url.pathname !== '' && url.pathname !== '/') fail('open.url', `prism://build${url.pathname} has a path; the link is prism://build?agent=<id>&q=<sentence>`);
+  if (url.protocol !== 'holo:') fail('open.url', `${url.protocol}// is not holo://; prism-code open takes holo://build?agent=<id>&q=<sentence>`);
+  if (url.username || url.password || url.port || url.hash) fail('open.url', 'a holo:// link carries no user, password, port or fragment');
+  if (url.hostname !== 'build') fail('open.host', `holo://${url.hostname} is not a link prism-code opens; only holo://build is`);
+  if (url.pathname !== '' && url.pathname !== '/') fail('open.url', `holo://build${url.pathname} has a path; the link is holo://build?agent=<id>&q=<sentence>`);
   const values = new Map();
   for (const [name, value] of url.searchParams) {
-    if (!PARAMETERS.includes(name)) fail('open.parameter', `prism://build takes agent and q, not ${name}`);
+    if (!PARAMETERS.includes(name)) fail('open.parameter', `holo://build takes agent and q, not ${name}`);
     if (values.has(name)) fail('open.parameter', `${name} is given twice`);
     values.set(name, value);
   }
@@ -233,7 +233,7 @@ export async function execute(steps) {
   }
 }
 
-/** Open a prism:// link: parse it against the remembered preference, plan, and carry the plan out. */
+/** Open a holo:// link: parse it against the remembered preference, plan, and carry the plan out. */
 export async function openLink(raw, context, { dryRun = false } = {}) {
   const link = parsePrismUrl(raw, { preferred: readPreferredAgent(context.configDir) });
   const plan = planOpen(link, context);

@@ -1,7 +1,7 @@
 /**
  * `prism-code setup` (experimental): one run adds the UOR MCP server to every
  * agent on this machine that takes a remote HTTP server, registers the
- * prism:// handler, and remembers the preferred agent.
+ * holo:// handler, and remembers the preferred agent.
  *
  * Like open.mjs, everything here plans first: `planSetup` reads the fixture or
  * the real machine through its context and returns, per agent, a status and
@@ -21,9 +21,11 @@ import { commandLine } from './open.mjs';
 import { invocation } from './plugins.mjs';
 import { parseToml } from './toml.mjs';
 
-/** The files `setup` copies out of the package as the prism:// handler: the entry and what it imports. */
+/** The files `setup` copies out of the package as the holo:// handler: the entry and what it imports. */
 export const HANDLER_FILES = Object.freeze(['handler.mjs', 'open.mjs', 'agents.mjs', 'errors.mjs', 'plugins.mjs']);
-export const REGISTRY_KEY = 'HKCU\\Software\\Classes\\prism';
+export const REGISTRY_KEY = 'HKCU\\Software\\Classes\\holo';
+/** HKCU and HKLM merged: the command Windows actually opens a holo:// link with. */
+export const OPEN_COMMAND_KEY = 'HKCR\\holo\\shell\\open\\command';
 export const MAC_APP = 'Prism Open.app';
 export const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
 export const DESKTOP_FILE = 'prism-open.desktop';
@@ -136,7 +138,13 @@ const appleScriptString = (s) => `"${String(s).replace(/(["\\])/g, '\\$1')}"`;
 // A .desktop Exec argument: quoted, with the four reserved characters escaped, then backslashes and % escaped for the key file.
 const desktopArgument = (s) => `"${String(s).replace(/([\\"`$])/g, '\\$1')}"`.replace(/\\/g, '\\\\').replace(/%/g, '%%');
 
-/** The prism:// handler: copy the entry out of the package, then register it with the OS. */
+/**
+ * holo:// may already belong to another program, such as the Hologram app. Taking it over would send that
+ * program's links to a handler that opens only holo://build, so setup reports it and leaves it alone.
+ */
+const foreign = (current) => ({ status: 'conflict', detail: `holo:// already opens ${current}; left alone, so links go through prism-code open`, steps: [] });
+
+/** The holo:// handler: copy the entry out of the package, then register it with the OS. */
 export function planHandler(context) {
   const { platform, home, env, configDir, node, sourceDir } = context;
   const handlerDir = join(configDir, 'handler');
@@ -154,7 +162,9 @@ export function planHandler(context) {
   if (platform === 'win32') {
     const command = `"${node}" "${entry}" "%1"`;
     const where = `${REGISTRY_KEY} -> ${command}`;
-    if (same && context.registryValue(`${REGISTRY_KEY}\\shell\\open\\command`) === command) return { status: 'already', detail: where, steps: [] };
+    const current = context.registryValue(OPEN_COMMAND_KEY);
+    if (current && !current.includes(entry)) return foreign(current);
+    if (same && current === command) return { status: 'already', detail: where, steps: [] };
     for (const args of [
       ['add', REGISTRY_KEY, '/ve', '/d', 'URL:Prism build link', '/f'],
       ['add', REGISTRY_KEY, '/v', 'URL Protocol', '/d', '', '/f'],
@@ -174,7 +184,7 @@ export function planHandler(context) {
       '',
     ].join('\n');
     const plist = join(app, 'Contents', 'Info.plist');
-    if (same && context.readFile(script) === source && (context.readFile(plist) ?? '').includes('<string>prism</string>')) return { status: 'already', detail: app, steps: [] };
+    if (same && context.readFile(script) === source && (context.readFile(plist) ?? '').includes('<string>holo</string>')) return { status: 'already', detail: app, steps: [] };
     steps.push({ kind: 'write', path: script, content: source });
     if (context.exists(app)) steps.push({ kind: 'remove', path: app });
     steps.push(
@@ -187,7 +197,7 @@ export function planHandler(context) {
           '-c', 'Add :CFBundleURLTypes:0 dict',
           '-c', 'Add :CFBundleURLTypes:0:CFBundleURLName string foundation.uor.prism',
           '-c', 'Add :CFBundleURLTypes:0:CFBundleURLSchemes array',
-          '-c', 'Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string prism',
+          '-c', 'Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string holo',
           plist,
         ],
         options: {},
@@ -204,18 +214,20 @@ export function planHandler(context) {
     '[Desktop Entry]',
     'Type=Application',
     'Name=Prism',
-    'Comment=Opens prism://build links in your agent',
+    'Comment=Opens holo://build links in your agent',
     `Exec=${desktopArgument(node)} ${desktopArgument(entry)} %u`,
     'Terminal=false',
     'NoDisplay=true',
-    'MimeType=x-scheme-handler/prism;',
+    'MimeType=x-scheme-handler/holo;',
     '',
   ].join('\n');
+  const current = context.mimeDefault('x-scheme-handler/holo');
+  if (current && current !== DESKTOP_FILE) return foreign(current);
   if (same && context.readFile(file) === content) return { status: 'already', detail: file, steps: [] };
   steps.push({ kind: 'write', path: file, content });
   const xdgMime = context.find('xdg-mime');
-  if (!xdgMime) return { status: 'manual', detail: `${file} written; xdg-mime not found: make ${DESKTOP_FILE} the default for x-scheme-handler/prism`, steps };
-  steps.push({ kind: 'command', command: xdgMime, args: ['default', DESKTOP_FILE, 'x-scheme-handler/prism'], options: {} });
+  if (!xdgMime) return { status: 'manual', detail: `${file} written; xdg-mime not found: make ${DESKTOP_FILE} the default for x-scheme-handler/holo`, steps };
+  steps.push({ kind: 'command', command: xdgMime, args: ['default', DESKTOP_FILE, 'x-scheme-handler/holo'], options: {} });
   const database = context.find('update-desktop-database');
   if (database) steps.push({ kind: 'command', command: database, args: [applications], options: {}, optional: true });
   return { status: 'configure', detail: file, steps };
@@ -278,6 +290,12 @@ export function hostSetupContext({ env = process.env, platform = process.platfor
     exists: existsSync,
     readFile: readText,
     registryValue,
+    mimeDefault: (type) => {
+      const xdgMime = platform === 'linux' ? which('xdg-mime', { env, platform }) : null;
+      if (!xdgMime) return null;
+      const result = spawnSync(xdgMime, ['query', 'default', type], { encoding: 'utf8' });
+      return result.status === 0 ? result.stdout.trim() || null : null;
+    },
     configDir: prismHome(env, home),
     node: process.execPath,
     sourceDir: dirname(fileURLToPath(import.meta.url)),
@@ -346,7 +364,7 @@ const WORDS = {
   unreadable: ['skipped', 'skipped'],
   failed: ['failed', 'failed'],
 };
-const HANDLER_WORDS = { configure: ['would register', 'registered'], already: ['already registered', 'already registered'], manual: ['manual', 'manual'], failed: ['failed', 'failed'] };
+const HANDLER_WORDS = { configure: ['would register', 'registered'], already: ['already registered', 'already registered'], conflict: ['left alone', 'left alone'], manual: ['manual', 'manual'], failed: ['failed', 'failed'] };
 
 function formatStep(step) {
   switch (step.kind) {
@@ -374,7 +392,7 @@ export function formatSetup(plan, { dryRun = false } = {}) {
     if (dryRun) for (const step of steps ?? []) lines.push(`      ${formatStep(step)}`);
   };
   for (const a of plan.agents) row(a.agent, WORDS, a.status, a.detail, a.steps);
-  row('prism://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);
+  row('holo://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);
   const preferred = plan.preferred.agent ? `${plan.preferred.agent}${plan.preferred.steps.length ? '' : ' (unchanged)'}` : 'none: pass --agent <id>';
   lines.push(`  ${'preferred agent'.padEnd(16)}${preferred}`);
   if (dryRun) for (const step of plan.preferred.steps) lines.push(`      ${formatStep(step)}`);

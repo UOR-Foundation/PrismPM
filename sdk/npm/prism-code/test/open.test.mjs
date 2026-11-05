@@ -1,4 +1,4 @@
-// prism-code open (experimental): the prism://build link, its refusals, and the exact commands per OS.
+// prism-code open (experimental): the holo://build link, its refusals, and the exact commands per OS.
 // Nothing here opens a window: the plans are checked, and the one real spawn is a stand-in agent in a temporary directory.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,49 +12,49 @@ import { LINUX_TERMINALS, TICKET_SCHEMA, checkSentence, parsePrismUrl, planOpen,
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const SENTENCE = 'Go to uor.foundation and build me a Prism app that tells whether a year is a leap year.';
-const LINK = `prism://build?agent=claude-code&q=${encodeURIComponent(SENTENCE)}`;
+const LINK = `holo://build?agent=claude-code&q=${encodeURIComponent(SENTENCE)}`;
 // Everything a shell, cmd.exe, Windows Terminal or AppleScript would act on.
 const HOSTILE = `it's 50% "done" & | ^ < > ; $(id) \`id\` %PATH% !x! \\ C:\\`;
 
 const refused = (raw, code, options) => assert.throws(() => parsePrismUrl(raw, options), (e) => e.code === code, raw);
 
-test('a prism://build link gives the agent and the sentence', () => {
+test('a holo://build link gives the agent and the sentence', () => {
   assert.deepEqual(parsePrismUrl(LINK), { agent: 'claude-code', sentence: SENTENCE });
-  assert.deepEqual(parsePrismUrl(`prism://build/?agent=codex&q=${encodeURIComponent(HOSTILE)}`), { agent: 'codex', sentence: HOSTILE });
-  assert.deepEqual(parsePrismUrl('prism://build?q=hi', { preferred: 'chatgpt' }), { agent: 'chatgpt', sentence: 'hi' });
-  for (const agent of ['claude-code', 'codex', 'cursor', 'vscode', 'claude', 'chatgpt']) assert.equal(parsePrismUrl(`prism://build?agent=${agent}&q=x`).agent, agent);
+  assert.deepEqual(parsePrismUrl(`holo://build/?agent=codex&q=${encodeURIComponent(HOSTILE)}`), { agent: 'codex', sentence: HOSTILE });
+  assert.deepEqual(parsePrismUrl('holo://build?q=hi', { preferred: 'chatgpt' }), { agent: 'chatgpt', sentence: 'hi' });
+  for (const agent of ['claude-code', 'codex', 'cursor', 'vscode', 'claude', 'chatgpt']) assert.equal(parsePrismUrl(`holo://build?agent=${agent}&q=x`).agent, agent);
 });
 
 test('a link to another host, scheme or path is refused', () => {
-  refused('prism://evil?agent=codex&q=hi', 'open.host');
-  refused('prism://run?agent=codex&q=hi', 'open.host');
+  refused('holo://evil?agent=codex&q=hi', 'open.host');
+  refused('holo://run?agent=codex&q=hi', 'open.host');
   refused('https://build?agent=codex&q=hi', 'open.url');
-  refused('prism://build/x?agent=codex&q=hi', 'open.url');
-  refused('prism://user@build?agent=codex&q=hi', 'open.url');
-  refused('prism://build:8080?agent=codex&q=hi', 'open.url');
-  refused('prism://build?agent=codex&q=hi#x', 'open.url');
+  refused('holo://build/x?agent=codex&q=hi', 'open.url');
+  refused('holo://user@build?agent=codex&q=hi', 'open.url');
+  refused('holo://build:8080?agent=codex&q=hi', 'open.url');
+  refused('holo://build?agent=codex&q=hi#x', 'open.url');
   refused('not a url', 'open.url');
 });
 
 test('an unknown agent, an unknown or repeated parameter, and no agent are refused', () => {
-  refused('prism://build?agent=bash&q=hi', 'open.agent');
-  refused('prism://build?agent=claude-desktop&q=hi', 'open.agent');
-  refused('prism://build?q=hi', 'open.agent');
-  refused('prism://build?agent=codex&q=hi&exec=1', 'open.parameter');
-  refused('prism://build?agent=codex&agent=claude-code&q=hi', 'open.parameter');
-  refused('prism://build?agent=codex&q=a&q=b', 'open.parameter');
+  refused('holo://build?agent=bash&q=hi', 'open.agent');
+  refused('holo://build?agent=claude-desktop&q=hi', 'open.agent');
+  refused('holo://build?q=hi', 'open.agent');
+  refused('holo://build?agent=codex&q=hi&exec=1', 'open.parameter');
+  refused('holo://build?agent=codex&agent=claude-code&q=hi', 'open.parameter');
+  refused('holo://build?agent=codex&q=a&q=b', 'open.parameter');
 });
 
 test('a sentence is one plain line of at most 2000 characters that does not start with a dash', () => {
   assert.equal(checkSentence('é'.repeat(MAX_SENTENCE)), 'é'.repeat(MAX_SENTENCE));
-  refused(`prism://build?agent=codex&q=${'a'.repeat(MAX_SENTENCE + 1)}`, 'open.sentence');
-  refused('prism://build?agent=codex', 'open.sentence');
-  refused('prism://build?agent=codex&q=%20%20', 'open.sentence');
-  refused('prism://build?agent=codex&q=one%0Atwo', 'open.sentence');
-  refused('prism://build?agent=codex&q=one%00two', 'open.sentence');
-  refused('prism://build?agent=codex&q=one%E2%80%AEtwo', 'open.sentence');
-  refused('prism://build?agent=codex&q=--dangerously-skip-permissions', 'open.sentence');
-  refused('prism://build?agent=codex&q=%20-p%20x', 'open.sentence');
+  refused(`holo://build?agent=codex&q=${'a'.repeat(MAX_SENTENCE + 1)}`, 'open.sentence');
+  refused('holo://build?agent=codex', 'open.sentence');
+  refused('holo://build?agent=codex&q=%20%20', 'open.sentence');
+  refused('holo://build?agent=codex&q=one%0Atwo', 'open.sentence');
+  refused('holo://build?agent=codex&q=one%00two', 'open.sentence');
+  refused('holo://build?agent=codex&q=one%E2%80%AEtwo', 'open.sentence');
+  refused('holo://build?agent=codex&q=--dangerously-skip-permissions', 'open.sentence');
+  refused('holo://build?agent=codex&q=%20-p%20x', 'open.sentence');
 });
 
 const finder = (files) => (name) => files[name] ?? null;
@@ -219,7 +219,7 @@ test('prism-code open prints its plan with --dry-run, refuses a bad link with ex
   // macOS quotes each word for the shell inside the AppleScript, so --run may stand in quotes.
   assert.match(dry.out, /\nrun .*--run/);
   assert.equal(existsSync(join(dry.home, '.prism', 'tickets')), false, '--dry-run writes nothing');
-  const bad = cli(['open', 'prism://evil?q=x', '--dry-run']);
+  const bad = cli(['open', 'holo://evil?q=x', '--dry-run']);
   assert.equal(bad.code, 2);
   assert.match(bad.err, /^open\.host: /);
   assert.equal(cli(['open']).code, 64);

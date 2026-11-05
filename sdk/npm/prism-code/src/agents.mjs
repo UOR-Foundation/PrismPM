@@ -6,7 +6,7 @@
  *
  * This module, open.mjs, handler.mjs, errors.mjs and plugins.mjs import only
  * node: modules and each other: `setup` copies them out of the package as the
- * prism:// handler, so the handler keeps working after npx clears its cache.
+ * holo:// handler, so the handler keeps working after npx clears its cache.
  */
 import { accessSync, constants, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -15,7 +15,7 @@ import { basename, dirname, extname, join } from 'node:path';
 export const MCP_NAME = 'lexlean';
 export const MCP_URL = 'https://mcp.uor.foundation/';
 
-/** The longest sentence a prism:// link may carry, in characters. */
+/** The longest sentence a holo:// link may carry, in characters. */
 export const MAX_SENTENCE = 2000;
 
 /**
@@ -35,7 +35,7 @@ export const AGENTS = Object.freeze({
 /** The agents `setup` looks for on this machine, in the order it prints them. */
 export const LOCAL_AGENTS = Object.freeze(['claude-code', 'codex', 'cursor', 'vscode', 'claude-desktop']);
 
-/** The agents a prism://build link may name: the six of the website's build box. */
+/** The agents a holo://build link may name: the six of the website's build box. */
 export const OPEN_AGENTS = Object.freeze(['claude-code', 'codex', 'cursor', 'vscode', 'claude', 'chatgpt']);
 
 const cursorConfig = Buffer.from(JSON.stringify({ url: MCP_URL })).toString('base64');

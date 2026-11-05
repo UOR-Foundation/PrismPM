@@ -1,6 +1,6 @@
 /**
  * `prism-code setup [--agent <id>] [--dry-run]` and
- * `prism-code open <prism://build?agent=<id>&q=<sentence>> [--dry-run]` (experimental).
+ * `prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]` (experimental).
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +41,7 @@ export async function runSetup(argv, usage, context = hostSetupContext()) {
 export async function runOpen(argv, usage, context = hostContext({ handler: HANDLER })) {
   const { problem, positional, named } = options(argv, { flags: ['dry-run'] });
   if (problem) return usage(problem);
-  if (positional.length !== 1) return usage('open takes one prism://build link');
+  if (positional.length !== 1) return usage('open takes one holo://build link');
   // A refused link throws a PrismCodeError open.*, which the command line prints and exits 2 for.
   const plan = await openLink(positional[0], context, { dryRun: named['dry-run'] === true });
   process.stdout.write(named['dry-run'] ? `${formatSteps(plan.steps)}\n` : `${plan.summary}\n`);

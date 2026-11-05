@@ -34,8 +34,8 @@
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
  *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
- *   prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server to every agent here, register prism:// (experimental)
- *   prism-code open <prism://build?agent=<id>&q=<sentence>> [--dry-run]
+ *   prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server to every agent here, register holo:// (experimental)
+ *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
  *                                                     hand the sentence to the agent the link names (experimental)
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
  *
@@ -147,8 +147,8 @@ Usage:
   prism-code conformance [args]                     prismpm conformance
   prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server (lexlean, https://mcp.uor.foundation/) to every
                                                     agent found here: Claude Code, Codex, Cursor, VS Code; say how for
-                                                    Claude Desktop; register the prism:// handler; remember the agent
-  prism-code open <prism://build?agent=<id>&q=<sentence>> [--dry-run]
+                                                    Claude Desktop; register the holo:// handler; remember the agent
+  prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
                                                     hand the sentence to the agent: a terminal running claude or codex
                                                     (after Enter), Cursor's or VS Code's install link with the sentence
                                                     on the clipboard, or the Claude or ChatGPT prompt URL

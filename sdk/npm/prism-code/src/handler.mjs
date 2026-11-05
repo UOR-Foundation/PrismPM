@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * The prism:// handler (experimental). The OS runs it with the link:
+ * The holo:// handler (experimental). The OS runs it with the link:
  *
- *   node handler.mjs prism://build?agent=claude-code&q=...
+ *   node handler.mjs holo://build?agent=claude-code&q=...
  *
  * and the terminal it opens runs it with a ticket:
  *
@@ -39,7 +39,7 @@ async function run(ticketPath, context) {
     await enter('Press Enter to close this window. ');
     return 1;
   }
-  process.stdout.write(`\nA prism:// link asks to run:\n\n  ${plan.display}\n\nAny web page can write such a link, so read the request first.\n`);
+  process.stdout.write(`\nA holo:// link asks to run:\n\n  ${plan.display}\n\nAny web page can write such a link, so read the request first.\n`);
   if (!(await enter('Press Enter to start it, or close this window to cancel. '))) return 1;
   return new Promise((done) => {
     const child = spawn(plan.command, plan.args, { ...plan.options, stdio: 'inherit' });
