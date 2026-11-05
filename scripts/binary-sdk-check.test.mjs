@@ -159,35 +159,66 @@ test('release retains existing mandatory gates and adds binary on both native pl
  const {load}=createRequire('/opt/prismpm/oracles/package.json')('js-yaml'),jobs=load(workflow).jobs;
  const binaryRelease=(jobs,assets=assetNames())=>{
   const owner=jobs['browser-library'];assert.deepEqual(owner.needs,['policy','sdk-supply']);
+  assert.equal(owner.name,'browser-library-${{ matrix.arch }}');
   assert.equal(owner['runs-on'],'${{ matrix.os }}');assert.equal(owner.if,undefined);assert.equal(owner['continue-on-error'],undefined);
   assert.deepEqual(owner.strategy.matrix.include,[{os:'ubuntu-24.04',arch:'amd64'},{os:'ubuntu-24.04-arm',arch:'arm64'}]);
   const sdk=owner.steps.filter(step=>step.with?.name==='sdk-image');assert.equal(sdk.length,1);
   assert.equal(sdk[0].with.path,'.shipped-image');assert.equal(sdk[0].if,undefined);assert.equal(sdk[0]['continue-on-error'],undefined);
   const checks=owner.steps.filter(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only');assert.equal(checks.length,1);
   const check=checks[0];assert.equal(check.if,undefined);assert.equal(check['continue-on-error'],undefined);assert.equal(check.shell,'bash');
-  assert.equal(check.env.RESULT_NAME,'sdk-${{ matrix.arch }}');assert(owner.steps.indexOf(sdk[0])<owner.steps.indexOf(check));
-  assert.equal(check.run,'set -euo pipefail\nnode root-a/scripts/binary-sdk-check.mjs tests\n'+
-   'bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1\n'+
-   'bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1\n');
+  assert.equal(check.env.RESULT_NAME,'sdk-${{ matrix.arch }}');assert.equal(check.env.ARCH,'${{ matrix.arch }}');assert(owner.steps.indexOf(sdk[0])<owner.steps.indexOf(check));
+  const producers=owner.steps.filter(step=>step.id==='binary-artifacts');assert.equal(producers.length,1);const producer=producers[0];
+  assert.equal(producer.if,undefined);assert.equal(producer['continue-on-error'],undefined);assert.equal(producer.shell,'bash');assert.equal(producer.env.ARCH,'${{ matrix.arch }}');
+  assert(owner.steps.indexOf(sdk[0])<owner.steps.indexOf(producer)&&owner.steps.indexOf(producer)<owner.steps.indexOf(check));
+  assert.equal(producer.run,'set -euo pipefail\nimage=$(cat .shipped-image/sdk-image.txt)\n'+
+   'language11=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")\n'+
+   'language12=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-language-1.2-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")\n'+
+   'printf \'language11=%s\\nlanguage12=%s\\n\' "$language11" "$language12" >> "$GITHUB_OUTPUT"\n');
+  assert.equal(check.run,'set -euo pipefail\n'+
+   'mkdir "$RUNNER_TEMP/binary-transport-1.1" "$RUNNER_TEMP/binary-transport-1.2"\n'+
+   'node root-a/scripts/binary-sdk-check.mjs tests\nimage=$(cat .shipped-image/sdk-image.txt)\n'+
+   'bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk" > "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk.log" 2>&1\n'+
+   'bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1\n'+
+   'node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.1" "$image" "$GITHUB_SHA" "$ARCH" 1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"\n'+
+   'node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.2" "$image" "$GITHUB_SHA" "$ARCH" 1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"\n');
   const steps=jobs['oci-native'].steps,pack=steps.find(step=>step.run?.includes('scripts/binary-sdk-release-evidence.mjs'));
   assert(pack);assert.equal(pack.if,undefined);assert.equal(pack['continue-on-error'],undefined);
   assert.doesNotMatch(pack.run,/\|\| true|\bif false\b|\bset \+e\b/);
   const packing=pack.run.replace(/[ \t]*\\\n[ \t]*/g,' ');
-  for(const [artifact,suffix,language]of [['binary-sdk','binary-sdk','1.1'],['binary-language-1.2-sdk','binary-sdk-language-1.2','1.2']]){
-   const uploads=owner.steps.filter(step=>step.with?.name===artifact+'-sdk-${{ matrix.arch }}');assert.equal(uploads.length,1);
+  for(const arch of ['amd64','arm64']){
+   const selectors=steps.filter(step=>step.id==='binary-'+arch);assert.equal(selectors.length,1);const selector=selectors[0];
+   assert.equal(selector.if,undefined);assert.equal(selector['continue-on-error'],undefined);assert.equal(selector.env.GH_TOKEN,'${{ github.token }}');
+   const selection=selector.run.replace(/[ \t]*\\\n[ \t]*/g,' ');
+   assert.equal(selection,'set -euo pipefail\nmkdir -p target/release-selection\n'+
+    'node scripts/release-artifact-metadata.mjs target/release-selection/binary-'+arch+'-provider.json "$GITHUB_RUN_ID"\n'+
+    'image=$(cat target/release-sdk/sdk-image.txt)\n'+
+    'node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/binary-'+arch+'-provider.json target/release-selection/binary-'+arch+'.json '+
+     '"$GITHUB_SHA" '+arch+' "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" binary-sdk-sdk-'+arch+' binary-language-1.2-sdk-sdk-'+arch+'\n'+
+    'language11=$(node -e \'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[0].id)\' target/release-selection/binary-'+arch+'.json)\n'+
+    'language12=$(node -e \'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[1].id)\' target/release-selection/binary-'+arch+'.json)\n'+
+    'printf \'language11=%s\\nlanguage12=%s\\n\' "$language11" "$language12" >> "$GITHUB_OUTPUT"\n');
+  }
+  for(const [artifact,suffix,language,output]of [['binary-sdk','binary-sdk','1.1','language11'],['binary-language-1.2-sdk','binary-sdk-language-1.2','1.2','language12']]){
+   const uploads=owner.steps.filter(step=>step.with?.name==='${{ steps.binary-artifacts.outputs.'+output+' }}');assert.equal(uploads.length,1);
    const upload=uploads[0];assert.equal(upload.if,'always()');assert.equal(upload['continue-on-error'],undefined);
-   assert.equal(upload.with.path,'sdk-${{ matrix.arch }}-'+suffix+'.log\nsdk-${{ matrix.arch }}-'+suffix+'/\n');
+   assert.equal(upload.uses,'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+   assert.equal(upload.with.path,'${{ runner.temp }}/binary-transport-'+language+'/');assert.equal(upload.with.overwrite,false);
    assert.equal(upload.with['include-hidden-files'],true);assert.equal(upload.with['if-no-files-found'],'error');
    assert(owner.steps.indexOf(check)<owner.steps.indexOf(upload));
    for(const arch of ['amd64','arm64']){
-    const downloads=steps.filter(step=>step.with?.name===artifact+'-sdk-'+arch);assert.equal(downloads.length,1);
+    const path='.sdk-gate-evidence/'+artifact+'-sdk-'+arch,downloads=steps.filter(step=>step.with?.path===path);assert.equal(downloads.length,1);
     const download=downloads[0];assert.equal(download.if,undefined);assert.equal(download['continue-on-error'],undefined);
-    assert.equal(download.with.path,'.sdk-gate-evidence/'+artifact+'-sdk-'+arch);assert(steps.indexOf(download)<steps.indexOf(pack));
+    assert.equal(download.uses,'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
+    assert.deepEqual(download.with,{'artifact-ids':'${{ steps.binary-'+arch+'.outputs.'+output+' }}','merge-multiple':true,path});
+    assert(steps.indexOf(steps.find(step=>step.id==='binary-'+arch))<steps.indexOf(download)&&steps.indexOf(download)<steps.indexOf(pack));
     assert(assets.includes('sdk-'+arch+'-'+suffix+'.tar'),'complete binary publication asset '+arch+'/'+language);
    }
-   assert(packing.includes('node scripts/binary-sdk-release-evidence.mjs ".sdk-gate-evidence/'+artifact+'-sdk-$architecture" '+
-    '"release/sdk-$architecture-'+suffix+'.tar" "$image" "$GITHUB_SHA" "$architecture" '+language));
+   assert(packing.includes('node scripts/binary-sdk-release-evidence.mjs pack ".sdk-gate-evidence/'+artifact+'-sdk-$architecture" '+
+    '"release/sdk-$architecture-'+suffix+'.tar" "$image" "$GITHUB_SHA" "$architecture" '+language+' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" '+
+    '"target/release-selection/binary-$architecture-provider.json" "target/release-selection/binary-$architecture.json"'));
   }
+  const metadata=steps.filter(step=>step.name==='Retain original artifact metadata and immutable selections');assert.equal(metadata.length,1);
+  assert.equal(metadata[0].if,'always()');assert.equal(metadata[0]['continue-on-error'],undefined);assert.equal(metadata[0].with.path,'target/release-selection/*.json');assert.equal(metadata[0].with['if-no-files-found'],'error');
   assert.deepEqual(jobs.reproducibility.needs,['reproducibility-parts','browser-library']);
   assert.equal(jobs.reproducibility.if,undefined);assert.equal(jobs.reproducibility['continue-on-error'],undefined);
   for(const name of ['oci-native','crates','release'])assert(jobs[name].needs.includes('reproducibility'));
@@ -223,11 +254,23 @@ test('release retains existing mandatory gates and adds binary on both native pl
  }
  for(const mutate of [
   value=>{value['browser-library'].strategy.matrix.include.pop();},
+  value=>{delete value['browser-library'].name;},
   value=>{value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only').if='false';},
   value=>{value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only').run=value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only').run.replace(' 1.2 >',' >');},
-  value=>{value['browser-library'].steps.find(step=>step.with?.name==='binary-sdk-sdk-${{ matrix.arch }}').with['include-hidden-files']=false;},
-  value=>{value['oci-native'].steps=value['oci-native'].steps.filter(step=>step.with?.name!=='binary-language-1.2-sdk-sdk-arm64');},
+  value=>{const step=value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only');step.run=step.run.replace('mkdir "$RUNNER_TEMP/binary-transport-1.1"','mkdir -p "$RUNNER_TEMP/binary-transport-1.1"');},
+  value=>{const step=value['browser-library'].steps.find(step=>step.name==='Verify exact current SDK binary-package closure offline and read-only');step.run=step.run.replace('1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"','1.1 "$GITHUB_RUN_ID" "1"');},
+  value=>{const step=value['browser-library'].steps.find(step=>step.id==='binary-artifacts');step.run=step.run.replace('"$GITHUB_RUN_ATTEMPT"','"1"');},
+  value=>{value['browser-library'].steps.find(step=>step.with?.name==='${{ steps.binary-artifacts.outputs.language11 }}').with['include-hidden-files']=false;},
+  value=>{value['browser-library'].steps.find(step=>step.with?.name==='${{ steps.binary-artifacts.outputs.language12 }}').with.overwrite=true;},
+  value=>{value['browser-library'].steps.find(step=>step.with?.name==='${{ steps.binary-artifacts.outputs.language11 }}').with.name='binary-sdk-sdk-${{ matrix.arch }}';},
+  value=>{value['oci-native'].steps=value['oci-native'].steps.filter(step=>step.with?.path!=='.sdk-gate-evidence/binary-language-1.2-sdk-sdk-arm64');},
+  value=>{const step=value['oci-native'].steps.find(step=>step.id==='binary-amd64');step.run=step.run.replace('select-artifacts','omitted-selection');},
+  value=>{const step=value['oci-native'].steps.find(step=>step.id==='binary-arm64');step.run=step.run.replace('artifacts[0].id','artifacts[1].id');},
+  value=>{const step=value['oci-native'].steps.find(step=>step.with?.path==='.sdk-gate-evidence/binary-sdk-sdk-amd64');delete step.with['artifact-ids'];step.with.name='binary-sdk-sdk-amd64';},
+  value=>{value['oci-native'].steps.find(step=>step.with?.path==='.sdk-gate-evidence/binary-sdk-sdk-arm64').with['merge-multiple']=false;},
   value=>{value['oci-native'].steps.find(step=>step.run?.includes('scripts/binary-sdk-release-evidence.mjs')).if='false';},
+  value=>{const step=value['oci-native'].steps.find(step=>step.run?.includes('scripts/binary-sdk-release-evidence.mjs'));step.run=step.run.replace('1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"','1.2 "$GITHUB_RUN_ID" "1"');},
+  value=>{value['oci-native'].steps.find(step=>step.name==='Retain original artifact metadata and immutable selections').if='success()';},
   value=>{value.reproducibility.needs=['reproducibility-parts'];},
  ]){const changed=structuredClone(jobs);mutate(changed);assert.throws(()=>binaryRelease(changed));}
  for(const arch of ['amd64','arm64'])for(const suffix of ['binary-sdk','binary-sdk-language-1.2'])
@@ -335,7 +378,14 @@ test('release retains existing mandatory gates and adds binary on both native pl
 });
 test('generated review is deliberate, exact-source, writer-owned and never acceptance',()=>{
  const workflow=readFileSync(new URL('../.github/workflows/binary-generated-review.yml',import.meta.url),'utf8');validateGenerationWorkflow(workflow);
+ const branches='branches: [work/binary-generated-review, work/binary-generated-review-521]';
  for(const [before,after] of [
+  [branches,'branches: [work/binary-generated-review-521]'],
+  [branches,'branches: [work/binary-generated-review]'],
+  [branches,'branches: [work/binary-generated-review, work/binary-generated-review-*]'],
+  [branches,'branches: [work/binary-generated-review, work/binary-generated-review-521, work/extra]'],
+  [branches,'branches: [work/binary-generated-review, refs/heads/work/binary-generated-review-521]'],
+  [branches,'branches: [refs/heads/work/binary-generated-review, work/binary-generated-review-521]'],
   ['work/binary-generated-review','work/binary-program-prerequisite'],['contents: read','contents: write'],
   ['test "$SOURCE_REVISION" = "$GITHUB_SHA"','true'],['just golden-check','echo skipped golden'],
   ['just stdlib-package-check','echo skipped stdlib'],['just check-fixtures','echo skipped fixtures'],

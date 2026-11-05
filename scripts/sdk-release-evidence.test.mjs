@@ -152,26 +152,67 @@ function validateWorkflow(workflow) {
     download(`library-sdk-sdk-${arch}`, `.sdk-gate-evidence/library-sdk-sdk-${arch}`);
     for (const kind of ['browser', 'library']) assert(assetNames().includes(`sdk-${arch}-${kind}-sdk.log`));
     assert(assetNames().includes(`sdk-${arch}-native-metadata.tar`));
-    for (const [name, language] of [[`binary-sdk-sdk-${arch}`, '1.1'], [`binary-language-1.2-sdk-sdk-${arch}`, '1.2']]) {
-      download(name, `.sdk-gate-evidence/${name}`);
+    const selectors = steps.filter(step => step.id === `binary-${arch}`);
+    assert.equal(selectors.length, 1, 'one Binary provider-backed selector per architecture');
+    const selector = selectors[0];
+    assert.equal(selector.if, undefined); assert.equal(selector['continue-on-error'], undefined);
+    assert.deepEqual(selector.env, {GH_TOKEN: '${{ github.token }}'});
+    assert.equal(selector.run, [
+      'set -euo pipefail', 'mkdir -p target/release-selection',
+      `node scripts/release-artifact-metadata.mjs target/release-selection/binary-${arch}-provider.json "$GITHUB_RUN_ID"`,
+      'image=$(cat target/release-sdk/sdk-image.txt)',
+      `node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/binary-${arch}-provider.json target/release-selection/binary-${arch}.json \\`,
+      `  "$GITHUB_SHA" ${arch} "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" binary-sdk-sdk-${arch} binary-language-1.2-sdk-sdk-${arch}`,
+      `language11=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[0].id)' target/release-selection/binary-${arch}.json)`,
+      `language12=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[1].id)' target/release-selection/binary-${arch}.json)`,
+      'printf \'language11=%s\\nlanguage12=%s\\n\' "$language11" "$language12" >> "$GITHUB_OUTPUT"', '',
+    ].join('\n'));
+    assert(steps.indexOf(sdkImage) < steps.indexOf(selector));
+    for (const [name, language, output] of [[`binary-sdk-sdk-${arch}`, '1.1', 'language11'], [`binary-language-1.2-sdk-sdk-${arch}`, '1.2', 'language12']]) {
+      const ids = '${{ steps.binary-' + arch + '.outputs.' + output + ' }}';
+      const matches = steps.filter(step => step.with?.['artifact-ids'] === ids);
+      assert.equal(matches.length, 1, 'one immutable Binary download per architecture and language');
+      const step = matches[0];
+      assert.equal(step.uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
+      assert.deepEqual(step.with, {'artifact-ids': ids, 'merge-multiple': true, path: `.sdk-gate-evidence/${name}`});
+      assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+      assert(steps.indexOf(selector) < steps.indexOf(step));
+      assert(steps.indexOf(step) < steps.indexOf(pack));
       const languageSuffix = language === '1.1' ? '' : '-language-1.2';
       assert(assetNames().includes(`sdk-${arch}-binary-sdk${languageSuffix}.tar`));
     }
   }
+  assert.equal(steps.filter(step => step.uses?.startsWith('actions/download-artifact@')
+    && /^\.sdk-gate-evidence\/binary(?:-sdk|-language-1\.2-sdk)-sdk-/.test(step.with?.path ?? '')).length, 4,
+  'exactly four Binary transport downloads, with no later named download overlay');
   assert.deepEqual(assetNames().filter(name => /^sdk-(amd64|arm64)-binary-sdk(?:-language-1\.2)?\.tar$/.test(name)).sort(),
     ['amd64', 'arm64'].flatMap(arch => [`sdk-${arch}-binary-sdk.tar`, `sdk-${arch}-binary-sdk-language-1.2.tar`]).sort());
   const nativeOwners = workflow.jobs['browser-library'];
   const binary = nativeOwners.steps.find(step => step.run?.includes('binary-sdk-check.sh'));
   assert(binary && binary.if === undefined && binary['continue-on-error'] === undefined);
   semanticPrerequisite(nativeOwners, [binary], 'root-a');
-  for (const [name, suffix] of [['binary-sdk-sdk-${{ matrix.arch }}', 'binary-sdk'], ['binary-language-1.2-sdk-sdk-${{ matrix.arch }}', 'binary-sdk-language-1.2']]) {
+  assert.equal(nativeOwners.name, 'browser-library-${{ matrix.arch }}');
+  const naming = nativeOwners.steps.filter(step => step.id === 'binary-artifacts');
+  assert.equal(naming.length, 1);
+  assert.equal(naming[0].if, undefined); assert.equal(naming[0]['continue-on-error'], undefined);
+  assert.equal(naming[0].shell, 'bash');
+  assert.deepEqual(naming[0].env, {ARCH: '${{ matrix.arch }}'});
+  assert.equal(naming[0].run, [
+    'set -euo pipefail', 'image=$(cat .shipped-image/sdk-image.txt)',
+    'language11=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")',
+    'language12=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-language-1.2-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")',
+    'printf \'language11=%s\\nlanguage12=%s\\n\' "$language11" "$language12" >> "$GITHUB_OUTPUT"', '',
+  ].join('\n'));
+  assert(nativeOwners.steps.indexOf(naming[0]) < nativeOwners.steps.indexOf(binary));
+  for (const [language, output] of [['1.1', 'language11'], ['1.2', 'language12']]) {
+    const name = '${{ steps.binary-artifacts.outputs.' + output + ' }}';
     const uploads = nativeOwners.steps.filter(step => step.with?.name === name);
     assert.equal(uploads.length, 1);
     const upload = uploads[0];
     assert.equal(upload.if, 'always()'); assert.equal(upload['continue-on-error'], undefined);
     assert.equal(upload.uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
-    assert.deepEqual(upload.with, {name, path: `sdk-\${{ matrix.arch }}-${suffix}.log\nsdk-\${{ matrix.arch }}-${suffix}/\n`,
-      'include-hidden-files': true, 'if-no-files-found': 'error', 'retention-days': 30});
+    assert.deepEqual(upload.with, {name, path: '${{ runner.temp }}/binary-transport-' + language + '/',
+      'include-hidden-files': true, 'if-no-files-found': 'error', overwrite: false, 'retention-days': 30});
     assert(nativeOwners.steps.indexOf(binary) < nativeOwners.steps.indexOf(upload));
   }
   assert.equal(pack.shell, 'bash');
@@ -190,12 +231,14 @@ function validateWorkflow(workflow) {
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
     '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
-    '  node scripts/binary-sdk-release-evidence.mjs \\',
+    '  node scripts/binary-sdk-release-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/binary-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk.tar" \\',
-    '    "$image" "$GITHUB_SHA" "$architecture" 1.1',
-    '  node scripts/binary-sdk-release-evidence.mjs \\',
+    '    "$image" "$GITHUB_SHA" "$architecture" 1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\',
+    '    "target/release-selection/binary-$architecture-provider.json" "target/release-selection/binary-$architecture.json"',
+    '  node scripts/binary-sdk-release-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/binary-language-1.2-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk-language-1.2.tar" \\',
-    '    "$image" "$GITHUB_SHA" "$architecture" 1.2',
+    '    "$image" "$GITHUB_SHA" "$architecture" 1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\',
+    '    "target/release-selection/binary-$architecture-provider.json" "target/release-selection/binary-$architecture.json"',
     '  for part in $parts; do',
     '    node scripts/sdk-release-evidence.mjs full-sdk-vv \\',
     '      ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \\',
@@ -244,15 +287,51 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {gate(value).if = 'always()';},
     value => {gate(value)['continue-on-error'] = true;},
     value => {const record = gate(value); steps(value).splice(steps(value).indexOf(record), 1); steps(value).push(record);},
-    value => {steps(value).splice(steps(value).findIndex(step => step.with?.name === 'binary-sdk-sdk-amd64'), 1);},
-    value => {steps(value).splice(steps(value).findIndex(step => step.with?.name === 'binary-language-1.2-sdk-sdk-arm64'), 1);},
+    value => {steps(value).splice(steps(value).findIndex(step => step.with?.['artifact-ids'] === '${{ steps.binary-amd64.outputs.language11 }}'), 1);},
+    value => {steps(value).splice(steps(value).findIndex(step => step.with?.['artifact-ids'] === '${{ steps.binary-arm64.outputs.language12 }}'), 1);},
+    ...['amd64', 'arm64'].flatMap(arch => [
+      value => {steps(value).find(step => step.id === `binary-${arch}`).if = 'always()';},
+      value => {steps(value).find(step => step.id === `binary-${arch}`)['continue-on-error'] = true;},
+      value => {steps(value).find(step => step.id === `binary-${arch}`).env.GH_TOKEN = '';},
+      ...[
+        run => run.replace('scripts/release-artifact-metadata.mjs', 'scripts/omitted-provider.mjs'),
+        run => run.replace('select-artifacts', 'artifact-name'),
+        run => run.replace('"$GITHUB_RUN_ATTEMPT"', '1'),
+        run => run.replace('artifacts[0].id', 'artifacts[1].id'),
+        run => run.replace('-provider.json', '-ambient.json'),
+      ].map(rewrite => value => {const step = steps(value).find(step => step.id === `binary-${arch}`); step.run = rewrite(step.run);}),
+      ...['language11', 'language12'].flatMap(output => [
+        value => {const step = steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.binary-' + arch + '.outputs.' + output + ' }}'); step.if = 'always()';},
+        value => {const step = steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.binary-' + arch + '.outputs.' + output + ' }}'); step.with.name = 'mutable-binary-name'; delete step.with['artifact-ids'];},
+        value => {const step = steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.binary-' + arch + '.outputs.' + output + ' }}'); step.with['merge-multiple'] = false;},
+        value => {const step = steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.binary-' + arch + '.outputs.' + output + ' }}'); steps(value).splice(steps(value).indexOf(step), 1); steps(value).push(step);},
+      ]),
+    ]),
+    value => {steps(value).splice(steps(value).indexOf(pack(value)), 0, {
+      uses: 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093',
+      with: {name: 'mutable-overlay', path: '.sdk-gate-evidence/binary-sdk-sdk-amd64'},
+    });},
+    value => {delete value.jobs['browser-library'].name;},
+    value => {value.jobs['browser-library'].steps.find(step => step.id === 'binary-artifacts').run = 'echo unbound';},
+    value => {const step = value.jobs['browser-library'].steps.find(step => step.id === 'binary-artifacts'); step.run = step.run.replace('"$GITHUB_RUN_ATTEMPT"', '1');},
+    ...['language11', 'language12'].flatMap(output => [
+      value => {value.jobs['browser-library'].steps.find(step => step.with?.name === '${{ steps.binary-artifacts.outputs.' + output + ' }}').with.overwrite = true;},
+      value => {value.jobs['browser-library'].steps.find(step => step.with?.name === '${{ steps.binary-artifacts.outputs.' + output + ' }}').with.path += '*.log';},
+      value => {value.jobs['browser-library'].steps.find(step => step.with?.name === '${{ steps.binary-artifacts.outputs.' + output + ' }}').with['if-no-files-found'] = 'ignore';},
+    ]),
+    ...[
+      run => run.replace('binary-sdk-release-evidence.mjs pack', 'binary-sdk-release-evidence.mjs'),
+      run => run.replace('1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"', '1.1 "$GITHUB_RUN_ID" 1'),
+      run => run.replace('binary-$architecture-provider.json', 'binary-$architecture.json'),
+      run => run.replace('"target/release-selection/binary-$architecture.json"', '"unverified-selection.json"'),
+    ].map(rewrite => value => {pack(value).run = rewrite(pack(value).run);}),
     value => {pack(value).run = pack(value).run.replace('binary-sdk-release-evidence.mjs', 'omitted-binary-reader.mjs');},
     value => {pack(value).run = pack(value).run.replace('"$architecture" 1.2', '"$architecture" 1.1');},
     value => {steps(value).find(step => step.run?.includes('semantic-source-bootstrap.sh')).if = 'false';},
     value => {const helper = steps(value).find(step => step.run?.includes('semantic-source-bootstrap.sh'));
       steps(value).splice(steps(value).indexOf(helper), 1); steps(value).push(helper);},
-    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'binary-sdk-sdk-${{ matrix.arch }}').with.path = 'sdk-${{ matrix.arch }}-binary-sdk.log';},
-    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === 'binary-language-1.2-sdk-sdk-${{ matrix.arch }}').with['include-hidden-files'] = false;},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === '${{ steps.binary-artifacts.outputs.language11 }}').with.path = 'sdk-${{ matrix.arch }}-binary-sdk.log';},
+    value => {value.jobs['browser-library'].steps.find(step => step.with?.name === '${{ steps.binary-artifacts.outputs.language12 }}').with['include-hidden-files'] = false;},
     ...['browser-library', 'oci-native'].flatMap(name => semanticReadinessMutations.map(rewrite => value => {
       const step = value.jobs[name].steps.find(candidate => candidate.run?.includes('semantic-source-bootstrap.sh'));
       const changed = rewrite(step.run);
@@ -276,7 +355,9 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {value.jobs['oci-native'].needs.pop();},
     value => {value.jobs.release.needs = value.jobs.release.needs.filter(name => name !== 'crates');},
   ]) {
-    const changed = structuredClone(workflow); mutate(changed); assert.throws(() => validateWorkflow(changed));
+    const changed = structuredClone(workflow); mutate(changed);
+    assert.notDeepEqual(changed, workflow, 'mutation must change the workflow: ' + mutate.toString());
+    assert.throws(() => validateWorkflow(changed), undefined, mutate.toString());
   }
 });
 

@@ -224,10 +224,15 @@ bash scripts/source-sdk-handoff.sh "$image" '\${{ github.sha }}' amd64 '\${{ git
   const library = value.jobs['browser-library'].steps.find(step => step.run?.includes('library-sdk-check.sh'));
   const binary = value.jobs['browser-library'].steps.find(step => step.run?.includes('binary-sdk-check.sh'));
   assert(binary && binary.if === undefined && binary['continue-on-error'] === undefined);
+  assert.deepEqual(binary.env, {RESULT_NAME: 'sdk-${{ matrix.arch }}', ARCH: '${{ matrix.arch }}'});
   assert.equal(binary.run, `set -euo pipefail
+mkdir "$RUNNER_TEMP/binary-transport-1.1" "$RUNNER_TEMP/binary-transport-1.2"
 node root-a/scripts/binary-sdk-check.mjs tests
-bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1
-bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+image=$(cat .shipped-image/sdk-image.txt)
+bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk" > "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk.log" 2>&1
+bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.1" "$image" "$GITHUB_SHA" "$ARCH" 1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.2" "$image" "$GITHUB_SHA" "$ARCH" 1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
 `);
   semanticPrerequisite(value.jobs['browser-library'], [browser, library, binary], 'root-a');
   const retainedProof = value.jobs['oci-native'].steps.find(step => step.run?.includes('library-sdk-metadata-evidence.mjs join'));
@@ -236,7 +241,7 @@ bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$
   for (const step of [product, browser, library, binary]) {
     assert.match(step.run, /^set -euo pipefail\n/);
     assert(!step.run.includes('||'), 'independent owner failure must propagate');
-    assert(step.run.includes('"$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA"')
+    if (step !== binary) assert(step.run.includes('"$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA"')
       || step.run.includes('"$(cat .shipped-image/sdk-image.txt)" \\\n  "$GITHUB_SHA"'));
   }
   assert.match(library.run, /node root-a\/scripts\/library-sdk-check\.mjs tests/);
@@ -360,6 +365,16 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
       step.run = changed;
     })),
     value => { value.jobs['browser-library'].steps.find(step => step.run?.includes('binary-sdk-check.sh')).run = 'true'; },
+    ...[
+      run => run.replace('mkdir "$RUNNER_TEMP/binary-transport-1.1"', 'mkdir -p "$RUNNER_TEMP/binary-transport-1.1"'),
+      run => run.replace('node root-a/scripts/binary-sdk-check.mjs tests\n', ''),
+      run => run.replace('binary-sdk-release-evidence.mjs retain', 'binary-sdk-release-evidence.mjs omitted'),
+      run => run.replace('"$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"', '"$GITHUB_RUN_ID" 1'),
+      run => run.replace('"$ARCH" 1.2', '"$ARCH" 1.1'),
+    ].map(rewrite => value => {
+      const step = value.jobs['browser-library'].steps.find(step => step.run?.includes('binary-sdk-check.sh'));
+      step.run = rewrite(step.run);
+    }),
     value => value.jobs['oci-native'].needs.push('crates'),
     value => value.jobs['oci-native'].needs.pop(),
     value => { delete value.jobs['installed-sdk']; },

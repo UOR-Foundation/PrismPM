@@ -3,7 +3,7 @@ run-name: Binary generated-source review · ${{ github.sha }}
 
 on:
   push:
-    branches: [work/binary-generated-review]
+    branches: [work/binary-generated-review, work/binary-generated-review-521]
   workflow_dispatch:
     inputs:
       source_revision:

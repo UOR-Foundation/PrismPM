@@ -302,7 +302,7 @@ export function validateHelperBootstrapWorkflow(workflow,generated=false){
 export function validateGenerationWorkflow(workflow){
  validateHelperBootstrapWorkflow(workflow,true);
  for(const required of [
-  'branches: [work/binary-generated-review]','  workflow_dispatch:',
+  'branches: [work/binary-generated-review, work/binary-generated-review-521]','  workflow_dispatch:',
   '  contents: read','    runs-on: ubuntu-24.04','          ref: ${{ github.sha }}',
   '          persist-credentials: false','          node-version: 22.23.2',
   'test "$SOURCE_REVISION" = "$GITHUB_SHA"','test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"',

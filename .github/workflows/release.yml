@@ -941,6 +941,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   browser-library:
+    name: browser-library-${{ matrix.arch }}
     needs: [policy, sdk-supply]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
@@ -1027,34 +1028,47 @@ jobs:
             root-a/target/library-sdk-evidence/
           if-no-files-found: error
           retention-days: 30
+      - id: binary-artifacts
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          image=$(cat .shipped-image/sdk-image.txt)
+          language11=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          language12=$(node root-a/scripts/release-gate-evidence.mjs artifact-name "binary-language-1.2-sdk-sdk-$ARCH" "$GITHUB_SHA" "$ARCH" "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          printf 'language11=%s\nlanguage12=%s\n' "$language11" "$language12" >> "$GITHUB_OUTPUT"
       - name: Verify exact current SDK binary-package closure offline and read-only
         shell: bash
         env:
           RESULT_NAME: sdk-${{ matrix.arch }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
+          mkdir "$RUNNER_TEMP/binary-transport-1.1" "$RUNNER_TEMP/binary-transport-1.2"
           node root-a/scripts/binary-sdk-check.mjs tests
-          bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1
-          bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+          image=$(cat .shipped-image/sdk-image.txt)
+          bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk" > "$RUNNER_TEMP/binary-transport-1.1/$RESULT_NAME-binary-sdk.log" 2>&1
+          bash root-a/scripts/binary-sdk-check.sh "$image" "$GITHUB_SHA" "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2" 1.2 > "$RUNNER_TEMP/binary-transport-1.2/$RESULT_NAME-binary-sdk-language-1.2.log" 2>&1
+          node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.1" "$image" "$GITHUB_SHA" "$ARCH" 1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          node root-a/scripts/binary-sdk-release-evidence.mjs retain "$RUNNER_TEMP/binary-transport-1.2" "$image" "$GITHUB_SHA" "$ARCH" 1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: binary-sdk-sdk-${{ matrix.arch }}
-          path: |
-            sdk-${{ matrix.arch }}-binary-sdk.log
-            sdk-${{ matrix.arch }}-binary-sdk/
+          name: ${{ steps.binary-artifacts.outputs.language11 }}
+          path: ${{ runner.temp }}/binary-transport-1.1/
           include-hidden-files: true
           if-no-files-found: error
+          overwrite: false
           retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: binary-language-1.2-sdk-sdk-${{ matrix.arch }}
-          path: |
-            sdk-${{ matrix.arch }}-binary-sdk-language-1.2.log
-            sdk-${{ matrix.arch }}-binary-sdk-language-1.2/
+          name: ${{ steps.binary-artifacts.outputs.language12 }}
+          path: ${{ runner.temp }}/binary-transport-1.2/
           include-hidden-files: true
           if-no-files-found: error
+          overwrite: false
           retention-days: 30
   # One installed pass per architecture, as the eight parts of
   # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
@@ -1581,21 +1595,51 @@ jobs:
           artifact-ids: ${{ steps.source-vv.outputs.ids }}
           merge-multiple: true
           path: .sdk-gate-evidence/source-vv
+      - id: binary-amd64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/binary-amd64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/binary-amd64-provider.json target/release-selection/binary-amd64.json \
+            "$GITHUB_SHA" amd64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" binary-sdk-sdk-amd64 binary-language-1.2-sdk-sdk-amd64
+          language11=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[0].id)' target/release-selection/binary-amd64.json)
+          language12=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[1].id)' target/release-selection/binary-amd64.json)
+          printf 'language11=%s\nlanguage12=%s\n' "$language11" "$language12" >> "$GITHUB_OUTPUT"
+      - id: binary-arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/release-selection
+          node scripts/release-artifact-metadata.mjs target/release-selection/binary-arm64-provider.json "$GITHUB_RUN_ID"
+          image=$(cat target/release-sdk/sdk-image.txt)
+          node scripts/release-gate-evidence.mjs select-artifacts target/release-selection/binary-arm64-provider.json target/release-selection/binary-arm64.json \
+            "$GITHUB_SHA" arm64 "$image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" binary-sdk-sdk-arm64 binary-language-1.2-sdk-sdk-arm64
+          language11=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[0].id)' target/release-selection/binary-arm64.json)
+          language12=$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1])).artifacts[1].id)' target/release-selection/binary-arm64.json)
+          printf 'language11=%s\nlanguage12=%s\n' "$language11" "$language12" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: binary-sdk-sdk-amd64
+          artifact-ids: ${{ steps.binary-amd64.outputs.language11 }}
+          merge-multiple: true
           path: .sdk-gate-evidence/binary-sdk-sdk-amd64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: binary-sdk-sdk-arm64
+          artifact-ids: ${{ steps.binary-arm64.outputs.language11 }}
+          merge-multiple: true
           path: .sdk-gate-evidence/binary-sdk-sdk-arm64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: binary-language-1.2-sdk-sdk-amd64
+          artifact-ids: ${{ steps.binary-amd64.outputs.language12 }}
+          merge-multiple: true
           path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-amd64
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: binary-language-1.2-sdk-sdk-arm64
+          artifact-ids: ${{ steps.binary-arm64.outputs.language12 }}
+          merge-multiple: true
           path: .sdk-gate-evidence/binary-language-1.2-sdk-sdk-arm64
       - id: sdk-equivalence-amd64
         env:
@@ -1649,12 +1693,14 @@ jobs:
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
               "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
-            node scripts/binary-sdk-release-evidence.mjs \
+            node scripts/binary-sdk-release-evidence.mjs pack \
               ".sdk-gate-evidence/binary-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk.tar" \
-              "$image" "$GITHUB_SHA" "$architecture" 1.1
-            node scripts/binary-sdk-release-evidence.mjs \
+              "$image" "$GITHUB_SHA" "$architecture" 1.1 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+              "target/release-selection/binary-$architecture-provider.json" "target/release-selection/binary-$architecture.json"
+            node scripts/binary-sdk-release-evidence.mjs pack \
               ".sdk-gate-evidence/binary-language-1.2-sdk-sdk-$architecture" "release/sdk-$architecture-binary-sdk-language-1.2.tar" \
-              "$image" "$GITHUB_SHA" "$architecture" 1.2
+              "$image" "$GITHUB_SHA" "$architecture" 1.2 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+              "target/release-selection/binary-$architecture-provider.json" "target/release-selection/binary-$architecture.json"
             for part in $parts; do
               node scripts/sdk-release-evidence.mjs full-sdk-vv \
                 ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \

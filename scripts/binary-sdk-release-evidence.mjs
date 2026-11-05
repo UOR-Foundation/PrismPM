@@ -2,10 +2,11 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {constants, chmodSync, closeSync, fstatSync, lstatSync, mkdirSync,
+import {constants, chmodSync, closeSync, fstatSync, lstatSync, linkSync, mkdirSync,
   mkdtempSync, openSync, readSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync} from 'node:fs';
 import {basename, dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
+import {releaseContext, selectArtifacts} from './release-gate-evidence.mjs';
 import {canonical, checkAccepted, hash, inventoryEvidence, verifyResult, verifySource} from './binary-sdk-check.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,8 +20,8 @@ const sameIdentity = (actual, expected) => {
 const inside = (path, root) => path === root || path.startsWith(root + sep);
 
 function contextNames(context) {
-  assert.deepEqual(Object.keys(context).sort(), ['architecture', 'image_reference', 'language', 'source_revision']);
-  assert.match(context.source_revision, /^[0-9a-f]{40}$/);
+  assert.deepEqual(Object.keys(context).sort(), ['architecture', 'image_reference', 'language', 'run_attempt', 'run_id', 'source_revision']);
+  releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
   assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
   assert(['amd64', 'arm64'].includes(context.architecture));
   assert(['1.1', '1.2'].includes(context.language));
@@ -48,7 +49,7 @@ function readHeld(path, maximum) {
   } finally {closeSync(fd);}
 }
 
-function captureRaw(directory, names) {
+function captureRaw(directory, names, retained = true) {
   assert.equal(realpathSync(directory), directory, 'binary artifact root alias');
   const files = new Map(), directories = [];
   let entries = 0, total = 0;
@@ -80,7 +81,7 @@ function captureRaw(directory, names) {
   }
   try {
     walk('', 0);
-    assert.deepEqual(directories[0].names, [names.evidence, names.log].sort(), 'exact downloaded binary artifact members required');
+    assert.deepEqual(directories[0].names, [names.evidence, names.log, ...(retained ? ['retention.json'] : [])].sort(), 'exact downloaded binary artifact members required');
     const gate = directories.find(row => row.relative === names.evidence);
     assert(gate, 'binary gate directory required');
     assert.deepEqual(gate.names, ['inventory.json', 'proof', 'result.json', 'source.json'], 'complete original binary gate directory required');
@@ -108,6 +109,17 @@ function recheck(raw) {
   }
 }
 
+function checkRawCustody(raw) {
+  for (const row of raw.directories) {
+    sameIdentity(fstatSync(row.fd, {bigint: true}), row.identity);
+    sameIdentity(lstatSync(row.path, {bigint: true}), row.identity);
+    assert.equal(realpathSync(row.path), row.path);
+  }
+  for (const [path, row] of raw.files) {
+    sameIdentity(lstatSync(join(raw.directory, path), {bigint: true}), row.identity);
+    assert.equal(realpathSync(join(raw.directory, path)), join(raw.directory, path));
+  }
+}
 function authorityAt(sourceRoot) {
   const files = ['vendor/lean4-prod/lean.tar', 'lean-toolchain'].map(relative => {
     const path = join(sourceRoot, relative);
@@ -149,13 +161,105 @@ function validateOriginal(raw, context, sourceRoot, names, authority) {
   return {source_sha256: sourceSha256, inventory_sha256: inventory.sha256, receipt};
 }
 
+
+const binaryOwners = architecture => [`binary-sdk-sdk-${architecture}`, `binary-language-1.2-sdk-sdk-${architecture}`];
+const ownerFor = context => binaryOwners(context.architecture)[context.language === '1.2' ? 1 : 0];
+function rawDescription(raw) {
+  return {directories: raw.directories.map(row => row.relative).filter(Boolean).sort(),
+    files: [...raw.files.keys()].filter(path => path !== 'retention.json').sort()
+      .map(path => ({path, size: raw.files.get(path).bytes.length, sha256: hash(raw.files.get(path).bytes)}))};
+}
+function retentionFor(raw, context) {
+  return {schema: 'prismpm/binary-sdk-transport-retention/1', scope: 'original-binary-gate-transport-only',
+    ...context, owner: ownerFor(context), job_name: `browser-library-${context.architecture}`, ...rawDescription(raw)};
+}
+function checkRetention(raw, context, selected) {
+  const row = raw.files.get('retention.json'); assert(row, 'missing binary transport retention');
+  assert(row.bytes.length <= 16 * 1024 ** 2, 'binary retention limit');
+  const receipt = JSON.parse(row.bytes);
+  const expected = retentionFor(raw, {...context, run_attempt: selected.run_attempt});
+  assert.equal(canonical(receipt), canonical(expected), 'binary transport retention differs from selected provider execution or raw bytes');
+  assert(row.bytes.equals(Buffer.from(canonical(receipt) + '\n')), 'canonical binary retention required');
+  return receipt;
+}
+function captureProvenance(provenance, context) {
+  assert.deepEqual(Object.keys(provenance).sort(), ['provider', 'selection']);
+  const rows = ['provider', 'selection'].map(key => {
+    const path = resolve(provenance[key]); return {path, ...readHeld(path, 16 * 1024 ** 2)};
+  });
+  const provider = JSON.parse(rows[0].bytes), selection = JSON.parse(rows[1].bytes);
+  const expected = selectArtifacts(provider, releaseContext(context.source_revision, context.architecture,
+    context.image_reference, context.run_id, context.run_attempt), binaryOwners(context.architecture));
+  assert.equal(canonical(selection), canonical(expected), 'original provider metadata and selection differ');
+  const selected = expected.artifacts.find(row => row.owner === ownerFor(context));
+  assert(selected, 'missing selected binary owner');
+  return {rows, selected, manifest: {provider_sha256: hash(rows[0].bytes), selection_sha256: hash(rows[1].bytes), selected}};
+}
+function checkProvenanceCustody(provenance) {
+  for (const row of provenance.rows) {
+    sameIdentity(lstatSync(row.path, {bigint: true}), row.identity);
+    assert.equal(realpathSync(row.path), row.path, 'original provider metadata path changed');
+  }
+}
+function checkProvenance(provenance) {
+  for (const row of provenance.rows) {
+    const actual = readHeld(row.path, 16 * 1024 ** 2);
+    sameIdentity(actual.identity, row.identity);
+    assert(actual.bytes.equals(row.bytes), 'original provider metadata or selection changed');
+  }
+}
+
+// This envelope records transport context and bytes only. Original installed
+// result/proof scope and content are never rewritten or promoted to acceptance.
+export function retainBinaryEvidence(directory, context, sourceRoot = repository) {
+  context = {...context}; const names = contextNames(context);
+  directory = resolve(directory); sourceRoot = resolve(sourceRoot);
+  assert.equal(realpathSync(sourceRoot), sourceRoot, 'binary source root alias');
+  const raw = captureRaw(directory, names, false);
+  const output = join(directory, 'retention.json'); let stage, linkedIdentity;
+  try {
+    const authority = authorityAt(sourceRoot);
+    validateOriginal(raw, context, sourceRoot, names, authority); recheck(raw);
+    const receipt = retentionFor(raw, context), bytes = Buffer.from(canonical(receipt) + '\n');
+    assert(bytes.length <= 16 * 1024 ** 2, 'binary retention limit');
+    stage = mkdtempSync(join(dirname(directory), '.binary-retention-'));
+    const temporary = join(stage, 'retention.json');
+    writeFileSync(temporary, bytes, {flag: 'wx', mode: 0o444}); chmodSync(temporary, 0o444);
+    validateOriginal(raw, context, sourceRoot, names, authority); recheck(raw);
+    const temporaryIdentity = lstatSync(temporary, {bigint: true});
+    linkSync(temporary, `/proc/${process.pid}/fd/${raw.directories[0].fd}/retention.json`);
+    linkedIdentity = temporaryIdentity;
+    unlinkSync(temporary);
+    const root = raw.directories[0], after = lstatSync(directory, {bigint: true});
+    for (const field of ['dev', 'ino', 'mode']) assert.equal(after[field], root.identity[field], 'binary transport root changed');
+    sameIdentity(fstatSync(root.fd, {bigint: true}), after);
+    assert.deepEqual(readdirSync(directory).sort(), [names.evidence, names.log, 'retention.json'].sort());
+    root.identity = after; root.names = readdirSync(directory).sort();
+    const retained = readHeld(output, 16 * 1024 ** 2);
+    assert.equal(retained.identity.dev, linkedIdentity.dev); assert.equal(retained.identity.ino, linkedIdentity.ino);
+    assert(retained.bytes.equals(bytes)); raw.files.set('retention.json', retained);
+    recheck(raw); checkAuthority(authority); recheck(raw); checkRawCustody(raw);
+    return receipt;
+  } catch (error) {
+    if (linkedIdentity) {
+      const anchored = `/proc/${process.pid}/fd/${raw.directories[0].fd}/retention.json`;
+      const current = lstatSync(anchored, {bigint: true, throwIfNoEntry: false});
+      if (current?.dev === linkedIdentity.dev && current?.ino === linkedIdentity.ino) unlinkSync(anchored);
+    }
+    throw error;
+  } finally {
+    for (const row of raw.directories) closeSync(row.fd);
+    if (stage) rmSync(stage, {recursive: true, force: true});
+  }
+}
+
 // Read-only USTAR validation. No archive paths or contents are extracted/run.
 function verifyArchive(path, expectedFiles, expectedDirectories, {fd: existing, nlink = 1n} = {}) {
   assert.equal(realpathSync(path), path, 'binary archive path alias');
   const fd = existing ?? openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const identity = fstatSync(fd, {bigint: true});
-    const maximum = binaryEvidenceLimits.total + 16 * 1024 ** 2 + (binaryEvidenceLimits.entries + 2) * 1024;
+    const maximum = binaryEvidenceLimits.total + 48 * 1024 ** 2 + (binaryEvidenceLimits.entries + 4) * 1024;
     assert(identity.isFile() && identity.nlink === nlink && identity.size <= BigInt(maximum)
       && identity.size >= 1024n && identity.size % 512n === 0n, 'bounded independent USTAR required');
     let offset = 0;
@@ -185,7 +289,7 @@ function verifyArchive(path, expectedFiles, expectedDirectories, {fd: existing, 
         assert(remaining >= 512 && remaining <= 9728 && exact(remaining).every(value => value === 0), 'complete USTAR terminators required');
         ended = true; break;
       }
-      assert(seen.size < binaryEvidenceLimits.entries + 1, 'binary tar entry limit');
+      assert(seen.size < binaryEvidenceLimits.entries + 3, 'binary tar entry limit');
       const checksum = header.reduce((sum, value, index) => sum + (index >= 148 && index < 156 ? 32 : value), 0);
       assert.equal(octal(header.subarray(148, 156)), checksum, 'binary tar checksum');
       assert.equal(header.subarray(257, 265).toString('latin1'), 'ustar\0' + '00');
@@ -224,7 +328,7 @@ function verifyArchive(path, expectedFiles, expectedDirectories, {fd: existing, 
   } catch (error) {if (existing === undefined) closeSync(fd); throw error;}
 }
 
-export function packBinaryEvidence(directory, output, context, sourceRoot = repository) {
+export function packBinaryEvidence(directory, output, context, provenance, sourceRoot = repository) {
   context = {...context};
   const names = contextNames(context);
   directory = resolve(directory); output = resolve(output); sourceRoot = resolve(sourceRoot);
@@ -239,11 +343,13 @@ export function packBinaryEvidence(directory, output, context, sourceRoot = repo
   try {
     parentFd = openSync(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     for (const field of ['dev', 'ino', 'mode']) assert.equal(fstatSync(parentFd, {bigint: true})[field], parentIdentity[field]);
+    const provider = captureProvenance(provenance, context);
+    const retention = checkRetention(raw, context, provider.selected);
     const authority = authorityAt(sourceRoot);
     const original = validateOriginal(raw, context, sourceRoot, names, authority);
     recheck(raw);
     const manifest = {schema: 'prismpm/binary-sdk-gate-evidence/1', scope: 'original-binary-gate-evidence-only',
-      ...context, ...original, source_authority: authority.value,
+      ...context, ...original, transport: {...provider.manifest, retention_sha256: hash(raw.files.get('retention.json').bytes), retention}, source_authority: authority.value,
       directories: raw.directories.map(row => row.relative).filter(Boolean).sort(),
       files: [...raw.files.keys()].sort().map(path => ({path, size: raw.files.get(path).bytes.length, sha256: hash(raw.files.get(path).bytes)})),
       unclaimed: ['new-acceptance', 'sdk-release', 'crates.io-publication', 'ecosystem-acceptance', 'foundry-readiness', 'deployment']};
@@ -256,6 +362,9 @@ export function packBinaryEvidence(directory, output, context, sourceRoot = repo
     for (const [relative, row] of raw.files) {
       const path = join(root, relative); writeFileSync(path, row.bytes, {flag: 'wx', mode: 0o444}); chmodSync(path, 0o444);
     }
+    for (const [index, name] of ['provider-metadata.json', 'artifact-selection.json'].entries()) {
+      const path = join(root, name); writeFileSync(path, provider.rows[index].bytes, {flag: 'wx', mode: 0o444}); chmodSync(path, 0o444);
+    }
     const manifestPath = join(root, 'evidence-manifest.json');
     const manifestBytes = Buffer.from(canonical(manifest) + '\n');
     assert(manifestBytes.length <= 16 * 1024 ** 2, 'binary evidence manifest limit');
@@ -265,13 +374,17 @@ export function packBinaryEvidence(directory, output, context, sourceRoot = repo
     const tarEnvironment = {...process.env, LC_ALL: 'C'};
     delete tarEnvironment.TAR_OPTIONS;
     execFileSync('/usr/bin/tar', ['--format=ustar', '--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner',
-      '-cf', archive, '-C', root, '--', ...[names.evidence, names.log, 'evidence-manifest.json'].sort()],
+      '-cf', archive, '-C', root, '--', ...[names.evidence, names.log, 'retention.json', 'provider-metadata.json', 'artifact-selection.json', 'evidence-manifest.json'].sort()],
     {timeout: 120000, maxBuffer: 1024 * 1024, env: tarEnvironment});
     chmodSync(archive, 0o444);
     const expectedFiles = new Map(manifest.files.map(row => [row.path, row]));
+    for (const [index, name] of ['provider-metadata.json', 'artifact-selection.json'].entries()) {
+      expectedFiles.set(name, {size: provider.rows[index].bytes.length, sha256: hash(provider.rows[index].bytes)});
+    }
     expectedFiles.set('evidence-manifest.json', {size: manifestBytes.length, sha256: hash(manifestBytes)});
     archiveOwner = verifyArchive(archive, expectedFiles, new Set(manifest.directories));
     validateOriginal(raw, context, sourceRoot, names, authority);
+    checkRetention(raw, context, provider.selected); checkProvenance(provider);
     recheck(raw);
     const currentParent = lstatSync(parent, {bigint: true});
     for (const field of ['dev', 'ino', 'mode']) assert.equal(currentParent[field], parentIdentity[field], 'archive parent changed');
@@ -289,9 +402,10 @@ export function packBinaryEvidence(directory, output, context, sourceRoot = repo
     assert.equal(linked.nlink, 2n, 'binary archive has an unexpected link');
     sameIdentity(lstatSync(output, {bigint: true}), linked);
     const publishedIdentity = verifyArchive(output, expectedFiles, new Set(manifest.directories), {fd: archiveOwner.fd, nlink: 2n}).identity;
-    recheck(raw); checkAuthority(authority);
+    recheck(raw); checkAuthority(authority); checkProvenance(provider);
     for (const field of ['dev', 'ino', 'mode']) assert.equal(lstatSync(parent, {bigint: true})[field], parentIdentity[field], 'archive parent changed');
     assert.equal(realpathSync(parent), parent);
+    checkRawCustody(raw); checkProvenanceCustody(provider);
     sameIdentity(fstatSync(archiveOwner.fd, {bigint: true}), publishedIdentity);
     sameIdentity(lstatSync(output, {bigint: true}), publishedIdentity);
     assert.equal(realpathSync(output), output, 'published binary archive path changed');
@@ -320,8 +434,16 @@ export function packBinaryEvidence(directory, output, context, sourceRoot = repo
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [directory, output, image_reference, source_revision, architecture, language, ...extra] = process.argv.slice(2);
-  assert.equal(extra.length, 0);
-  const manifest = packBinaryEvidence(directory, output, {source_revision, image_reference, architecture, language});
-  process.stdout.write(canonical(manifest) + '\n');
+  const [command, ...args] = process.argv.slice(2);
+  if (command === 'retain') {
+    const [directory, image_reference, source_revision, architecture, language, run_id, run_attempt, ...extra] = args;
+    assert.equal(extra.length, 0);
+    process.stdout.write(canonical(retainBinaryEvidence(directory, {source_revision, image_reference, architecture, language, run_id, run_attempt})) + '\n');
+  } else {
+    assert.equal(command, 'pack', 'expected retain or pack');
+    const [directory, output, image_reference, source_revision, architecture, language, run_id, run_attempt, provider, selection, ...extra] = args;
+    assert.equal(extra.length, 0);
+    const manifest = packBinaryEvidence(directory, output, {source_revision, image_reference, architecture, language, run_id, run_attempt}, {provider, selection});
+    process.stdout.write(canonical(manifest) + '\n');
+  }
 }

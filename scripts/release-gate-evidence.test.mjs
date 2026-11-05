@@ -115,6 +115,102 @@ test('foreign, future, duplicate, missing and failed owner selections fail close
   assert.throws(() => selectArtifacts(duplicateIds, binding, ['source-vv-part-source', 'source-vv-part-dk-2']), /duplicate selected artifact ID/);
 });
 
+const binaryOwners = architecture => [`binary-sdk-sdk-${architecture}`, `binary-language-1.2-sdk-sdk-${architecture}`];
+function binaryProviderFixture(binding, attempt = 1) {
+  const owners = binaryOwners(binding.architecture);
+  return {
+    jobs: [{id: 100, run_id: Number(binding.run_id), run_attempt: attempt, name: `browser-library-${binding.architecture}`,
+      head_sha: binding.source_revision, status: 'completed', conclusion: 'success'}],
+    artifacts: owners.map((owner, index) => ({id: 200 + index,
+      name: artifactName(owner, {...binding, run_attempt: String(attempt)}), digest: 'sha256:' + String(index + 1).repeat(64),
+      expired: false, size_in_bytes: 10, workflow_run: {id: Number(binding.run_id), head_sha: binding.source_revision}})),
+  };
+}
+
+test('Binary 1.1 and 1.2 artifacts share the explicit architecture owner and latest successful attempt', () => {
+  for (const architecture of ['amd64', 'arm64']) {
+    const binding = {...context, architecture, run_attempt: '3'}, owners = binaryOwners(architecture);
+    const metadata = binaryProviderFixture(binding), original = structuredClone(metadata);
+    const selected = selectArtifacts(metadata, binding, owners);
+    assert.deepEqual(metadata, original);
+    assert.deepEqual(selected, {schema: 'prismpm/release-artifact-selection/1', ...binding,
+      artifacts: metadata.artifacts.map((artifact, index) => ({owner: owners[index], id: String(artifact.id), name: artifact.name,
+        digest: artifact.digest, run_attempt: '1', job_id: '100'}))});
+    for (const owner of owners) assert.equal(selectArtifacts(metadata, binding, [owner]).artifacts[0].job_id, '100');
+    // A retained earlier pass is selected only while the owning job has not retried.
+    for (const attempt of [2, 3]) {
+      const retry = binaryProviderFixture(binding, attempt);
+      retry.jobs[0].id += attempt; retry.artifacts.forEach(artifact => {artifact.id += attempt * 10;});
+      metadata.jobs.push(...retry.jobs); metadata.artifacts.push(...retry.artifacts);
+      const latest = selectArtifacts(metadata, binding, owners);
+      assert.deepEqual(latest.artifacts.map(artifact => [artifact.id, artifact.job_id, artifact.run_attempt]),
+        retry.artifacts.map(artifact => [String(artifact.id), String(retry.jobs[0].id), String(attempt)]));
+    }
+  }
+});
+
+test('Binary artifact ownership rejects foreign context, failed retries and ambiguous immutable selections', () => {
+  for (const architecture of ['amd64', 'arm64']) {
+    const binding = {...context, architecture, run_attempt: '3'}, owners = binaryOwners(architecture);
+    const otherArchitecture = architecture === 'amd64' ? 'arm64' : 'amd64';
+    const mutations = [
+      m => {m.jobs[0].name = 'browser-library';},
+      m => {m.jobs[0].name = `browser-library-${otherArchitecture}`;},
+      m => {m.jobs[0].name = owners[0];},
+      m => {m.jobs[0].run_id++;}, m => {m.jobs[0].head_sha = 'f'.repeat(40);},
+      m => {m.jobs[0].run_attempt = 4;}, m => {m.jobs[0].status = 'in_progress';},
+      m => {m.jobs[0].conclusion = 'failure';}, m => {m.jobs[0].conclusion = 'skipped';},
+      m => {m.jobs.push({...m.jobs[0], id: 999});}, m => {m.jobs = [];},
+      m => {m.jobs.push({...m.jobs[0], id: 999, run_attempt: 2, conclusion: 'failure'});},
+      m => {m.jobs.push({...m.jobs[0], id: 999, run_attempt: 2});},
+      m => {m.artifacts[1].id = m.artifacts[0].id;},
+    ];
+    for (const index of [0, 1]) mutations.push(
+      m => {m.artifacts[index].workflow_run.id++;}, m => {m.artifacts[index].workflow_run.head_sha = 'f'.repeat(40);},
+      m => {m.artifacts[index].name = artifactName(owners[index], {...binding, run_attempt: '1', source_revision: 'f'.repeat(40)});},
+      m => {m.artifacts[index].name = artifactName(owners[index], {...binding, run_attempt: '1', image_reference: image.replace('b'.repeat(64), 'c'.repeat(64))});},
+      m => {m.artifacts[index].name = m.artifacts[index].name.replace(`--${architecture}--`, `--${otherArchitecture}--`);},
+      m => {m.artifacts[index].name = artifactName(owners[index], {...binding, run_attempt: '1', run_id: '124'});},
+      m => {m.artifacts[index].name = artifactName(owners[index], {...binding, run_attempt: '4'});},
+      m => {m.artifacts[index].expired = true;}, m => {m.artifacts[index].digest = null;},
+      m => {m.artifacts[index].size_in_bytes = 0;}, m => {m.artifacts[index].id = Number.MAX_SAFE_INTEGER + 1;},
+      m => {m.artifacts.push({...m.artifacts[index], id: 999});}, m => {m.artifacts.splice(index, 1);},
+    );
+    for (const mutate of mutations) {
+      const metadata = binaryProviderFixture(binding); mutate(metadata);
+      assert.throws(() => selectArtifacts(metadata, binding, owners));
+    }
+    for (const owner of owners) {
+      assert.throws(() => artifactName(owner, {...binding, architecture: otherArchitecture}), /closed evidence owner/);
+      assert.throws(() => artifactName(owner, {...binding, image_reference: null}), /exact image/);
+    }
+    for (const owner of [`binary-sdk-${architecture}`, `binary-language-1.1-sdk-sdk-${architecture}`,
+      `binary-language-1.2-sdk-sdk-${architecture}-extra`]) assert.throws(() => artifactName(owner, binding), /closed evidence owner/);
+    const metadata = binaryProviderFixture(binding);
+    assert.throws(() => selectArtifacts(metadata, binding, [...owners, owners[0]]), /duplicate selected owner/);
+  }
+});
+
+test('Binary selector CLI returns exact immutable IDs and refuses a failed latest owner without output', t => {
+  const root = temporary(t), script = new URL('./release-gate-evidence.mjs', import.meta.url).pathname;
+  for (const architecture of ['amd64', 'arm64']) {
+    const binding = {...context, architecture, run_attempt: '3'}, owners = binaryOwners(architecture);
+    const metadata = binaryProviderFixture(binding, 2), input = join(root, `${architecture}-provider.json`), output = join(root, `${architecture}-selection.json`);
+    put(root, `${architecture}-provider.json`, metadata);
+    const args = [script, 'select-artifacts', input, output, revision, architecture, image, '123', '3', ...owners];
+    execFileSync(process.execPath, args);
+    const original = readFileSync(output);
+    assert.deepEqual(JSON.parse(original), selectArtifacts(metadata, binding, owners));
+    assert.throws(() => execFileSync(process.execPath, args, {stdio: 'pipe'}));
+    assert.deepEqual(readFileSync(output), original);
+    metadata.jobs.push({...metadata.jobs[0], id: 999, run_attempt: 3, conclusion: 'failure'});
+    put(root, `${architecture}-provider.json`, metadata);
+    const failed = join(root, `${architecture}-failed.json`);
+    assert.throws(() => execFileSync(process.execPath, args.map((arg, index) => index === 3 ? failed : arg), {stdio: 'pipe'}));
+    assert(!existsSync(failed));
+  }
+});
+
 test('artifact selector CLI writes fresh immutable selection and cannot replace originals', t => {
   const root = temporary(t), input = join(root, 'provider.json'), output = join(root, 'selection.json');
   const owner = 'sdk-equivalence-amd64', metadata = providerFixture([owner]); put(root, 'provider.json', metadata);

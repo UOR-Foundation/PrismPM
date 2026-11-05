@@ -9,12 +9,13 @@ import {tmpdir} from 'node:os';
 import test from 'node:test';
 import {capture, canonical, hash, qualificationChecks, sourceAliases, sourceRoots, unclaimed} from './binary-sdk-check.mjs';
 import {inventory, parserFixture} from './binary-sdk-check-fixtures.mjs';
-import {packBinaryEvidence, binaryEvidenceLimits} from './binary-sdk-release-evidence.mjs';
+import {artifactName, releaseContext, selectArtifacts} from './release-gate-evidence.mjs';
+import {packBinaryEvidence, retainBinaryEvidence, binaryEvidenceLimits} from './binary-sdk-release-evidence.mjs';
 
 const repository = resolve(new URL('..', import.meta.url).pathname);
 const revision = 'a'.repeat(40), image = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:' + 'b'.repeat(64);
 const put = (root, relative, bytes) => {const path = join(root, relative); mkdirSync(dirname(path), {recursive: true}); writeFileSync(path, bytes); return path;};
-const context = (architecture = 'amd64', language = '1.1') => ({source_revision: revision, image_reference: image, architecture, language});
+const context = (architecture = 'amd64', language = '1.1') => ({source_revision: revision, image_reference: image, architecture, language, run_id: '1234', run_attempt: '2'});
 function temporary(t) {const root = mkdtempSync(join(tmpdir(), 'binary-evidence-unit-')); t.after(() => rmSync(root, {recursive: true, force: true})); return root;}
 function sourceFixture(root) {
   for (const path of sourceRoots) if (!Object.hasOwn(sourceAliases, path)) put(root, path + '/input', 'source fixture only');
@@ -44,7 +45,26 @@ function fixture(t, selected = context()) {
   put(artifact, name + '/proof/proof.prism', 'raw proof.prism unit bytes\n');
   put(artifact, name + '/proof/.prism/build/' + receipt.build_id + '/bytes.bin', Buffer.from([0, 255, 17]));
   mkdirSync(join(artifact, name, 'proof/empty-directory'));
-  return {root, sourceRoot, artifact, name, receipt, result, selected,
+  const owners = [`binary-sdk-sdk-${selected.architecture}`, `binary-language-1.2-sdk-sdk-${selected.architecture}`];
+  const providerContext = releaseContext(revision, selected.architecture, image, selected.run_id, selected.run_attempt);
+  const metadata = {jobs: [{id: 41, run_id: 1234, head_sha: revision, name: `browser-library-${selected.architecture}`,
+    run_attempt: 1, status: 'completed', conclusion: 'success'}], artifacts: owners.map((owner, index) => ({id: 51 + index,
+    name: artifactName(owner, {...providerContext, run_attempt: '1'}), workflow_run: {id: 1234, head_sha: revision},
+    expired: false, size_in_bytes: 123, digest: 'sha256:' + 'c'.repeat(64)}))};
+  const provider = put(root, 'provider.json', JSON.stringify(metadata)), selection = put(root, 'selection.json', canonical(selectArtifacts(metadata, providerContext, owners)));
+  const directories = [], files = [];
+  function describe(relative = '') {
+    for (const entry of readdirSync(join(artifact, relative)).sort()) {
+      const path = relative ? relative + '/' + entry : entry, full = join(artifact, path);
+      if (lstatSync(full).isDirectory()) {directories.push(path); describe(path);}
+      else {const bytes = readFileSync(full); files.push({path, size: bytes.length, sha256: hash(bytes)});}
+    }
+  }
+  describe(); directories.sort(); files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const retention = {schema: 'prismpm/binary-sdk-transport-retention/1', scope: 'original-binary-gate-transport-only',
+    ...selected, run_attempt: '1', owner: owners[selected.language === '1.2' ? 1 : 0], job_name: `browser-library-${selected.architecture}`, directories, files};
+  put(artifact, 'retention.json', canonical(retention) + '\n');
+  return {root, sourceRoot, artifact, name, receipt, result, selected, provider, selection, metadata, retention,
     output: join(root, 'evidence.tar'), proof: join(artifact, name, 'proof')};
 }
 let unitSequence = 0;
@@ -69,7 +89,7 @@ for (const architecture of ['amd64', 'arm64']) for (const language of ['1.1', '1
       assert.equal(authority.archive_sha256, hash(readFileSync(join(repository, 'vendor/lean4-prod/lean.tar'))));
       assert.equal(authority.toolchain, readFileSync(join(repository, 'lean-toolchain'), 'utf8').trim());
     });
-    const manifest = unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot);
+    const manifest = unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot);
     assert.equal(calls, 2, 'original receipt path must be revalidated before publication');
     assert.equal(manifest.scope, 'original-binary-gate-evidence-only');
     assert(manifest.files.some(row => row.path === f.name + '/proof/proof.prism'));
@@ -86,8 +106,8 @@ for (const architecture of ['amd64', 'arm64']) for (const language of ['1.1', '1
 
 test('archive bytes are deterministic across fresh absolute roots', async t => {
   const first = fixture(t), second = fixture(t), unit = await unitPackager(t);
-  unit.packBinaryEvidence(first.artifact, first.output, first.selected, first.sourceRoot);
-  unit.packBinaryEvidence(second.artifact, second.output, second.selected, second.sourceRoot);
+  unit.packBinaryEvidence(first.artifact, first.output, first.selected, {provider: first.provider, selection: first.selection}, first.sourceRoot);
+  unit.packBinaryEvidence(second.artifact, second.output, second.selected, {provider: second.provider, selection: second.selection}, second.sourceRoot);
   assert(readFileSync(first.output).equals(readFileSync(second.output)));
 });
 
@@ -95,7 +115,7 @@ test('ambient tar configuration cannot change the deterministic archive recipe',
   const f = fixture(t), unit = await unitPackager(t), before = process.env.TAR_OPTIONS;
   try {
     process.env.TAR_OPTIONS = '--mode=0000';
-    unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot);
+    unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot);
   } finally {
     if (before === undefined) delete process.env.TAR_OPTIONS; else process.env.TAR_OPTIONS = before;
   }
@@ -115,7 +135,7 @@ test('current source, exact native context, inventory and original result remain
     f => {f.selected.image_reference = image.replace('b'.repeat(64), 'f'.repeat(64));},
     f => {f.selected.source_revision = 'f'.repeat(40);},
   ];
-  for (const change of cases) {const f = fixture(t); change(f); assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot)); assert(!existsSync(f.output));}
+  for (const change of cases) {const f = fixture(t); change(f); assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot)); assert(!existsSync(f.output));}
 });
 
 test('unknown/missing artifact members, symlinks, hardlinks, special files and size/entry budgets fail closed', async t => {
@@ -131,12 +151,12 @@ test('unknown/missing artifact members, symlinks, hardlinks, special files and s
     f => truncateSync(join(f.artifact, f.name + '.log'), binaryEvidenceLimits.file + 1),
     f => {for (let n = 0; n < binaryEvidenceLimits.entries; n++) put(f.proof, `entry-${n}`, '');},
   ];
-  for (const change of changes) {const f = fixture(t); change(f); assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot)); assert(!existsSync(f.output));}
+  for (const change of changes) {const f = fixture(t); change(f); assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot)); assert(!existsSync(f.output));}
 });
 
 test('proof refusal propagates, and metadata/bytes cannot change between validation and publication', async t => {
   const rejected = fixture(t), refuse = await unitPackager(t, () => {throw Error('original proof reader refused unit fixture');});
-  assert.throws(() => refuse.packBinaryEvidence(rejected.artifact, rejected.output, rejected.selected, rejected.sourceRoot), /original proof reader refused/);
+  assert.throws(() => refuse.packBinaryEvidence(rejected.artifact, rejected.output, rejected.selected, {provider: rejected.provider, selection: rejected.selection}, rejected.sourceRoot), /original proof reader refused/);
   for (const change of [
     f => put(f.artifact, f.name + '.log', 'changed log'),
     f => put(f.proof, 'late-file', 'late'),
@@ -144,23 +164,23 @@ test('proof refusal propagates, and metadata/bytes cannot change between validat
   ]) {
     const f = fixture(t); let calls = 0;
     const unit = await unitPackager(t, () => {if (++calls === 2) change(f);});
-    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot)); assert(!existsSync(f.output));
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot)); assert(!existsSync(f.output));
   }
 });
 
 test('fresh output is exclusive, including a destination created after validation', async t => {
   const f = fixture(t); let calls = 0;
   const unit = await unitPackager(t, () => {if (++calls === 2) writeFileSync(f.output, 'retain sentinel');});
-  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot));
+  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
   assert.equal(readFileSync(f.output, 'utf8'), 'retain sentinel');
-  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot), /fresh/);
+  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot), /fresh/);
 });
 
 test('combined raw-byte budget is enforced independently of the per-file bound', async t => {
   const f = fixture(t);
   put(f.proof, 'first.bin', Buffer.alloc(160 * 1024)); put(f.proof, 'second.bin', Buffer.alloc(160 * 1024));
   const unit = await unitPackager(t, () => {}, source => source.replace('total: 1024 ** 3', 'total: 300 * 1024'));
-  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot), /bounded|exceeds/);
+  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot), /bounded|exceeds/);
   assert(!existsSync(f.output));
 });
 
@@ -181,11 +201,12 @@ function checksum(bytes, offset) {
 }
 test('read-only archive validation rejects altered payloads, graph, modes, links, traversal, checksum and trailers', async t => {
   const f = fixture(t), unit = await unitPackager(t);
-  const manifest = unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot);
+  const manifest = unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot);
   const original = readFileSync(f.output), parsed = tarRows(original);
   const proof = parsed.rows.find(row => row.name.endsWith('/proof/proof.prism'));
   const manifestBytes = execFileSync('/usr/bin/tar', ['-xOf', f.output, 'evidence-manifest.json']);
   const files = new Map(manifest.files.map(row => [row.path, row]));
+  for (const [name, path] of [['provider-metadata.json', f.provider], ['artifact-selection.json', f.selection]]) {const bytes = readFileSync(path); files.set(name, {size: bytes.length, sha256: hash(bytes)});}
   files.set('evidence-manifest.json', {size: manifestBytes.length, sha256: hash(manifestBytes)});
   const directories = new Set(manifest.directories);
   const mutations = [
@@ -221,7 +242,7 @@ test('publication revalidates the linked inode and removes only its exact own fa
     };
     t.after(() => delete globalThis[Symbol.for(key)]);
     const unit = await unitPackager(t, () => {}, source => source.replace("execFileSync('/usr/bin/ln',", `globalThis[Symbol.for(${JSON.stringify(key)})]('/usr/bin/ln',`));
-    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot));
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
     if (foreignReplacement) assert.equal(readFileSync(f.output, 'utf8'), 'foreign replacement');
     else assert(!existsSync(f.output));
   }
@@ -231,17 +252,120 @@ test('mutation during the final original-byte reread cannot escape final publish
   const f = fixture(t), key = 'prismpm.binary.final-read.unit.' + ++unitSequence;
   globalThis[Symbol.for(key)] = () => {chmodSync(f.output, 0o644); writeFileSync(f.output, 'late mutation after archive validation');};
   t.after(() => delete globalThis[Symbol.for(key)]);
-  const unit = await unitPackager(t, () => {}, source => source.replace('recheck(raw); checkAuthority(authority);',
-    `recheck(raw); checkAuthority(authority); globalThis[Symbol.for(${JSON.stringify(key)})]();`));
-  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot));
+  const unit = await unitPackager(t, () => {}, source => source.replace('recheck(raw); checkAuthority(authority); checkProvenance(provider);',
+    `recheck(raw); checkAuthority(authority); checkProvenance(provider); globalThis[Symbol.for(${JSON.stringify(key)})]();`));
+  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
   assert(!existsSync(f.output));
+});
+
+test('retention producer preserves all original bytes, validates original readers, and creates exclusively', async t => {
+  for (const language of ['1.1', '1.2']) {
+    const f = fixture(t, context('arm64', language)); rmSync(join(f.artifact, 'retention.json'));
+    const before = new Map(f.retention.files.map(row => [row.path, readFileSync(join(f.artifact, row.path))]));
+    let calls = 0; const unit = await unitPackager(t, () => calls++);
+    const receipt = unit.retainBinaryEvidence(f.artifact, {...f.selected, run_attempt: '1'}, f.sourceRoot);
+    assert.equal(calls, 2); assert.deepEqual(receipt, f.retention);
+    for (const [path, bytes] of before) assert(readFileSync(join(f.artifact, path)).equals(bytes));
+    assert.throws(() => unit.retainBinaryEvidence(f.artifact, f.selected, f.sourceRoot));
+    const manifest = unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot);
+    assert.equal(manifest.transport.selected.run_attempt, '1'); assert.equal(manifest.run_attempt, '2');
+    assert.equal(manifest.transport.selected.owner, receipt.owner);
+    for (const [name, path] of [['provider-metadata.json', f.provider], ['artifact-selection.json', f.selection]]) {
+      assert(execFileSync('/usr/bin/tar', ['-xOf', f.output, name]).equals(readFileSync(path)));
+    }
+  }
+});
+
+test('provider-selected execution rejects foreign, future, failed, duplicate and missing provenance', async t => {
+  const unit = await unitPackager(t);
+  const cases = [
+    f => {f.metadata.jobs[0].run_id = 9876;},
+    f => {f.metadata.jobs[0].run_attempt = 3;},
+    f => {f.metadata.jobs[0].conclusion = 'failure';},
+    f => {f.metadata.jobs[0].status = 'in_progress';},
+    f => {f.metadata.jobs.push({...f.metadata.jobs[0]});},
+    f => {f.metadata.artifacts.push({...f.metadata.artifacts[0], id: 53});},
+    f => {f.metadata.artifacts.pop();},
+    f => {f.metadata.artifacts[0].workflow_run.id = 9876;},
+    f => {f.metadata.artifacts[0].workflow_run.head_sha = 'f'.repeat(40);},
+    f => {f.metadata.artifacts[0].digest = 'sha256:' + 'f'.repeat(64);},
+    f => {f.metadata.jobs[0].id = 100;},
+    f => {f.metadata.artifacts[0].id = 100;},
+  ];
+  for (const change of cases) {
+    const f = fixture(t); change(f); writeFileSync(f.provider, JSON.stringify(f.metadata));
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
+    assert(!existsSync(f.output));
+  }
+});
+
+test('transport retention cannot substitute run, attempt, owner, context, raw bytes or self-reported selection', async t => {
+  const unit = await unitPackager(t);
+  const cases = [
+    f => {f.retention.run_id = '9876';},
+    f => {f.retention.run_attempt = '2';},
+    f => {f.retention.run_attempt = '3';},
+    f => {f.retention.owner = 'binary-language-1.2-sdk-sdk-amd64';},
+    f => {f.retention.job_name = 'unrelated';},
+    f => {f.retention.source_revision = 'f'.repeat(40);},
+    f => {f.retention.image_reference = image.replace('b'.repeat(64), 'f'.repeat(64));},
+    f => {f.retention.architecture = 'arm64';},
+    f => {f.retention.language = '1.2';},
+    f => {f.retention.files.pop();},
+    f => {f.retention.files[0].sha256 = 'f'.repeat(64);},
+    f => {put(f.proof, 'proof.prism', 'changed original proof bytes');},
+    f => {put(f.artifact, f.name + '.log', 'changed original log');},
+  ];
+  for (const change of cases) {
+    const f = fixture(t); change(f); put(f.artifact, 'retention.json', canonical(f.retention) + '\n');
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
+    assert(!existsSync(f.output));
+  }
+  const f = fixture(t), selection = JSON.parse(readFileSync(f.selection)); selection.artifacts[0].id = '999';
+  writeFileSync(f.selection, canonical(selection));
+  assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
+  const missing = fixture(t); rmSync(join(missing.artifact, 'retention.json'));
+  assert.throws(() => unit.packBinaryEvidence(missing.artifact, missing.output, missing.selected, {provider: missing.provider, selection: missing.selection}, missing.sourceRoot));
+});
+
+test('producer refusal or changed original bytes never leave a retention envelope', async t => {
+  for (const mode of ['refused', 'changed']) {
+    const f = fixture(t); rmSync(join(f.artifact, 'retention.json')); let calls = 0;
+    const unit = await unitPackager(t, () => {
+      if (mode === 'refused') throw Error('original reader refused');
+      if (++calls === 2) put(f.artifact, f.name + '.log', 'late bytes');
+    });
+    assert.throws(() => unit.retainBinaryEvidence(f.artifact, f.selected, f.sourceRoot));
+    assert(!existsSync(join(f.artifact, 'retention.json')));
+  }
+});
+
+test('provider, selection and retention mutations during original readers or final sweep fail closed', async t => {
+  for (const member of ['provider', 'selection', 'retention']) {
+    const f = fixture(t); let calls = 0;
+    const unit = await unitPackager(t, () => {
+      if (++calls === 2) writeFileSync(member === 'retention' ? join(f.artifact, 'retention.json') : f[member], '{}');
+    });
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
+    assert(!existsSync(f.output));
+  }
+  for (const member of ['provider', 'selection', 'retention']) {
+    const f = fixture(t), key = 'prismpm.binary.provenance.final.' + ++unitSequence;
+    globalThis[Symbol.for(key)] = () => writeFileSync(member === 'retention' ? join(f.artifact, 'retention.json') : f[member], '{}');
+    t.after(() => delete globalThis[Symbol.for(key)]);
+    const unit = await unitPackager(t, () => {}, source => source.replace('    checkRawCustody(raw); checkProvenanceCustody(provider);',
+      `    globalThis[Symbol.for(${JSON.stringify(key)})](); checkRawCustody(raw); checkProvenanceCustody(provider);`));
+    assert.throws(() => unit.packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot));
+    assert(!existsSync(f.output));
+  }
 });
 
 test('production entry point has no proof-reader replacement switch', () => {
   const source = readFileSync(new URL('./binary-sdk-release-evidence.mjs', import.meta.url), 'utf8');
   assert(source.includes('const validateProof = checkAccepted;'));
   assert(!source.includes('NODE_TEST_CONTEXT')); assert(!source.includes('PRISMPM_BINARY_EVIDENCE'));
-  assert.equal(packBinaryEvidence.length, 3);
+  assert.equal(packBinaryEvidence.length, 4);
+  assert.equal(retainBinaryEvidence.length, 2);
 });
 
 const semanticHelper = process.env.PRISMPM_SEMANTIC_SOURCE;
@@ -254,6 +378,8 @@ test('original proof reader integration with parser data (not genuine SDK accept
     const receipt = parserFixture(f.proof, undefined, undefined, authority, '1.1');
     put(f.proof, 'receipt.json', canonical(receipt));
     put(f.artifact, f.name + '/result.json', canonical({...f.result, build_id: receipt.build_id, attestation_id: receipt.attestation_id}));
-    packBinaryEvidence(f.artifact, f.output, f.selected, f.sourceRoot);
+    rmSync(join(f.artifact, 'retention.json'));
+    retainBinaryEvidence(f.artifact, {...f.selected, run_attempt: '1'}, f.sourceRoot);
+    packBinaryEvidence(f.artifact, f.output, f.selected, {provider: f.provider, selection: f.selection}, f.sourceRoot);
     assert(existsSync(f.output));
   });

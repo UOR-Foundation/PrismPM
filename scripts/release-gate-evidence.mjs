@@ -17,10 +17,12 @@ export function releaseContext(revision, architecture, image, runId, attempt) {
 function evidenceOwner(owner, architecture) {
   assert(typeof owner === 'string');
   const nativeArchive = `native-${architecture === 'amd64' ? 'x86_64' : 'aarch64'}-unknown-linux-gnu`;
+  const binary = owner === `binary-sdk-sdk-${architecture}` || owner === `binary-language-1.2-sdk-sdk-${architecture}`;
   assert(owner === 'source-vv' || vvParts.some(part => owner === `source-vv-part-${part}`)
-    || owner === `sdk-equivalence-${architecture}` || owner === nativeArchive
+    || owner === `sdk-equivalence-${architecture}` || owner === nativeArchive || binary
     || vvParts.some(part => owner === `full-sdk-vv-sdk-${architecture}-${part}`), 'closed evidence owner');
-  return owner === 'source-vv' ? 'gate' : owner === nativeArchive ? `sdk-equivalence-${architecture}` : owner;
+  return owner === 'source-vv' ? 'gate' : owner === nativeArchive ? `sdk-equivalence-${architecture}`
+    : binary ? `browser-library-${architecture}` : owner;
 }
 export function artifactName(owner, context) {
   releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
