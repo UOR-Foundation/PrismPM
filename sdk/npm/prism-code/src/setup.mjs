@@ -11,6 +11,7 @@
  * that does not parse is never rewritten.
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -272,14 +273,85 @@ function planPreferred(requested, agents, context) {
 }
 
 /**
- * Everything setup would do. `agent` limits the agents to one, and makes it the preferred agent.
- * @param {{ agent?: string }} options
+ * The skills that teach an agent to build Prism apps, as uor.foundation serves them for `npx skills add`:
+ * the v2 discovery index, each SKILL.md checked against its digest. `PRISM_SKILLS_INDEX` points elsewhere.
  */
-export function planSetup({ agent } = {}, context) {
+export const SKILLS_INDEX = 'https://uor.foundation/.well-known/agent-skills/index.json';
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const SKILL_MARKER = '.prism-code.json';
+
+/**
+ * Fetch every skill the index lists. A name that is not a plain slug, a file on another origin, and a file whose
+ * sha256 differs from the index are refused. Never throws: a failure is `{ error }`, and setup goes on without skills.
+ * @returns {Promise<{ skills: { name: string, markdown: string, digest: string, url: string }[] } | { error: string }>}
+ */
+export async function fetchSkills(index = SKILLS_INDEX, get = globalThis.fetch) {
+  const fetched = async (url) => {
+    const response = await get(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  };
+  try {
+    const listed = JSON.parse((await fetched(index)).toString('utf8')).skills;
+    if (!Array.isArray(listed)) return { error: `${index} lists no skills` };
+    const skills = [];
+    for (const entry of listed) {
+      if (entry?.type !== 'skill-md' || !SKILL_NAME.test(entry.name ?? '')) continue;
+      const url = new URL(entry.url, index);
+      if (url.origin !== new URL(index).origin) continue;
+      const bytes = await fetched(url);
+      const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      if (digest !== entry.digest) return { error: `${url} does not match the digest ${index} lists` };
+      skills.push({ name: entry.name, markdown: bytes.toString('utf8'), digest, url: url.href });
+    }
+    return { skills };
+  } catch (error) {
+    return { error: `${index}: ${error.cause?.code ?? error.message}` };
+  }
+}
+
+/**
+ * Write each skill where the agents found here read skills: `~/.claude/skills` for Claude Code, and the shared
+ * `~/.agents/skills` for Codex, Cursor and VS Code. A skill folder prism-code did not write is left alone; one it
+ * wrote (it holds the marker) is brought up to date.
+ */
+export function planSkills(fetched, agents, context) {
+  if (fetched.error) return { status: 'unreadable', detail: `not fetched: ${fetched.error}; run setup again when online`, steps: [] };
+  const found = new Set(agents.filter((a) => a.status !== 'not-found').map((a) => a.agent));
+  const dirs = [];
+  if (found.has('claude-code')) dirs.push(join(context.env.CLAUDE_CONFIG_DIR || join(context.home, '.claude'), 'skills'));
+  if (['codex', 'cursor', 'vscode'].some((a) => found.has(a))) dirs.push(join(context.home, '.agents', 'skills'));
+  if (dirs.length === 0 || fetched.skills.length === 0) return { status: 'not-found', detail: dirs.length ? 'the index lists no skills' : 'no agent here reads skill folders', steps: [] };
+  const steps = [];
+  const kept = [];
+  for (const dir of dirs) {
+    for (const skill of fetched.skills) {
+      const file = join(dir, skill.name, 'SKILL.md');
+      const current = context.readFile(file);
+      if (current === skill.markdown) continue;
+      if (current !== null && context.readFile(join(dir, skill.name, SKILL_MARKER)) === null) {
+        kept.push(file);
+        continue;
+      }
+      steps.push({ kind: 'write', path: file, content: skill.markdown }, { kind: 'write', path: join(dir, skill.name, SKILL_MARKER), content: `${JSON.stringify({ source: skill.url, digest: skill.digest })}\n` });
+    }
+  }
+  const detail = `${fetched.skills.map((s) => s.name).join(', ')} in ${dirs.join(', ')}${kept.length ? `; left alone, not written by prism-code: ${kept.join(', ')}` : ''}`;
+  return { status: steps.length > 0 ? 'configure' : kept.length > 0 ? 'conflict' : 'already', detail, steps };
+}
+
+/**
+ * Everything setup would do. `agent` limits the agents to one, and makes it the preferred agent. `skills` is what
+ * `fetchSkills` returned; without it there is no skills row.
+ * @param {{ agent?: string, skills?: object }} options
+ */
+export function planSetup({ agent, skills } = {}, context) {
   if (agent !== undefined && !Object.hasOwn(AGENTS, agent)) fail('setup.agent', `${agent} is not an agent; one of ${Object.keys(AGENTS).join(', ')}`);
   const paths = agentPaths(context);
   const agents = (agent === undefined ? LOCAL_AGENTS : [agent]).map((id) => planAgent(id, context, paths));
-  return { agents, handler: planHandler(context), preferred: planPreferred(agent, agents, context) };
+  const plan = { agents, handler: planHandler(context), preferred: planPreferred(agent, agents, context) };
+  if (skills !== undefined) plan.skills = planSkills(skills, agents, context);
+  return plan;
 }
 
 const readText = (path) => {
@@ -361,7 +433,7 @@ export function applyStep(step, { run = spawnSync } = {}) {
 
 /** Carry out a plan. A step that fails marks its row failed and the rest still run. */
 export function applySetup(plan, options) {
-  for (const row of [...plan.agents, plan.handler, plan.preferred]) {
+  for (const row of [...plan.agents, plan.handler, ...(plan.skills ? [plan.skills] : []), plan.preferred]) {
     try {
       for (const step of row.steps ?? []) applyStep(step, options);
     } catch (error) {
@@ -381,6 +453,7 @@ const WORDS = {
   unreadable: ['skipped', 'skipped'],
   failed: ['failed', 'failed'],
 };
+const SKILL_WORDS = { configure: ['would install', 'installed'], already: ['already installed', 'already installed'], conflict: ['left alone', 'left alone'], unreadable: ['skipped', 'skipped'], 'not-found': ['none', 'none'], failed: ['failed', 'failed'] };
 const HANDLER_WORDS = { configure: ['would register', 'registered'], already: ['already registered', 'already registered'], conflict: ['left alone', 'left alone'], manual: ['manual', 'manual'], failed: ['failed', 'failed'] };
 
 function formatStep(step) {
@@ -410,6 +483,7 @@ export function formatSetup(plan, { dryRun = false } = {}) {
   };
   for (const a of plan.agents) row(a.agent, WORDS, a.status, a.detail, a.steps);
   row('holo://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);
+  if (plan.skills) row('skills', SKILL_WORDS, plan.skills.status, plan.skills.detail, plan.skills.steps);
   const preferred = plan.preferred.agent ? `${plan.preferred.agent}${plan.preferred.steps.length ? '' : ' (unchanged)'}` : 'none: pass --agent <id>';
   lines.push(`  ${'preferred agent'.padEnd(16)}${preferred}`);
   if (dryRun) for (const step of plan.preferred.steps) lines.push(`      ${formatStep(step)}`);

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export const PACKAGE_LIMIT = 1163264; // 1136 KiB: 1088 KiB plus 48 KiB for setup and open (about 43 KiB).
+export const PACKAGE_LIMIT = 1171456; // 1144 KiB: 1088 KiB plus 56 KiB for setup, open and the skills step (about 47 KiB).
 export const PACKAGE_FILES = JSON.parse(readFileSync(new URL('../test/fixtures/package-files.json', import.meta.url), 'utf8'));
 
 export function checkPackage(pack) {

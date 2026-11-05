@@ -25,11 +25,14 @@ npm install prism-code
 npx prism-code setup
 ```
 
-One run gets this machine ready for the build box on uor.foundation. It does three things:
+One run gets this machine ready for the build box on uor.foundation. It does four things:
 
 1. It adds the UOR MCP server, `lexlean` at `https://mcp.uor.foundation/`, to every agent it finds, and prints one line per agent.
-2. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
-3. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
+2. It installs the Prism skills, so the agent knows how to build a Prism app.
+3. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
+4. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
+
+The skills are the ones `npx skills add https://uor.foundation` installs. Setup reads the discovery index at `https://uor.foundation/.well-known/agent-skills/index.json` and fetches each `SKILL.md` it lists. A file whose sha256 differs from the index, a file on another origin, or a name that is not a plain slug is refused. Setup writes each skill to `~/.claude/skills/<name>/` when Claude Code is found. It writes to the shared `~/.agents/skills/<name>/`, which Codex, Cursor and VS Code read, when any of those is found. A `.prism-code.json` beside each `SKILL.md` marks it as setup's, so a later run updates it. A skill folder setup did not write is `left alone`. Offline, the skills row says `skipped` and everything else still runs. `PRISM_SKILLS_INDEX` points at another index. Claude Desktop, claude.ai and ChatGPT take skills only through their own settings.
 
 | Agent | Found by | What setup writes |
 | --- | --- | --- |
