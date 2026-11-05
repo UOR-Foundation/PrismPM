@@ -315,10 +315,12 @@ const products = [
 const platforms = [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}];
 const expectedMatrices = {
   release: {
-    images: products.map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
+    'image-platforms': platforms,
+    'sdk-supply': products.slice(0,1).map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
+    'product-images': products.slice(1).map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
     reproducibility: products.flatMap(([image, dockerfile, target]) => platforms.map(({os, arch}) => ({os, platform: `linux/${arch}`, dockerfile, target, name: `${image}-${arch}`, image}))),
     'installed-sdk': platforms,
-    native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
+    native: [{os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
   'sdk-candidate': {
     build: platforms.map(({os, arch}) => ({runner: os, architecture: arch})),
@@ -363,7 +365,7 @@ function candidateContract(value) {
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
-const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, native: 2}};
+const matrixParallelism = {release: {'sdk-supply': 1, 'product-images': 3, reproducibility: 4, 'installed-sdk': 2, native: 2}};
 function publicationContract(name, value) {
   if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {

@@ -4,12 +4,12 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { buildImage, buildImageWithInputs, captureImageInputs, dockerArguments, inputPolicy, prepareImageInputs, stageImageInputs } from './sdk-image-inputs.mjs';
+import { buildImage, buildImageSet, buildImageWithInputs, captureImageInputs, dockerArguments, inputPolicy, prepareImageInputs, stageImageInputs } from './sdk-image-inputs.mjs';
 import { validateImageInputMetadata } from '../sdk/inventory-metadata.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -42,7 +42,7 @@ function fixture(t) {
   git(source, 'tag', '-a', 'v0.2.0', '-m', 'fixture historical tag');
   const historical = git(source, 'rev-parse', 'HEAD'), tag = git(source, 'rev-parse', 'v0.2.0');
   mkdirSync(join(source, 'sdk')); mkdirSync(join(source, 'scripts'));
-  for (const name of ['sdk-vv-inputs.mjs', 'sdk-image-inputs.mjs']) {
+  for (const name of ['sdk-vv-inputs.mjs', 'sdk-image-inputs.mjs', 'release-construction-plan.mjs']) {
     cpSync(new URL(`./${name}`, import.meta.url), join(source, 'scripts', name));
   }
   cpSync(new URL('../sdk/Dockerfile', import.meta.url), join(source, 'sdk/Dockerfile'));
@@ -643,7 +643,7 @@ test('the actual Docker staging instruction executes and an omitted verifier fai
 function recordingDocker(t, work, action = '') {
   const bin = join(work, 'bin'); mkdirSync(bin);
   const record = join(work, 'docker.json');
-  writeFileSync(join(bin, 'docker'), `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');const args=process.argv.slice(2);const value=args[args.indexOf('--build-context')+1];const recipe=args[args.indexOf('--file')+1];${action}\nconst files=['sdk/Dockerfile','sdk/vv-inputs.lock.json','tools.lock','scripts/sdk-vv-inputs.mjs','scripts/sdk-image-inputs.mjs'];const recipeInputs=Object.fromEntries(files.map(name=>[name,crypto.createHash('sha256').update(fs.readFileSync(path.join(args.at(-1),name))).digest('hex')]));fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD,JSON.stringify({args,recipeInputs,files:fs.readdirSync(value.slice('vv-inputs='.length))})+'\\n');const at=args.indexOf('--metadata-file');if(at>=0)fs.writeFileSync(args[at+1],JSON.stringify({'containerimage.digest':'sha256:'+'a'.repeat(64)}));process.exit(Number(process.env.IMAGE_DOCKER_STATUS??0));\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'docker'), `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');const args=process.argv.slice(2);if(args[0]==='volume'&&args[1]==='ls'){fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD+'.volumes',JSON.stringify(args)+'\\n');const state=process.env.IMAGE_DOCKER_RECORD+'.active-builders';for(const builder of fs.existsSync(state)?JSON.parse(fs.readFileSync(state)):[])console.log('buildx_buildkit_'+builder+'0_state');process.exit(0);}if(args[0]==='buildx'&&['inspect','create','rm'].includes(args[1])){const state=process.env.IMAGE_DOCKER_RECORD+'.active-builders',events=process.env.IMAGE_DOCKER_RECORD+'.builders';const active=fs.existsSync(state)?JSON.parse(fs.readFileSync(state)):[];fs.appendFileSync(events,JSON.stringify(args)+'\\n');const builder=args[1]==='create'?args[args.indexOf('--name')+1]:args[2];if(args[1]==='inspect')process.exit(active.includes(builder)?0:1);if(args[1]==='create'){if(active.includes(builder))process.exit(1);active.push(builder);}else{if(!active.includes(builder))process.exit(1);active.splice(active.indexOf(builder),1);}fs.writeFileSync(state,JSON.stringify(active));process.exit(0);}if(!args.includes('--build-context')){if(args[0]!=='buildx'||args[1]!=='build'||args[args.indexOf('--file')+1]!=='sdk/runtime/Dockerfile')throw Error('unexpected raw Docker construction');fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD,JSON.stringify({args,recipeInputs:{}})+'\\n');const at=args.indexOf('--metadata-file');if(at>=0)fs.writeFileSync(args[at+1],JSON.stringify({'containerimage.digest':'sha256:'+'a'.repeat(64)}));process.exit(Number(process.env.IMAGE_DOCKER_STATUS??0));}const value=args[args.indexOf('--build-context')+1];const recipe=args[args.indexOf('--file')+1];${action}\nconst files=['sdk/Dockerfile','sdk/vv-inputs.lock.json','tools.lock','scripts/sdk-vv-inputs.mjs','scripts/sdk-image-inputs.mjs'];const recipeInputs=Object.fromEntries(files.map(name=>[name,crypto.createHash('sha256').update(fs.readFileSync(path.join(args.at(-1),name))).digest('hex')]));fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD,JSON.stringify({args,recipeInputs,contextIdentity:fs.statSync(args.at(-1)).ino,closureIdentity:fs.statSync(value.slice('vv-inputs='.length)).ino,files:fs.readdirSync(value.slice('vv-inputs='.length))})+'\\n');const at=args.indexOf('--metadata-file');if(at>=0)fs.writeFileSync(args[at+1],JSON.stringify({'containerimage.digest':'sha256:'+'a'.repeat(64)}));process.exit(Number(process.env.IMAGE_DOCKER_STATUS??0));\n`, { mode: 0o755 });
   const prior = { PATH: process.env.PATH, IMAGE_DOCKER_RECORD: process.env.IMAGE_DOCKER_RECORD, IMAGE_DOCKER_STATUS: process.env.IMAGE_DOCKER_STATUS };
   process.env.PATH = `${bin}:${process.env.PATH}`; process.env.IMAGE_DOCKER_RECORD = record;
   t.after(() => { for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
@@ -718,6 +718,183 @@ test('build wrapper prepares and verifies real inputs before invoking Docker exa
   assert(!existsSync(record), 'omitted acquisition cannot reach Docker');
 });
 
+function closedBuildSet(work, targets = ['runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'cli-archive']) {
+  return {builder: 'fixture-builder', platform: 'linux/amd64', builds: targets.map(target => ({target, args: [
+    '--output', target === 'cli-archive' ? `type=local,dest=${join(work, 'native')}`
+      : `type=registry,name=fixture.invalid/${target},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true`,
+    ...(target === 'cli-archive' ? ['--build-arg', 'SDK_VERSION=0.3.0'] : ['--metadata-file', join(work, `${target}.json`)]),
+    '--provenance=false', '--sbom=false', '--build-arg', 'SOURCE_DATE_EPOCH=0',
+    '--label', 'org.opencontainers.image.created=1970-01-01T00:00:00Z',
+  ]}))};
+}
+
+test('one closed build set acquires and materializes once and invokes every exact target/output on its owning builder', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work), plan = closedBuildSet(f.work);
+  const expected = structuredClone(plan); let calls = 0;
+  const prepare = (source, revision, destination) => {
+    calls++; assert.equal(source, f.source); assert.equal(revision, f.revision);
+    // The constructor already owns a copy of the closed plan.
+    plan.builder = 'changed-builder'; plan.platform = 'linux/arm64'; plan.builds.reverse();
+    plan.builds[0].args.push('--file', 'foreign');
+    return f.capture(destination);
+  };
+  assert.equal(buildImageSet(f.source, f.revision, plan, prepare), 0);
+  assert.equal(calls, 1);
+  const actual = records(record); assert.equal(actual.length, 6);
+  assert.equal(new Set(actual.map(row => row.contextIdentity)).size, 1);
+  assert.equal(new Set(actual.map(row => row.closureIdentity)).size, 1);
+  const closure = actual[0].args[actual[0].args.indexOf('--build-context') + 1].slice('vv-inputs='.length);
+  const context = actual[0].args.at(-1);
+  for (const [index, row] of actual.entries()) {
+    assert.deepEqual(row.args, dockerArguments(context, f.revision, expected.builds[index].target, closure,
+      ['--builder', expected.builder, '--platform', expected.platform, ...expected.builds[index].args]));
+    assert.deepEqual(row.recipeInputs, actual[0].recipeInputs);
+  }
+  assert(!existsSync(closure)); assert(!existsSync(context));
+  const implementation = readFileSync(new URL('./sdk-image-inputs.mjs', import.meta.url), 'utf8');
+  const constructor = implementation.slice(implementation.indexOf('function constructImages('), implementation.indexOf('export function buildImage('));
+  assert.equal(constructor.match(/materializeClosure\(/g)?.length, 1, 'one materialization site for the whole construction scope');
+  assert(constructor.indexOf('materializeClosure(') < constructor.indexOf('for (const {target, args} of builds) {'));
+});
+
+test('invalid build-set plans fail before acquisition or Docker', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work);
+  const valid = closedBuildSet(f.work, ['runtime']);
+  const change = mutate => {const plan = structuredClone(valid); mutate(plan); return plan;};
+  const invalid = [null, [], {}, {...valid, extra: true},
+    ...['', 'tcp://foreign:1234', '../builder', '-builder', 'a'.repeat(129)].map(builder => ({...valid, builder})),
+    ...['linux/amd64,linux/arm64', 'linux/386', '', null].map(platform => ({...valid, platform})),
+    {...valid, builds: []}, {...valid, builds: Array(7).fill(valid.builds[0])},
+    change(p => p.builds.push(structuredClone(p.builds[0]))),
+    change(p => p.builds[0].target = 'foreign'), change(p => p.builds[0].extra = true),
+    change(p => p.builds[0].args = []), change(p => p.builds[0].args = Array(65).fill('--no-cache')),
+    change(p => p.builds[0].args.push('x'.repeat(4097))),
+    ...[
+      ['--builder', 'another'], ['--platform', 'linux/arm64'], ['--load'], ['--tag', 'foreign:tag'],
+      ['--target', 'oracles'], ['--file', 'foreign'], ['--build-context', 'vv-inputs=/foreign'],
+      ['--build-arg', 'SDK_SOURCE_REVISION=' + 'e'.repeat(40)], ['--build-arg', 'SOURCE_DATE_EPOCH=0'],
+      ['--label', 'org.opencontainers.image.created=foreign'], ['--provenance=false'],
+      ['--output', 'type=local,dest=foreign'], ['--metadata-file', 'foreign.json'],
+    ].map(options => change(p => p.builds[0].args.push(...options))),
+    ...[
+      'type=registry,name=fixture.invalid/runtime,unknown=true',
+      'type=registry,name=fixture.invalid/runtime,name=foreign',
+      'type=registry,name=fixture.invalid/runtime,push-by-digest=false',
+      'type=registry,name=fixture.invalid/runtime,rewrite-timestamp=false',
+      'type=registry,name=fixture.invalid/runtime,tar=false',
+      'type=registry,name=fixture.invalid/runtime:tag with space',
+      'type=oci,dest=foreign,tar=true', 'type=oci,dest=-', 'type=oci,dest=foreign,compression=gzip',
+      'type=local,dest=foreign', 'type=docker,dest=foreign', 'type=oci',
+    ].map(output => change(p => p.builds[0].args[1] = output)),
+    change(p => p.builds[0].args.splice(2, 2)),
+    change(p => {p.builds[0].args[1] = `type=oci,dest=${join(f.work, 'output')}`;
+      p.builds[0].args[3] = join(f.work, 'output', 'metadata.json');}),
+    change(p => {const row = structuredClone(p.builds[0]); row.target = 'oracles'; row.args[3] = join(f.work, 'other.json'); p.builds.push(row);}),
+    change(p => {const row = structuredClone(p.builds[0]); row.target = 'oracles'; row.args[1] = 'type=registry,name=fixture.invalid/oracles'; p.builds.push(row);}),
+  ];
+  let calls = 0;
+  for (const plan of invalid) assert.throws(() => buildImageSet(f.source, f.revision, plan, () => {calls++; throw Error('acquisition reached');}),
+    error => !error.message.includes('acquisition reached'), JSON.stringify(plan));
+  assert.equal(calls, 0); assert(!existsSync(record));
+  assert.throws(() => buildImageSet(f.source, 'not-an-oid', valid, () => {calls++;}));
+  assert.equal(calls, 0);
+});
+
+test('build sets reject aliased output paths and private-scratch ancestors before acquisition', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work);
+  const real = join(f.work, 'real-output'), alias = join(f.work, 'alias-output');
+  mkdirSync(real); symlinkSync(real, alias);
+  const retained = join(real, 'retained.json'), hardlink = join(real, 'hardlink.json');
+  writeFileSync(retained, 'retained metadata'); linkSync(retained, hardlink);
+  const dangling = join(f.work, 'dangling-output'); symlinkSync(join(f.work, 'absent'), dangling);
+  let calls = 0;
+  const reject = (destination, metadata = false) => {
+    const plan = closedBuildSet(f.work, ['runtime']);
+    if (metadata) plan.builds[0].args[3] = destination;
+    else plan.builds[0].args[1] = `type=oci,tar=false,dest=${destination}`;
+    assert.throws(() => buildImageSet(f.source, f.revision, plan, () => {calls++; throw Error('acquisition reached');}),
+      error => !error.message.includes('acquisition reached'));
+  };
+  reject(join(alias, 'artifact')); reject(join(alias, 'metadata.json'), true);
+  reject(dangling); reject(hardlink, true); reject('/'); reject(tmpdir());
+  reject(join(f.work, 'real-output') + '/../artifact');
+  assert.equal(calls, 0); assert(!existsSync(record));
+  assert.equal(readFileSync(retained, 'utf8'), 'retained metadata');
+  assert.equal(lstatSync(retained).nlink, 2);
+});
+
+test('build-set output alias drift refuses after transport and stops every later target', t => {
+  const f = fixture(t), first = join(f.work, 'first-output'), second = join(f.work, 'second-output');
+  mkdirSync(first); mkdirSync(second);
+  const action = `fs.renameSync(${JSON.stringify(second)},${JSON.stringify(second + '.saved')});fs.symlinkSync(${JSON.stringify(second + '.saved')},${JSON.stringify(second)});`;
+  const record = recordingDocker(t, f.work, action), plan = closedBuildSet(f.work, ['runtime', 'oracles']);
+  plan.builds[0].args[3] = join(first, 'metadata.json'); plan.builds[1].args[3] = join(second, 'metadata.json');
+  assert.throws(() => buildImageSet(f.source, f.revision, plan, (_source, _revision, destination) => f.capture(destination)), /output path must not be aliased/);
+  assert.equal(records(record).length, 1);
+  assert(!existsSync(records(record)[0].args.at(-1)), 'private inputs are cleaned after output custody refusal');
+});
+
+test('build-set CLI rejects malformed, oversized, and open plans before any acquisition transport', t => {
+  const f = fixture(t), bin = join(f.work, 'reject-cli-bin'), marker = join(f.work, 'unexpected-acquisition'); mkdirSync(bin);
+  for (const tool of ['git', 'curl', 'docker']) writeFileSync(join(bin, tool),
+    `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)},'unexpected transport');process.exit(89);\n`, {mode: 0o755});
+  const helper = new URL('./sdk-image-inputs.mjs', import.meta.url).pathname;
+  for (const encoded of ['{', JSON.stringify({...closedBuildSet(f.work), authority: '/foreign'}), ' '.repeat(65537)]) {
+    const result = spawnSync(process.execPath, [helper, 'build-set', f.source, f.revision, encoded], {
+      env: {...env(), PATH: bin}, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024,
+    });
+    assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.notEqual(result.status, 0);
+    assert(!existsSync(marker), 'invalid CLI plans cannot invoke acquisition or Docker');
+  }
+});
+
+test('build sets preserve bounded OCI exports including diagnostic tar=false', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work);
+  const plan = closedBuildSet(f.work, ['runtime', 'oracles']);
+  plan.platform = 'linux/arm64';
+  for (const row of plan.builds) row.args = ['--no-cache', '--output', `type=oci,dest=${join(f.work, row.target + '.oci')},rewrite-timestamp=true,oci-mediatypes=true,tar=false`];
+  assert.equal(buildImageSet(f.source, f.revision, plan, (_source, _revision, destination) => f.capture(destination)), 0);
+  for (const [index, row] of records(record).entries()) {
+    assert(row.args.includes('linux/arm64'));
+    assert.equal(row.args[row.args.indexOf('--output') + 1], plan.builds[index].args[2]);
+  }
+});
+
+test('build-set failure stops later targets and always checks custody before returning failure', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work,
+    "if(args[args.indexOf('--target')+1]==='adapter-compose')process.env.IMAGE_DOCKER_STATUS='23';");
+  let calls = 0;
+  assert.equal(buildImageSet(f.source, f.revision, closedBuildSet(f.work), (_source, _revision, destination) => {calls++; return f.capture(destination);}), 23);
+  assert.equal(calls, 1); assert.deepEqual(records(record).map(row => row.args[row.args.indexOf('--target') + 1]), ['runtime', 'adapter-compose']);
+  for (const row of records(record)) assert(!existsSync(row.args.at(-1)));
+});
+
+test('build sets reject unbound acquisition, post-capture drift, and closure or private-context custody drift on success and failure', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work), plan = closedBuildSet(f.work);
+  const prepare = (_source, _revision, destination) => f.capture(destination);
+  assert.throws(() => buildImageSet(f.source, f.revision, plan, () => inputPolicy(f.source, f.revision)));
+  const original = readFileSync(join(f.source, 'sdk/Dockerfile'));
+  assert.throws(() => buildImageSet(f.source, f.revision, plan, (_source, _revision, destination) => {
+    const policy = f.capture(destination); writeFileSync(join(f.source, 'sdk/Dockerfile'), 'foreign'); return policy;
+  }));
+  writeFileSync(join(f.source, 'sdk/Dockerfile'), original);
+  assert(!existsSync(record));
+  const executable = join(f.work, 'bin/docker'), transport = readFileSync(executable, 'utf8');
+  for (const [action, message] of [
+    ["fs.chmodSync(recipe,0o600);fs.appendFileSync(recipe,'changed');", /recipe context custody changed/],
+    ["const p=path.join(value.slice('vv-inputs='.length),'source.pack');fs.appendFileSync(p,'changed');", /closure custody changed/],
+    ["const p=path.join(value.slice('vv-inputs='.length),'manifest.json'),b=fs.readFileSync(p);fs.renameSync(p,p+'.old');fs.writeFileSync(p,b);fs.unlinkSync(p+'.old');", /closure custody changed/],
+  ]) {
+    for (const status of [0, 23]) {
+      process.env.IMAGE_DOCKER_STATUS = String(status);
+      writeFileSync(executable, transport.replace("const files=['sdk/Dockerfile'", action + "const files=['sdk/Dockerfile'"));
+      assert.throws(() => buildImageSet(f.source, f.revision, plan, prepare), message);
+    }
+  }
+  assert.equal(records(record).length, 6, 'each custody failure stops after its first transport');
+  for (const row of records(record)) assert(!existsSync(row.args.at(-1)));
+});
+
 test('post-capture recipe/helper changes refuse before Docker; changing the original during consumption cannot replace captured bytes', t => {
   const f = fixture(t), recipe = join(f.source, 'sdk/Dockerfile'), original = readFileSync(recipe);
   const action = `const original=${JSON.stringify(recipe)},before=fs.readFileSync(original);fs.writeFileSync(original,'FROM scratch\\n');if(fs.readFileSync(recipe).toString()!==${JSON.stringify(original.toString())})process.exit(91);fs.writeFileSync(original,before);`;
@@ -766,7 +943,8 @@ test('a planted successful Docker omission is caught by the executable wrapper c
 test('all SDK targets preserve accepted flags and reject conflicting source/context/file/target overrides', () => {
   const revision = '1'.repeat(40);
   for (const target of ['runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'cli-archive']) {
-    const result = dockerArguments('/fixture/source', revision, target, '/fixture/inputs', ['--load', '--tag', 'fixture:only']);
+    const result = dockerArguments('/fixture/source', revision, target, '/fixture/inputs', ['--builder', 'owned-builder_1', '--load', '--tag', 'fixture:only']);
+    assert.equal(result[result.indexOf('--builder') + 1], 'owned-builder_1');
     assert.equal(result[result.indexOf('--target') + 1], target);
     assert.equal(result[result.indexOf('--build-arg') + 1], `SDK_SOURCE_REVISION=${revision}`);
     assert.equal(result.at(-1), '/fixture/source');
@@ -774,7 +952,8 @@ test('all SDK targets preserve accepted flags and reject conflicting source/cont
   for (const args of [ ['--build-context', 'vv-inputs=/other'], ['--build-arg', 'SDK_SOURCE_REVISION=' + '2'.repeat(40)],
     ['--build-arg=SDK_SOURCE_REVISION=' + revision], ['--file', 'other'], ['-f', 'other'], ['--target', 'other'], ['.'],
     ['--platform'], ['--output', ''], ['--output', '--build-context'], ['--label', '--file'],
-    ['--build-arg', 'SOURCE_DATE_EPOCH=123'], ['--provenance=true'] ]) {
+    ['--build-arg', 'SOURCE_DATE_EPOCH=123'], ['--provenance=true'],
+    ['--builder', 'tcp://foreign:1234'], ['--builder', '../foreign'], ['--builder', 'one', '--builder', 'two'] ]) {
     assert.throws(() => dockerArguments('/fixture/source', revision, 'runtime', '/fixture/inputs', args), JSON.stringify(args));
   }
   assert.throws(() => dockerArguments('/fixture/source', revision, 'unregistered', '/fixture/inputs', []));
@@ -829,16 +1008,19 @@ function runBlock(source, marker) {
 }
 
 function unitCallerTransport(t, f) {
-  const record = recordingDocker(t, f.work), bin = join(f.work, 'bin');
+  const record = recordingDocker(t, f.work), bin = join(f.work, 'bin'), acquisitions = join(f.work, 'caller-acquisitions.json');
   // This executable intercepts the *actual caller shell arguments*. Only
   // acquisition uses explicitly synthetic local Git inputs; Docker records
   // transport arguments and cannot build/publish an image in this unit test.
   const shim = `#!${process.execPath}\nimport fs from 'node:fs';import assert from 'node:assert/strict';import path from 'node:path';
 const [script,command,...args]=process.argv.slice(2);
+if(path.basename(script)!=='sdk-image-inputs.mjs'){const result=(await import('node:child_process')).spawnSync(process.execPath,process.argv.slice(2),{stdio:'inherit'});if(result.error)throw result.error;process.exit(result.status??1);}
 assert.equal(path.basename(script),'sdk-image-inputs.mjs');
 assert.equal(fs.readFileSync(script,'utf8'),fs.readFileSync(${JSON.stringify(new URL('./sdk-image-inputs.mjs', import.meta.url).pathname)},'utf8'));
 const m=await import(${JSON.stringify(new URL('./sdk-image-inputs.mjs', import.meta.url).href)});
-if(command==='build'){const [source,revision,target,...options]=args;process.exitCode=m.buildImage(source,revision,target,options,(s,r,destination)=>m.captureImageInputs({source:path.resolve(s),revision:r,advisory:${JSON.stringify(f.advisory)},bootstrap:${JSON.stringify(f.bootstrap)},destination}));}
+const prepare=(s,r,destination)=>{fs.appendFileSync(${JSON.stringify(acquisitions)},JSON.stringify({source:s,revision:r,destination})+'\\n');return m.captureImageInputs({source:path.resolve(s),revision:r,advisory:${JSON.stringify(f.advisory)},bootstrap:${JSON.stringify(f.bootstrap)},destination});};
+if(command==='build'){const [source,revision,target,...options]=args;process.exitCode=m.buildImage(source,revision,target,options,prepare);}
+else if(command==='build-set'){const [source,revision,encoded]=args;process.exitCode=m.buildImageSet(source,revision,JSON.parse(encoded),prepare);}
 else if(command==='digest'){const value=JSON.parse(fs.readFileSync(args[0]));assert.match(value['containerimage.digest'],/^sha256:[0-9a-f]{64}$/);console.log(value['containerimage.digest']);}
 else throw Error('unexpected caller invocation');\n`;
   // .mjs ensures top-level await; the shim named node is just a shell exec.
@@ -846,9 +1028,9 @@ else throw Error('unexpected caller invocation');\n`;
   writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec '${process.execPath}' '${join(bin, 'node-shim.mjs')}' "$@"\n`, { mode: 0o755 });
   const output = join(f.work, 'github-output');
   const environment = { ...env(), GITHUB_SHA: f.revision, GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM',
-    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
-    TARGET: 'runtime', DOCKERFILE: 'sdk/Dockerfile', REPOSITORY: 'fixture-registry.invalid/sdk', VERSION: '0.3.0' };
-  return { record, output, run: (script, cwd = f.source) => spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
+    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, GITHUB_RUN_ID: '1', GITHUB_RUN_ATTEMPT: '1', ARCH: 'amd64', ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
+    BUILDER: 'fixture-owner', TARGET: 'runtime', DOCKERFILE: 'sdk/Dockerfile', REPOSITORY: 'fixture-registry.invalid/sdk', VERSION: '0.4.0' };
+  return { record, acquisitions, output, run: (script, cwd = f.source) => spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
     cwd, env: environment, encoding: 'utf8', timeout: 180000, maxBuffer: 1024 * 1024 }) };
 }
 
@@ -867,12 +1049,8 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     return matches[0];
   });
   const local = [...assignments, localBuild].join('\n');
-  const native = runBlock(release.slice(release.indexOf('  native:')), '      - shell: bash')
-    .split('\n  archive=')[0].split('\narchive=')[0];
   const rows = [
     ['candidate', runBlock(candidate, '      - name: Build the production image recipe'), 'runtime', 'type=oci,'],
-    ['release', runBlock(release, '      - id: build'), 'runtime', 'type=registry,'],
-    ['native', native, 'cli-archive', 'type=local,'],
     ['local-vv', local, 'runtime', null],
   ];
   for (const [name, command, target, outputPrefix] of rows) {
@@ -897,7 +1075,6 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
       assert.match(secondTag, /^prismpm-vv-sdk:gate-[0-9]+-[0-9]+$/);
       assert.notEqual(secondTag, firstTag, 'separate sessions must not share a mutable SDK tag');
     }
-    if (name === 'release') assert.equal(readFileSync(transport.output, 'utf8'), `digest=sha256:${'a'.repeat(64)}\n`);
     rmSync(transport.record);
     // A successful skipped command is not a successful test of the caller.
     const skipped = transport.run(`if false; then\n${command}\nfi`);
@@ -908,19 +1085,84 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     assert.notEqual(changed, command, name);
     assert.notEqual(transport.run(changed).status, 0); assert(!existsSync(transport.record));
   }
-  // Execute the unchanged build portion of the real two-root workflow loop.
+  // Execute the complete owning producer: six closed SDK targets share one
+  // authenticated scope; the standalone runtime retains its separate recipe.
+  const producer = runBlock(release.slice(release.indexOf('  image-platforms:')), '      - id: build');
+  if (existsSync(transport.acquisitions)) rmSync(transport.acquisitions);
+  let result = transport.run(producer); assert.equal(result.status, 0, result.stderr);
+  const all = records(transport.record); assert.equal(all.length, 7);
+  const sdk = all.filter(row => row.args.includes('--build-context'));
+  assert.equal(sdk.length, 6); assert.equal(records(transport.acquisitions).length, 1);
+  assert.equal(new Set(sdk.map(row => row.contextIdentity)).size, 1);
+  assert.equal(new Set(sdk.map(row => row.closureIdentity)).size, 1);
+  const plan = JSON.parse(execFileSync(process.execPath, [join(f.source, 'scripts/release-construction-plan.mjs'),
+    f.revision, 'amd64', 'fixture-owner', join(f.work, 'image-platforms-work')], {encoding: 'utf8'}));
+  const context = sdk[0].args.at(-1);
+  const closure = sdk[0].args[sdk[0].args.indexOf('--build-context') + 1].slice('vv-inputs='.length);
+  for (const [index, row] of sdk.entries()) {
+    assert.deepEqual(row.args, dockerArguments(context, f.revision, plan.builds[index].target, closure,
+      ['--builder', plan.builder, '--platform', plan.platform, ...plan.builds[index].args]));
+    for (const [path, digest] of Object.entries(row.recipeInputs)) assert.equal(digest, hash(readFileSync(join(f.source, path))));
+  }
+  const standalone = all.filter(row => !row.args.includes('--build-context'));
+  assert.equal(standalone.length, 1);
+  assert.deepEqual(standalone[0].args, ['buildx', 'build', '--builder', 'fixture-owner', '--file', 'sdk/runtime/Dockerfile', '--platform', 'linux/amd64',
+    '--output', 'type=registry,name=ghcr.io/uor-foundation/prismpm-runtime,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true',
+    '--metadata-file', join(f.work, 'runtime-build.json'), '--provenance=false', '--sbom=false', '--build-arg', 'SOURCE_DATE_EPOCH=0',
+    '--label', 'org.opencontainers.image.created=1970-01-01T00:00:00Z', '--label', `org.opencontainers.image.revision=${f.revision}`,
+    '--label', 'org.opencontainers.image.source=https://github.com/UOR-Foundation/PrismPM', '--label', 'org.opencontainers.image.version=0.4.0', '.']);
+  for (const name of ['sdk', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'runtime'])
+    assert.equal(readFileSync(join(f.work, `image-platforms/${name}-amd64.digest`), 'utf8'), `sha256:${'a'.repeat(64)}\n`);
+  const native = release.slice(release.indexOf('  native:')).split(/\n  [a-z][a-z-]*:/)[0];
+  assert(native.includes('name: native-construction-${{ matrix.arch }}'));
+  assert(!native.includes('sdk-image-inputs.mjs build'), 'native acceptance consumes the producer artifact without constructing it again');
+  rmSync(transport.record); rmSync(join(f.work, 'image-platforms'), {recursive: true});
+  rmSync(join(f.work, 'image-platforms-work'), {recursive: true});
+  const skipped = transport.run(`if false; then\n${producer}\nfi`);
+  assert.equal(skipped.status, 0); assert(!existsSync(transport.record));
+  const changed = producer.replaceAll('"$GITHUB_SHA"', '"' + 'e'.repeat(40) + '"');
+  assert.notEqual(changed, producer);
+  result = transport.run(changed); assert.notEqual(result.status, 0); assert(!existsSync(transport.record));
+  // Execute the actual build portion of the two-root workflow loop, including
+  // independent pinned builder creation and disposal for each root.
   const full = runBlock(release.slice(release.indexOf('  reproducibility:')), '      - shell: bash');
   const start = full.indexOf('for root in root-a root-b; do');
-  const end = full.indexOf('\n  mkdir "$root.oci"', start); assert(start >= 0 && end > start);
-  const loop = full.slice(start, end) + '\ndone\n';
+  const end = full.indexOf('\n  jq -r', start); assert(start >= 0 && end > start);
+  const loop = (full.slice(start, end) + '\ndone\n').replaceAll('${{ matrix.name }}', 'fixture-sdk-amd64');
   cpSync(f.source, join(f.work, 'root-a'), { recursive: true, verbatimSymlinks: true });
   cpSync(f.source, join(f.work, 'root-b'), { recursive: true, verbatimSymlinks: true });
-  const result = transport.run(loop, f.work); assert.equal(result.status, 0, result.stderr);
+  const measurements = join(f.work, 'storage-measurements.json');
+  const measureFixture = join(f.work, 'storage-measurement-fixture.mjs');
+  writeFileSync(measureFixture, `import fs from 'node:fs';fs.appendFileSync(${JSON.stringify(measurements)},JSON.stringify(process.argv.slice(2))+'\\n');`);
+  // Storage observation is an independent hosted-runner helper; this unit
+  // fixture replaces only that explicit measurement, preserving real source
+  // capture and every construction/builder argument from the workflow loop.
+  writeFileSync(join(f.work, 'root-a/scripts/release-storage-snapshot.sh'),
+    `#!/bin/sh\nexec '${process.execPath}' '${measureFixture}' "$@"\n`);
+  result = transport.run(loop, f.work); assert.equal(result.status, 0, result.stderr);
   const actual = records(transport.record); assert.equal(actual.length, 2);
   assert.notEqual(actual[0].args.at(-1), actual[1].args.at(-1), 'two roots must retain separate private recipe contexts');
   for (const [number, row] of actual.entries()) {
     assert.notEqual(row.args.at(-1), join(f.work, number === 0 ? 'root-a' : 'root-b'));
     for (const [path, digest] of Object.entries(row.recipeInputs)) assert.equal(digest, hash(readFileSync(join(f.source, path))));
   }
-  for (const row of actual) assert(row.args.includes('--no-cache') && row.args.includes('--provenance=false') && row.args.includes('--sbom=false'));
+  for (const [index, row] of actual.entries()) {
+    assert(row.args.includes('--no-cache') && row.args.includes('--provenance=false') && row.args.includes('--sbom=false'));
+    assert.equal(row.args[row.args.indexOf('--output') + 1],
+      `type=oci,tar=false,dest=root-${index === 0 ? 'a' : 'b'}.oci,rewrite-timestamp=true,oci-mediatypes=true`);
+  }
+  assert.deepEqual(records(measurements), ['a', 'b'].map(root => [
+    `root-${root}-retired`, join(f.work, `repro-root-${root}-retired.txt`), `root-${root}.oci`,
+  ]));
+  assert.deepEqual(records(transport.record + '.volumes'), Array(2).fill(['volume', 'ls', '--format', '{{.Name}}']));
+  const builders = actual.map(row => row.args[row.args.indexOf('--builder') + 1]);
+  assert.equal(new Set(builders).size, 2, 'each independent root gets its own builder');
+  const lifecycle = records(transport.record + '.builders');
+  assert.deepEqual(lifecycle.map(args => args[1]), ['inspect', 'create', 'rm', 'inspect', 'create', 'rm']);
+  for (const [index, builder] of builders.entries()) {
+    assert.deepEqual(lifecycle[index * 3 + 1], ['buildx', 'create', '--name', builder, '--driver', 'docker-container',
+      '--driver-opt', 'image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa']);
+    assert.deepEqual(lifecycle[index * 3 + 2], ['buildx', 'rm', builder]);
+  }
+  assert.deepEqual(JSON.parse(readFileSync(transport.record + '.active-builders')), []);
 });

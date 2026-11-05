@@ -76,11 +76,21 @@ function validateWorkflow(workflow) {
   const pack = steps.find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
   assert(pack && pack.if === undefined && pack['continue-on-error'] === undefined);
   const download = (name, path) => {
-    const matching = steps.filter(step => step.with?.name === name);
+    const owner = name === 'source-vv' ? 'source' : name.startsWith('full-sdk-vv-sdk-') ? 'full-' + name.split('-').at(-1)
+      : name.startsWith('sdk-equivalence-') ? 'equivalence-' + name.split('-').at(-1) : null;
+    const identity = owner ? '${{ steps.' + owner + '.outputs.ids }}' : null;
+    const matching = steps.filter(step => owner ? step.with?.['artifact-ids'] === identity : step.with?.name === name);
     assert.equal(matching.length, 1, 'missing or duplicate gate download ' + name);
     const step = matching[0];
     assert.equal(step.uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
-    assert.deepEqual(step.with, {name, path});
+    assert.deepEqual(step.with, owner ? {'artifact-ids': identity, 'merge-multiple': true, path} : {name, path});
+    if (owner) {
+      const selection = steps.find(candidate => candidate.id === owner);
+      assert(selection.run.includes('scripts/release-artifact-metadata.mjs'));
+      assert(selection.run.includes('scripts/release-gate-evidence.mjs select-artifacts'));
+      assert(selection.run.includes(name));
+      assert(steps.indexOf(selection) < steps.indexOf(step));
+    }
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
     assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
   };
@@ -105,18 +115,20 @@ function validateWorkflow(workflow) {
     'cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/',
     'cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/',
     'node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \\',
-    '  release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    "  release/source-vv.tar \"$image\" \"$GITHUB_SHA\" amd64 \"$GITHUB_RUN_ID\" \"$(node -e 'console.log(require(process.argv[1]).artifacts[0].run_attempt)' \"$PWD/target/release-selection/source.json\")\"",
     'for architecture in amd64 arm64; do',
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
     '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
     '  for kind in full-sdk-vv product-cli; do',
+    '    evidence=".sdk-gate-evidence/$kind-sdk-$architecture"',
+    '    if test "$kind" = full-sdk-vv; then evidence="$evidence/sdk-$architecture-full-sdk-vv"; fi',
     '    node scripts/sdk-release-evidence.mjs "$kind" \\',
-    '      ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \\',
+    '      "$evidence" "release/sdk-$architecture-$kind.tar" \\',
     '      "$image" "$GITHUB_SHA" "$architecture"', '  done',
     '  node scripts/sdk-release-evidence.mjs native-equivalence \\',
     '    ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \\',
-    '    "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    "    \"$image\" \"$GITHUB_SHA\" \"$architecture\" \"$GITHUB_RUN_ID\" \"$(node -e 'console.log(require(process.argv[1]).artifacts[0].run_attempt)' \"$PWD/target/release-selection/equivalence-$architecture.json\")\"",
     'done', '',
   ].join('\n'));
   download('source-vv', '.sdk-gate-evidence/source-vv');
@@ -131,7 +143,7 @@ test('OCI publication retains both native gate closures without granting SDK acc
   validateWorkflow(workflow);
   const steps = value => value.jobs['oci-native'].steps;
   const pack = value => steps(value).find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
-  const gate = value => steps(value).find(step => step.with?.name === 'full-sdk-vv-sdk-arm64');
+  const gate = value => steps(value).find(step => step.with?.['artifact-ids'] === '${{ steps.full-arm64.outputs.ids }}');
   for (const mutate of [
     value => steps(value).splice(steps(value).indexOf(gate(value)), 1),
     value => steps(value).push(structuredClone(gate(value))),
@@ -140,6 +152,7 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {gate(value).if = 'always()';},
     value => {gate(value)['continue-on-error'] = true;},
     value => {const record = gate(value); steps(value).splice(steps(value).indexOf(record), 1); steps(value).push(record);},
+    value => {pack(value).run = pack(value).run.replace('/sdk-$architecture-full-sdk-vv', '');},
     value => {pack(value).if = 'false';},
     value => {pack(value)['continue-on-error'] = true;},
     value => {pack(value).run = pack(value).run.replace('set -euo pipefail', 'set -uo pipefail');},

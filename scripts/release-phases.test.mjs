@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
-import { assetNames, imageVerificationArguments, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
+import { assetNames, imageVerificationArguments, platformIndex, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
@@ -42,6 +42,7 @@ const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/ma
   event: 'workflow_dispatch', version: '0.4.0', publishCrates: false, revision});
 const prerequisites = names => Object.fromEntries(names.map(name => [name, {result: 'success'}]));
 const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
+const nativePlatforms = [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
 const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/main',
   GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false',
@@ -103,19 +104,22 @@ function validateWorkflow(value) {
   // The job script is one single-quoted `bash -c` argument: an apostrophe in a
   // comment or a message inside it ends the quote and breaks the whole job.
   execFileSync('bash', ['-n'], {input: publicationStep.run, stdio: ['pipe', 'pipe', 'pipe']});
-  assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
-  assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
+  assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ needs.policy.outputs.publish-crates }}');
+  assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   const sourceSteps = value.jobs.gate.steps;
-  const preflight = sourceSteps.findIndex(step => step.run === 'node --test scripts/release-native-contract.test.mjs');
-  assert(preflight >= 0 && preflight < sourceSteps.findIndex(step => step.with?.runCmd));
+  const policySteps = value.jobs.policy.steps;
+  const preflight = policySteps.findIndex(step => step.run === 'node --test scripts/release-native-contract.test.mjs');
+  assert(preflight >= 0);
+  assert.deepEqual(value.jobs.gate.needs, ['policy', 'sdk-supply']);
   assert(sourceSteps.some(step => step.id === 'cache' && step.uses === './.github/actions/devcontainer-cache'));
   const sourceBuild = sourceSteps.find(step => step.with?.runCmd).with;
   assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
   assert.equal(sourceBuild.cacheTo, undefined);
   const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
-    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
-  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  assert(sourceGate.includes('bash scripts/source-sdk-handoff.sh "$image"'));
+  assert.equal(sourceGate.slice(sourceGate.indexOf('bash scripts/vv.sh')), "bash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 \"$PRISMPM_TEST_SDK_IMAGE\" '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
+  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === '${{ steps.evidence.outputs.name }}');
   assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
@@ -131,73 +135,102 @@ function validateWorkflow(value) {
   assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run'));
   assert(outer.includes('--target registry_qualification_tools'));
   assert(installed.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
-  const retained = installed.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}');
+  const retained = installed.steps.find(step => step.with?.name === '${{ steps.evidence.outputs.name }}');
   assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
-  const builds = value.jobs.images.steps.find(step => step.id === 'build');
-  assert.equal(builds.uses, undefined);
-  assert.equal(builds.with, undefined);
-  assert.equal(builds.env.REPOSITORY, '${{ matrix.repository }}');
-  assert.match(builds.run, /--output "type=registry,name=\$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
+  const platformJob = value.jobs['image-platforms'];
+  assert.equal(platformJob.needs, 'policy');
+  assert.equal(platformJob['runs-on'], '${{ matrix.os }}');
+  assert.deepEqual(platformJob.strategy.matrix.include, nativePlatforms);
+  for (const job of Object.values(value.jobs))
+    assert.ok(!job.steps.some(step => step.uses?.startsWith('docker/setup-qemu-action')), 'every platform is built natively');
+  const builds = platformJob.steps.find(step => step.id === 'build');
+  assert.equal(builds.uses, undefined); assert.equal(builds.with, undefined);
+  assert.match(builds.run, /plan=\$\(node scripts\/release-construction-plan\.mjs "\$GITHUB_SHA" "\$ARCH" "\$BUILDER" "\$RUNNER_TEMP\/image-platforms-work"\)/);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs build-set \. "\$GITHUB_SHA" "\$plan"/);
+  assert.equal(builds.env.BUILDER, '${{ steps.builder.outputs.name }}');
+  assert.match(builds.run, /docker buildx build --builder "\$BUILDER" --file sdk\/runtime\/Dockerfile --platform "linux\/\$ARCH"/);
+  assert.match(builds.run, /--output "type=registry,name=\$repository,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
   assert.ok(!builds.run.includes('--tag'), 'unaccepted publication must not move discovery aliases');
-  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$TARGET"\)/);
-  assert.match(builds.run, /--platform linux\/amd64,linux\/arm64/);
   assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
-  assert.match(builds.run, /digest=\$\(node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/sdk-build\.json"\)/);
-  const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
+  assert.match(builds.run, /node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/image-platforms-work\/\$name-build\.json"/);
+  const table = builds.run.split("<<'SDK_IMAGES'\n")[1].split('SDK_IMAGES\n')[0].trim().split('\n').map(line => line.split(' '));
+  const supplyNames = ['sdk-supply', 'product-images'];
+  const imageRows = supplyNames.flatMap(name => value.jobs[name].strategy.matrix.include);
+  assert.deepEqual(imageRows.map(row => row.name), ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']);
+  assert.deepEqual(table, imageRows.filter(row => row.dockerfile === 'sdk/Dockerfile').map(row => [row.name, row.target]));
+  const native = value.jobs.native;
+  assert(native.steps.some(step => step.with?.name === 'native-construction-${{ matrix.arch }}' && step.with.path === '.native-release'));
+  assert(!native.steps.some(step => step.run?.includes('sdk-image-inputs.mjs build')), 'native acceptance must consume the original archive');
+  const equivalence = native.steps.find(step => step.run?.includes('release-gate-evidence.mjs native'));
+  assert.match(equivalence.run, /sha256sum --check/); assert.equal(equivalence.if, undefined);
+  const rebuild = value.jobs['reproducibility'].steps.find(step => step.env?.DOCKERFILE);
   for (const key of ['created', 'revision', 'source', 'version']) {
     assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
       || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
     assert.ok(rebuild.run.includes(`--label "org.opencontainers.image.${key}=`), `rebuild omits ${key}`);
   }
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.revision=\$GITHUB_SHA"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.source=https:\/\/github\.com\/\$GITHUB_REPOSITORY"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.version=\$VERSION"/);
-  assert.match(rebuild.run, /--label "org\.opencontainers\.image\.created=1970-01-01T00:00:00Z"/);
+  for (const [key, expected] of [['revision', '$GITHUB_SHA'], ['source', 'https://github.com/$GITHUB_REPOSITORY'], ['version', '$VERSION'], ['created', '1970-01-01T00:00:00Z']])
+    assert(rebuild.run.includes(`--label "org.opencontainers.image.${key}=${expected}"`));
+  assert.match(rebuild.run, /for root in root-a root-b; do/);
+  assert.match(rebuild.run, /builder="repro-.*-\$root"/);
+  assert.match(rebuild.run, /docker buildx create --name "\$builder" --driver docker-container/);
+  assert.match(rebuild.run, /--builder "\$builder" --no-cache --provenance=false --sbom=false/);
+  assert(!/--cache-(?:from|to)|--keep-state/.test(rebuild.run));
+  assert(rebuild.run.indexOf('\n  docker buildx rm "$builder"\n') > rebuild.run.indexOf('"${build[@]}"'));
   assert.match(rebuild.run, /release-phases\.mjs reproducibility/);
-  assert.match(rebuild.run, /type=oci,dest=\$root\.oci\.tar,rewrite-timestamp=true,oci-mediatypes=true/);
-  for (const row of value.jobs.reproducibility.strategy.matrix.include) {
-    assert.ok(value.jobs.images.strategy.matrix.include.some(image => image.name === row.image
-      && image.dockerfile === row.dockerfile && image.target === row.target));
-  }
+  assert.match(rebuild.run, /type=oci,tar=false,dest=\$root\.oci,rewrite-timestamp=true,oci-mediatypes=true/);
+  assert(!rebuild.run.includes('.oci.tar'), 'reproducibility retains the complete layouts without duplicate outer archives');
+  for (const row of value.jobs['reproducibility'].strategy.matrix.include)
+    assert(imageRows.some(image => image.name === row.image && image.dockerfile === row.dockerfile && image.target === row.target));
+  assert.equal(value.jobs['reproducibility'].strategy.matrix.include.length, 12);
   const publication = value.jobs['oci-native'].steps;
-  assert.ok(publication.some(step => step.run?.includes('release-phases.mjs prerequisites oci-native')));
-  assert.ok(publication.some(step => step.run?.includes('release-phases.mjs publish-oci')));
-  assert.ok(!publication.some(step => step.run?.includes('imagetools create')));
-  assert.ok(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
+  assert(publication.some(step => step.run?.includes('release-phases.mjs prerequisites oci-native')));
+  assert(publication.some(step => step.run?.includes('release-phases.mjs publish-oci')));
+  assert(!publication.some(step => step.run?.includes('imagetools create')));
+  assert(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
     'default overwrite-enabled release upload must not replace source-addressed bytes');
-  for (const name of ['images', 'oci-native', 'crates', 'release']) {
+  for (const name of ['image-platforms', ...supplyNames, 'oci-native', 'crates', 'release']) {
     const steps = value.jobs[name].steps;
     const policyStep = steps.findIndex(step => step.run?.includes('release-phases.mjs policy'));
     assert.ok(policyStep >= 0, `${name} must check its own publication policy`);
     assert.equal(steps[policyStep].env.PUBLISH_CRATES, '${{ toJSON(inputs.publish-crates) }}');
     const firstCredential = steps.findIndex(step => step.uses?.startsWith('docker/login-action')
       || step.uses?.startsWith('rust-lang/crates-io-auth-action') || step.env?.GH_TOKEN);
-    assert.ok(firstCredential < 0 || policyStep < firstCredential);
+    assert(firstCredential < 0 || policyStep < firstCredential);
   }
-  for (const name of ['images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
+  for (const name of ['image-platforms', ...supplyNames, 'native', 'reproducibility', 'installed-sdk', 'release']) {
     const builder = value.jobs[name].steps.find(step => step.uses?.startsWith('docker/setup-buildx-action'));
     assert.equal(builder.with.version, 'v0.28.0');
     assert.equal(builder.with['driver-opts'], `image=${buildkit}`);
   }
-  assert.ok(!value.jobs.images.steps.some(step => step.uses?.startsWith('actions/attest-sbom')),
-    'complete SPDX must not enter the inline predicate size limit');
-  for (const architecture of ['amd64', 'arm64']) {
-    const step = value.jobs.images.steps.find(step => step.id === `sbom-${architecture}`);
-    assert.equal(step.with['syft-version'], 'v1.51.1');
-    assert.equal(step.with['upload-artifact'], false);
+  for (const name of supplyNames) {
+    const supply = value.jobs[name];
+    assert.deepEqual(supply.needs, ['policy', 'image-platforms']);
+    assert.equal(supply.if, undefined); assert.equal(supply['continue-on-error'], undefined);
+    for (const step of supply.steps) {
+      assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+    }
+    const assembly = supply.steps.find(step => step.id === 'build');
+    assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
+    assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
+    assert(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
+    assert(!supply.steps.some(step => step.uses?.startsWith('actions/attest-sbom')), 'complete SPDX must not enter the inline predicate size limit');
+    for (const architecture of ['amd64', 'arm64']) {
+      const step = supply.steps.find(step => step.id === `sbom-${architecture}`);
+      assert.equal(step.with['syft-version'], 'v1.51.1'); assert.equal(step.with['upload-artifact'], false);
+    }
+    const transport = supply.steps.find(step => step.run?.includes('release-phases.mjs sbom-publish'));
+    assert(transport, 'both platform SBOMs must be signed and re-fetched');
+    assert.match(transport.run, /for architecture in amd64 arm64/); assert.match(transport.run, /oras manifest fetch-config/);
+    assert.match(transport.run, /release-phases\.mjs sbom-record/);
+    assert.match(transport.run, /cmp .*sbom\.spdx\.json.*sbom\.received\.spdx\.json/);
+    const indexVerification = supply.steps.find(step => step.run?.includes('docker pull "$REPOSITORY@$DIGEST"'));
+    assert.match(indexVerification.run, /^set -euo pipefail\n/);
+    assert.match(indexVerification.run, /release-phases\.mjs image-verify "\$REPOSITORY@\$DIGEST" "\$GITHUB_SHA" "\$GITHUB_REF"/);
+    assert.match(indexVerification.run, /standards\/trust\/sigstore-trusted-root-cosign-3\.1\.3\.json/);
+    assert(!indexVerification.run.includes('certificate-identity-regexp'));
+    assert(!indexVerification.run.includes('||'), 'index signature failure must stop publication');
   }
-  const transport = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs sbom-publish'));
-  assert.ok(transport, 'both platform SBOMs must be signed and re-fetched');
-  assert.match(transport.run, /for architecture in amd64 arm64/);
-  assert.match(transport.run, /oras manifest fetch-config/);
-  assert.match(transport.run, /release-phases\.mjs sbom-record/);
-  assert.match(transport.run, /cmp .*sbom\.spdx\.json.*sbom\.received\.spdx\.json/);
-  const indexVerification = value.jobs.images.steps.find(step => step.run?.includes('docker pull "$REPOSITORY@$DIGEST"'));
-  assert.match(indexVerification.run, /^set -euo pipefail\n/);
-  assert.match(indexVerification.run, /release-phases\.mjs image-verify "\$REPOSITORY@\$DIGEST" "\$GITHUB_SHA" "\$GITHUB_REF"/);
-  assert.match(indexVerification.run, /standards\/trust\/sigstore-trusted-root-cosign-3\.1\.3\.json/);
-  assert.ok(!indexVerification.run.includes('certificate-identity-regexp'));
-  assert.ok(!indexVerification.run.includes('||'), 'index signature failure must stop publication');
 }
 
 test('publication phases preserve all gates and decouple OCI/native from optional Cargo', () => {
@@ -249,23 +282,23 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
       = '${{ steps.auth.outputs.token }}'; },
     value => { value.jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
-    value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
+    value => { value.jobs['sdk-supply'].steps = value.jobs['sdk-supply'].steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
       run => run + '\n--tag mutable:unaccepted\n',
       run => run.replace('push-by-digest=true', 'push-by-digest=false'),
-      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET"', 'docker buildx build'),
-      run => run.replace('--platform linux/amd64,linux/arm64', '--platform linux/amd64'),
+      run => run.replace('node scripts/sdk-image-inputs.mjs build-set . "$GITHUB_SHA" "$plan"', 'true'),
+      run => run.replace('--builder "$BUILDER" --file sdk/runtime/Dockerfile --platform "linux/$ARCH"', '--file sdk/runtime/Dockerfile --platform linux/amd64'),
       run => run.replace('--provenance=false', '--provenance=true'),
-    ].map(mutate => value => { const step = value.jobs.images.steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
-    value => { value.jobs.images.steps.push({uses: 'actions/attest-sbom@fixture'}); },
-    value => { value.jobs.images.steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    ].map(mutate => value => { const step = value.jobs['image-platforms'].steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
+    value => { value.jobs['sdk-supply'].steps.push({uses: 'actions/attest-sbom@fixture'}); },
+    value => { value.jobs['sdk-supply'].steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"other-sha" "$GITHUB_REF"'); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"$GITHUB_SHA" "refs/heads/main"'); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('set -euo pipefail\n', ''); },
-    value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
+    value => { const step = value.jobs['sdk-supply'].steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run += '\ntrue || true\n'; },
   ]) {
     const changed = workflow(); mutate(changed);
@@ -401,7 +434,8 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
 test('the release twice-VV shell must fail on either invocation, including first-run-only failure', t => {
   // This checks the actual shell sequence's failure propagation. The helper's
   // fixed just-vv command and real process capture have separate owning tests.
-  const bodies = [workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd];
+  const actual = workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd;
+  const bodies = ['set -euo pipefail\nimage=fixture\n' + actual.slice(actual.indexOf('bash scripts/vv.sh'))];
   const verify = body => {
     for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
       const root = mkdtempSync(join(tmpdir(), 'prismpm-release-session-'));
@@ -893,4 +927,19 @@ test('pinned Buildx pushes a genuine two-platform OCI index by digest without cr
       try { if (registryCreated) docker(['rm', '--force', registry]); } finally { rmSync(directory, {recursive: true, force: true}); }
     }
   }
+});
+
+test('the platform index names exactly the two pushed manifests, canonically', () => {
+  const manifest = architecture => Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json',
+    config: {mediaType: 'application/vnd.oci.image.config.v1+json', digest: sha(architecture), size: architecture.length}, layers: []}));
+  const platforms = ['amd64', 'arm64'].map(architecture => ({architecture, digest: sha(manifest(architecture)), bytes: manifest(architecture)}));
+  const index = platformIndex(platforms);
+  assert.deepEqual(index, platformIndex(platforms.map(row => ({...row}))));
+  assert.deepEqual(JSON.parse(index), {schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json',
+    manifests: platforms.map(({architecture, digest, bytes}) => ({mediaType: 'application/vnd.oci.image.manifest.v1+json',
+      digest, size: bytes.length, platform: {architecture, os: 'linux'}}))});
+  for (const broken of [
+    platforms.slice(0, 1), [...platforms].reverse(), [platforms[0], {...platforms[1], digest: platforms[0].digest}],
+    [platforms[0], {...platforms[1], bytes: Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json'}))}],
+  ]) assert.throws(() => platformIndex(broken));
 });
