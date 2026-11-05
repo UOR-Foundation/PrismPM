@@ -655,7 +655,7 @@ async function contrastProbe(source, style) {
 }
 test('text_v3_workbench text and controls meet 4.5:1 contrast in light and dark', async () => {
   await contrastProbe(template, styleSource);
-  const broken = styleSource.replace('--muted:#4d6272', '--muted:#e9f1f5');
+  const broken = styleSource.replace('--muted-foreground:#6b6660', '--muted-foreground:#eae9e1');
   assert.notEqual(broken, styleSource);
   await assert.rejects(contrastProbe(template, broken), error => error instanceof assert.AssertionError);
 });
