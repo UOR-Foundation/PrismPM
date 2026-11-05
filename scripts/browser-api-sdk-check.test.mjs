@@ -308,8 +308,9 @@ function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image]
 }}}];}
 
 test('current SDK source closure binds helper, compiler, suite and every selected byte',async t=>{
+ for(const path of ['sdk/exporter-seed.mjs','sdk/inventory-metadata.mjs'])assert.ok(sourceRoots.includes(path),'private semantic helper dependency closure: '+path);
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
- for(const path of['scripts/browser-api-sdk-check.mjs','LICENSE-MIT','LICENSE-APACHE','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt',
+ for(const path of['scripts/browser-api-sdk-check.mjs','sdk/exporter-seed.mjs','sdk/inventory-metadata.mjs','LICENSE-MIT','LICENSE-APACHE','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt',
   'tests/browser-effects/source.txt','tests/browser-presentation/source.txt','tests/browser-custody/source.txt',
   'tests/browser-operation-journal/source.txt','tests/support/browser_application.rs',
   'sdk/oracles/package.json','sdk/oracles/package-lock.json',

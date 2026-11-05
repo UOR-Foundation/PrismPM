@@ -371,6 +371,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
    [['scripts/binary-sdk-language12.test.mjs'],3,'additional language-1.2 controls',true],
    [['scripts/sdk-owned-session.test.mjs'],19,'complete additional owned-retirement controls',true],
    [['scripts/semantic-source-bootstrap.test.mjs'],13,'complete separate Rust and Node prerequisite controls',false],
+   [['scripts/semantic-source-runtime.test.mjs'],6,'complete separate private installed-helper controls',false],
   ]){
    const output=suite(files,sequential);assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);
    assert.equal(verifyTap(output.stdout,count),count,message);

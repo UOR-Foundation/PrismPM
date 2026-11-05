@@ -88,6 +88,7 @@ const definitions = [
   ['bootstrap-historical-runtime', 'binary', '0.2.0-runner/1', '/opt/prismpm/bootstrap-0.2.0', 'tree'],
   ['bootstrap-historical-runner', 'binary', '0.2.0-runner/1', 'sdk/bootstrap/runner.mjs'],
   ['conformance-corpus', 'test-corpus', 'prismpm/ids/1', '/opt/prismpm/share/conformance-root', 'tree'],
+  ['conformance-semantic-source', 'binary', '0.4.0', '/opt/prismpm/conformance/bin/prismpm-semantic-source'],
   ['cloudevents-1.0.2-fixtures', 'test-corpus', '1.0.2', 'standards/corpora/cloudevents-1.0.2', 'tree'],
   ['cloudevents-sdk-go-corpus', 'test-corpus', '2.16.2', 'standards/oracles/cloudevents-sdk-go-2.16.2', 'tree'],
   ['cloudevents-sdk-conformance', 'oracle', '2.16.2', '/usr/local/bin/cloudevents-sdk-conformance'],

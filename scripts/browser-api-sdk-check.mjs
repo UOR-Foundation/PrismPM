@@ -34,6 +34,7 @@ export const sourceRoots=Object.freeze([
  'scripts/sdk-command-owner.mjs','scripts/sdk-command-owner.py',
  'scripts/sdk-qualification-trust.mjs',
  'scripts/semantic-source.mjs','crates/conformance/src/bin/prismpm-semantic-source.rs',
+ 'sdk/exporter-seed.mjs','sdk/inventory-metadata.mjs',
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
  'sdk/account-genesis-artifact.mjs','sdk/generate-account-genesis.mjs',
  'sdk/platform-lock.mjs','sdk/metadata-layer.mjs',

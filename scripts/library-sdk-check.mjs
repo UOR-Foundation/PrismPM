@@ -29,6 +29,8 @@ export const sourceRoots=Object.freeze([
  'scripts/sdk-command-owner.mjs','scripts/sdk-command-owner.py',
  'scripts/sdk-qualification-trust.mjs',
  'scripts/semantic-source.mjs','crates/conformance/src/bin/prismpm-semantic-source.rs',
+ 'scripts/semantic-source-runtime-check.mjs','scripts/semantic-source-runtime.test.mjs',
+ 'scripts/semantic-source-installed.md',
  'scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/library-sdk-fixture.mjs','scripts/library-owner-reader-replay.mjs','.github/workflows/release.yml',
  'scripts/installed-exporter-concurrency.mjs','scripts/installed-exporter-concurrency.test.mjs','scripts/portable-oracle-process-owner.py',
  'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
