@@ -117,7 +117,7 @@ Calculator true
 Get the machine ready once. `setup` finds Docker, also inside WSL on Windows, pulls the SDK image the lockfile pins, creates its build cache and adds the MCP server to your agents:
 
 ```bash
-npx prism-code setup
+npx prism-code@latest setup
 ```
 
 Then scaffold, and judge every edit by the cheapest gate that can refuse it:
@@ -135,7 +135,7 @@ npx prism-code verify
 - When `verify --lean` names an axiom policy, run `axioms --write` once. It sets every declaration's `axioms` member from what Lean observes, in one pass. Do not guess axiom lists by hand; the verify reports only the first wrong one per run.
 - `verify` takes minutes: the guest, the vectors and the holo. Run it once the cheaper gates pass.
 - Keep sources LF. `init` writes `* text eol=lf`; LexLean refuses a file with CRLF.
-- Exit 69 means no Docker. Run `npx prism-code setup` and report what its `docker` row says.
+- Exit 69 means no Docker. Run `npx prism-code@latest setup` and report what its `docker` row says.
 
 ## Docs
 

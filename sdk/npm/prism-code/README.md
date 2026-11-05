@@ -19,7 +19,7 @@ Experimental APIs remain experimental; repository `SPEC.md` is normative.
 ## Set up this machine (experimental)
 
 ```sh
-npx prism-code setup --machine-only # Node, Docker (also inside WSL), the SDK image, its cache, LF endings
+npx prism-code@latest setup --machine-only # Node, Docker (also inside WSL), the SDK image, its cache, LF endings
 npx prism-code build --check        # T0: the model is well formed, seconds
 npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute
 npx prism-code axioms --write       # set every declaration's axiom policy in one pass
@@ -34,8 +34,8 @@ that can refuse it. [Rows, tiers and overrides][guide-machine].
 ## Set up your agents (experimental)
 
 ```sh
-npx prism-code setup --dry-run
-npx prism-code setup
+npx prism-code@latest setup --dry-run
+npx prism-code@latest setup
 prism-code open "holo://build?agent=claude-code&q=Go%20to%20uor.foundation%20and%20build%20me%20a%20Prism%20app%20that%20tells%20whether%20a%20year%20is%20a%20leap%20year."
 ```
 
