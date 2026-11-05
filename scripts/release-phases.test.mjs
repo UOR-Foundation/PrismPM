@@ -118,8 +118,23 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs.rehearsal, '${{ needs.policy.outputs.rehearsal }}');
   assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert(value.jobs.policy.steps.some(step => step.run === 'node --test scripts/release-native-contract.test.mjs'));
-  assert.equal(value.jobs['source-vv'].needs, 'policy', 'cheap release contracts must pass before source verification');
+  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'devcontainer-image'],
+    'cheap release contracts and the one construction-cache writer precede source verification');
+  const image = value.jobs['devcontainer-image'];
+  assert.equal(image.needs, 'policy');
+  assert(!('strategy' in image) && !('if' in image), 'exactly one unconditional construction-cache writer');
+  const imageBuild = image.steps.at(-1);
+  assert.equal(imageBuild.uses, 'devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca');
+  assert.equal(imageBuild.with.push, 'never');
+  assert.equal(imageBuild.with.runCmd, 'true', 'the cache writer verifies nothing and accepts nothing');
+  assert.equal(imageBuild.with.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
+  assert.equal(imageBuild.with.cacheTo, '${{ steps.cache.outputs.cache-to }}');
   const sourceSteps = value.jobs['source-vv'].steps;
+  for (const job of [image, value.jobs['source-vv']]) {
+    const cleanup = job.steps.findIndex(step => step.uses === './.github/actions/prepare-devcontainer-runner');
+    const cache = job.steps.findIndex(step => step.uses === './.github/actions/devcontainer-cache');
+    assert(cleanup > 0 && cleanup < cache, 'prepare disk before importing construction layers');
+  }
   assert(sourceSteps.some(step => step.id === 'cache' && step.uses === './.github/actions/devcontainer-cache'));
   const sourceBuild = sourceSteps.find(step => step.with?.runCmd).with;
   assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
