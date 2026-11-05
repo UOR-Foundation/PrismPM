@@ -11,10 +11,20 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 ### Features Added
 - `prism-code mcp`, the local Prism MCP server, and its place in `setup` (#325, `docs/proposals/325-prism-journey.md`, experimental). The server asks six questions (purpose, fields, outcomes, rules, properties, examples) and checks each answer as it arrives: a property the rules break returns the request that breaks it, and an example the rules contradict returns the rule that decides it. The spec (`prism/spec/1`) becomes a LexLean text application written for the user, each property a `linear_arithmetic` theorem in a proofs module that the build does not compile, and acceptance vectors from an evaluator with the model's semantics. `prism_build` proves, corrects axiom sets, builds the holo in the SDK image through the Docker and cache volume `setup` recorded, and replays the vectors through the guest. Proving and building run as jobs that outlast an agent's tool timeout and are not started twice by a second server. `setup` adds `prism` beside `lexlean` in each agent it configures, Claude Desktop included, and the `prism` skill describes the guided path.
 
-## [0.4.1] - 2026-11-05
+## [0.4.2] - 2026-11-05
 
 ### Features Added
 - The machine half of `prism-code setup`, the build tiers and `prism-code axioms` (experimental). `setup` now runs five rows before the agents: `node` (22 or later), `docker` (`docker` or `podman` on the PATH, or on Windows without Docker Desktop the first WSL distribution whose `docker version` answers, recorded in `$PRISM_HOME/config.json` so `check`, `build` and `verify` spawn it and mount the project under `/mnt/<drive>/`), `image` (the SDK image `prismpm.lock` pins or `--image <ref>`, pulled with its progress when missing; `--no-pull`), `cache` (a volume per image digest mounted at `/tmp` in place of the 2 GB in-memory tmpfs, which holds the SDK's 1.2 GB Cargo home on disk instead of in memory: a full verify of a chess model went from 814 s to 284 s on WSL; `PRISM_CODE_NO_CACHE=1` restores the tmpfs) and `endings` (`* text eol=lf` in the project's `.gitattributes`, with CRLF files counted). `--machine-only` and `--agents-only` take one half, `--json` prints `prism/setup-report/1`. `PRISM_DOCKER="<command>"` and `PRISM_DOCKER_MOUNT=wsl|native` override the probe; a delegated verb with no Docker exits 69 with the reason (`docker.missing`). `prism-code verify --lean` runs `lexlean verify` on the project's `lexlean.toml` (at the root or under `[model] source`) in the image without the Docker socket: every theorem and its exact axiom policy, about a minute. `prism-code axioms` compiles the project once and prints the axiom set Lean observes for every definition and theorem beside the declared one (`axioms.probe`, `axioms.project`, `tier.project` codes); `--write` sets each `axioms` member in its canonical place and runs `lexlean fmt`.
+
+### Breaking Changes
+None.
+
+### Bugs Fixed
+- `prism-code doctor` finds Docker the way `check`, `build`, `verify` and `axioms` reach it: the program `setup` recorded in `$PRISM_HOME/config.json` (Docker inside WSL on Windows included), `PRISM_DOCKER`, or a probe of the PATH. It used to look only on the PATH, so on Windows without Docker Desktop it reported "docker is not on the PATH" right after `setup` had configured Docker. Its error hook now covers `axioms` too.
+
+## [0.4.1] - 2026-11-05
+
+### Features Added
 - `setup` installs one skill, `prism`, which ships in the package (`skill/SKILL.md`, the repository's `skills/prism/SKILL.md` byte for byte). It now covers building a new app from one sentence, every command, and the `lexlean` MCP server. It replaces the `prism-sdk` skill 0.4.0 fetched from uor.foundation: setup reads no network for skills, and removes the `prism-sdk` folder it installed, only where its marker is. The skill's generated tables are no longer padded, so it is 16 KB instead of 39 KB.
 
 ### Breaking Changes
