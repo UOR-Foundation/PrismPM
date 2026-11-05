@@ -14,6 +14,74 @@ export function releaseContext(revision, architecture, image, runId, attempt) {
   for (const value of [runId, attempt]) assert.match(value, /^[1-9][0-9]{0,19}$/);
   return {source_revision: revision, architecture, image_reference: image, run_id: runId, run_attempt: attempt};
 }
+function evidenceOwner(owner, architecture) {
+  assert(typeof owner === 'string');
+  const nativeArchive = `native-${architecture === 'amd64' ? 'x86_64' : 'aarch64'}-unknown-linux-gnu`;
+  assert(['source-vv', `sdk-equivalence-${architecture}`, nativeArchive, `full-sdk-vv-sdk-${architecture}`].includes(owner), 'closed evidence owner');
+  return owner === 'source-vv' ? 'gate' : owner === nativeArchive ? `sdk-equivalence-${architecture}`
+    : owner === `full-sdk-vv-sdk-${architecture}` ? `installed-sdk-${architecture}` : owner;
+}
+export function artifactName(owner, context) {
+  releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
+  evidenceOwner(owner, context.architecture);
+  assert(context.image_reference !== null || owner === 'source-vv', 'SDK owner requires an exact image');
+  const image = context.image_reference === null ? 'source' : context.image_reference.split('@sha256:')[1];
+  return ['prismpm-evidence-v1', owner, context.source_revision, context.architecture, image, context.run_id, context.run_attempt].join('--');
+}
+const providerId = value => {
+  assert(Number.isSafeInteger(value) && value > 0, 'exact positive provider ID required');
+  return String(value);
+};
+// The caller obtains these unmodified provider records from this run's artifact
+// and all-attempts job APIs. Names bind the expected context; provider job/run
+// metadata establishes provenance. Download only the returned immutable IDs,
+// then validate the complete original bytes with the owning gate validators.
+export function selectArtifacts(metadata, context, owners) {
+  releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
+  assert.deepEqual(Object.keys(metadata).sort(), ['artifacts', 'jobs']);
+  for (const records of [metadata.artifacts, metadata.jobs]) assert(Array.isArray(records) && records.length <= 10000, 'bounded provider metadata');
+  assert(Array.isArray(owners) && owners.length > 0 && owners.length <= 32);
+  assert.equal(new Set(owners).size, owners.length, 'duplicate selected owner');
+  const selected = owners.map(owner => {
+    const jobName = evidenceOwner(owner, context.architecture);
+    const jobs = metadata.jobs.filter(job => job.name === jobName);
+    assert(jobs.length > 0, `missing owning job ${owner}`);
+    const attempts = new Set();
+    for (const job of jobs) {
+      providerId(job.id); assert.equal(providerId(job.run_id), context.run_id, 'foreign owning run');
+      assert.equal(job.head_sha, context.source_revision, 'foreign owning source');
+      assert(Number.isSafeInteger(job.run_attempt) && job.run_attempt > 0);
+      assert(BigInt(job.run_attempt) <= BigInt(context.run_attempt), 'future owning attempt');
+      assert(!attempts.has(job.run_attempt), 'duplicate owning job attempt'); attempts.add(job.run_attempt);
+    }
+    const latest = jobs.reduce((left, right) => left.run_attempt > right.run_attempt ? left : right);
+    assert.equal(latest.status, 'completed', 'owning job is incomplete');
+    assert.equal(latest.conclusion, 'success', 'owning job did not succeed');
+    const artifacts = metadata.artifacts.filter(artifact => typeof artifact.name === 'string'
+      && artifact.name.startsWith(`prismpm-evidence-v1--${owner}--`));
+    const artifactAttempts = new Set();
+    for (const artifact of artifacts) {
+      providerId(artifact.id);
+      assert.equal(providerId(artifact.workflow_run?.id), context.run_id, 'foreign artifact run');
+      assert.equal(artifact.workflow_run.head_sha, context.source_revision, 'foreign artifact source');
+      const attempt = artifact.name.split('--').at(-1);
+      assert.match(attempt, /^[1-9][0-9]{0,19}$/);
+      assert(BigInt(attempt) <= BigInt(context.run_attempt), 'future artifact attempt');
+      assert.equal(artifact.name, artifactName(owner, {...context, run_attempt: attempt}), 'foreign artifact context');
+      assert(!artifactAttempts.has(attempt), 'duplicate artifact owner attempt'); artifactAttempts.add(attempt);
+    }
+    const matching = artifacts.filter(artifact => artifact.name === artifactName(owner, {...context, run_attempt: String(latest.run_attempt)}));
+    assert.equal(matching.length, 1, `missing immutable artifact ${owner}`);
+    const artifact = matching[0];
+    assert.equal(artifact.expired, false, 'expired selected artifact');
+    assert(Number.isSafeInteger(artifact.size_in_bytes) && artifact.size_in_bytes > 0, 'missing artifact bytes');
+    assert.match(artifact.digest, /^sha256:[0-9a-f]{64}$/, 'immutable artifact digest required');
+    return {owner, id: providerId(artifact.id), name: artifact.name, digest: artifact.digest,
+      run_attempt: String(latest.run_attempt), job_id: providerId(latest.id)};
+  });
+  assert.equal(new Set(selected.map(artifact => artifact.id)).size, selected.length, 'duplicate selected artifact ID');
+  return {schema: 'prismpm/release-artifact-selection/1', ...context, artifacts: selected};
+}
 function directory(path, fresh) {
   path = resolve(path); assert.equal(realpathSync(dirname(path)), dirname(path));
   if (fresh) mkdirSync(path, {mode: 0o755});
@@ -134,7 +202,9 @@ export function validateSourceRun(files, run, context) {
   });
 }
 async function sourceRun(root, output, context, run) {
-  assert([1, 2].includes(run)); assert.equal(context.image_reference, null);
+  assert([1, 2].includes(run));
+  if (context.image_reference !== null) assert.equal(process.env.PRISMPM_TEST_SDK_IMAGE, context.image_reference,
+    'source owner must execute against the selected immutable SDK');
   assert.equal(context.architecture, process.arch === 'x64' ? 'amd64' : process.arch);
   const target = join(root, 'target');
   if (!lstatSync(target, {throwIfNoEntry: false})) mkdirSync(target, {mode: 0o755});
@@ -197,10 +267,25 @@ async function nativeRun(root, output, context, archive) {
   validateNative(files, context);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [operation, rootPath, output, revision, architecture, image, runId, attempt, selection, ...extra] = process.argv.slice(2);
-  assert.equal(extra.length, 0); assert(['source-run', 'native'].includes(operation));
-  const root = realpathSync(rootPath), context = releaseContext(revision, architecture, image === '-' ? null : image, runId, attempt);
-  assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(), revision);
-  if (operation === 'source-run') await sourceRun(root, output, context, Number(selection));
-  else await nativeRun(root, output, context, resolve(selection));
+  if (['artifact-name', 'select-artifacts'].includes(process.argv[2])) {
+    const [operation, ...args] = process.argv.slice(2);
+    if (operation === 'artifact-name') {
+      const [owner, revision, architecture, image, runId, attempt, ...extra] = args;
+      assert.equal(extra.length, 0);
+      process.stdout.write(artifactName(owner, releaseContext(revision, architecture, image === '-' ? null : image, runId, attempt)) + '\n');
+    } else {
+      const [input, output, revision, architecture, image, runId, attempt, ...owners] = args;
+      const selected = selectArtifacts(JSON.parse(readOriginal(input, 16 * 1024 * 1024)),
+        releaseContext(revision, architecture, image === '-' ? null : image, runId, attempt), owners);
+      assert.equal(realpathSync(dirname(resolve(output))), dirname(resolve(output)));
+      writeFileSync(output, canonical(selected) + '\n', {flag: 'wx', mode: 0o444});
+    }
+  } else {
+    const [operation, rootPath, output, revision, architecture, image, runId, attempt, selection, ...extra] = process.argv.slice(2);
+    assert.equal(extra.length, 0); assert(['source-run', 'native'].includes(operation));
+    const root = realpathSync(rootPath), context = releaseContext(revision, architecture, image === '-' ? null : image, runId, attempt);
+    assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(), revision);
+    if (operation === 'source-run') await sourceRun(root, output, context, Number(selection));
+    else await nativeRun(root, output, context, resolve(selection));
+  }
 }
