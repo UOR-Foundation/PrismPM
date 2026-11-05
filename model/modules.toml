@@ -274,7 +274,7 @@ module = "client"
 
 [[owner]]
 path = "sdk/npm/prism-code/bin/prism-doctor.mjs"
-module = "system"
+module = "client"
 
 [[owner]]
 path = "sdk/npm/prism-code/bin/prism-provider-kv.mjs"
