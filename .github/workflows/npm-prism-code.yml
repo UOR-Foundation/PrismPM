@@ -112,7 +112,7 @@ jobs:
         working-directory: sdk/npm/testing
         run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
       - name: Unit tests
-        run: node --test "test/*.test.mjs"
+        run: npm test
       - name: The init templates are their fixtures
         run: node scripts/sync-templates.mjs --check
       - name: create-prism-code
@@ -127,6 +127,7 @@ jobs:
           echo "unpacked size: $size bytes"
           # 1088 KiB is the prism-code package cap. prism-code vendors the @prism-code/verify build (src/vendor/verify.mjs, about 288 KiB, so holo.verify() has no dependency) and adds its own code. Raised from 768 KiB to fit the M3 features in flight (export, middleware, generate, replay, about 115 KiB together), then to 1088 KiB for the authoring front door (#325, about 65 KiB); the next lever is depending on @prism-code/verify once it is published instead of vendoring it.
           test "$size" -le 1114112
+          node scripts/check-package.mjs pack.json
           rm pack.json
       - name: The entry points import cleanly
         shell: bash
