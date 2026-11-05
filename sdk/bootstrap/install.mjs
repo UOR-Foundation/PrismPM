@@ -22,15 +22,21 @@ import {
 
 // curl exit statuses that indicate a transient network condition: resolve (6),
 // connect (7), partial transfer (18), timeout (28), TLS connect (35), empty
-// reply (52), send (55), receive (56). Anything else, including HTTP errors
-// and every integrity failure, is final on the first attempt.
+// reply (52), send (55), receive (56). HTTP failures require a separately
+// captured transient response code; integrity failures are never retried.
 export const TRANSIENT_CURL_STATUS = new Set([6, 7, 18, 28, 35, 52, 55, 56]);
+const TRANSIENT_HTTP_STATUS = new Set(['408', '429', '500', '502', '503', '504']);
+
+function transientDownload(error) {
+  return TRANSIENT_CURL_STATUS.has(error?.status) ||
+    (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.stdout?.toString()));
+}
 
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
 // Run one download at most `attempts` times with doubling backoff, retrying
-// only transient transport failures. Retrying never relaxes verification: the
+// only transient transport or HTTP failures. Retrying never relaxes verification: the
 // caller checks the digest of whatever the successful attempt produced.
 export function withTransientRetry(
   download,
@@ -44,7 +50,7 @@ export function withTransientRetry(
     try {
       return download();
     } catch (error) {
-      if (attempt >= attempts || !TRANSIENT_CURL_STATUS.has(error?.status))
+      if (attempt >= attempts || !transientDownload(error))
         throw error;
       process.stderr.write(
         `download failed with curl status ${error.status}; retry ${attempt}/${attempts - 1}\n`,
@@ -117,6 +123,8 @@ export function installRuntime(destination = RUNTIME, cache = null) {
               '--location',
               '--silent',
               '--show-error',
+              '--write-out',
+              '%{http_code}',
               '--max-time',
               '300',
               '--max-filesize',
@@ -125,7 +133,7 @@ export function installRuntime(destination = RUNTIME, cache = null) {
               '--output',
               archive,
             ],
-            { timeout: 310000, stdio: 'inherit' },
+            { timeout: 310000, stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 1024 },
           ),
         );
       checkedFile(archive, authority.sha256);

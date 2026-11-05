@@ -60,6 +60,8 @@ test('bootstrap acquisition disables ambient curl configuration before any downl
         if (command !== 'curl') return original(command, args, options);
         calls++;
         assert.equal(args[0], '--disable', 'curl must ignore user configuration');
+        assert.equal(args[args.indexOf('--write-out') + 1], '%{http_code}');
+        assert.deepEqual(options.stdio, ['ignore', 'pipe', 'inherit']);
         const result = cp.spawnSync(command, [args[0], '--version'], { encoding: 'utf8' });
         assert.equal(result.status, 0);
         assert(!result.stderr.includes('unregistered-prismpm-test-option'));
@@ -461,4 +463,63 @@ test('downloads retry only transient curl statuses, with bounded doubling backof
     assert.equal(calls, 1, `status ${status} must not be retried`);
   }
   assert.throws(() => withTransientRetry(() => 'x', { attempts: 0 }), /positive integer/);
+});
+
+test('transient HTTP failures share the bounded retry budget; permanent and malformed responses fail closed', () => {
+  for (const code of ['408', '429', '500', '502', '503', '504']) {
+    let calls = 0;
+    const waits = [];
+    assert.equal(withTransientRetry(() => {
+      if (++calls < 3) throw Object.assign(new Error('HTTP failure'), {
+        status: 22, stdout: Buffer.from(code),
+      });
+      return 'downloaded';
+    }, { delay: 10, sleep: ms => waits.push(ms) }), 'downloaded');
+    assert.equal(calls, 3);
+    assert.deepEqual(waits, [10, 20]);
+  }
+  for (const code of ['400', '401', '403', '404', '410', '501', '200', '000', '', '504\n', 'x504']) {
+    let calls = 0;
+    assert.throws(() => withTransientRetry(() => {
+      calls++;
+      throw Object.assign(new Error('permanent'), { status: 22, stdout: Buffer.from(code) });
+    }, { sleep: () => assert.fail('permanent failure must not wait') }), /permanent/);
+    assert.equal(calls, 1);
+  }
+  let calls = 0;
+  assert.throws(() => withTransientRetry(() => {
+    calls++;
+    throw Object.assign(new Error('unavailable'), { status: 22, stdout: Buffer.from('504') });
+  }, { attempts: 4, sleep: () => {} }), /unavailable/);
+  assert.equal(calls, 4);
+});
+
+test('installation retries a 504 but never retries or extracts a corrupt successful download', () => {
+  const work = mkdtempSync(join(tmpdir(), 'bootstrap-http-retry.'));
+  try {
+    const module = new URL('./install.mjs', import.meta.url).href;
+    execFileSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import cp from 'node:child_process';
+      import { writeFileSync } from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      import { installRuntime } from ${JSON.stringify(module)};
+      let calls = 0;
+      cp.execFileSync = (command, args, options) => {
+        assert.equal(command, 'curl', 'unverified bytes must never be extracted');
+        assert.equal(args[args.indexOf('--write-out') + 1], '%{http_code}');
+        assert.deepEqual(options.stdio, ['ignore', 'pipe', 'inherit']);
+        if (++calls === 1) throw Object.assign(new Error('HTTP 504'), {
+          status: 22, stdout: Buffer.from('504'),
+        });
+        writeFileSync(args[args.indexOf('--output') + 1], 'invalid package');
+        return Buffer.from('200');
+      };
+      syncBuiltinESMExports();
+      assert.throws(() => installRuntime(${JSON.stringify(join(work, 'runtime'))}), /digest|checksum|sha256/i);
+      assert.equal(calls, 2);
+    `], { timeout: 15000, stdio: 'pipe' });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });
