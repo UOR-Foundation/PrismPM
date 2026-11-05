@@ -1,7 +1,8 @@
 spec = "prismpm/emitter-inputs/1"
-digest = "c7ad5d8cc34f8820373375d9475c15179ce200187e382eea65ed43856591d363"
+digest = "37ac7856db8bf3597e12adec89d61b31913039a0d4e911a1c13c043287828271"
 inputs = [
     "crates/prismpm/src/application_build.rs",
+    "crates/prismpm/src/brand.rs",
     "crates/prismpm/src/holo/application.rs",
     "crates/prismpm/src/holo/application/workbench.rs",
     "crates/prismpm/src/holo/browser_application.rs",
@@ -31,5 +32,14 @@ inputs = [
     "schemas/model-document-v5.schema.json",
     "schemas/model-document-v6.schema.json",
     "schemas/model-document.schema.json",
-    "schemas/workbench-view-projection.schema.json"
+    "schemas/workbench-view-projection.schema.json",
+    "vendor/hologram-brand/fonts/Archivo-SemiBold.woff2",
+    "vendor/hologram-brand/fonts/Geist-Medium.woff2",
+    "vendor/hologram-brand/fonts/Geist-Regular.woff2",
+    "vendor/hologram-brand/fonts/Geist-SemiBold.woff2",
+    "vendor/hologram-brand/fonts/GeistMono-Regular.woff2",
+    "vendor/hologram-brand/fonts/OFL-Archivo.txt",
+    "vendor/hologram-brand/fonts/OFL-Geist.txt",
+    "vendor/hologram-brand/icon-512.png",
+    "vendor/hologram-brand/icon.svg"
 ]

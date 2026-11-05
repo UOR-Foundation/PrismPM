@@ -93,8 +93,8 @@ assert_eq!(calculate(Operation::Add, 20, 22), Ok(42));
 The public reference application is
 [`UOR-Foundation/calculator-example`](https://github.com/UOR-Foundation/calculator-example).
 Its publication contract requires the exact content-addressed model, repeated
-PrismPM acceptance, the published registry crate and only the generated six-file
-browser closure. Registry publication remains deferred as recorded in release status.
+PrismPM acceptance, the published registry crate and only the generated browser
+closure (six files before closure v2, sixteen since; see SPEC §1.2.1). Registry publication remains deferred as recorded in release status.
 
 ## Verification scope
 

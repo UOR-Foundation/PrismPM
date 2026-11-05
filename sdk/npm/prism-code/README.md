@@ -6,7 +6,8 @@ A Prism application is modeled in LexLean, proved in Lean 4, and built by
 [PrismPM](https://github.com/UOR-Foundation/PrismPM) into two artifacts: a
 Hologram `.holo` archive (the Core-Wasm guest, the model document, the
 portable view, the proof and build provenance, all content-addressed) and a
-six-file browser closure. This package opens both, verifies their identities,
+browser closure (closure v1, six files, or closure v2, which adds the Hologram
+fonts, icons and a web app manifest). This package opens both, verifies their identities,
 runs the guest, and replays the modeled acceptance vectors. It does not
 compile, prove or produce artifacts; that stays in the SDK image, which the
 command line runs for you.
@@ -18,6 +19,54 @@ packages, which need Node 22.22.2 or newer; nothing else loads them.
 ```
 npm install prism-code
 ```
+
+## Build a verified app with your agent (experimental)
+
+```
+npx prism-code setup
+```
+
+`setup` checks Node and Docker (Docker Engine inside WSL works on Windows),
+downloads the SDK image when it is missing, creates the app folder `prism/`,
+pins it to the image, and connects the coding agents it finds: Claude Code,
+Codex, Gemini CLI, Cursor, VS Code with Copilot, and OpenCode. Each agent
+gets the Prism MCP server, `prism-code mcp`, in its own MCP configuration and a
+one-line launcher. Any other agent reads `.agents/skills/prism/SKILL.md` and a
+block in `AGENTS.md`. Running `setup` again changes nothing that is already
+right. It asks before it downloads the image or changes `~/.codex/config.toml`;
+`--yes` answers yes.
+
+Then open the agent in the same folder and type `/prism` (`$prism` in Codex).
+Prism greets you and asks six questions, one at a time:
+
+| Step | Asks | Becomes |
+| --- | --- | --- |
+| purpose | what the app decides, in one sentence | the app's name and description |
+| fields | what goes into one request | the request: space-separated fields, each a number or a choice |
+| outcomes | what the answer can be | the answers, plus `invalid` for a malformed request |
+| rules | `when ... then ...`, in order, and `otherwise` | the decision the guest runs |
+| properties | what must `never` or `always` happen | one theorem each, proved by Lean |
+| examples | real requests and their answers | acceptance vectors |
+
+Each answer is checked as it arrives. A property the rules break comes back
+with the request that breaks it, and an example the rules contradict comes back
+with the rule that decides it. Then `prism_build` writes the LexLean model,
+asks Lean to prove every property, builds the holo and replays its acceptance
+vectors through the guest. A wrong axiom set is corrected and proved again
+without asking. Proving takes a few minutes; the first build takes ten or more.
+
+`prism/` holds `spec.json` (the spec as data), `SPEC.md` (the spec in prose,
+with what is proved), `src/<App>.lex.tex` (the model the guest is built from),
+`src/<App>Proofs.lex.tex` (the theorems, about the model's own definitions) and
+the LexLean and PrismPM project files. The properties are proved; the parsing
+of requests and the examples are tested.
+
+The server's tools are `prism_start`, `prism_answer`, `prism_spec` (read or
+replace the whole spec as `prism/spec/1` JSON), `prism_prove`, `prism_build`,
+`prism_try` (answer one request) and `prism_status`. It also offers the prompt
+`prism` and the resources `prism://spec`, `prism://model` and `prism://status`.
+`PRISM_DOCKER` names a Docker command line to use, such as
+`wsl.exe -d Ubuntu -- docker`.
 
 ## Three calls
 
@@ -816,16 +865,17 @@ prism-code export ghcr.io/acme/calculator@sha256:<digest> --out site
 prism-code export ghcr.io/acme/calculator@sha256:<digest> --tar site.tar
 ```
 
-`export` writes the six-file browser export of a release that `prismpm build`
+`export` writes the browser export of a release that `prismpm build`
 or `prismpm pull` left verified in `.prism/oci`: `index.html`, `app.js`,
 `app.css`, the wasm-bindgen glue `<stem>.js`, the adapter `<stem>_bg.wasm` and
-`provenance.json`. `--tar` writes the same six files as one deterministic ustar
+`provenance.json`, plus, for closure v2, the brand fonts and their licences,
+`icon.svg`, `icon-512.png` and `manifest.webmanifest`. `--tar` writes the same files as one deterministic ustar
 archive instead (name order, mode 0644, owner 0, mtime 0, no directory entry).
 The holo's attestation bundles, when it carries any, go byte for byte to
 `<name>.attestations.jsonl` beside the output, as buildx writes attestation
 files beside its `local` and `tar` output. `--out` defaults to `export`; both
 are new names in the project (`--project`, default the current directory), and
-nothing that exists is replaced. `--json` prints the `prismpm/browser-export/1`
+nothing that exists is replaced. `--json` prints the `prismpm/browser-export/2`
 receipt `prismpm export-browser` prints.
 
 The bytes come from the release, not from a `.holo` (a holo carries the core

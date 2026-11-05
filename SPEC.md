@@ -65,6 +65,30 @@ The immutable LexLean and `lean4-prod` revisions and source/crate hashes are in
 `model/dependencies.toml`; adjacent repositories and mutable references are not
 dependencies.
 
+#### 1.2.1 Browser closure v2
+
+Every generated browser page (the Text/1 page and the Text/3 workbench) is
+closure v2: the six-file page `index.html`, `app.css`, `app.js`, `<stem>.js`,
+`<stem>_bg.wasm` and `provenance.json`, plus ten brand files beside them:
+`Geist-Regular.woff2`, `Geist-Medium.woff2`, `Geist-SemiBold.woff2`,
+`GeistMono-Regular.woff2`, `Archivo-SemiBold.woff2`, `OFL-Geist.txt`,
+`OFL-Archivo.txt`, `icon.svg`, `icon-512.png` and `manifest.webmanifest`. All
+sixteen are flat and same-origin. The fonts, licences and icons are the
+`hologram-brand` vendored dependency (`vendor/hologram-brand`, pinned by tree
+manifest in `model/dependencies.toml`); `crates/prismpm/src/brand.rs` owns
+the names, `@font-face` rules, head links and the per-application web app
+manifest, whose bytes are a pure function of the view title. No remote font,
+image or script is loaded. The HOLOVIEW bundle carries the same files.
+
+`provenance.json` is `prismpm/browser-provenance/2`: every v1 field plus
+`files`, the SHA-256 of every other closure file. `export-browser` and
+`verify-browser-publication` return `prismpm/browser-export/2` and
+`prismpm/browser-publication-integrity/2`, whose file lists hold exactly
+closure v1 (six files, from releases built before closure v2) or exactly
+closure v2 (sixteen). Release verification accepts either and, for v2, checks
+every `files` digest. The `/1` contracts remain registered for existing
+receipts.
+
 ### 1.3 Compiler pipeline
 
 PrismPM operates through a verification-oriented multi-stage pipeline:
@@ -262,7 +286,7 @@ response without assuming that it equals an empty-request response.
 
 The closed `Foundation.View.Text.V3.Model.TextApplication` (text/3, below) also
 declares one optional field, `workbench : Option WorkbenchView` (HO-19). `none`
-keeps the Text/1 six-file page and the generated command line exactly as without
+keeps the Text/1 page (closure v2, below) and the generated command line exactly as without
 the field. `some` replaces only the browser and Hologram page with the generated
 workbench; the `view`, `cli`, byte-guest, package, empty-capability, layer and
 independent input-allocation/output-response resource contracts are unchanged,
@@ -327,7 +351,7 @@ Comfortable/Compact, Balanced/Wide and System/Light/Dark are finite token choice
 finite automated/keyboard/layout checks are not a universal accessibility claim.
 
 Browser computation runs in a module Worker loaded from the same `app.js` URL,
-without blob URLs or a seventh asset. Its required source-owned
+without blob URLs or any asset beyond the closure v2 files. Its required source-owned
 `Execution.wasmCachePolicy` has the single closed `WasmCachePolicy.NoStore`
 constructor, projected as `execution.wasm_cache_policy: "no-store"`. The worker
 explicitly fetches its same-origin generated Wasm with that HTTP cache policy,
@@ -987,7 +1011,7 @@ coverage/lexicon-closure artifact below `lexlean/build/`, and
 `manifest.json`. For an application, the tree additionally contains named-root LCNF/coverage, the
 generated Cargo package and `.crate`, Core-Wasm package and guest, evaluated
 View and projection manifest, Hologram assets/bundle, browser adapter/lock/
-Wasm/six-file production closure, source manifest, capability/manifest/
+Wasm/closure v2 production closure, source manifest, capability/manifest/
 directory/provenance values, `ApplicationName.holo`, identities, and build
 manifest. Each file row fixes its relative path, kind, byte length, and
 SHA-256; undeclared extras and symlinks fail reuse.
@@ -1568,7 +1592,7 @@ Presence of ownership text does not authenticate an owner.
 application digest and exact ordered artifact path/size/SHA-256 rows.
 Rows cover all generated build artifacts except the containing system,
 system projections and the self-identifying build manifest. The generated
-Holo/1 application and exact supported six-file browser projection are
+Holo/1 application and exact supported closure v1 or v2 browser projection are
 required, and a declared `cli` component additionally requires both static
 programs and `cli/sbom.spdx.json` in the closure; the SPDX projection then
 describes both packages. This profile accepts only the existing Legacy and Text application
@@ -3426,7 +3450,7 @@ integrity only. Independent producer authorization, target policy, readiness,
 publication and deployed-product acceptance remain mandatory and separate.
 
 `verify-browser-publication NAME@sha256:DIGEST --url HTTPS_BASE` compares the
-source-free, reverified six-file browser closure and the base URL's index bytes
+source-free, reverified closure v1 or v2 browser files and the base URL's index bytes
 against HTTPS responses. It accepts no caller receipt or local exported tree as
 authority. The base is an explicitly selected target, not proof of target
 authorization: lowercase DNS labels, HTTPS default port, and a slash-terminated

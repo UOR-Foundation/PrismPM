@@ -332,9 +332,9 @@ export interface ExportFile {
   digest: string;
   size: number;
 }
-/** `prismpm/browser-export/1`, the receipt `prismpm export-browser` prints. Integrity only. */
+/** `prismpm/browser-export/2`, the receipt `prismpm export-browser` prints, over closure v1 or v2. Integrity only. */
 export interface BrowserExportReceipt {
-  schema: 'prismpm/browser-export/1';
+  schema: 'prismpm/browser-export/2';
   reference: string;
   release_digest: string;
   model_digest: string;
@@ -345,7 +345,7 @@ export interface BrowserExportReceipt {
   tree_digest: string;
 }
 /**
- * Experimental. Write the six-file browser export of a verified release in `<project>/.prism/oci`
+ * Experimental. Write the browser export (closure v1 or v2) of a verified release in `<project>/.prism/oci`
  * to a new directory (`out`) or a new `<name>.tar` (`tar`) in the project, and the holo's attestation
  * bundles to `<name>.attestations.jsonl` beside it. Throws `ExportMismatchError` when a file's bytes
  * differ from its build manifest row or release layer, and `PrismCodeError` (`export.*`) otherwise.

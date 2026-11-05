@@ -1,8 +1,11 @@
 /**
- * The six-file browser closure that `prismpm export-browser` writes
- * (`crates/prismpm/src/browser_build.rs`): `index.html`, `app.js`, `app.css`,
- * the wasm-bindgen glue `<stem>.js`, the adapter `<stem>_bg.wasm` and
- * `provenance.json` (`prismpm/browser-provenance/1`), which is the anchor.
+ * The browser closure that `prismpm export-browser` writes. Closure v1 is the
+ * six-file page: `index.html`, `app.js`, `app.css`, the wasm-bindgen glue
+ * `<stem>.js`, the adapter `<stem>_bg.wasm` and `provenance.json`
+ * (`prismpm/browser-provenance/1`), which is the anchor. Closure v2 adds the
+ * Hologram brand files and a web app manifest beside them
+ * (`crates/prismpm/src/brand.rs`), and its `prismpm/browser-provenance/2`
+ * names the digest of every other file.
  *
  * The closure is loaded from a map of file name to bytes plus a way to import
  * the glue module, so the same code serves Node (files on disk) and browsers
@@ -12,7 +15,18 @@ import { fail } from './errors.mjs';
 import { sha256Hex } from './sha256.mjs';
 
 export const PROVENANCE_SCHEMA = 'prismpm/browser-provenance/1';
+export const PROVENANCE_SCHEMA_V2 = 'prismpm/browser-provenance/2';
 export const FIXED_FILES = ['index.html', 'app.js', 'app.css', 'provenance.json'];
+/** Closure v2's brand files and manifest, flat beside index.html. */
+export const BRAND_FILES = Object.freeze(['Archivo-SemiBold.woff2', 'Geist-Medium.woff2', 'Geist-Regular.woff2',
+  'Geist-SemiBold.woff2', 'GeistMono-Regular.woff2', 'OFL-Archivo.txt', 'OFL-Geist.txt', 'icon-512.png', 'icon.svg',
+  'manifest.webmanifest']);
+
+/** The exact closure v1 and v2 file names for a stem, each sorted. */
+export function closureProfiles(stem) {
+  const v1 = [...FIXED_FILES, `${stem}.js`, `${stem}_bg.wasm`].sort();
+  return { 1: v1, 2: [...v1, ...BRAND_FILES].sort() };
+}
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const encoder = new TextEncoder();
 
@@ -41,8 +55,8 @@ export async function verifyClosure(files) {
   } catch (error) {
     fail('closure.provenance', `provenance.json is not JSON: ${error.message}`);
   }
-  if (provenance.schema !== PROVENANCE_SCHEMA) {
-    fail('closure.provenance', `provenance schema is ${provenance.schema}, expected ${PROVENANCE_SCHEMA}`);
+  if (provenance.schema !== PROVENANCE_SCHEMA && provenance.schema !== PROVENANCE_SCHEMA_V2) {
+    fail('closure.provenance', `provenance schema is ${provenance.schema}, expected ${PROVENANCE_SCHEMA} or ${PROVENANCE_SCHEMA_V2}`);
   }
   const checks = {
     adapter_wasm_sha256: await sha256Hex(files.get(wasmName)),
@@ -56,6 +70,17 @@ export async function verifyClosure(files) {
   const unverifiable = ['model_id', 'view_model_id', 'generated_core_sha256', 'adapter_lock_sha256'].filter(
     (f) => typeof provenance[f] === 'string',
   );
+  if (provenance.schema === PROVENANCE_SCHEMA_V2) {
+    // v2 names every other file's digest. A present file must be named and match;
+    // a named file that was not supplied (a font the browser fetches) stays unverified.
+    const listed = provenance.files && typeof provenance.files === 'object' ? provenance.files : {};
+    for (const name of names) {
+      if (name === 'provenance.json') continue;
+      const actual = await sha256Hex(files.get(name));
+      if (listed[name] !== actual) mismatches.push({ field: `files.${name}`, declared: listed[name], actual });
+    }
+    for (const name of Object.keys(listed)) if (!files.has(name)) unverifiable.push(`files.${name}`);
+  }
   return { stem, glueName, wasmName, provenance, verification: { verified: mismatches.length === 0, mismatches, unverifiable } };
 }
 

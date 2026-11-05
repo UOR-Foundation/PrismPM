@@ -60,11 +60,12 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 31] = [
+    const INPUTS: [(&str, &[u8]); 41] = [
         (
             "crates/prismpm/src/application_build.rs",
             include_bytes!("../application_build.rs"),
         ),
+        ("crates/prismpm/src/brand.rs", include_bytes!("../brand.rs")),
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
@@ -181,6 +182,42 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "schemas/workbench-view-projection.schema.json",
             include_bytes!("../../schemas/workbench-view-projection.schema.json"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/Archivo-SemiBold.woff2",
+            include_bytes!("../../vendor/hologram-brand/fonts/Archivo-SemiBold.woff2"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/Geist-Medium.woff2",
+            include_bytes!("../../vendor/hologram-brand/fonts/Geist-Medium.woff2"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/Geist-Regular.woff2",
+            include_bytes!("../../vendor/hologram-brand/fonts/Geist-Regular.woff2"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/Geist-SemiBold.woff2",
+            include_bytes!("../../vendor/hologram-brand/fonts/Geist-SemiBold.woff2"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/GeistMono-Regular.woff2",
+            include_bytes!("../../vendor/hologram-brand/fonts/GeistMono-Regular.woff2"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/OFL-Archivo.txt",
+            include_bytes!("../../vendor/hologram-brand/fonts/OFL-Archivo.txt"),
+        ),
+        (
+            "vendor/hologram-brand/fonts/OFL-Geist.txt",
+            include_bytes!("../../vendor/hologram-brand/fonts/OFL-Geist.txt"),
+        ),
+        (
+            "vendor/hologram-brand/icon-512.png",
+            include_bytes!("../../vendor/hologram-brand/icon-512.png"),
+        ),
+        (
+            "vendor/hologram-brand/icon.svg",
+            include_bytes!("../../vendor/hologram-brand/icon.svg"),
         ),
     ];
     let mut hasher = Sha256::new();

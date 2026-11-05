@@ -66,3 +66,15 @@ id = "uor-hologram"
 revision = "2bda6a9a9476872dade705bd61ece4209607f6da"
 source = "git"
 role = "validation-oracle"
+
+[[dependency]]
+id = "hologram-brand"
+revision = "f14a9d8cfe6bce14fc8a6ff09ac0f99b01e300be"
+source = "vendored"
+role = "brand-assets"
+
+[[dependency.artifact]]
+kind = "tree-manifest"
+path = "vendor/hologram-brand/MANIFEST.sha256"
+tree_root = "vendor/hologram-brand"
+sha256 = "f623cb91f16d7bed0b940c59f8fd708cde6d11d0d9294b370778f54409ef4c35"

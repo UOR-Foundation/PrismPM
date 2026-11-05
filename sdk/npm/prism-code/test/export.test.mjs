@@ -107,7 +107,7 @@ test('the export is the six build-manifest files, byte for byte, with the holo a
   }
   const files = Object.entries(browser).map(([p, bytes]) => ({ digest: digestOf(bytes), path: p, size: bytes.length }));
   assert.deepEqual(receipt, {
-    schema: 'prismpm/browser-export/1',
+    schema: 'prismpm/browser-export/2',
     reference: r.reference,
     release_digest: r.releaseDigest,
     model_digest: digestOf(r.build['model.prism.json']),

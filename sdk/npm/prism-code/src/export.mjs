@@ -1,5 +1,5 @@
 /**
- * `prism-code export` (issue #290): write the six-file browser export of a
+ * `prism-code export` (issue #290): write the browser export (closure v1 or v2) of a
  * locally verified release, or one tarball of it, with the holo's attestation
  * bundles beside it, the way buildx's `local` and `tar` exporters write
  * attestation files beside their output.
@@ -26,11 +26,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, writeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ExportMismatchError, PrismCodeError } from './errors.mjs';
-import { FIXED_FILES } from './closure.mjs';
+import { closureProfiles } from './closure.mjs';
 import { canonicalJson } from './archive.mjs';
 import { attestationSection, readAttestations } from './attestations.mjs';
 
-export const EXPORT_SCHEMA = 'prismpm/browser-export/1';
+export const EXPORT_SCHEMA = 'prismpm/browser-export/2';
 export const BUILD_MANIFEST_SCHEMA = 'prismpm/build-manifest/1';
 export const RELEASE_ARTIFACT_TYPE = 'application/vnd.prismpm.product.release.v1+json';
 export const BROWSER_PREFIX = 'view/browser/';
@@ -158,7 +158,7 @@ function rowChecked(release, rows, title, limit = FILE_LIMIT) {
 }
 
 /**
- * The browser closure of an opened release: the six `view/browser/` files of
+ * The browser closure of an opened release: the exact closure v1 or v2 `view/browser/` files of
  * its build manifest, each read from its layer and checked against its row.
  * Returns the build manifest (bytes, document, rows) and the files sorted by
  * name, each `{ path, title, bytes, digest, size }`.
@@ -177,9 +177,10 @@ export function browserClosure(release) {
     .sort();
   const wasm = names.filter((name) => name.endsWith('_bg.wasm'));
   const stem = wasm.length === 1 ? wasm[0].slice(0, -'_bg.wasm'.length) : null;
-  const profile = stem === null ? [] : [...FIXED_FILES, `${stem}.js`, `${stem}_bg.wasm`].sort();
-  if (stem === null || canonicalJson(names) !== canonicalJson(profile)) {
-    throw refuse('release', `build manifest browser rows are not the exact six-file profile: ${names.join(', ') || 'none'}`);
+  const profiles = stem === null ? {} : closureProfiles(stem);
+  const version = Object.keys(profiles).find((key) => canonicalJson(names) === canonicalJson(profiles[key]));
+  if (stem === null || version === undefined) {
+    throw refuse('release', `build manifest browser rows are neither the six-file nor the closure v2 profile: ${names.join(', ') || 'none'}`);
   }
   const files = names.map((name) => {
     if (!FILE_NAME.test(name)) throw refuse('unsafe', `browser file name ${name} is not portable`);
@@ -199,7 +200,7 @@ function lstatOrNull(path) {
 }
 
 /**
- * Check an exported directory against a browser closure: exactly the six
+ * Check an exported directory against a browser closure: exactly its closure v1 or v2
  * names, each a regular file whose bytes are the closure's. Returns the
  * `[{digest, path, size}]` rows of the directory.
  */
@@ -239,7 +240,7 @@ function written(file, bytes) {
 
 // ustar, deterministic: one regular file per entry in name order, mode 0644,
 // owner 0:0 with no names, mtime 0, then two zero blocks. No directory entry,
-// so the archive unpacks to the six files at its root, as a Pages artifact.
+// so the archive unpacks to the closure files at its root, as a Pages artifact.
 function octal(value, width) {
   return `${value.toString(8).padStart(width - 1, '0')}\0`;
 }

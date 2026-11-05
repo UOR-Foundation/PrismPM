@@ -318,9 +318,9 @@ export async function receive(){
   const pinned=reference+'@'+row.result.release_digest;
   await cli(receiver,['inspect',pinned],{});
   const output='browser-'+row.release.toLowerCase();
-  const result=await cli(receiver,['export-browser',pinned,'--output',output],{schema:'prismpm/browser-export/1'});
+  const result=await cli(receiver,['export-browser',pinned,'--output',output],{schema:'prismpm/browser-export/2'});
   assert.equal(result.release_digest,row.result.release_digest);assert.equal(result.model_digest,row.result.model_digest);assert.equal(result.build_digest,row.result.build_digest);
-  const files=tree(join(receiver,output)).filter(item=>item.kind==='file');assert.equal(files.length,6,'exact six-file browser closure');
+  const files=tree(join(receiver,output)).filter(item=>item.kind==='file');assert.equal(files.length,16,'exact closure v2 browser export');
   equal(files.map(item=>item.path),result.files.map(item=>item.path));assert.equal(sha(canonical(result.files)),result.tree_digest);
   for(const item of result.files){const actual=files.find(candidate=>candidate.path===item.path);assert(actual);assert.equal(actual.size,item.size);assert.equal('sha256:'+actual.sha256,item.digest);}
   const proof=referrer(receiver,row.result.release_digest,proofType);
@@ -332,7 +332,7 @@ export async function receive(){
   for(const [name,change] of [['missing-proof',()=>rmSync(path)],['changed-proof',()=>writeFileSync(path,Buffer.concat([original,Buffer.from([0])]))]]){
    change();try{await cli(receiver,['export-browser',pinned,'--output',output+'-'+name],{code:'PP6101',exit:5});assert(!existsSync(join(receiver,output+'-'+name)));}finally{writeFileSync(path,original);}
   }
-  const restored=await cli(receiver,['export-browser',pinned,'--output',output+'-restored'],{schema:'prismpm/browser-export/1'});assert.equal(restored.tree_digest,result.tree_digest);
+  const restored=await cli(receiver,['export-browser',pinned,'--output',output+'-restored'],{schema:'prismpm/browser-export/2'});assert.equal(restored.tree_digest,result.tree_digest);
   outputs.push({release:row.release,release_digest:row.result.release_digest,model_digest:result.model_digest,build_digest:result.build_digest,tree_digest:result.tree_digest,files:result.files,checks:['source-free-proof-replay','exact-browser-export','missing-proof-refused','changed-proof-refused','restored-export']});
  }
  return{schema:'prismpm/installed-product-cli-check/1',scope:'installed-cli-product-build-and-source-free-integrity',status:'passed',sdk_image:build.sdk_image,releases:outputs,unclaimed};
@@ -348,7 +348,7 @@ export function verifyResult(value,image){
   keys(row,['release','release_digest','model_digest','build_digest','tree_digest','files','checks']);
   for(const name of ['release_digest','model_digest','build_digest','tree_digest'])assert.match(row[name],digestPattern);
   equal(row.checks,['source-free-proof-replay','exact-browser-export','missing-proof-refused','changed-proof-refused','restored-export']);
-  equal(row.files.map(file=>file.path),['app.css','app.js','index.html','prism_calculator.js','prism_calculator_bg.wasm','provenance.json']);
+  equal(row.files.map(file=>file.path),['Archivo-SemiBold.woff2','Geist-Medium.woff2','Geist-Regular.woff2','Geist-SemiBold.woff2','GeistMono-Regular.woff2','OFL-Archivo.txt','OFL-Geist.txt','app.css','app.js','icon-512.png','icon.svg','index.html','manifest.webmanifest','prism_calculator.js','prism_calculator_bg.wasm','provenance.json']);
   for(const file of row.files){keys(file,['path','digest','size']);assert.match(file.digest,digestPattern);assert(Number.isSafeInteger(file.size)&&file.size>=0);}
   assert.equal(sha(canonical(row.files)),row.tree_digest);
  }
