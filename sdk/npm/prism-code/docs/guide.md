@@ -67,7 +67,13 @@ The handler is a copy of five files of this package in `$PRISM_HOME/handler` (de
 | macOS | `~/Applications/Prism Open.app`, an AppleScript applet from `osacompile` with a `holo` URL type, signed again with `codesign --sign -` and registered with `lsregister` |
 | Linux | `~/.local/share/applications/prism-open.desktop` with `MimeType=x-scheme-handler/holo`, made the default with `xdg-mime` |
 
-`holo://` may already belong to another program, such as the Hologram app. Taking it over would send that program's links to a handler that opens only `holo://build`. So setup checks first, on Windows with `HKCR\holo\shell\open\command` and on Linux with `xdg-mime query default x-scheme-handler/holo`. When `holo://` already opens something else, setup prints `left alone` with the program it found, and registers nothing. `prism-code open <link>` still works by hand. macOS has no simple query for this. When two apps claim `holo`, LaunchServices picks one, so check with `open "holo://build?agent=claude-code&q=hi"`.
+`holo://` may already belong to another program, such as the Hologram app. Taking it over would send that program's links to a handler that opens only `holo://build`. So setup checks first, on Windows with `HKCR\holo\shell\open\command` and on Linux with `xdg-mime query default x-scheme-handler/holo`. When `holo://` already opens something else, setup prints `left alone` with the program it found, and registers nothing. It still installs the handler, and writes where it is to `$PRISM_HOME/handler.json`:
+
+```json
+{ "schema": "prism/handler/1", "scheme": "holo", "host": "build", "node": "<the node that ran setup>", "entry": "<$PRISM_HOME>/handler/handler.mjs" }
+```
+
+An app that owns `holo://`, such as the Hologram app, forwards a `holo://build` link by running `node` with two arguments, `entry` and the link, without a shell. The handler checks the link itself. `prism-code open <link>` does the same by hand. macOS has no simple query for this. When two apps claim `holo`, LaunchServices picks one, so check with `open "holo://build?agent=claude-code&q=hi"`.
 
 ### Open a link
 

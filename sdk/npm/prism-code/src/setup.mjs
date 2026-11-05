@@ -139,12 +139,23 @@ const appleScriptString = (s) => `"${String(s).replace(/(["\\])/g, '\\$1')}"`;
 const desktopArgument = (s) => `"${String(s).replace(/([\\"`$])/g, '\\$1')}"`.replace(/\\/g, '\\\\').replace(/%/g, '%%');
 
 /**
- * holo:// may already belong to another program, such as the Hologram app. Taking it over would send that
- * program's links to a handler that opens only holo://build, so setup reports it and leaves it alone.
+ * Where the handler is, for an app that owns holo:// and forwards holo://build links: it runs `node` with
+ * `entry` and the link as the two arguments, never through a shell.
  */
-const foreign = (current) => ({ status: 'conflict', detail: `holo:// already opens ${current}; left alone, so links go through prism-code open`, steps: [] });
+export const HANDLER_RECORD_SCHEMA = 'prism/handler/1';
 
-/** The holo:// handler: copy the entry out of the package, then register it with the OS. */
+/**
+ * holo:// may already belong to another program, such as the Hologram app. Taking it over would send that
+ * program's links to a handler that opens only holo://build, so setup leaves the registration alone. It still
+ * installs the handler and its record, so that program can forward holo://build links to it.
+ */
+const foreign = (current, record, steps) => ({
+  status: 'conflict',
+  detail: `holo:// already opens ${current}; left alone. That app can forward holo://build links to the handler ${record} names`,
+  steps,
+});
+
+/** The holo:// handler: copy the entry out of the package and record where it is, then register it with the OS. */
 export function planHandler(context) {
   const { platform, home, env, configDir, node, sourceDir } = context;
   const handlerDir = join(configDir, 'handler');
@@ -159,11 +170,17 @@ export function planHandler(context) {
       steps.push({ kind: 'copy', from, to });
     }
   }
+  const record = join(configDir, 'handler.json');
+  const recordContent = `${JSON.stringify({ schema: HANDLER_RECORD_SCHEMA, scheme: 'holo', host: 'build', node, entry }, null, 2)}\n`;
+  if (context.readFile(record) !== recordContent) {
+    same = false;
+    steps.push({ kind: 'write', path: record, content: recordContent });
+  }
   if (platform === 'win32') {
     const command = `"${node}" "${entry}" "%1"`;
     const where = `${REGISTRY_KEY} -> ${command}`;
     const current = context.registryValue(OPEN_COMMAND_KEY);
-    if (current && !current.includes(entry)) return foreign(current);
+    if (current && !current.includes(entry)) return foreign(current, record, steps);
     if (same && current === command) return { status: 'already', detail: where, steps: [] };
     for (const args of [
       ['add', REGISTRY_KEY, '/ve', '/d', 'URL:Prism build link', '/f'],
@@ -222,7 +239,7 @@ export function planHandler(context) {
     '',
   ].join('\n');
   const current = context.mimeDefault('x-scheme-handler/holo');
-  if (current && current !== DESKTOP_FILE) return foreign(current);
+  if (current && current !== DESKTOP_FILE) return foreign(current, record, steps);
   if (same && context.readFile(file) === content) return { status: 'already', detail: file, steps: [] };
   steps.push({ kind: 'write', path: file, content });
   const xdgMime = context.find('xdg-mime');

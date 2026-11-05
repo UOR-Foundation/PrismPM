@@ -188,11 +188,19 @@ test('Windows: config under %APPDATA%, and the handler registered under HKCU wit
 test('a holo:// handler another program owns is left alone, on Windows and on Linux', () => {
   const home = fixtureHome();
   const hologram = '"C:\\Users\\u\\AppData\\Local\\Hologram\\hologram.exe" "%1"';
+  const record = join(home, '.prism', 'handler.json');
   const win = planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })).handler;
-  assert.deepEqual(win, { status: 'conflict', detail: `holo:// already opens ${hologram}; left alone, so links go through prism-code open`, steps: [] });
+  assert.equal(win.status, 'conflict');
+  assert.equal(win.detail, `holo:// already opens ${hologram}; left alone. That app can forward holo://build links to the handler ${record} names`);
+  // The registration is left alone, but the handler and its record are still installed for that app to forward to.
+  assert.deepEqual(win.steps.map((s) => s.kind), [...HANDLER_FILES.map(() => 'copy'), 'write']);
+  assert.ok(!win.steps.some((s) => s.kind === 'command'));
   const linux = planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler;
   assert.equal(linux.status, 'conflict');
-  assert.deepEqual(linux.steps, []);
+  assert.ok(!linux.steps.some((s) => s.kind === 'command' || s.path?.endsWith('.desktop')));
+  applySetup({ agents: [], handler: linux, preferred: { steps: [] } }, recorder());
+  assert.deepEqual(json(record), { schema: 'prism/handler/1', scheme: 'holo', host: 'build', node: '/usr/bin/node', entry: join(home, '.prism', 'handler', 'handler.mjs') });
+  assert.equal(planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler.steps.length, 0, 'a second run installs nothing again');
   const ours = planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'prism-open.desktop' } })).handler;
   assert.equal(ours.status, 'configure');
   const text = formatSetup(planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })));
@@ -207,7 +215,7 @@ test('macOS: config under Application Support, and the handler an AppleScript ap
   assert.deepEqual(plan.agents.map((a) => a.status), ['not-found', 'configure', 'not-found', 'configure', 'not-found']);
   const app = join(home, 'Applications', 'Prism Open.app');
   const script = join(home, '.prism', 'handler', 'prism-open.applescript');
-  const steps = plan.handler.steps.filter((s) => s.kind !== 'copy');
+  const steps = plan.handler.steps.filter((s) => s.kind !== 'copy' && !s.path?.endsWith('handler.json'));
   assert.equal(steps[0].path, script);
   assert.match(steps[0].content, /^on open location theURL\n\tdo shell script quoted form of "\/usr\/bin\/node" & " " & quoted form of ".*handler\.mjs" & " " & quoted form of theURL & " >\/dev\/null 2>&1 &"\nend open location\n$/);
   assert.deepEqual(steps.slice(1).map((s) => [s.command, ...s.args]), [
