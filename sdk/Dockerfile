@@ -263,6 +263,7 @@ RUN cargo build --locked --release --package prismpm \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
     && install -m 0755 target/release/prismpm-conformance /usr/local/bin/prismpm-conformance \
     && install -m 0755 target/release/prismpm-platform-equivalence /usr/local/bin/prismpm-platform-equivalence \
+    && install -D -m 0555 target/release/prismpm-semantic-source /opt/prismpm/conformance/bin/prismpm-semantic-source \
     && install -m 0755 vendor/lexlean/target/release/lexlean /usr/local/bin/lexlean \
     && echo '844a1c6de3986c9f02070266b25e0d1a2fa99ceccc89f6b9ad90aae47b62a16e  standards/trust/sigstore-trusted-root-cosign-3.1.3.json' | sha256sum --check --strict \
     && echo 'e33e1416f08d6ee24f1c66f3895be7d919ff58c0d4318f2934ec4743f75f0a7e  standards/trust/github-sudo-bmitch-openpgp-6e0ff28c767a8bee.asc' | sha256sum --check --strict \
@@ -417,6 +418,8 @@ RUN --network=none --mount=type=tmpfs,target=/tmp,size=805306368 \
     && rm /opt/prismpm/artifact-inventory.json /opt/prismpm/generate-inventory.mjs \
     && prismpm --json completion bash > /tmp/prismpm-sdk-self-check.json \
     && grep -Fq '"schema":"prismpm/completion-result/1"' /tmp/prismpm-sdk-self-check.json \
+    && setpriv --reuid=1000 --regid=1000 --clear-groups \
+      node /opt/prismpm/share/conformance-root/scripts/semantic-source-runtime-check.mjs \
     && /usr/local/bin/asyncapi-official --check \
     && rm /tmp/prismpm-sdk-self-check.json
 
