@@ -125,8 +125,8 @@ jobs:
           npm pack --dry-run --json > pack.json
           size=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("pack.json","utf8"))[0].unpackedSize)')
           echo "unpacked size: $size bytes"
-          # 1208 KiB is the prism-code package cap. prism-code vendors the @prism-code/verify build (src/vendor/verify.mjs, about 288 KiB, so holo.verify() has no dependency) and adds its own code. Raised from 768 KiB to fit the M3 features in flight (export, middleware, generate, replay, about 115 KiB together), then to 1088 KiB for the authoring front door (#325, about 65 KiB), then to 1160 KiB for setup and open: the agent configuration, the bundled prism skill (16 KB) and the holo:// handler (about 63 KiB), then to 1208 KiB for the machine half of setup, the build tiers, axioms and init's next steps (about 44 KiB); the next lever is depending on @prism-code/verify once it is published instead of vendoring it.
-          test "$size" -le 1236992
+          # 1212 KiB is the prism-code package cap. prism-code vendors the @prism-code/verify build (src/vendor/verify.mjs, about 288 KiB, so holo.verify() has no dependency) and adds its own code. Raised from 768 KiB to fit the M3 features in flight (export, middleware, generate, replay, about 115 KiB together), then to 1088 KiB for the authoring front door (#325, about 65 KiB), then to 1160 KiB for setup and open: the agent configuration, the bundled prism skill (16 KB) and the holo:// handler (about 63 KiB), then to 1208 KiB for the machine half of setup, the build tiers, axioms and init's next steps (about 44 KiB); the next lever is depending on @prism-code/verify once it is published instead of vendoring it. Then to 1212 KiB for closure v2 provenance verification and the Hologram studio stylesheet (about 2.7 KiB).
+          test "$size" -le 1241088
           node scripts/check-package.mjs pack.json
           rm pack.json
       - name: The entry points import cleanly
