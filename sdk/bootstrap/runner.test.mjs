@@ -34,6 +34,8 @@ import {
   publishRuntime,
   TRANSIENT_CURL_STATUS,
   withTransientRetry,
+  DOWNLOAD_ATTEMPTS,
+  DOWNLOAD_DELAY_MS,
 } from './install.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -498,6 +500,7 @@ test('installation retries a 504 but never retries or extracts a corrupt success
   const work = mkdtempSync(join(tmpdir(), 'bootstrap-http-retry.'));
   try {
     const module = new URL('./install.mjs', import.meta.url).href;
+    // The first 504 waits the real default backoff (DOWNLOAD_DELAY_MS) before the retry.
     execFileSync(process.execPath, ['--input-type=module', '-e', `
       import assert from 'node:assert/strict';
       import cp from 'node:child_process';
@@ -518,8 +521,22 @@ test('installation retries a 504 but never retries or extracts a corrupt success
       syncBuiltinESMExports();
       assert.throws(() => installRuntime(${JSON.stringify(join(work, 'runtime'))}), /digest|checksum|sha256/i);
       assert.equal(calls, 2);
-    `], { timeout: 15000, stdio: 'pipe' });
+    `], { timeout: 30000, stdio: 'pipe' });
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
+});
+
+test('the default retry window outlasts a minutes-long 503 burst and stays bounded', () => {
+  assert.equal(DOWNLOAD_ATTEMPTS, 6);
+  assert.equal(DOWNLOAD_DELAY_MS, 10000);
+  let calls = 0;
+  const waits = [];
+  assert.throws(() => withTransientRetry(() => {
+    calls++;
+    throw Object.assign(new Error('unavailable'), { status: 22, stdout: Buffer.from('503') });
+  }, { sleep: (ms) => waits.push(ms) }), /unavailable/);
+  assert.equal(calls, 6);
+  assert.deepEqual(waits, [10000, 20000, 40000, 80000, 160000]);
+  assert.equal(waits.reduce((a, b) => a + b, 0), 310000);
 });
