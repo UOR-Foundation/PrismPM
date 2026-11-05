@@ -8,6 +8,8 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-05
+
 ### Features Added
 - `prism-code setup [--agent <id>] [--dry-run]` and `prism-code open <holo://build link> [--dry-run]` (experimental): configure the UOR MCP server in Claude Code, Codex, Cursor and VS Code, install the Prism skills from uor.foundation, register the `holo://` handler, and hand the website's sentence to the agent. New modules `src/agents.mjs`, `src/open.mjs`, `src/handler.mjs`, `src/setup.mjs` and `src/setup-cli.mjs`, with no new dependencies. See the root CHANGELOG and the README section Set up your agents.
 - `src/volumes.mjs`, the `prism.volumes` namespace (#445, experimental): `create`, `list`, `inspect` and `remove` over the capability file, not yet reachable from the package, because #441 connects the modules. See the root CHANGELOG.
