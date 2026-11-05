@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,7 @@ test('verify --lean runs lexlean verify in the image without the Docker socket (
   const env = { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: join(scratch(), '.prism') };
   const r = spawnSync(process.execPath, [bin, 'verify', '--lean', '--all'], { cwd: dir, env, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
-  const workdir = process.platform === 'win32' ? '/work' : dir;
+  const workdir = process.platform === 'win32' ? '/work' : realpathSync(dir);
   assert.ok(r.stdout.endsWith(`${IMAGE} lexlean verify --project ${workdir}/app/lexlean.toml --all\n`), r.stdout);
   assert.ok(!r.stdout.includes('docker.sock'), 'no socket for a Lean-only verify');
   assert.ok(spawnSync(process.execPath, [bin, 'verify'], { cwd: dir, env, encoding: 'utf8' }).stdout.includes(`${IMAGE} prismpm verify`));

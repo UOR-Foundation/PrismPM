@@ -27,7 +27,7 @@ function options(argv, { values = [], flags = [] }) {
 }
 
 /**
- * `setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only | --machine-only] [--json] [--dry-run]`.
+ * `setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
  * The machine half runs first and is applied first, so the agent half's write of
  * `config.json` sees the Docker record. @returns {Promise<number>} the exit code
  */

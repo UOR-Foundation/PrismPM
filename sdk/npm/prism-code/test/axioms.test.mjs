@@ -4,16 +4,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { templateFiles } from '../src/init.mjs';
 import { WORK_DIR, collect, compare, declaredAxioms, declarations, formatRows, mismatches, parseReport, probeCommand, readAudit, rewrite, unaudited, withAxioms, writeWork } from '../src/axioms.mjs';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const template = fileURLToPath(new URL('../templates/text-request', import.meta.url));
 const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
 const scratch = () => mkdtempSync(join(tmpdir(), 'prism-axioms-'));
+/** The template as init writes it: LF line endings whatever the checkout did, because LexLean refuses CRLF. */
+function copyTemplate(root) {
+  for (const [path, bytes] of templateFiles()) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), bytes);
+  }
+}
 
 const RECURSIVE = `definition{
   name: rowFrom,
@@ -75,7 +83,7 @@ test('a module the verify stopped before auditing is reported as not audited, no
   assert.match(text, /1 of \d+ declarations need their axioms member set; run with --write\n\d+ of \d+ declarations were not audited; --write fixes the rest and audits again until every one is settled\n$/);
   // --write rewrites the mismatch and leaves every declaration it was not told about byte for byte.
   const root = scratch();
-  cpSync(template, root, { recursive: true });
+  copyTemplate(root);
   const copied = collect(root, '.');
   const changed = rewrite(root, copied, compare(copied, observed));
   assert.deepEqual([...changed.keys()].map((p) => p.slice(root.length + 1).replace(/\\/g, '/')), ['src/TextRequest.lex.tex']);
@@ -85,7 +93,7 @@ test('a module the verify stopped before auditing is reported as not audited, no
 
 test('the audit records LexLean stages are read back in name order, and a failed audit is refused', () => {
   const root = scratch();
-  cpSync(template, root, { recursive: true });
+  copyTemplate(root);
   const work = writeWork(root, collect(root, '.'));
   assert.throws(() => readAudit(work), (e) => e.code === 'axioms.probe' && /no audit records/.test(e.message));
   mkdirSync(join(work, 'audit'));
@@ -127,7 +135,7 @@ test('a one-line declaration, as lexlean fmt writes a short one, is found, read 
 
 test('rewrite changes only the mismatching declarations of a copied template, and leaves the rest byte for byte', () => {
   const root = scratch();
-  cpSync(template, root, { recursive: true });
+  copyTemplate(root);
   const project = collect(root, '.');
   const observed = new Map();
   for (const m of project.modules) for (const d of m.declarations) observed.set(`${m.lean}.${d.name}`, d.name === 'dispatch' ? ['Quot.sound', 'propext'] : d.name === 'byteLength' ? ['propext'] : declaredAxioms(d.block));
@@ -145,12 +153,12 @@ test('rewrite changes only the mismatching declarations of a copied template, an
 
 test('prism-code axioms writes the probe under .lexlean/axioms and runs it in the image (dry run)', () => {
   const root = scratch();
-  cpSync(template, root, { recursive: true });
+  copyTemplate(root);
   writeFileSync(join(root, 'prismpm.lock'), JSON.stringify({ sdk_image: IMAGE }));
   const env = { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: join(scratch(), '.prism') };
   const r = spawnSync(process.execPath, [bin, 'axioms'], { cwd: root, env, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
-  const workdir = process.platform === 'win32' ? '/work' : root;
+  const workdir = process.platform === 'win32' ? '/work' : realpathSync(root);
   assert.ok(r.stdout.includes(`${IMAGE} sh -c "sh \\"${workdir}/.lexlean/axioms/axioms.sh\\" \\"${workdir}\\" \\"${workdir}/.lexlean/axioms\\""`), r.stdout);
   assert.ok(existsSync(join(root, WORK_DIR, 'axioms.sh')));
   assert.deepEqual(readFileSync(join(root, WORK_DIR, 'modules.txt'), 'utf8').split('\n').filter(Boolean), [

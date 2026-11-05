@@ -154,7 +154,7 @@ Usage:
                                                     the axiom set Lean observes for every definition and theorem, in one
                                                     pass, beside the set the source declares; --write sets each axioms
                                                     member to the observed set and formats the project (experimental)
-  prism-code setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only | --machine-only] [--json] [--dry-run]
+  prism-code setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]
                                                     get this machine ready: find Docker (also inside WSL), pull the SDK
                                                     image the lockfile pins, create its cache volume, keep sources LF;
                                                     then add the UOR MCP server (lexlean, https://mcp.uor.foundation/)
