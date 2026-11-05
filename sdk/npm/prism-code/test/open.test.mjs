@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -184,7 +184,8 @@ test('a stand-in agent on the PATH receives a hostile sentence as exactly one ar
   if (process.platform === 'win32') {
     writeFileSync(join(dir, 'claude.cmd'), `@"${process.execPath}" "%~dp0echo.mjs" %*\r\n`);
   } else {
-    writeFileSync(join(dir, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "$(dirname "$0")/echo.mjs" "$@"\n`);
+    // PATH holds only this directory, so the script names everything by its full path.
+    writeFileSync(join(dir, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${join(dir, 'echo.mjs')}" "$@"\n`);
     chmodSync(join(dir, 'claude'), 0o755);
   }
   const env = { ...process.env, PATH: dir, Path: dir };
@@ -197,7 +198,17 @@ test('a stand-in agent on the PATH receives a hostile sentence as exactly one ar
 
 function cli(args) {
   const home = mkdtempSync(join(tmpdir(), 'prism-open-home-'));
-  const result = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: { ...process.env, PRISM_HOME: join(home, '.prism') } });
+  const env = { ...process.env, PRISM_HOME: join(home, '.prism') };
+  if (process.platform === 'linux') {
+    // A CI runner has no terminal installed; a stand-in on the PATH is enough for --dry-run to plan one.
+    const terminal = join(home, 'bin');
+    mkdirSync(terminal);
+    writeFileSync(join(terminal, 'x-terminal-emulator'), '#!/bin/sh\nexit 0\n');
+    chmodSync(join(terminal, 'x-terminal-emulator'), 0o755);
+    env.PATH = `${terminal}:${env.PATH ?? ''}`;
+    delete env.TERMINAL;
+  }
+  const result = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env });
   return { code: result.status, out: result.stdout, err: result.stderr, home };
 }
 
@@ -205,7 +216,8 @@ test('prism-code open prints its plan with --dry-run, refuses a bad link with ex
   const dry = cli(['open', LINK, '--dry-run']);
   assert.equal(dry.code, 0, dry.err);
   assert.match(dry.out, /^write .*tickets[\\/][0-9a-f-]{36}\.json\n {2}\{"schema":"prism\/open-ticket\/1","agent":"claude-code","sentence":"Go to uor/);
-  assert.match(dry.out, /\nrun .* --run /);
+  // macOS quotes each word for the shell inside the AppleScript, so --run may stand in quotes.
+  assert.match(dry.out, /\nrun .*--run/);
   assert.equal(existsSync(join(dry.home, '.prism', 'tickets')), false, '--dry-run writes nothing');
   const bad = cli(['open', 'prism://evil?q=x', '--dry-run']);
   assert.equal(bad.code, 2);
