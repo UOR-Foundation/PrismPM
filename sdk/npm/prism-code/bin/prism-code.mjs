@@ -159,8 +159,13 @@ Usage:
                                                     image the lockfile pins, create its cache volume, keep sources LF;
                                                     then add the UOR MCP server (lexlean, https://mcp.uor.foundation/)
                                                     to every agent found here: Claude Code, Codex, Cursor, VS Code; say
-                                                    how for Claude Desktop; install the Prism skills; register the
-                                                    holo:// handler; remember the agent. Run it as npx prism-code@latest setup
+                                                    how for Claude Desktop; add the local Prism server (prism, the mcp
+                                                    verb below) beside it, Claude Desktop included; install the Prism
+                                                    skills; register the holo:// handler; remember the agent. Run it as
+                                                    npx prism-code@latest setup
+  prism-code mcp [--project <dir>]                  the Prism MCP server on stdio (experimental): six spec questions, each
+                                                    answer checked as it arrives; then the LexLean model written for you,
+                                                    every property proved by Lean, and the holo built in the SDK image
   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
                                                     hand the sentence to the agent: a terminal running claude or codex
                                                     (after Enter), Cursor's or VS Code's install link with the sentence
@@ -918,6 +923,13 @@ async function main(argv) {
     case 'open': {
       const { runOpen } = await import('../src/setup-cli.mjs');
       return runOpen(rest, usage);
+    }
+    case 'mcp': {
+      const at = rest.indexOf('--project');
+      if (rest.length > 0 && !(at === 0 && rest.length === 2)) return usage('mcp takes only --project <dir>');
+      const { serveStdio } = await import('../src/journey/mcp.mjs');
+      await serveStdio({ cwd: at === 0 ? resolve(rest[1]) : process.env.PRISM_PROJECT ?? process.cwd() });
+      return 0;
     }
     case 'attest':
     case 'verify-attestation':

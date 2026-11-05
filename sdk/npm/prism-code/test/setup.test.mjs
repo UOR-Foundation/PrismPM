@@ -82,14 +82,20 @@ test('Linux: each agent found is configured once, in its own file and format, an
   applySetup(plan, { run });
 
   const claude = json(join(home, '.claude.json'));
-  assert.deepEqual(claude.mcpServers, { lexlean: { type: 'http', url: MCP_URL } });
+  assert.deepEqual(Object.keys(claude.mcpServers), ['lexlean', 'prism']);
+  assert.deepEqual(claude.mcpServers.lexlean, { type: 'http', url: MCP_URL });
   assert.equal(claude.numStartups, 3, 'the rest of the file stays');
-  assert.equal(readFileSync(join(home, '.claude.json.prism-backup'), 'utf8'), JSON.stringify({ numStartups: 3, projects: { '/w': { mcpServers: {} } } }));
+  assert.equal(readFileSync(join(home, '.claude.json.prism-backup'), 'utf8'), JSON.stringify({ numStartups: 3, projects: { '/w': { mcpServers: {} } } }), 'one backup, of the file as it was');
   const codex = readFileSync(join(home, '.codex', 'config.toml'), 'utf8');
-  assert.equal(codex, 'model = "o3"\n[mcp_servers.other]\ncommand = "npx"\n\n[mcp_servers.lexlean]\nurl = "https://mcp.uor.foundation/"\n');
+  assert.ok(codex.startsWith('model = "o3"\n[mcp_servers.other]\ncommand = "npx"\n\n[mcp_servers.lexlean]\nurl = "https://mcp.uor.foundation/"\n\n[mcp_servers.prism]\n'), codex);
   assert.deepEqual(parseToml(codex).mcp_servers.lexlean, { url: MCP_URL });
-  assert.deepEqual(json(join(home, '.config', 'Code', 'User', 'mcp.json')), { servers: { lexlean: { type: 'http', url: MCP_URL } } });
-  assert.equal(existsSync(join(home, '.config', 'Claude', 'claude_desktop_config.json')), false, 'Claude Desktop takes no url server in its file');
+  // Beside the remote lexlean server, the local Prism server: this Node running this package's `mcp` verb.
+  const prism = { command: '/usr/bin/node', args: [join(sourceDir, '..', 'bin', 'prism-code.mjs'), 'mcp'] };
+  assert.deepEqual(json(join(home, '.claude.json')).mcpServers.prism, { type: 'stdio', ...prism });
+  assert.deepEqual(parseToml(codex).mcp_servers.prism, { command: prism.command, args: prism.args, startup_timeout_sec: 30, tool_timeout_sec: 900 });
+  assert.deepEqual(json(join(home, '.cursor', 'mcp.json')).mcpServers.prism, prism);
+  assert.deepEqual(json(join(home, '.config', 'Code', 'User', 'mcp.json')), { servers: { lexlean: { type: 'http', url: MCP_URL }, prism: { type: 'stdio', ...prism } } });
+  assert.deepEqual(json(join(home, '.config', 'Claude', 'claude_desktop_config.json')), { mcpServers: { prism } }, 'Claude Desktop takes no url server in its file, but it takes a local one');
 
   const desktop = join(home, '.local', 'share', 'applications', 'prism-open.desktop');
   const entry = join(home, '.prism', 'handler', 'handler.mjs');
@@ -105,6 +111,7 @@ test('Linux: each agent found is configured once, in its own file and format, an
 
   const again = planSetup({}, c);
   assert.deepEqual(again.agents.map((a) => a.status), ['already', 'already', 'already', 'already', 'manual']);
+  assert.deepEqual(again.journey.map((a) => [a.agent, a.status]), [['claude-code', 'already'], ['codex', 'already'], ['cursor', 'already'], ['vscode', 'already'], ['claude-desktop', 'already']]);
   assert.equal(again.handler.status, 'already');
   assert.deepEqual(again.preferred.steps, []);
 });
@@ -158,7 +165,8 @@ test('the indentation of a JSON file is kept', () => {
   const home = fixtureHome({ '.cursor/mcp.json': '{\n\t"mcpServers": {\n\t\t"a": {"url": "https://a/"}\n\t}\n}\n' });
   const plan = planSetup({ agent: 'cursor' }, context('linux', home));
   applySetup(plan, recorder());
-  assert.equal(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8'), '{\n\t"mcpServers": {\n\t\t"a": {\n\t\t\t"url": "https://a/"\n\t\t},\n\t\t"lexlean": {\n\t\t\t"url": "https://mcp.uor.foundation/"\n\t\t}\n\t}\n}\n');
+  const bin = JSON.stringify(join(sourceDir, '..', 'bin', 'prism-code.mjs'));
+  assert.equal(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8'), `{\n\t"mcpServers": {\n\t\t"a": {\n\t\t\t"url": "https://a/"\n\t\t},\n\t\t"lexlean": {\n\t\t\t"url": "https://mcp.uor.foundation/"\n\t\t},\n\t\t"prism": {\n\t\t\t"command": "/usr/bin/node",\n\t\t\t"args": [\n\t\t\t\t${bin},\n\t\t\t\t"mcp"\n\t\t\t]\n\t\t}\n\t}\n}\n`);
 });
 
 test('Windows: config under %APPDATA%, and the handler registered under HKCU with reg.exe', () => {

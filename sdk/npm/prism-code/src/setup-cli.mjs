@@ -43,7 +43,7 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
   const skills = agentsHalf ? bundledSkills() : undefined;
   const plan = agentsHalf ? planSetup({ agent: named.agent, skills }, context) : { agents: [], handler: { status: 'not-found', steps: [] }, preferred: { agent: null, steps: [] } };
   if (!dryRun && agentsHalf) applySetup(plan);
-  const rows = [...plan.agents, plan.handler, ...(plan.skills ? [plan.skills] : [])];
+  const rows = [...plan.agents, ...(plan.journey ?? []), plan.handler, ...(plan.skills ? [plan.skills] : [])];
   const failed = (machine ? machineFailed(machine) : false) || rows.some((row) => row.status === 'failed');
   if (named.json) {
     const row = ({ agent, status, detail }) => ({ agent, status, detail: detail ?? null });
@@ -52,6 +52,7 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
       dryRun,
       machine: machine ? machineReport(machine) : null,
       agents: plan.agents.map(row),
+      journey: (plan.journey ?? []).map(row),
       handler: { status: plan.handler.status, detail: plan.handler.detail ?? null },
       skills: plan.skills ? { status: plan.skills.status, detail: plan.skills.detail ?? null } : null,
       preferredAgent: plan.preferred.agent,

@@ -1,0 +1,332 @@
+// The Prism journey: the spec, its evaluator, the rendered model, the session, agent wiring, setup and the MCP server.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  SpecError,
+  counterexample,
+  decodeRequest,
+  judge,
+  nameFromPurpose,
+  parseCondition,
+  parseExamples,
+  parseFields,
+  parseNumber,
+  parseOutcomes,
+  parseProperties,
+  parseRules,
+  requestLimits,
+  respond,
+  unreachableRules,
+  validateSpec,
+} from '../src/journey/spec.mjs';
+import { acceptanceVectors, declarations, names, proofDeclarations, renderModel, renderProofs, renderSpecDocument } from '../src/journey/render.mjs';
+import { answersFromSpec, compile, nextTurn } from '../src/journey/session.mjs';
+import { journeyServer } from '../src/journey/register.mjs';
+import { axiomViolations, declarationAt, parseDiagnostics, steps } from '../src/journey/sdk.mjs';
+import { appDir, modelPath, readSession, scaffold, writeApp } from '../src/journey/project.mjs';
+import { createServer, INSTRUCTIONS } from '../src/journey/mcp.mjs';
+
+const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
+const scratch = () => mkdtempSync(join(tmpdir(), 'prism-journey-'));
+const enc = (s) => new TextEncoder().encode(s);
+
+const ANSWERS = {
+  purpose: 'Payment approval: decide whether a payment request is approved.',
+  fields: 'role: clerk|manager, amount: number at least 1, limit: number',
+  outcomes: 'approved, refused',
+  rules: 'when role is manager then approved\nwhen amount is at most limit then approved\notherwise refused',
+  properties: 'never when role is clerk and amount > limit then approved\nalways when role is manager then approved',
+  examples: 'clerk 250 1000 -> approved\nclerk 1001 1000 -> refused',
+};
+const paymentSpec = () => compile({ ...ANSWERS, review: 'yes' }).spec;
+
+test('fields, outcomes, rules, properties and examples parse from the formats the questions show', () => {
+  const fields = parseFields(ANSWERS.fields);
+  assert.deepEqual(fields, [
+    { name: 'role', kind: 'choice', values: ['clerk', 'manager'] },
+    { name: 'amount', kind: 'number', min: 1 },
+    { name: 'limit', kind: 'number' },
+  ]);
+  assert.deepEqual(parseFields('score: number 0..100'), [{ name: 'score', kind: 'number', min: 0, max: 100 }]);
+  const outcomes = parseOutcomes('approved or refused');
+  assert.deepEqual(outcomes, ['approved', 'refused']);
+  const { rules, otherwise } = parseRules(ANSWERS.rules, fields, outcomes);
+  assert.equal(otherwise, 'refused');
+  assert.deepEqual(rules[1].when, [{ field: 'amount', op: '<=', value: { field: 'limit' } }]);
+  assert.deepEqual(parseCondition('amount is more than 1000', fields), { field: 'amount', op: '>', value: 1000 });
+  assert.deepEqual(parseCondition('role is not clerk', fields), { field: 'role', op: 'is not', value: 'clerk' });
+  const props = parseProperties('It should never be possible that when role is clerk and amount > limit then approved', fields, outcomes);
+  assert.equal(props[0].kind, 'never');
+  assert.equal(props[0].id, 'INV-001');
+  assert.deepEqual(parseExamples('`clerk 1 2` -> approved'), [{ request: 'clerk 1 2', response: 'approved' }]);
+  assert.equal(nameFromPurpose('Decide whether a payment request is approved'), 'payment-request-approved');
+  assert.equal(nameFromPurpose('Payment approval: decide whether it is approved'), 'payment-approval');
+});
+
+test('a malformed answer names the problem and the fix', () => {
+  const fields = parseFields(ANSWERS.fields);
+  assert.throws(() => parseCondition('colour is red', fields), (e) => e instanceof SpecError && /not a field/.test(e.message));
+  assert.throws(() => parseCondition('role is boss', fields), /not a choice of `role`; the choices are clerk, manager/);
+  assert.throws(() => parseRules('when role is manager then approved', fields, ['approved', 'refused']), /otherwise/);
+  assert.throws(() => parseOutcomes('yes'), /at least two/);
+  assert.throws(() => validateSpec({ ...paymentSpec(), outcomes: ['invalid', 'ok'] }), /reserved/);
+});
+
+test('the evaluator decodes exactly the canonical requests the model decodes, and decides by the first matching rule', () => {
+  const spec = paymentSpec();
+  assert.equal(parseNumber('0'), 0n);
+  for (const bad of ['07', '-1', '+1', '1.5', '', ' 1', '1000000000000000000', '١']) assert.equal(parseNumber(bad), null, bad);
+  assert.equal(parseNumber('999999999999999999'), 999999999999999999n);
+  assert.deepEqual(decodeRequest(spec, 'clerk 250 1000'), { role: 'clerk', amount: 250n, limit: 1000n });
+  assert.equal(decodeRequest(spec, 'clerk 0 1000'), null, 'amount has a minimum of 1');
+  assert.equal(decodeRequest(spec, 'clerk  250 1000'), null, 'two spaces');
+  assert.deepEqual(judge(spec, decodeRequest(spec, 'manager 5000 10')), { outcome: 'approved', rule: 'REQ-001' });
+  assert.deepEqual(judge(spec, decodeRequest(spec, 'clerk 11 10')), { outcome: 'refused', rule: null });
+  assert.equal(respond(spec, enc('clerk 10 10')), 'approved');
+  assert.equal(respond(spec, Uint8Array.of(0xff)), 'invalid');
+  assert.equal(respond(spec, enc('x'.repeat(requestLimits(spec).requestMaximum + 1))), 'invalid');
+});
+
+test('a property the rules break has a counterexample; one they keep has none', () => {
+  const spec = paymentSpec();
+  for (const p of spec.properties) assert.equal(counterexample(spec, p).request, null, p.id);
+  const broken = validateSpec({ ...spec, properties: [{ kind: 'never', when: [{ field: 'amount', op: '>', value: { field: 'limit' } }], then: 'approved' }] });
+  const found = counterexample(broken, broken.properties[0]);
+  assert.match(found.request, /^manager \d+ \d+$/);
+  assert.equal(found.rule, 'REQ-001');
+  const shadowed = validateSpec({ ...spec, rules: [spec.rules[0], { ...spec.rules[0], id: 'REQ-002' }] });
+  assert.deepEqual(unreachableRules(shadowed), ['REQ-002']);
+});
+
+test('the model names every rule and property, states each property over decodable requests, and unfolds exactly what it needs', () => {
+  const spec = paymentSpec();
+  const n = names(spec);
+  assert.equal(n.module, 'PaymentApproval');
+  assert.equal(n.prefix, 'PrismPaymentApproval');
+  const model = renderModel(spec);
+  assert.match(model, /^\\begin\{lexlean\}\{PaymentApproval\}\n/);
+  assert.match(model, /\\title\{Text application model\}/, 'a glossary phrase, so LLL1004 cannot occur');
+  assert.doesNotMatch(model, /\r/);
+  assert.equal(declarations(spec).filter((d) => d.kind === 'theorem').length, 0, 'the app module carries no proof, so the build never compiles one');
+  assert.match(model, /recursive_argument: fuel/);
+  const theorems = proofDeclarations(spec).filter((d) => d.kind === 'theorem');
+  assert.deepEqual(theorems.map((t) => t.name), ['inv001Holds', 'inv002Holds']);
+  const unfold = /definitions: \[([^\]]*)\]/.exec(theorems[0].proof)[1].split(', ');
+  assert.deepEqual(unfold, [...unfold].sort(), 'linear_arithmetic needs its definitions sorted');
+  assert.ok(['PaymentApproval::judge', 'PaymentApproval::rule1', 'PaymentApproval::roleClerk'].every((d) => unfold.includes(d)));
+  const breaks = proofDeclarations(spec).find((d) => d.name === 'breaksInv001');
+  assert.match(breaks.body, /\(1 <=\? \(project request amount\)\)/, 'the bound of amount is a hypothesis');
+  assert.match(renderProofs(spec), /^\\begin\{lexlean\}\{PaymentApprovalProofs\}\n[\s\S]*\\importmodule\{PaymentApproval\}/);
+  assert.equal(renderProofs({ ...spec, properties: [] }), null);
+  assert.match(model, /entryRoot := "PrismPaymentApproval\.PaymentApproval\.dispatch"/);
+  assert.match(renderModel(spec, { axioms: { judge: '[propext]' } }), /name: judge,[\s\S]*?axioms: \[propext\]/);
+});
+
+test('acceptance vectors agree with the evaluator and include the bound the text profile requires', () => {
+  const spec = paymentSpec();
+  const vectors = acceptanceVectors(spec);
+  const { guestAllocationMaximum } = requestLimits(spec);
+  assert.ok(vectors.some((v) => v.bytes.length === guestAllocationMaximum), 'PP2009 needs a vector exactly the guest allocation bound long');
+  assert.ok(vectors.every((v) => v.bytes.length <= guestAllocationMaximum));
+  for (const v of vectors) assert.equal(v.response, respond(spec, v.bytes));
+  assert.ok(vectors.some((v) => v.why === 'example' && v.request === 'clerk 250 1000'));
+  for (const outcome of ['approved', 'refused', 'invalid']) assert.ok(vectors.some((v) => v.response === outcome), outcome);
+  assert.equal(new Set(vectors.map((v) => Buffer.from(v.bytes).toString('hex'))).size, vectors.length, 'no duplicates');
+});
+
+test('the session asks six questions, checks each answer, and can revise an earlier one', () => {
+  assert.equal(nextTurn({}).step, 'purpose');
+  const partial = { purpose: ANSWERS.purpose, fields: ANSWERS.fields };
+  assert.equal(nextTurn(partial).step, 'outcomes');
+  assert.match(nextTurn(partial).inferred, /payment-approval/);
+  const broken = nextTurn({ ...ANSWERS, properties: 'never when amount > limit then approved' });
+  assert.equal(broken.step, 'properties');
+  assert.match(broken.issue, /INV-001 does not hold\. The request `manager \d+ \d+`/);
+  const wrong = nextTurn({ ...ANSWERS, examples: 'clerk 250 1000 -> refused' });
+  assert.equal(wrong.step, 'examples');
+  assert.match(wrong.issue, /expects refused, but the rules answer approved, because REQ-002 decides it/);
+  const review = nextTurn(ANSWERS);
+  assert.equal(review.step, 'review');
+  assert.ok(review.summary.split('\n').length <= 10);
+  assert.equal(nextTurn({ ...ANSWERS, review: 'yes' }).step, 'ready');
+  assert.equal(nextTurn({ ...ANSWERS, review: 'no, change the rules' }).step, 'review');
+  const revised = nextTurn({ ...ANSWERS, fields: 'role: clerk|manager, amount: number' });
+  assert.equal(revised.step, 'rules', 'rules naming a removed field are asked again');
+});
+
+test('a spec written as data joins the same flow and comes back the same', () => {
+  const spec = paymentSpec();
+  const again = compile({ ...answersFromSpec(spec), review: 'yes' }).spec;
+  const strip = (s) => JSON.parse(JSON.stringify(s, (k, v) => (k === 'says' ? undefined : v)));
+  assert.deepEqual(strip(again), strip(spec));
+});
+
+test('SPEC.md says what is proved and what is tested', () => {
+  const doc = renderSpecDocument(paymentSpec(), { properties: { 'INV-001': 'proved', 'INV-002': 'failing' } });
+  assert.match(doc, /\*\*INV-001\*\* It never answers `approved` when role is clerk and amount is above limit\. proved by Lean/);
+  assert.match(doc, /\*\*INV-002\*\*.*not proved/);
+  assert.match(doc, /tested, not proved/);
+});
+
+test('diagnostics, axiom violations and step markers are read from the SDK output', () => {
+  const output = [
+    '@@step verify',
+    'error[LLV7005]: `PrismPaymentApproval.PaymentApproval.inv001Holds` violates its exact axiom policy: observed [Quot.sound, propext]',
+    '  --> lexlean.toml:1:1',
+    "error[LLV7002]: Lean rejected `PrismX.X` (error): omega could not prove the goal:",
+    'a possible counterexample may satisfy the constraints',
+    '  --> src/X.lex.tex:74:1',
+    '  note: generated location: $STAGING/lean-src/X.lean:43:12',
+    '@@exit verify 1',
+  ].join('\n');
+  const d = parseDiagnostics(output);
+  assert.equal(d.length, 2);
+  assert.deepEqual(d[1].span, { file: 'src/X.lex.tex', line: 74, column: 1 });
+  assert.deepEqual(axiomViolations(d), [{ name: 'inv001Holds', axioms: '[Quot.sound, propext]' }]);
+  assert.deepEqual(steps(output), [{ step: 'verify', code: 1 }]);
+  const proofs = renderProofs(paymentSpec());
+  const line = proofs.split('\n').findIndex((l) => l.startsWith('theorem{')) + 1;
+  assert.equal(declarationAt(proofs, line), 'inv001Holds');
+});
+
+test('the app lives in prism/, a hand edit of the model is noticed, and renaming follows the spec', () => {
+  const root = scratch();
+  const dir = appDir(root);
+  assert.equal(dir, join(root, 'prism'));
+  assert.ok(scaffold(dir).includes('lexlean.toml'));
+  assert.deepEqual(scaffold(dir), [], 'scaffolding again writes nothing');
+  const session = { ...readSession(dir), spec: paymentSpec(), status: {} };
+  assert.equal(writeApp(dir, session).edited, false);
+  assert.match(readFileSync(join(dir, 'lexlean.toml'), 'utf8'), /module_prefix = "PrismPaymentApproval"[\s\S]*entrypoints = \["src\/PaymentApproval\.lex\.tex"\]/);
+  assert.match(readFileSync(join(dir, 'lakefile.toml'), 'utf8'), /name = "PrismPaymentApproval"/);
+  assert.ok(!existsSync(join(dir, 'src', 'TextRequest.lex.tex')));
+  assert.equal(readFileSync(join(dir, '.gitattributes'), 'utf8'), '* text eol=lf\n');
+  session.status.modelSha = 'something else';
+  assert.equal(writeApp(dir, session).edited, true);
+  assert.equal(writeApp(dir, session, { overwrite: true }).edited, false);
+  assert.ok(existsSync(modelPath(dir, session.spec)));
+  assert.ok(existsSync(join(dir, 'src', 'PaymentApprovalProofs.lex.tex')));
+  assert.doesNotMatch(readFileSync(join(dir, 'lexlean.toml'), 'utf8'), /Proofs/, 'the proofs module is not a build entrypoint');
+});
+
+test('agents start the server with this package, or with npx at this version from the npx cache', () => {
+  const context = (sourceDir, platform = 'linux') => ({ sourceDir, platform, node: '/usr/bin/node' });
+  assert.deepEqual(journeyServer(context('/repo/sdk/npm/prism-code/src')), { command: '/usr/bin/node', args: [join('/repo/sdk/npm/prism-code/src', '..', 'bin', 'prism-code.mjs'), 'mcp'] });
+  assert.equal(journeyServer(context('/home/u/.npm/_npx/abc/node_modules/prism-code/src')).command, 'npx');
+  assert.deepEqual(journeyServer(context('C:\\npm-cache\\_npx\\abc\\node_modules\\prism-code\\src', 'win32')).args.slice(0, 3), ['/c', 'npx', '-y']);
+});
+
+function mcp(cwd) {
+  const sent = [];
+  const server = createServer({ cwd, send: (m) => sent.push(m) });
+  let id = 0;
+  return {
+    async call(method, params) {
+      const n = ++id;
+      await server.handle({ jsonrpc: '2.0', id: n, method, params });
+      return sent.find((m) => m.id === n);
+    },
+    async tool(name, args = {}) {
+      return (await this.call('tools/call', { name, arguments: args })).result;
+    },
+  };
+}
+
+test('the MCP server greets, asks, records answers and refuses to build an unfinished spec', async () => {
+  const root = scratch();
+  const s = mcp(root);
+  const init = await s.call('initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 't', version: '0' } });
+  assert.equal(init.result.protocolVersion, '2025-03-26');
+  assert.equal(init.result.instructions, INSTRUCTIONS);
+  assert.ok(INSTRUCTIONS.split(/\s+/).length < 150);
+  const tools = (await s.call('tools/list')).result.tools.map((t) => t.name);
+  assert.deepEqual(tools, ['prism_start', 'prism_answer', 'prism_spec', 'prism_prove', 'prism_build', 'prism_try', 'prism_status']);
+  const start = await s.tool('prism_start');
+  assert.match(start.structuredContent.greeting, /six short questions/);
+  assert.equal(start.structuredContent.step, 'purpose');
+  const blocked = await s.tool('prism_build');
+  assert.equal(blocked.isError, true);
+  assert.equal(blocked.structuredContent.state, 'blocked');
+  for (const step of ['purpose', 'fields', 'outcomes', 'rules', 'properties', 'examples']) await s.tool('prism_answer', { answer: ANSWERS[step] });
+  const review = await s.tool('prism_answer', { answer: 'yes' });
+  assert.equal(review.structuredContent.step, 'ready');
+  assert.ok(existsSync(join(root, 'prism', 'spec.json')) && existsSync(join(root, 'prism', 'SPEC.md')));
+  const tried = await s.tool('prism_try', { request: 'clerk 1001 1000' });
+  assert.deepEqual([tried.structuredContent.answer, tried.structuredContent.decidedBy], ['refused', 'otherwise']);
+  const resumed = await mcp(root).tool('prism_start');
+  assert.match(resumed.structuredContent.greeting, /Welcome back/);
+  const changed = await s.tool('prism_answer', { step: 'examples', answer: 'clerk 250 1000 -> refused' });
+  assert.match(changed.structuredContent.issue, /REQ-002/);
+  assert.equal((await s.call('tools/call', { name: 'nope', arguments: {} })).error.code, -32602);
+  assert.equal((await s.call('no/such')).error.code, -32601);
+  assert.match((await s.call('resources/read', { uri: 'prism://spec' })).result.contents[0].text, /# Payment approval/);
+  assert.match((await s.call('prompts/get', { name: 'prism' })).result.messages[0].content.text, /prism_start/);
+});
+
+test('a whole spec given as data is checked like answers', async () => {
+  const s = mcp(scratch());
+  const r = await s.tool('prism_spec', { spec: { ...paymentSpec(), properties: [{ kind: 'never', when: [{ field: 'amount', op: '>', value: { field: 'limit' } }], then: 'approved' }] } });
+  assert.equal(r.structuredContent.step, 'properties');
+  assert.match(r.structuredContent.issue, /does not hold/);
+  const ok = await s.tool('prism_spec', { spec: paymentSpec() });
+  assert.equal(ok.structuredContent.step, 'review');
+});
+
+test('mcp serves over stdio', () => {
+  const root = scratch();
+  const input = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2099-01-01', capabilities: {}, clientInfo: { name: 't', version: '0' } } },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'prism_start', arguments: {} } },
+  ].map((m) => JSON.stringify(m)).join('\n');
+  const r = spawnSync(process.execPath, [bin, 'mcp'], { cwd: root, input: `${input}\nnot json\n`, encoding: 'utf8' });
+  const lines = r.stdout.trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(lines.find((m) => m.id === 1).result.protocolVersion, '2025-06-18', 'an unknown version gets the newest');
+  assert.equal(lines.find((m) => m.id === 2).result.structuredContent.step, 'purpose');
+  assert.equal(lines.find((m) => m.id === null).error.code, -32700);
+});
+
+test('the review lists every property, and a rule example uses a number the field can hold', () => {
+  const many = {
+    ...ANSWERS,
+    rules: 'when role is manager then approved\nwhen amount <= limit then approved\nwhen amount < 5 then approved\nwhen limit > 1000000 then approved\notherwise refused',
+    properties: 'never when role is clerk and amount > limit and amount > 4 and limit <= 1000000 then approved\nalways when role is manager then approved\nalways when amount <= limit then approved',
+  };
+  const review = nextTurn(many);
+  assert.equal(review.step, 'review');
+  for (const id of ['INV-001', 'INV-002', 'INV-003']) assert.match(review.summary, new RegExp(id));
+  const ages = nextTurn({ purpose: 'Ticket price: decide a ticket.', fields: 'age: number 0..120', outcomes: 'child, adult' });
+  assert.equal(ages.step, 'rules');
+  assert.match(ages.example, /age <= 60/);
+  assert.doesNotMatch(ages.example, /1000/);
+});
+
+test('a build another live Prism server is running is not started twice, and an unchanged spec is not rebuilt', async () => {
+  const root = scratch();
+  const s = mcp(root);
+  await s.tool('prism_spec', { spec: paymentSpec() });
+  await s.tool('prism_answer', { answer: 'yes' });
+  const dir = join(root, 'prism');
+  const session = readSession(dir);
+  session.status.job = { kind: 'build', pid: process.pid === 1 ? 2 : 1, started: Date.now() - 5000 };
+  writeFileSync(join(dir, 'session.json'), JSON.stringify({ ...session, status: { ...session.status, job: { ...session.status.job, pid: process.ppid } } }));
+  const busy = await mcp(root).tool('prism_build', { wait: 0 });
+  assert.equal(busy.structuredContent.state, 'running');
+  assert.match(busy.structuredContent.next, /another Prism server/);
+  const holo = join(root, 'App.holo');
+  writeFileSync(holo, 'x');
+  const done = readSession(dir);
+  delete done.status.job;
+  done.status.lastSpec = JSON.stringify(done.spec);
+  done.status.modelSha = 'abc';
+  done.status.lastBuild = { modelSha: 'abc', holo, result: { ok: true, message: 'Built.', holo } };
+  writeFileSync(join(dir, 'session.json'), JSON.stringify(done));
+  const again = await mcp(root).tool('prism_build', { wait: 0 });
+  assert.equal(again.structuredContent.state, 'done');
+  assert.match(again.structuredContent.note, /not built again/);
+});
