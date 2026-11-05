@@ -21,7 +21,7 @@ npm install prism-code
 
 ## Write from examples (experimental)
 
-`prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See [docs/proposals/325-authoring-front-door.md](../proposals/325-authoring-front-door.md).
+`prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See [docs/proposals/325-authoring-front-door.md](../../../../docs/proposals/325-authoring-front-door.md).
 
 ## Three calls
 
@@ -170,7 +170,7 @@ app.capabilities.assert('variables', 'signing_key');  // throws CapabilityDenied
 The guest's world, `hologram:guest/core-wasm@1`, has no imports, so the runtime
 links none: a guest that declares an import fails to load with
 `CapabilityDeniedError` (`capabilities.import`) whatever the file grants. The
-format and its open questions are in [docs/proposals/279-capability-sets.md](../proposals/279-capability-sets.md);
+format and its open questions are in [docs/proposals/279-capability-sets.md](../../../../docs/proposals/279-capability-sets.md);
 the JSON Schema is `@prism-code/spec`'s `schemas/capabilities/capabilities-v1.schema.json`.
 
 ### The world within the grant (experimental, #283)
@@ -190,7 +190,7 @@ await app.experimental_verify();  // judges world.capabilities against the set t
 `hologram:guest/core-wasm@1` imports nothing, so it is within every grant and
 pure. The check is `@prism-code/verify`'s `worldPolicy`, vendored, so the
 runtime, `holo.verify()` and the browser verifier cannot disagree. Design:
-[docs/proposals/283-world-within-policy.md](../proposals/283-world-within-policy.md).
+[docs/proposals/283-world-within-policy.md](../../../../docs/proposals/283-world-within-policy.md).
 
 ## Start a project (experimental, #281)
 
@@ -255,7 +255,7 @@ const vars = resolveVariables(manifest, process.env);        // env(NAME) unset:
 ```
 
 The schema is `@prism-code/spec`'s `schemas/manifest/manifest-v1.schema.json`;
-the design is [docs/proposals/280-prism-toml.md](../proposals/280-prism-toml.md).
+the design is [docs/proposals/280-prism-toml.md](../../../../docs/proposals/280-prism-toml.md).
 
 ```
 npx prism-code vectors app.holo       # replay every acceptance vector; exit 1 on a failure
@@ -416,7 +416,7 @@ const { statement, divergenceCount } = await app.experimental_replay([history, r
 
 A divergence rejects with `DeterminismViolationError` (`replay.divergence`), and every divergence is in its `details`. With `throw: false` the result comes back instead. A replay that cannot be carried out always rejects with `ReplayError`.
 
-`statement` is an in-toto Statement v1 of type `https://uor.foundation/prism/replay/v1`: the guest as its subject, the model, every history by its sha256 and BLAKE3, the divergence count and the runtime. It holds no clock, so the same replay writes the same bytes. Sign it with `prism-code attest`. `check <holo> --replay <file>` judges a statement from beside the holo, which can withhold P3 and never support it because it is unsigned. `check` reads signed statements from the holo when you name the signer (#270). The design is [docs/proposals/284-histories-replay.md](../proposals/284-histories-replay.md).
+`statement` is an in-toto Statement v1 of type `https://uor.foundation/prism/replay/v1`: the guest as its subject, the model, every history by its sha256 and BLAKE3, the divergence count and the runtime. It holds no clock, so the same replay writes the same bytes. Sign it with `prism-code attest`. `check <holo> --replay <file>` judges a statement from beside the holo, which can withhold P3 and never support it because it is unsigned. `check` reads signed statements from the holo when you name the signer (#270). The design is [docs/proposals/284-histories-replay.md](../../../../docs/proposals/284-histories-replay.md).
 
 ## Generate a typed client (experimental)
 
@@ -487,7 +487,7 @@ which adjust the default policy. Without `--policy` the default policy asks for
 `PRISM_MINIMUM_LEVEL` sets the minimum when the policy does not, and never
 applies to a Rego policy, which states its own. A file is named in the verdict by
 its path, unless JSON names itself. The format is in
-[docs/proposals/285-policy-file.md](../proposals/285-policy-file.md).
+[docs/proposals/285-policy-file.md](../../../../docs/proposals/285-policy-file.md).
 
 A holo reaches P1 and P2 through the signed statements in its attestation
 section: a provenance statement for P1 and a proof statement for P2. `check`
@@ -685,7 +685,7 @@ set bounds whether it runs, not what it does.
 `prism-provider-kv` is the reference provider, a third binary in this package. It
 keeps a store as one JSON file, `.prism/kv/<application>/<store>.json`, and takes
 `store`, `dir` and repeated `set = ["key=value"]`. The protocol and its reasons
-are in [docs/proposals/294-provider-services.md](../proposals/294-provider-services.md).
+are in [docs/proposals/294-provider-services.md](../../../../docs/proposals/294-provider-services.md).
 
 ## What is in a `.holo`
 
@@ -706,7 +706,7 @@ A holo may carry signed statements in one more Extension row, the last one,
 named `https://uor.foundation/extension/attestation-bundle/v1`. Its payload is
 JSON Lines, one Sigstore bundle v0.3 per line. The footer still covers every
 byte before it, bundle included. The design is
-[docs/proposals/267-attestation-bundle.md](../proposals/267-attestation-bundle.md).
+[docs/proposals/267-attestation-bundle.md](../../../../docs/proposals/267-attestation-bundle.md).
 
 ```js
 import { load, appendAttestations, stripAttestations } from 'prism-code';
@@ -764,7 +764,7 @@ Errors are typed: `SigningError` (`sign.*`), `SignatureInvalidError`, `IdentityM
 `TransparencyError`, `SubjectMismatchError`, `AttestationNotFoundError`, `TrustRootError`; a bad policy is a
 `VerificationError` with check `policy.invalid`. The verb is `verify-attestation` because
 `prism-code verify` already runs `prismpm verify`. The design is
-[docs/proposals/272-attest-verify.md](../proposals/272-attest-verify.md).
+[docs/proposals/272-attest-verify.md](../../../../docs/proposals/272-attest-verify.md).
 
 ## Push and pull (experimental, #292)
 
@@ -811,7 +811,7 @@ const { holo, verdict } = await experimental_pull('ghcr.io/acme/app:1.0', { key:
 
 Errors are typed: `RegistryAuthError`, `ReferrersUnsupportedError`, `DigestMismatchError`, `PullVerificationError`,
 `ManifestNotFoundError`, `RegistryError`, `ReferenceInvalidError`. The design is
-[docs/proposals/292-push-pull-oci.md](../proposals/292-push-pull-oci.md).
+[docs/proposals/292-push-pull-oci.md](../../../../docs/proposals/292-push-pull-oci.md).
 
 ## Export for the browser (experimental, #290)
 

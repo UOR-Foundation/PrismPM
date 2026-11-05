@@ -1,12 +1,19 @@
-// The source inventory catches budget regressions in npm test; CI additionally
-// passes npm's real pack manifest through the same check to catch packlist drift.
+// Measure npm's actual package, including the checkout's platform line endings.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { test } from 'node:test';
-import { checkPackage, PACKAGE_FILES, PACKAGE_LIMIT } from '../scripts/check-package.mjs';
+import { checkPackage, PACKAGE_LIMIT } from '../scripts/check-package.mjs';
 
-const files = PACKAGE_FILES.map((path) => ({ path, size: statSync(new URL(`../${path}`, import.meta.url)).size }));
-const pack = { name: 'prism-code', files, unpackedSize: files.reduce((sum, file) => sum + file.size, 0) };
+const args = ['pack', '--dry-run', '--json'];
+assert.ok(process.env.npm_execpath, 'Run this suite with npm test so npm uses the current Node executable');
+const result = spawnSync(process.execPath, [process.env.npm_execpath, ...args], {
+  cwd: new URL('../', import.meta.url), encoding: 'utf8', timeout: 60000,
+});
+assert.ifError(result.error);
+assert.equal(result.status, 0, result.stderr);
+const [pack] = JSON.parse(result.stdout);
+const { files } = pack;
 
 test('all required distributed files fit the unchanged 1088 KiB package budget', () => {
   checkPackage(pack);
@@ -32,12 +39,12 @@ test('a smaller package cannot pass by omitting a required file or changing its 
 test('README guide links resolve to repository files and headings', () => {
   const root = new URL('../../../../', import.meta.url);
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  const guide = readFileSync(new URL('docs/npm/prism-code.md', root), 'utf8');
+  const guide = readFileSync(new URL('sdk/npm/prism-code/docs/guide.md', root), 'utf8');
   const slugs = new Set([...guide.matchAll(/^#+ (.+)$/gm)].map(([, title]) => title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/ /g, '-')));
-  const links = [...readme.matchAll(/https:\/\/github\.com\/UOR-Foundation\/PrismPM\/blob\/main\/docs\/npm\/prism-code\.md(?:#([\w-]+))?/g)];
+  const links = [...readme.matchAll(/https:\/\/github\.com\/UOR-Foundation\/PrismPM\/blob\/main\/sdk\/npm\/prism-code\/docs\/guide\.md(?:#([\w-]+))?/g)];
   assert.ok(links.length > 0, 'the complete guide is discoverable from the npm README');
   for (const [, anchor] of links) if (anchor) assert.ok(slugs.has(anchor), anchor);
-  for (const [, path] of guide.matchAll(/\]\((\.\.\/proposals\/[^)#]+\.md)\)/g)) {
-    assert.ok(statSync(new URL(path, new URL('docs/npm/prism-code.md', root))).isFile(), path);
+  for (const [, path] of guide.matchAll(/\]\(((?:\.\.\/)+docs\/proposals\/[^)#]+\.md)\)/g)) {
+    assert.ok(statSync(new URL(path, new URL('sdk/npm/prism-code/docs/guide.md', root))).isFile(), path);
   }
 });

@@ -12,7 +12,6 @@ on:
   pull_request:
     paths:
       - sdk/npm/prism-code/**
-      - docs/npm/prism-code.md
       # test/inspect.test.mjs checks its format revision table against the spec's.
       - sdk/npm/spec/constants.mjs
       # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
@@ -41,7 +40,6 @@ on:
     branches: [main]
     paths:
       - sdk/npm/prism-code/**
-      - docs/npm/prism-code.md
       - sdk/npm/spec/constants.mjs
       # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
       - sdk/npm/spec/assurance-levels.mjs
@@ -114,7 +112,7 @@ jobs:
         working-directory: sdk/npm/testing
         run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
       - name: Unit tests
-        run: node --test "test/*.test.mjs"
+        run: npm test
       - name: The init templates are their fixtures
         run: node scripts/sync-templates.mjs --check
       - name: create-prism-code

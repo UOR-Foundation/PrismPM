@@ -34,13 +34,12 @@ await app.acceptance();            // { total: 22, passed: 22, failed: [] }
 and moves bytes only; callers choose text encoding.
 
 Fields: `model`, `profile`, `limits`, `vectors`, `directory`, `identities`,
-`evidence`, `view`, `provenance.model`, `provenance.browser`. Archives supply
-model/limits/vectors, directory, kappas, fingerprint and model provenance.
-Closures need `{ model }` for model/limits/vectors; profile may come from
-glue; directory/model provenance are null. Archives have null browser
-provenance. `view` is decoded HOLOVIEW entry/files or closure files. Evidence
-is proof/build pointers, not proof checking. Closure identity checks report
-mismatches/unverifiable inputs; external `model_id`/`view_model_id` remain unverifiable.
+`evidence`, `view`, `provenance.model/browser`. Archives supply model, limits,
+vectors, directory, kappas, fingerprint and model provenance; browser
+provenance is null. Closures need `{ model }` for model/limits/vectors, infer
+profile from glue, have null directory/model provenance. `view` holds
+HOLOVIEW entry/files or closure files; `evidence` is pointers, not proof
+checking. Closure identities report mismatches/unverifiable external IDs.
 
 ```sh
 npx prism-code vectors app.holo
@@ -82,10 +81,10 @@ await container.inspect(); // prism/container/1: id, image, state, verdict, outp
 await container.remove();
 ```
 
-`create` then `start` is the two-step API; `rm: true` removes on exit.
-Failed runs return an exit code; an unopenable image rejects without creating
-a container. CLI records retain times and output, never input, under
-`$PRISM_HOME/containers` (default `~/.prism/containers`) until removed.
+`create`/`start` is the two-step API; `rm: true` removes on exit. Failed runs
+return codes; unopenable images reject without creating a container. CLI
+records retain times/output, never input, under `$PRISM_HOME/containers`
+(default `~/.prism/containers`) until removed.
 `EXIT_CODES` and `exitCodeFor(error)` share this mapping:
 
 | Exit | Reason |
@@ -238,13 +237,13 @@ npx prism-code inspect Calculator.holo --format sections[0].digest.sha256
 npx prism-code check Calculator.holo --policy policy.json --json
 ```
 
-`inspect` never compiles/runs the guest: it reads revision, section
-SHA-256/BLAKE3, manifest, model, provenance, world, attestations and integrity
-checks. Human output has stable order/full digests; JSON is canonical
-`prismpm/holo-inspection/1`. `--format` selects a dotted path: raw strings,
-otherwise canonical JSON; missing value exits 2, malformed path 64. Damaged
-but readable archives report failed integrity; unknown structure exits 2.
-Closures return the earlier JSON identities/limits/provenance/view summary.
+`inspect` reads revision, SHA-256/BLAKE3 sections, manifest, model,
+provenance, world, attestations and integrity without running the guest.
+Human output has stable order/full digests; JSON: canonical
+`prismpm/holo-inspection/1`. `--format` selects dotted paths: raw strings,
+otherwise canonical JSON; missing values exit 2, malformed paths 64.
+Readable damage reports failed integrity; unknown structures exit 2.
+Closures return a JSON identities/limits/provenance/view summary.
 
 ```js
 import { inspect, experimental_verify, VerificationError } from 'prism-code';
@@ -256,13 +255,12 @@ await experimental_verify(bytes, { world: lock.inputs.world, throw: true });
 ```
 
 `experimental_verify` / `app.experimental_verify` return `prism/verdict/1`
-offline using the vendored verifier. No option raises the evidence's level.
-Options: `name`, `minimum` (P0–P3), `digests`, `world`, `throw`.
-`experimental_createClient(options)` holds defaults: call overrides client,
-which overrides `PRISM_MINIMUM_LEVEL`. `world` accepts `lock.inputs.world`;
-contract/hash changes fail `world.hash`. Independently, imports/exports must
-match the declared WIT contract. `throw: true` throws typed verdict failures;
-invalid options, unknown revisions and non-holos always throw (no verdict).
+offline; no option raises the evidence's level. Options: `name`, `minimum`
+(P0–P3), `digests`, `world`, `throw`. `experimental_createClient(options)`
+sets defaults: call overrides client overrides `PRISM_MINIMUM_LEVEL`.
+`world` accepts `lock.inputs.world`; contract/hash changes fail `world.hash`.
+Imports/exports must match WIT independently. `throw: true` throws typed
+verdict failures; invalid options/revisions/non-holos always throw (no verdict).
 
 `check` runs the same checks without Docker. `--policy` takes shipped
 `default`, `pure-only`, `provenance-only`, a JSON options file (also `effects`),
@@ -301,14 +299,11 @@ a holo is deprecated `build --check`, removed in 0.4.0.
 Errors extend `PrismError` with stable `code`; verification adds `check`,
 registered `diagnostic`, `verdict`, `reasons`.
 
-Error classes/checks: `VerificationError` (`holo.*`, `provenance.*`,
-`policy.*`, no verdict), `ProofMismatchError` (`proof.*`),
-`CapabilityDeniedError` (`world.capabilities`, runtime `capabilities.*`),
-`WorldMismatchError` (`world.contract`, `world.hash`),
-`DeterminismViolationError` (`replay.divergence`), `ReplayError` (other
-`replay.*`). Codes respectively: `verification_failed`, `proof_mismatch`,
-`capability_denied`, `world_mismatch`, `determinism_violation`, `replay_failed`.
-`PrismCodeError` uses the load/archive check as code, e.g. `archive.magic`.
+Classes/codes: `VerificationError` / `verification_failed`,
+`ProofMismatchError` / `proof_mismatch`, `CapabilityDeniedError` /
+`capability_denied`, `WorldMismatchError` / `world_mismatch`,
+`DeterminismViolationError` / `determinism_violation`, `ReplayError` /
+`replay_failed`. `PrismCodeError` uses the load/archive check, e.g. `archive.magic`.
 
 ## Histories and typed clients (experimental)
 
@@ -525,11 +520,7 @@ Stdout JSON Lines `{type,message}`: `info`, `debug`, `error`, `setenv`.
 `.prism/kv/<application>/<store>.json`, supports `store`, `dir`, repeated
 `set = ["key=value"]`, deletes on down.
 
-## Format and compatibility
-
-HOLO v4 is little-endian and content-addressed. Labels/footer, digests and
-cross-references are checked; unknown structures fail with named errors.
-The [guide][guide] covers headers, sections and digest ranges.
+## Compatibility
 
 0.1.0 hashing stays at `prism-code/canonical`: `canonicalize`, `codeHash`,
 `describe`, `differs`. Hashes are host-independent. Without `node:crypto`,
@@ -542,4 +533,4 @@ JavaScript-only holo production is promised here.
 
 MIT.
 
-[guide]: https://github.com/UOR-Foundation/PrismPM/blob/main/docs/npm/prism-code.md
+[guide]: https://github.com/UOR-Foundation/PrismPM/blob/main/sdk/npm/prism-code/docs/guide.md
