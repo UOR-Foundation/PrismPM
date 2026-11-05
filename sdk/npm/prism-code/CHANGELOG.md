@@ -9,6 +9,7 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 ## [Unreleased]
 
 ### Features Added
+- `prism-code setup [--agent <id>] [--dry-run]` and `prism-code open <prism://build link> [--dry-run]` (experimental): configure the UOR MCP server in Claude Code, Codex, Cursor and VS Code, register the `prism://` handler, and hand the website's sentence to the agent. New modules `src/agents.mjs`, `src/open.mjs`, `src/handler.mjs`, `src/setup.mjs` and `src/setup-cli.mjs`, with no new dependencies. See the root CHANGELOG and the README section Set up your agents.
 - `src/volumes.mjs`, the `prism.volumes` namespace (#445, experimental): `create`, `list`, `inspect` and `remove` over the capability file, not yet reachable from the package, because #441 connects the modules. See the root CHANGELOG.
 - `pull` reads signed statements (#292, #270, experimental): its verdict is now `check`'s, so a signed holo reaches P1 and P2 with the signer named, and `experimental_pull` refuses a policy object that carries evidence. See the root CHANGELOG.
 - `check` reaches P1 and P2 from the signed statements in a holo (#270, experimental): name the signer with `--key`, or `--certificate-identity`/`--certificate-identity-regexp` with `--certificate-oidc-issuer`, and pin `--trusted-root`. Without a signer a signed holo is P0. A holo with an attestation section no longer exits 2 with `format.revision`. See the root CHANGELOG.
