@@ -1,11 +1,7 @@
 /**
- * The browser closure that `prismpm export-browser` writes. Closure v1 is the
- * six-file page: `index.html`, `app.js`, `app.css`, the wasm-bindgen glue
- * `<stem>.js`, the adapter `<stem>_bg.wasm` and `provenance.json`
- * (`prismpm/browser-provenance/1`), which is the anchor. Closure v2 adds the
- * Hologram brand files and a web app manifest beside them
- * (`crates/prismpm/src/brand.rs`), and its `prismpm/browser-provenance/2`
- * names the digest of every other file.
+ * The browser closure `prismpm export-browser` writes. v1: `index.html`, `app.js`,
+ * `app.css`, `<stem>.js`, `<stem>_bg.wasm` and the anchor `provenance.json`. v2 adds
+ * the brand files and manifest (`brand.rs`); its provenance names every file digest.
  *
  * The closure is loaded from a map of file name to bytes plus a way to import
  * the glue module, so the same code serves Node (files on disk) and browsers
@@ -17,12 +13,10 @@ import { sha256Hex } from './sha256.mjs';
 export const PROVENANCE_SCHEMA = 'prismpm/browser-provenance/1';
 export const PROVENANCE_SCHEMA_V2 = 'prismpm/browser-provenance/2';
 export const FIXED_FILES = ['index.html', 'app.js', 'app.css', 'provenance.json'];
-/** Closure v2's brand files and manifest, flat beside index.html. */
 export const BRAND_FILES = Object.freeze(['Archivo-SemiBold.woff2', 'Geist-Medium.woff2', 'Geist-Regular.woff2',
   'Geist-SemiBold.woff2', 'GeistMono-Regular.woff2', 'OFL-Archivo.txt', 'OFL-Geist.txt', 'icon-512.png', 'icon.svg',
   'manifest.webmanifest']);
 
-/** The exact closure v1 and v2 file names for a stem, each sorted. */
 export function closureProfiles(stem) {
   const v1 = [...FIXED_FILES, `${stem}.js`, `${stem}_bg.wasm`].sort();
   return { 1: v1, 2: [...v1, ...BRAND_FILES].sort() };
@@ -71,8 +65,7 @@ export async function verifyClosure(files) {
     (f) => typeof provenance[f] === 'string',
   );
   if (provenance.schema === PROVENANCE_SCHEMA_V2) {
-    // v2 names every other file's digest. A present file must be named and match;
-    // a named file that was not supplied (a font the browser fetches) stays unverified.
+    // A supplied file must be listed and match; a listed file not supplied stays unverified.
     const listed = provenance.files && typeof provenance.files === 'object' ? provenance.files : {};
     for (const name of names) {
       if (name === 'provenance.json') continue;

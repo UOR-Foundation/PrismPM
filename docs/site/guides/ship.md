@@ -59,7 +59,7 @@ The page serves the holo, the browser export, and the attestation bundle. Nothin
 
 ## Export for the browser
 
-`export` writes the browser export, or a tarball of the same files. Use it when you host the files yourself. The export is closure v2: the six-file page plus the Hologram fonts, their licences, the app icons and a web app manifest, so the page renders in the brand fonts and installs on a phone with no remote request:
+`export` writes the browser export, or a tarball of the same files. Use it when you host the files yourself. The export is closure v2: the six-file page plus the brand fonts (Geist, Geist Mono and Archivo), their licences, the app icons and a web app manifest, so the page renders in the brand fonts and installs on a phone with no remote request:
 
 ```bash
 prism export --out dist
