@@ -60,7 +60,7 @@ The command does not load a project or lock, invoke a compiler/helper subprocess
 fetch packages, link a checked program or prove it. `prismpm build`'s checked
 `lexlean/snapshot.json` remains a separate representation and acceptance surface.
 Use the immutable installed SDK selected by the consumer's lock. A source-built
-CLI result alone does not qualify that image or authorize a consumer lock change.
+CLI result alone does not establish acceptance of that image or authorize a consumer lock change.
 
 `--max-input-bytes` and `--max-output-bytes` default to 16 MiB and 64 MiB. They
 can be overridden before or after the operation. Both must be positive and
