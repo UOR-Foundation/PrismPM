@@ -342,7 +342,11 @@ export function checkRecord(files, { repo, sha }) {
   for (const name of ['project', 'build', 'holo', 'fingerprint', 'holo_sha256']) {
     if (typeof record[name] !== 'string' || record[name] === '') fail('remote.artifact', `build.json has no ${name}`);
   }
-  if (!/^[A-Za-z0-9_.-]+$/.test(record.project) || !/^[0-9a-f]{64}$/.test(record.build) || !/^[A-Za-z0-9_.-]+\.holo$/.test(record.holo)) fail('remote.artifact', 'build.json names a project, build or holo with characters a path cannot take');
+  // A holo is named after the app, spaces included (`Leap year.holo`); what a name must not do is leave its directory.
+  const leaves = (name) => /[\\/\0]/.test(name) || name === '..' || name.split(/[\\/]/).includes('..');
+  if (!/^[A-Za-z0-9_.-]+$/.test(record.project) || record.project === '..' || !/^[0-9a-f]{64}$/.test(record.build) || !/\.holo$/.test(record.holo) || leaves(record.holo)) {
+    fail('remote.artifact', `build.json names a project, build or holo a path cannot take: ${JSON.stringify({ project: record.project, build: record.build, holo: record.holo })}`);
+  }
   return record;
 }
 
@@ -482,7 +486,9 @@ export async function remoteBuild({
   log('downloading the artifact');
   const { artifact, files } = await downloadArtifact(client, repo, ended.id, sha);
   const result = await verifyRemoteBuild(files, { cwd, repo, sha, runInfo: { id: ended.id, url: ended.html_url, artifact: artifact.name }, policy, verifyBundle, run, env });
-  if (pushed) result.refDeleted = deleteBuildRef(cwd, sha, { run });
+  // The build ref has served, whoever pushed it: a run reused after a refusal still leaves one behind otherwise.
+  result.refDeleted = deleteBuildRef(cwd, sha, { run });
+  result.pushed = pushed;
   return result;
 }
 

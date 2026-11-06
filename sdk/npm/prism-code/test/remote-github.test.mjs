@@ -155,6 +155,8 @@ test('build.json must be this commit and this repository; the provenance must be
   assert.throws(() => checkRecord(files({ rec: record({ repository: 'other/repo' }) }), { repo: REPO, sha: SHA }), (e) => e.code === 'remote.signer');
   assert.throws(() => checkRecord(files({ rec: record({ schema: 'prism/remote-build/9' }) }), { repo: REPO, sha: SHA }), (e) => e.code === 'remote.artifact');
   assert.throws(() => checkRecord(files({ rec: record({ holo: '../escape.holo' }) }), { repo: REPO, sha: SHA }), (e) => e.code === 'remote.artifact');
+  assert.throws(() => checkRecord(files({ rec: record({ holo: 'sub/escape.holo' }) }), { repo: REPO, sha: SHA }), (e) => e.code === 'remote.artifact');
+  assert.equal(checkRecord(files({ rec: record({ holo: 'Leap year.holo' }) }), { repo: REPO, sha: SHA }).holo, 'Leap year.holo', 'a holo is named after its app, spaces included');
   assert.throws(() => checkRecord(new Map(), { repo: REPO, sha: SHA }), (e) => e.code === 'remote.artifact' && /no build\.json/.test(e.message));
 
   const ok = checkProvenance(bundle(), { repo: REPO, sha: SHA, holoSha256: sha256(holoBytes) });
@@ -179,6 +181,12 @@ test('a verified build is written under .prism/build/<build>/ and nothing is wri
   assert.equal(result.vectors.total, 22);
   assert.equal(result.vectors.passed, 22);
   assert.ok(result.verdict.level, 'a verdict was reached');
+
+  // The live run's app was `Leap year.holo`: a name with a space is written where the runner put it.
+  const spaced = await verifyRemoteBuild(files({ rec: record({ holo: 'Leap year.holo' }) }), { cwd: scratch(), repo: REPO, sha: SHA, verifyBundle: signed });
+  assert.equal(spaced.exitCode, 0);
+  assert.ok(spaced.holo.endsWith(join('.prism', 'build', BUILD, 'Leap year.holo')));
+  assert.ok(existsSync(spaced.holo));
 });
 
 test('planted: a flipped byte in the holo is a digest mismatch, and .prism/build/ stays empty', async () => {
@@ -299,8 +307,10 @@ test('an existing run for the commit is reused without a push, and a wait that r
   const existing = github({ runs: [{ id: 7, head_sha: SHA, path: '.github/workflows/pages.yml', status: 'completed', conclusion: 'success', html_url: 'https://github.com/acme/prism-luhn/actions/runs/7', created_at: '2026-11-06T00:00:00Z' }] });
   const result = await remoteBuild({ cwd, env: { GITHUB_TOKEN: 't' }, fetch: existing.fetch, run: existing.run, sleep: async () => {}, verifyBundle: signed });
   assert.equal(result.exitCode, 0);
-  assert.equal(existing.gitCalls.some((c) => c.includes('push')), false);
-  assert.equal(result.refDeleted, undefined);
+  assert.equal(result.pushed, false);
+  const pushes = existing.gitCalls.filter((c) => c[0] === 'git' && c.includes('push'));
+  assert.deepEqual(pushes.map((c) => c.at(-1)), [`:${buildRef(SHA)}`], 'no push of the commit, only the delete of a build ref that may be left from an earlier attempt');
+  assert.equal(result.refDeleted, true);
 
   let clock = 0;
   const client = gitHubClient({ token: 't', fetch: async () => ({ status: 200, ok: true, text: async () => JSON.stringify({ id: 7, status: 'in_progress', html_url: 'u' }) }), sleep: async (ms) => { clock += ms; } });
