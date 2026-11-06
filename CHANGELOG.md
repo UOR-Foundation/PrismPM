@@ -53,7 +53,7 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
 ### Bugs Fixed
-- `prismpm` compiles for Windows: the executable mode bit for a built `cli/bin/` program is set only on Unix, the one place it exists. A native `prismpm check` gives the image's verdict on Linux, macOS and Windows, which the new `native check` workflow holds.
+- `prismpm` compiles for Windows and macOS. The executable mode bit for a built `cli/bin/` program is set only on Unix, the one place it exists, and the exporter widens rustix stat fields (an i32 device and a u16 mode on macOS) as std does. A native `prismpm check` gives the image's verdict on Linux, macOS and Windows, which the new `native check` workflow holds.
 
 ### Other Changes
 - The spec digest in `prismpm/sdk-lock/3` covers `intent.md` in place of the `intent/` directory reserved by #264, and the lock gains an optional `authoring` record. A lock with that record needs an SDK image built from this change.
