@@ -3,8 +3,10 @@
  * answer into something a person can act on. A wrong axiom set is fixed and
  * the proof run again without asking, because it is bookkeeping, not intent.
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
+import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names } from './render.mjs';
@@ -217,8 +219,13 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
   };
 }
 
-/** Prove, then build the holo and replay its acceptance vectors through the guest. */
-export async function build(dir, session, { log = () => {}, overwrite = false } = {}) {
+/**
+ * Prove, then build the holo and replay its acceptance vectors through the
+ * guest. `remote: 'github'` has the repository's own GitHub Actions build the
+ * committed app instead, and this machine verifies what comes back, so no
+ * Docker and no SDK image are needed here.
+ */
+export async function build(dir, session, { log = () => {}, overwrite = false, remote = null } = {}) {
   const proved = session.status.proved && session.status.proved.modelSha === session.status.modelSha && existsSync(modelPath(dir, session.spec)) && session.status.lastSpec === JSON.stringify(session.spec);
   if (!proved) {
     const p = await prove(dir, session, { log, overwrite });
@@ -226,6 +233,7 @@ export async function build(dir, session, { log = () => {}, overwrite = false } 
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
   }
+  if (remote === 'github') return buildRemote(dir, session, { log });
   // A build needs the image, and a hosted proof did not: pull it now if it is missing, saying so, and pin the app to it.
   const ready = await prepare(dir, session, log, { pull: true });
   if (!ready.ok) return { ok: false, stage: 'build', message: ready.message };
@@ -245,22 +253,58 @@ export async function build(dir, session, { log = () => {}, overwrite = false } 
   }
   const holo = newestHolo(dir);
   if (!holo) return { ok: false, stage: 'build', seconds, message: 'The build passed but wrote no holo that Prism could find under prism/.prism/build.' };
+  return built(dir, session, holo, seconds, { where: 'local' });
+}
+
+/** The app was built on GitHub Actions and verified here. The commit must hold the app folder as it is now. */
+async function buildRemote(dir, session, { log }) {
+  const started = Date.now();
+  const top = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', windowsHide: true });
+  if (top.error || top.status !== 0) {
+    return { ok: false, stage: 'build', message: `${dir} is not inside a git repository. A remote build needs the app committed to a GitHub repository that carries the template's build workflow.` };
+  }
+  const root = resolve(String(top.stdout).trim());
+  log('Building on GitHub Actions: the repository\'s build.yml runs prismpm verify in the SDK image, and this machine checks what comes back. The commit must hold the app folder as it is now.');
+  let result;
+  try {
+    const { remoteBuild } = await import('../remote-github.mjs');
+    result = await remoteBuild({ cwd: root, version: VERSION, log });
+  } catch (error) {
+    if (!(error instanceof PrismError)) throw error;
+    const hint = error.code === 'remote.dirty' ? ' Commit the app folder, then build again.' : '';
+    return { ok: false, stage: 'build', message: `The remote build was refused: ${error.code}: ${error.message}${hint}` };
+  }
+  const seconds = Math.round((Date.now() - started) / 1000);
+  if (result.exitCode !== 0) {
+    return { ok: false, stage: 'build', seconds, message: `The build came back from ${result.run.url} but did not pass here: verdict ${result.verdict.level ?? 'none'}, ${result.vectors.passed} of ${result.vectors.total} vectors. What came back is at ${result.staging}.` };
+  }
+  if (!resolve(result.holo).startsWith(resolve(dir))) {
+    return { ok: false, stage: 'build', seconds, message: `The repository's build.yml built ${result.project}, not ${relative(root, dir) || '.'}; the workflow and the app folder disagree.` };
+  }
+  return built(dir, session, result.holo, seconds, { where: 'github', run: result.run.url, fingerprint: result.fingerprint, signer: result.signature.identity ?? `a workflow of ${result.repository}`, checkedBy: result.signature.via });
+}
+
+/** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
+async function built(dir, session, holo, seconds, proof) {
   const app = await fromFile(holo);
   const acceptance = await app.acceptance();
   session.status.holo = holo;
   session.status.vectors = acceptance.total;
-  session.status.built = { at: new Date().toISOString(), seconds, passed: acceptance.passed, total: acceptance.total };
+  session.status.built = { at: new Date().toISOString(), seconds, passed: acceptance.passed, total: acceptance.total, ...proof };
   writeFileSync(join(dir, 'run-policy.json'), '{"minimum": "P0"}\n');
   writeSpecDocument(dir, session);
   const rel = relative(process.cwd(), holo) || holo;
   const policy = relative(process.cwd(), join(dir, 'run-policy.json')) || join(dir, 'run-policy.json');
+  const where = proof.where === 'github' ? ` on GitHub Actions (${proof.run}), provenance signed by ${proof.signer} and checked here` : '';
   return {
     ok: acceptance.failed.length === 0,
     stage: 'build',
     seconds,
     holo,
+    where: proof.where,
+    ...(proof.where === 'github' ? { run: proof.run, fingerprint: proof.fingerprint } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
-    message: acceptance.failed.length === 0 ? `Built and verified in ${seconds} s: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.` : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
+    message: acceptance.failed.length === 0 ? `Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.` : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
