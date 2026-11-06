@@ -103,6 +103,15 @@ test('additive integrity owner must be skipped and cannot replace original nativ
  }
  const g=fixture();g.authority.jobs[5]={...g.authority.jobs[3],id:6,name:'construction-integrity'};assert.throws(()=>g.admit());
 });
+test('the previous nine-job workflow, without the disk step, is still admitted by its own profile',()=>{
+ const previous=readFileSync(new URL('../tests/sdk-construction/sdk-candidate-nine.yml',import.meta.url));
+ const current=readFileSync(new URL('../.github/workflows/sdk-candidate.yml',import.meta.url));
+ assert.notDeepEqual(previous,current,'the fixture is the workflow before the disk step');
+ assert(!previous.toString().includes('Free runner disk')&&current.toString().includes('Free runner disk'));
+ const f=fixture();f.workflow=previous;
+ for(const [i,name]of['construction-integrity','unpublished-prerequisites','unpublished-installed'].entries())f.authority.jobs.push({...f.authority.jobs[3],id:7+i,name});
+ assert.doesNotThrow(()=>f.admit());
+});
 test('the current nine-job workflow profile is exact and bounds or command mutations fail closed',()=>{
  const current=readFileSync(new URL('../.github/workflows/sdk-candidate.yml',import.meta.url));
  const skipped=f=>{for(const [i,name]of['construction-integrity','unpublished-prerequisites','unpublished-installed'].entries())f.authority.jobs.push({...f.authority.jobs[3],id:7+i,name});};
@@ -111,7 +120,8 @@ test('the current nine-job workflow profile is exact and bounds or command mutat
  for(const mutation of [
   ['timeout-minutes: 180','timeout-minutes: 179'],
   ['max-parallel: 2','max-parallel: 1'],
-  ['node scripts/sdk-construction-record.mjs','node scripts/sdk-construction-record.mjs --mutated']
+  ['node scripts/sdk-construction-record.mjs','node scripts/sdk-construction-record.mjs --mutated'],
+  ['sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc','sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /home']
  ]){
   const altered=Buffer.from(current.toString().replace(mutation[0],mutation[1]));
   assert.notDeepEqual(altered,current,'the mutation must reach the actual workflow');

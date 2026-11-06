@@ -98,6 +98,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The amd64 runner ran out of disk when the SBOM step saved the built image to a tar
+      # (run 42057275246). These toolchains are preinstalled on the hosted image and no step
+      # of this job uses them.
+      - name: Free runner disk for the image and its inventory
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false

@@ -22,10 +22,12 @@ const metadataLimit=96*1024**2;
 const workflowProfiles=new Map([
  ['sha256:50d8165fbab57b4022c0475d3cb9b80ad63ba1644bc7182089b1525f5f920043',6],
  ['sha256:bbfbd47a2ec3131cb00912c496f8c627e48f6e067937b9042f241764beb38a15',7],
- // Current source-reviewed candidate workflow.  Keep historical profiles
- // above immutable; a new workflow is admitted only by this exact digest.
  ['sha256:ed952dbab6305ff49d8d1a3c19376049567455b73b6e673a01d72c43904d1f96',7],
- ['sha256:ee1932251f72659c7e43adf2bddbe9409c3e3f5206781071dbb067da1033163b',9]
+ ['sha256:ee1932251f72659c7e43adf2bddbe9409c3e3f5206781071dbb067da1033163b',9],
+ // Current source-reviewed candidate workflow: the nine jobs above, with a
+ // first build step that frees runner disk. Keep historical profiles above
+ // immutable; a new workflow is admitted only by this exact digest.
+ ['sha256:c3a7bbea1e3cce7e9e221fde00137ba05c11b7016e5ff500778b4efc50f02cff',9]
 ]);
 const authorities=new WeakMap(),metadata=new WeakMap();
 const sha=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');
