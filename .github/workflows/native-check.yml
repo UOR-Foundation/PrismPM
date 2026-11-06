@@ -1,0 +1,210 @@
+name: native check
+
+# `prism-code build --check` runs `prismpm check` on the host when it finds a
+# prismpm of the version prismpm.lock pins (sdk/npm/prism-code/src/native.mjs),
+# so a new user's first check needs no Docker and no 5.5 GB SDK image. That is
+# sound only while `prismpm check` gives the same verdict on every host. This
+# builds prismpm natively on Linux, macOS and Windows, checks each example
+# from a directory outside the repository, and requires:
+#   - one semantic ID per example, the same on all three hosts;
+#   - a planted defect (a CRLF line ending, which LexLean refuses) refused on each;
+#   - prism-code to run the host prismpm when the lock pins its version, and
+#     to pass it over for the image when the lock pins another.
+# The Linux native CLI equals the SDK image's by the release's native
+# equivalence gate (release.yml, job native), so equal IDs here carry that to
+# macOS and Windows.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - crates/prismpm/**
+      - vendor/**
+      - language/**
+      - model/**
+      - schemas/**
+      - stdlib/**
+      - standards/**
+      - standards.lock
+      - examples/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - sdk/npm/prism-code/bin/prism-code.mjs
+      - sdk/npm/prism-code/src/native.mjs
+      - sdk/npm/prism-code/src/archive.mjs
+      - sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/**
+      - .github/workflows/native-check.yml
+  push:
+    branches: [main]
+    paths:
+      - crates/prismpm/**
+      - vendor/**
+      - language/**
+      - model/**
+      - schemas/**
+      - stdlib/**
+      - standards/**
+      - standards.lock
+      - examples/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - sdk/npm/prism-code/bin/prism-code.mjs
+      - sdk/npm/prism-code/src/native.mjs
+      - sdk/npm/prism-code/src/archive.mjs
+      - sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/**
+      - .github/workflows/native-check.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-check-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: prismpm check on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      # A Windows runner converts to CRLF and writes each symlink as a text file
+      # holding its target. LexLean refuses CRLF, and prismpm's include_str!
+      # reads through crates/prismpm's symlinks, so take the committed bytes.
+      - name: Check out committed bytes on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Replace each symlink with a copy of its target on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files -s | awk '$1 == "120000" { print $4 }' | while read -r link; do
+            target=$(git cat-file -p "HEAD:$link")
+            source="$(dirname "$link")/$target"
+            test -e "$source"
+            rm -f "$link"
+            cp -R "$source" "$link"
+          done
+      - name: Install the pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.97.1 --profile minimal
+      - name: Build prismpm
+        shell: bash
+        run: cargo build --release --locked -p prismpm --bin prismpm
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Check every example outside the repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=prismpm workspace="$GITHUB_WORKSPACE" temp="$RUNNER_TEMP"
+          if [ "$RUNNER_OS" = Windows ]; then
+            exe=prismpm.exe workspace=$(cygpath -m "$GITHUB_WORKSPACE") temp=$(cygpath -m "$RUNNER_TEMP")
+          fi
+          prismpm="$workspace/target/release/$exe"
+          "$prismpm" --version
+          ids="$temp/semantic-ids.txt"
+          : > "$ids"
+          for example in Calculator PaymentApproval; do
+            work="$temp/examples/$example"
+            mkdir -p "$(dirname "$work")"
+            cp -R "examples/$example" "$work"
+            # The examples carry no prismpm.lock, which check accepts.
+            out=$(cd "$work" && "$prismpm" check 2>&1)
+            echo "$out"
+            id=$(printf '%s\n' "$out" | sed -n 's/^check passed (semantic ID: \([0-9a-f]\{64\}\))$/\1/p')
+            test -n "$id"
+            printf '%s %s\n' "$example" "$id" >> "$ids"
+            # A planted defect: a second line break at the end of the entry source.
+            entry=$(sed -n 's/^entrypoints = \["\([^"]*\)"\]$/\1/p' "$work/lexlean.toml")
+            test -f "$work/$entry"
+            printf '\r\n' >> "$work/$entry"
+            code=0
+            out=$(cd "$work" && "$prismpm" check 2>&1) || code=$?
+            echo "$out"
+            test "$code" -eq 1
+            printf '%s\n' "$out" | grep -q LLL1003
+          done
+          cat "$ids"
+          cp "$ids" "$temp/semantic-ids-${{ matrix.os }}.txt"
+      - name: prism-code runs the host prismpm only for the version the lock pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=prismpm workspace="$GITHUB_WORKSPACE" temp="$RUNNER_TEMP"
+          if [ "$RUNNER_OS" = Windows ]; then
+            exe=prismpm.exe workspace=$(cygpath -m "$GITHUB_WORKSPACE") temp=$(cygpath -m "$RUNNER_TEMP")
+          fi
+          export PRISM_PRISMPM="$workspace/target/release/$exe"
+          export PRISM_HOME="$temp/prism-home"
+          # No image to fall back to: a check sent to the image exits 69.
+          export PRISM_DOCKER=/nonexistent/docker
+          version=$("$PRISM_PRISMPM" --version | sed -n 's/^prismpm \([^ ]*\)$/\1/p')
+          test -n "$version"
+          work="$temp/routing"
+          mkdir -p "$work"
+          cd "$work"
+          # The reference sdk-lock/3, canonical, pinning the given prismpm version.
+          lock() {
+            node --input-type=module -e '
+              import { pathToFileURL } from "node:url";
+              import { readFileSync, writeFileSync } from "node:fs";
+              const [archive, fixture, version] = process.argv.slice(1);
+              const { canonicalJson } = await import(pathToFileURL(archive));
+              const lock = JSON.parse(readFileSync(fixture, "utf8"));
+              for (const p of lock.platforms) for (const i of p.inventory) if (i.id === "prismpm") i.version = version;
+              writeFileSync("prismpm.lock", canonicalJson(lock));
+            ' "$workspace/sdk/npm/prism-code/src/archive.mjs" "$workspace/sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json" "$1"
+          }
+          check() { code=0; out=$(node "$workspace/sdk/npm/prism-code/bin/prism-code.mjs" build --check 2>&1) || code=$?; echo "exit $code: $out"; }
+          # Another version: passed over with a note, and the check goes to the image.
+          lock 0.0.0
+          check
+          test "$code" -eq 69
+          printf '%s\n' "$out" | grep -qF "is prismpm $version, and prismpm.lock pins 0.0.0; checking in the SDK image"
+          # The built version: the host prismpm runs. Rewriting the version breaks the
+          # lock's inventory binding, so prismpm itself refuses it with PP5401; only a
+          # host run can answer that, since the image is unreachable here.
+          lock "$version"
+          check
+          test "$code" -eq 4
+          printf '%s\n' "$out" | grep -q PP5401
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: semantic-ids-${{ matrix.os }}
+          path: ${{ runner.temp }}/semantic-ids-${{ matrix.os }}.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  same:
+    name: one semantic ID per example on every host
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: semantic-ids-*
+          merge-multiple: true
+          path: ids
+      - name: Compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls ids
+          test "$(ls ids | wc -l)" -eq 3
+          for f in ids/*; do echo "== $f"; cat "$f"; done
+          test "$(cat ids/* | sort -u | wc -l)" -eq 2
