@@ -95,6 +95,12 @@ export function commitOf(cwd, { ref = 'HEAD', allowDirty = false, run = spawnSyn
   return { sha, dirty };
 }
 
+/** Whether the commit holds a file at `path`, read from the local repository. */
+export function commitHolds(cwd, sha, path, { run = spawnSync } = {}) {
+  const result = run('git', ['-C', cwd, 'cat-file', '-e', `${sha}:${path}`], { encoding: 'utf8', windowsHide: true });
+  return !result.error && result.status === 0;
+}
+
 // ---------------------------------------------------------------------------
 // The API client.
 // ---------------------------------------------------------------------------
@@ -446,9 +452,10 @@ export async function remoteBuild({
   const repository = await client.json(`/repos/${repo.full}`);
   if (!repository) fail('remote.repository', `${repo.full} is not a repository the token (${source}) can see`);
   log(`building ${sha.slice(0, 12)} in ${repo.full} (${repository.private ? 'private' : 'public'})${dirty ? ', the working tree\'s changes left out' : ''}`);
-  const workflow = await client.json(`/repos/${repo.full}/contents/${BUILD_WORKFLOW}?ref=${sha}`);
-  if (!workflow) {
-    fail('remote.workflow', `${repo.full} has no ${BUILD_WORKFLOW} at ${sha.slice(0, 12)}. Add the template's: ${TEMPLATE_WORKFLOW_URL}, commit it, and build again.`);
+  // The workflow must be in the commit itself: a push event runs the workflow of the pushed commit, and
+  // the commit may not be on GitHub yet, so this reads the local object, not the API.
+  if (!commitHolds(cwd, sha, BUILD_WORKFLOW, { run })) {
+    fail('remote.workflow', `the commit ${sha.slice(0, 12)} holds no ${BUILD_WORKFLOW}. Add the template's: ${TEMPLATE_WORKFLOW_URL}, commit it, and build again.`);
   }
 
   let run0 = await findRun(client, repo, sha);

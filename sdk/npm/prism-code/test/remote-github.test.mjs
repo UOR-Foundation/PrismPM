@@ -240,7 +240,6 @@ function github({ runs = [], conclusion = 'success', workflow = true, push = tru
     assert.match(init.headers.authorization, /^Bearer /);
     const json = (status, body) => ({ status, ok: status < 400, text: async () => JSON.stringify(body), arrayBuffer: async () => new ArrayBuffer(0) });
     if (path === `/repos/${REPO.full}`) return json(200, { private: false, permissions: { push } });
-    if (path.startsWith(`/repos/${REPO.full}/contents/.github/workflows/build.yml`)) return workflow ? json(200, { name: 'build.yml' }) : json(404, { message: 'Not Found' });
     if (path.startsWith(`/repos/${REPO.full}/actions/runs?head_sha=`)) return json(200, { workflow_runs: runs.length ? runs : seen.filter((p) => p.includes('head_sha')).length > 1 ? [{ id: 7, head_sha: SHA, path: '.github/workflows/build.yml', status: 'in_progress', conclusion: null, html_url: 'https://github.com/acme/prism-luhn/actions/runs/7', created_at: '2026-11-06T00:00:00Z' }] : [] });
     if (path === `/repos/${REPO.full}/actions/runs/7`) return json(200, { id: 7, head_sha: SHA, status: ++polls < 2 ? 'in_progress' : 'completed', conclusion: polls < 2 ? null : conclusion, html_url: 'https://github.com/acme/prism-luhn/actions/runs/7' });
     if (path.startsWith(`/repos/${REPO.full}/actions/runs/7/artifacts`)) return json(200, { artifacts: [{ id: 99, name: `prism-build-${SHA}`, expired: false }] });
@@ -257,6 +256,8 @@ function github({ runs = [], conclusion = 'success', workflow = true, push = tru
     if (args.includes('get-url')) return { status: 0, stdout: `git@github.com:${REPO.full}.git\n` };
     if (args.includes('rev-parse')) return { status: 0, stdout: `${SHA}\n` };
     if (args.includes('status')) return { status: 0, stdout: '' };
+    // The workflow is read from the commit itself, which may not be on GitHub yet.
+    if (args.includes('cat-file')) return { status: workflow ? 0 : 1, stdout: '', stderr: workflow ? '' : 'fatal: path not in tree' };
     return { status: 0, stdout: '', stderr: '' };
   };
   return { fetch, run, gitCalls, seen };
@@ -284,8 +285,9 @@ test('planted: a run that failed is a failure, never a build; no workflow and no
   assert.ok(!existsSync(join(cwd, 'app', '.prism', 'build')));
 
   const none = github({ workflow: false });
-  await rejects(remoteBuild({ cwd, env: {}, fetch: none.fetch, run: none.run, sleep: async () => {}, verifyBundle: signed }), 'remote.workflow', /build\.yml/);
+  await rejects(remoteBuild({ cwd, env: {}, fetch: none.fetch, run: none.run, sleep: async () => {}, verifyBundle: signed }), 'remote.workflow', /holds no \.github\/workflows\/build\.yml/);
   assert.equal(none.gitCalls.some((c) => c.includes('push')), false);
+  assert.equal(none.seen.some((p) => p.includes('/contents/')), false, 'the commit is read locally, not through the API, because it may not be on GitHub yet');
 
   const readOnly = github({ push: false });
   await rejects(remoteBuild({ cwd, env: {}, fetch: readOnly.fetch, run: readOnly.run, sleep: async () => {}, verifyBundle: signed }), 'remote.permission');
