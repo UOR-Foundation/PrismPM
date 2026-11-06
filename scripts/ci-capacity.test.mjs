@@ -360,6 +360,15 @@ function candidateContract(value) {
       delete job.steps[0].env.QUALIFICATION_SELECTION;
       job.steps[0].run = job.steps[0].run.slice(0, -extra.length);
     }
+    if (id === 'build') {
+      // Strip ONLY the exact first step that frees runner disk, after checking
+      // it. The unchanged original build owner still has its original hash.
+      assert.deepEqual(job.steps[0], {
+        name: 'Free runner disk for the image and its inventory',
+        run: 'sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL\ndf -h /\n',
+      });
+      job.steps.shift();
+    }
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
