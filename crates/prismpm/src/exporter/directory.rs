@@ -516,20 +516,34 @@ fn open_directory(
     Ok(directory)
 }
 
+// rustix exposes each platform's own stat field types: a u64 device and a u32
+// mode on Linux, an i32 device and a u16 mode on macOS. Widen them as std's
+// MetadataExt does, so a stat identity equals `identity(&metadata)` on every
+// Unix. On Linux the casts are no-ops.
 #[cfg(unix)]
+#[allow(clippy::unnecessary_cast)]
 fn stat_identity(stat: rustix::fs::Stat) -> Identity {
     Identity(
-        stat.st_dev,
+        stat.st_dev as u64,
         stat.st_ino,
         stat.st_uid,
         stat.st_gid,
-        stat.st_mode,
+        stat.st_mode as u32,
     )
+}
+
+/// Whether a node is a directory, from the mode `stat_identity` widened.
+#[cfg(unix)]
+#[allow(clippy::unnecessary_cast)]
+fn is_directory(node: &Identity) -> bool {
+    // Narrowing back to the platform's mode type is lossless: the value came from it.
+    rustix::fs::FileType::from_raw_mode(node.4 as rustix::fs::RawMode)
+        == rustix::fs::FileType::Directory
 }
 
 #[cfg(unix)]
 fn collect_nodes(root: &std::fs::File) -> Result<BTreeMap<PathBuf, Identity>, PrismError> {
-    use rustix::fs::{AtFlags, Dir, FileType};
+    use rustix::fs::{AtFlags, Dir};
     let mut nodes = BTreeMap::new();
     let mut pending = vec![PathBuf::new()];
     while let Some(path) = pending.pop() {
@@ -550,7 +564,7 @@ fn collect_nodes(root: &std::fs::File) -> Result<BTreeMap<PathBuf, Identity>, Pr
                 rustix::fs::statat(&parent, name, AtFlags::SYMLINK_NOFOLLOW)
                     .map_err(|_| failure())?,
             );
-            if FileType::from_raw_mode(node.4) == FileType::Directory {
+            if is_directory(&node) {
                 pending.push(child.clone());
             }
             if nodes.insert(child, node).is_some() {
@@ -577,14 +591,14 @@ fn remove_children(
     root: &std::fs::File,
     nodes: &BTreeMap<PathBuf, Identity>,
 ) -> Result<(), PrismError> {
-    use rustix::fs::{AtFlags, FileType};
+    use rustix::fs::AtFlags;
     // Reverse component ordering removes descendants before parents. Reopen
     // each ancestry from the held root with constant descriptor use; never
     // recurse or impose a narrower depth limit on an admitted seed.
     for (path, before) in nodes.iter().rev() {
         let parent = open_directory(root, path.parent().ok_or_else(failure)?, Some(nodes))?;
         let name = path.file_name().ok_or_else(failure)?;
-        let directory = FileType::from_raw_mode(before.4) == FileType::Directory;
+        let directory = is_directory(before);
         let after = stat_identity(
             rustix::fs::statat(&parent, name, AtFlags::SYMLINK_NOFOLLOW).map_err(|_| failure())?,
         );
