@@ -32,7 +32,7 @@
  *                                                     watch the project, rebuild and re-check on every change, serve the local studio
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
- *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
+ *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image; --check on the host when the locked prismpm is there
  *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
  *   prism-code setup [--agent <id>] [--dry-run]       add the UOR MCP server to every agent here, register holo:// (experimental)
  *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
@@ -56,7 +56,7 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { createPrism } from '../src/index.mjs';
@@ -64,6 +64,7 @@ import { fromFile, serve, readManifest, fileContainerStore, resolveProviders, re
 import { replayFiles, recordingApplication, writeHistory, formatReplay, replayJson } from '../src/replay-cli.mjs';
 import { sdkImageFromLock, DELEGATED } from '../src/docker.mjs';
 import { hostDockerArguments } from '../src/host.mjs';
+import { resolveNativePrismpm } from '../src/native.mjs';
 import { lexleanProjectArgument, lexleanProjectDir } from '../src/tiers.mjs';
 import { PrismCodeError, PrismError, VerificationError, errorFromVerdict, exitCodeFor } from '../src/errors.mjs';
 import { unverifiedWarning } from '../src/containers.mjs';
@@ -138,8 +139,9 @@ Usage:
   prism-code pull <reference> [<out.holo> | dir://store:tag] [--policy <file>] [--store <dir>]
                                                     fetch a holo and write it only after it verifies: digests, archive,
                                                     verdict, attestations; the verify-attestation flags add a signer policy
-  prism-code build --check [args]                   prismpm check in the SDK image named by ./prismpm.lock:
-                                                    validate the model, write nothing
+  prism-code build --check [args]                   prismpm check: validate the model, write nothing; on the host
+                                                    when a prismpm of the version ./prismpm.lock pins is found
+                                                    ($PRISM_PRISMPM, ~/.prism/bin, PATH), else in its SDK image
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code build --unstable-author [--check] [--no-cache] [--project <dir>]
                                                     experimental: an agent writes model/ from examples/, intent.md
@@ -757,6 +759,12 @@ async function commandDelegate(command, args, { program = 'prismpm' } = {}) {
     process.stderr.write('prismpm.lock not found in the current directory\n');
     return 64;
   }
+  // `check` compiles nothing, so the prismpm the lock pins runs it on the host when one is found (src/native.mjs).
+  if (command === 'check' && program === 'prismpm') {
+    const native = resolveNativePrismpm({ lockText: lock, probe: probeVersion });
+    for (const note of native.notes) process.stderr.write(`note: ${note}; ${native.path ? 'passed over' : 'checking in the SDK image'}\n`);
+    if (native.path) return runNative(native.path, [command, ...args]);
+  }
   const image = sdkImageFromLock(lock);
   let docker;
   try {
@@ -775,6 +783,28 @@ async function commandDelegate(command, args, { program = 'prismpm' } = {}) {
     child.on('error', (error) => {
       process.stderr.write(error.code === 'ENOENT' ? `${docker.command} is not installed or not on PATH; prism-code check/build/verify need Docker\n` : `${error.message}\n`);
       done(69);
+    });
+    child.on('exit', (code, signal) => done(code ?? (signal ? 1 : 0)));
+  });
+}
+
+/** `<path> --version` on stdout, or null when it does not run or exits nonzero. */
+function probeVersion(path) {
+  const r = spawnSync(path, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+  return r.error || r.status !== 0 ? null : r.stdout;
+}
+
+/** Run a host prismpm in the project directory, as the image runs it in its mount. */
+function runNative(path, argv) {
+  if (process.env.PRISM_CODE_DRY_RUN) {
+    process.stdout.write(`${[path, ...argv].map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}\n`);
+    return 0;
+  }
+  return new Promise((done) => {
+    const child = spawn(path, argv, { stdio: 'inherit', windowsHide: true });
+    child.on('error', (error) => {
+      process.stderr.write(`${path}: ${error.message}\n`);
+      done(70);
     });
     child.on('exit', (code, signal) => done(code ?? (signal ? 1 : 0)));
   });
