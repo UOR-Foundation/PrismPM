@@ -336,7 +336,7 @@ test('explicit OCI-only dispatch is distinct from Cargo publication and rejects 
 
 test('image-index signatures require the exact current source, ref, trigger, name, issuer and repository', () => {
   const imageDigest = `sha256:${'b'.repeat(64)}`;
-  for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
+  for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build']) {
     for (const [ref, event] of [['refs/heads/main', 'workflow_dispatch'], ['refs/heads/release/v0.4', 'workflow_dispatch'],
       ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
       const image = `ghcr.io/uor-foundation/prismpm-${name}@${imageDigest}`;

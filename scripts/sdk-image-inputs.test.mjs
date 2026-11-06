@@ -765,7 +765,7 @@ test('a planted successful Docker omission is caught by the executable wrapper c
 
 test('all SDK targets preserve accepted flags and reject conflicting source/context/file/target overrides', () => {
   const revision = '1'.repeat(40);
-  for (const target of ['runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'cli-archive']) {
+  for (const target of ['runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build', 'cli-archive']) {
     const result = dockerArguments('/fixture/source', revision, target, '/fixture/inputs', ['--load', '--tag', 'fixture:only']);
     assert.equal(result[result.indexOf('--target') + 1], target);
     assert.equal(result[result.indexOf('--build-arg') + 1], `SDK_SOURCE_REVISION=${revision}`);
