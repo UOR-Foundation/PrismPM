@@ -409,8 +409,10 @@ fn write_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), PrismErro
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", parent.display())))?;
     let mut options = OpenOptions::new();
     options.create_new(true).write(true);
+    // Built command-line programs are published runnable. Only Unix has a
+    // mode bit; a native Windows prismpm runs `check`, which writes nothing.
+    #[cfg(unix)]
     if relative.starts_with("cli/bin/") {
-        // Built command-line programs are published runnable.
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o755);
     }
