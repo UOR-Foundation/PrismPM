@@ -20,12 +20,18 @@ Experimental APIs remain experimental; repository `SPEC.md` is normative.
 ## Set up this machine (experimental)
 
 ```sh
-npx prism-code@latest setup --machine-only # Node, Docker (also inside WSL), the SDK image, its cache, LF endings
-npx prism-code build --check        # T0: the model is well formed, seconds
-npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute
+npx prism-code@latest setup --machine-only # Node, Docker (also inside WSL), the image cache, LF endings; --pull also gets the SDK image
+npx prism-code build --check        # T0: the model is well formed, seconds; hosted until the image is here
+npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute; hosted until the image is here
 npx prism-code axioms --write       # set every declaration's axiom policy in one pass
 npx prism-code verify               # T2: the guest, the vectors and the holo, minutes
 ```
+
+`setup` pulls nothing by default. Until the SDK image (about 5.5 GB) is here,
+`build --check` and `verify --lean` run on the hosted verifier at
+`https://mcp.uor.foundation/`, which receives the files under `src/`, unlisted
+but not private; `--local` runs either in the image instead. The first
+`build`, `verify` or `axioms` pulls the image and says so first.
 
 `setup` records the program that reaches Docker, so later commands spawn it,
 and moves `/tmp` off memory onto a cache volume: a full verify of the chess
@@ -73,7 +79,8 @@ its `prism_start` tool. It asks six questions, one at a time:
 Each answer is checked as it arrives. A property the rules break comes back
 with the request that breaks it, and an example the rules contradict comes back
 with the rule that decides it. `prism_build` then writes the LexLean model in
-`prism/`, has Lean prove every property, builds the holo in the SDK image with
+`prism/`, has Lean prove every property (hosted, sending `prism/src/` unlisted but not
+private, until the SDK image is here), builds the holo in the SDK image with
 the cache `setup` created, and replays its acceptance vectors through the
 guest. Wrong axiom sets are corrected without asking. Proving takes about a
 minute; a first build takes ten minutes or more. The properties are proved;

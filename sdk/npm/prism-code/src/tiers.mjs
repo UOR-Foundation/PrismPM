@@ -8,7 +8,9 @@
  *   T2  `verify`          prismpm verify: T1, then LCNF, the generated Rust, the
  *                         guest and the holo with its vectors. Minutes.
  *
- * T1 runs `lexlean` in the SDK image on the project's LexLean project. It is
+ * T0 and T1 run in the SDK image when it is on this machine, else on the
+ * hosted verifier (hosted.mjs); `--local` and `--hosted` choose. T1 runs
+ * `lexlean` on the project's LexLean project. It is
  * found, in this order: `--project <dir>`; the project root; between
  * `[model] source` of `prism.toml` and the root; the one direct subdirectory
  * that holds a `lexlean.toml`, as a UOR template instance's `app/` does.

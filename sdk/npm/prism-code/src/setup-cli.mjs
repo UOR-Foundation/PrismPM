@@ -27,16 +27,19 @@ function options(argv, { values = [], flags = [] }) {
 }
 
 /**
- * `setup [--agent <id>] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
+ * `setup [--agent <id>] [--pull] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
  * The machine half runs first and is applied first, so the agent half's write of
  * `config.json` sees the Docker record. @returns {Promise<number>} the exit code
  */
 export async function runSetup(argv, usage, context = hostSetupContext(), machineContext = hostMachineContext({ env: context.env, platform: context.platform, configDir: context.configDir })) {
-  const { problem, positional, named } = options(argv, { values: ['agent', 'image'], flags: ['dry-run', 'no-pull', 'agents-only', 'machine-only', 'json'] });
+  const { problem, positional, named } = options(argv, { values: ['agent', 'image'], flags: ['dry-run', 'pull', 'no-pull', 'agents-only', 'machine-only', 'json'] });
   if (problem) return usage(problem);
   if (positional.length > 0) return usage('setup takes no arguments');
+  if (named.pull && named['no-pull']) return usage('--pull and --no-pull name opposite things; give one');
   const dryRun = named['dry-run'] === true;
-  const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull: !named['no-pull'] }, machineContext);
+  // The image is pulled only when asked: `--pull`, or `--image` naming one. `--no-pull` is the default and is kept so older scripts still run.
+  const pull = named['no-pull'] ? false : Boolean(named.pull || named.image);
+  const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull }, machineContext);
   if (machine && !dryRun) applyMachine(machine);
   const agentsHalf = !named['machine-only'];
   // The skill ships in the package, so there is nothing to fetch.

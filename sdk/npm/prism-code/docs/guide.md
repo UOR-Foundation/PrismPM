@@ -687,7 +687,7 @@ Before the agents, `setup` gets the machine ready for the build, one row each.
 | --- | --- | --- |
 | `node` | 22 or later | nothing; an older Node fails the row |
 | `docker` | `docker` or `podman` on the PATH; on Windows without Docker Desktop, the first WSL distribution whose `docker version` answers | records the program in `$PRISM_HOME/config.json`, so every later `check`, `build` and `verify` spawns it, and mounts the project under `/mnt/<drive>/...` when the daemon lives in WSL |
-| `image` | the SDK image `prismpm.lock` pins, or `--image <ref>` | `docker pull` with its progress when the image is not here; `--no-pull` reports instead |
+| `image` | the SDK image `prismpm.lock` pins, or `--image <ref>` | with `--pull` or `--image`, `docker pull` with its progress when the image is not here; otherwise `deferred`: nothing is pulled, `build --check` and `verify --lean` run hosted, and the first `build`, `verify`, `axioms` or `conformance` pulls it (about 5.5 GB) and says so first |
 | `cache` | a volume named by the image digest | creates it; later runs mount it at `/tmp` in place of the 2 GB in-memory tmpfs, so the SDK's 1.2 GB Cargo home is on disk instead of in memory beside the build. A full verify of the chess example took 814 s with the tmpfs and 284 s with the volume |
 | `endings` | `.gitattributes` keeps sources LF | writes `* text eol=lf`; files already CRLF are counted and `git add --renormalize .` named, because LexLean refuses a CRLF source (`LLC0101`) |
 
@@ -713,6 +713,25 @@ refuse it:
 which it finds at the project root or between `[model] source` of `prism.toml`
 and the root, as in a UOR template instance's `app/`. It mounts no Docker socket.
 The arguments after `--lean` go to `lexlean verify`.
+
+#### Without the image: the hosted tiers
+
+When the SDK image is not on this machine, T0 and T1 run on the hosted verifier
+at `https://mcp.uor.foundation/`, profile `prism-app`; `--hosted` asks for it
+and `--local` for the image, and a flag of `lexlean` or `prismpm check` keeps a
+tier in the image. T2 always needs the image.
+
+| | In the image | Hosted |
+| --- | --- | --- |
+| T0 `build --check` | `prismpm check`: model, lockfile and SDK pins | `prism.toml` here and `lexlean check --all` there; the lockfile and SDK pins are skipped, and the last line says so |
+| T1 `verify --lean` | `lexlean verify` with the project's own `lexlean.toml` | `lexlean verify` of the project's entrypoints on the profile's pinned toolchain; it passes only when every entrypoint's module comes back verified (`hosted.coverage`), and the record goes to `.lexlean/hosted/<attestation_id>.json` |
+| What is sent | nothing | the files under `src/`, unlisted but not private |
+
+The profile takes a project whose only source root is `src` and whose lexicon
+packages it carries; any other shape is refused with `hosted.layout` before
+anything is sent, and runs with `--local`. The hosted attestation is not the
+local one byte for byte: the profile has its own `module_prefix`. `axioms`
+reads the local build directory, so it needs the image.
 
 ### Settle the axioms in one pass (experimental)
 

@@ -3,7 +3,8 @@
  *
  * `lexlean` is remote: it checks and verifies LexLean an agent writes. `prism`
  * is local, `prism-code mcp` on stdio: it asks the spec questions, writes the
- * model itself and proves it in the SDK image on this machine. setup.mjs plans
+ * model itself and proves it, in the SDK image when it is on this machine and
+ * on the hosted verifier when it is not. setup.mjs plans
  * both with the same step kinds, so `--dry-run` shows both and one apply
  * writes both. A `prism` entry setup wrote before is replaced when the command
  * moved (a newer package, a checkout elsewhere); any other `prism` entry is
