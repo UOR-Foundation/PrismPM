@@ -123,8 +123,10 @@ jobs:
             mkdir -p "$(dirname "$work")"
             cp -R "examples/$example" "$work"
             # The examples carry no prismpm.lock, which check accepts.
-            out=$(cd "$work" && "$prismpm" check 2>&1)
+            code=0
+            out=$(cd "$work" && "$prismpm" check 2>&1) || code=$?
             echo "$out"
+            test "$code" -eq 0
             id=$(printf '%s\n' "$out" | sed -n 's/^check passed (semantic ID: \([0-9a-f]\{64\}\))$/\1/p')
             test -n "$id"
             printf '%s %s\n' "$example" "$id" >> "$ids"
