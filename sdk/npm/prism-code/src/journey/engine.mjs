@@ -9,7 +9,9 @@ import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
-import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, hasImage, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
+import { VERSION } from '../version.mjs';
 
 const PROVE_SCRIPT_FULL = [
   'echo "@@step prelock"; lexlean lock 2>&1; code=$?; echo "@@exit prelock $code"; [ $code -eq 0 ] || exit $code',
@@ -21,13 +23,36 @@ const PROVE_SCRIPT_FULL = [
 
 const MAX_AXIOM_ROUNDS = 8;
 
-/** Make sure Docker, the image and the project's SDK pin are in place. */
-export async function prepare(dir, session, log) {
+/** The image this app is or will be pinned to. */
+const imageFor = (dir, session) => (isBound(dir) ? imageOf(dir) : session.image ?? DEFAULT_SDK_IMAGE);
+
+/**
+ * Where Lean proves the app: `local` in the SDK image when Docker and the image
+ * are on this machine, else `hosted` on the UOR MCP server. `PRISM_CODE_TIER`
+ * set to `local` or `hosted` chooses.
+ */
+export function proveWhere(dir, session, { env = process.env } = {}) {
+  if (env.PRISM_CODE_TIER === 'local' || env.PRISM_CODE_TIER === 'hosted') return env.PRISM_CODE_TIER;
+  if (resolveDocker().error) return 'hosted';
+  return hasImage(imageFor(dir, session)) ? 'local' : 'hosted';
+}
+
+/**
+ * Make sure Docker, the image and the project's SDK pin are in place. With
+ * `pull`, a missing image is downloaded first and the log says so; without it,
+ * a missing image is refused.
+ */
+export async function prepare(dir, session, log, { pull = false } = {}) {
   const d = resolveDocker();
   if (d.error) return { ok: false, message: d.error };
+  const image = imageFor(dir, session);
+  if (!hasImage(image)) {
+    if (!pull) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code@latest setup --pull\` in a terminal to download it (about ${SDK_IMAGE_DOWNLOAD}), or leave PRISM_CODE_TIER unset so the proof runs hosted.\n  ${image}` };
+    log(`The SDK image is not on this machine yet. Downloading it once now, about ${SDK_IMAGE_DOWNLOAD}; this can take a while.`);
+    const pulled = await docker(['pull', image], { onLine: (l) => /^(Status|Digest|[0-9a-f]{12}: Pull complete)/.test(l) && log(l) });
+    if (pulled.code !== 0) return { ok: false, message: `Could not download the SDK image:\n${tail(pulled.output)}` };
+  }
   if (!isBound(dir)) {
-    const image = session.image ?? DEFAULT_SDK_IMAGE;
-    if (!hasImage(image)) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code setup\` in a terminal to download it (about 21 GB), then try again.\n  ${image}` };
     log('Pinning the project to the SDK image (prismpm update)...');
     const r = await bind(dir, image, { onLine: log });
     if (!r.ok) return { ok: false, message: `Could not pin the SDK image:\n${tail(r.output)}` };
@@ -41,9 +66,10 @@ const tail = (text, n = 25) => String(text).split(/\r?\n/).filter((l) => !l.star
  * Lean proves every property. Returns `{ ok, properties, message, diagnostics }`,
  * with each property `proved`, `failing` or `unknown`.
  */
-export async function prove(dir, session, { log = () => {}, overwrite = false } = {}) {
+export async function prove(dir, session, { log = () => {}, overwrite = false, where = null, client = null } = {}) {
   const first = writeApp(dir, session, { overwrite });
   if (first.edited) return { ok: false, edited: true, message: `${relative(dir, first.path)} was edited by hand since Prism wrote it. Call the same tool again with overwrite: true to replace it from the spec, or change the spec to match.` };
+  if ((where ?? proveWhere(dir, session)) === 'hosted') return proveHosted(dir, session, { log, client });
   const ready = await prepare(dir, session, log);
   if (!ready.ok) return { ok: false, message: ready.message };
   overwrite = true;
@@ -66,20 +92,86 @@ export async function prove(dir, session, { log = () => {}, overwrite = false } 
       continue;
     }
     const seconds = Math.round((Date.now() - started) / 1000);
-    if (run.code === 0) {
-      session.status.properties = Object.fromEntries(spec.properties.map((p) => [p.id, 'proved']));
-      session.status.proved = { modelSha: session.status.modelSha, at: new Date().toISOString(), seconds };
-      writeSpecDocument(dir, session);
-      return {
-        ok: true,
-        seconds,
-        properties: spec.properties.map((p) => ({ id: p.id, theorem: n.properties[p.id].theorem, says: `It ${p.kind} answers ${p.then} when ${describeConditions(p.when)}.`, status: 'proved' })),
-        message: spec.properties.length
-          ? `Lean proved all ${spec.properties.length} propert${spec.properties.length === 1 ? 'y' : 'ies'} for every request, in ${seconds} s.`
-          : `The model checks and verifies in ${seconds} s. No property is stated, so nothing about the rules is proved.`,
-      };
-    }
+    if (run.code === 0) return provedResult(dir, session, seconds, { where: 'local' });
     return explainFailure(dir, session, { run, diagnostics, failed, seconds });
+  }
+  return { ok: false, message: 'The axiom sets did not settle after several rounds. This is a Prism bug; the last output is in prism/.prism-last.log.' };
+}
+
+/** Record that every property was proved, and say so. `proof` says where, and for a hosted proof its attestation. */
+function provedResult(dir, session, seconds, proof) {
+  const spec = session.spec;
+  const n = names(spec);
+  session.status.properties = Object.fromEntries(spec.properties.map((p) => [p.id, 'proved']));
+  session.status.proved = { modelSha: session.status.modelSha, at: new Date().toISOString(), seconds, ...proof };
+  writeSpecDocument(dir, session);
+  const where = proof.where === 'hosted' ? ' on the hosted verifier' : '';
+  return {
+    ok: true,
+    seconds,
+    where: proof.where,
+    ...(proof.attestation ? { attestation: proof.attestation } : {}),
+    properties: spec.properties.map((p) => ({ id: p.id, theorem: n.properties[p.id].theorem, says: `It ${p.kind} answers ${p.then} when ${describeConditions(p.when)}.`, status: 'proved' })),
+    message: spec.properties.length
+      ? `Lean proved all ${spec.properties.length} propert${spec.properties.length === 1 ? 'y' : 'ies'} for every request${where}, in ${seconds} s.`
+      : `The model checks and verifies${where} in ${seconds} s. No property is stated, so nothing about the rules is proved.`,
+  };
+}
+
+/** A Lean warning, such as an unused simp argument: reported, never a reason the proof failed. LexLean files Lean's warnings under LLV7002 with the word in the message. */
+export const isWarning = (d) => d.severity === 'warning' || /^Lean rejected `[^`]+` \(warning\):/.test(d.message);
+
+/** A `lexlean/diagnostic/1` from the hosted verifier, in the shape `parseDiagnostics` gives. */
+export function fromHosted(d) {
+  const p = d.primary;
+  return { severity: d.severity ?? 'error', code: d.code, message: String(d.message ?? ''), span: p?.path ? { file: p.path, line: p.line_start, column: p.column_start } : null };
+}
+
+/**
+ * The proof on the hosted verifier: no Docker, no image. Every module under
+ * `src/` is named, as `lexlean verify --all` verifies them, so the proofs
+ * module, which is not an entrypoint, is proved too, and the answer counts
+ * only when each of them comes back verified. Axiom sets are corrected and
+ * proved again as in the image.
+ */
+async function proveHosted(dir, session, { log, client }) {
+  const hosted = await import('../hosted.mjs');
+  client ??= hosted.hostedClient({ version: VERSION });
+  const started = Date.now();
+  for (let round = 1; round <= MAX_AXIOM_ROUNDS; round++) {
+    writeApp(dir, session, { overwrite: true });
+    log(round === 1
+      ? `Asking Lean to prove the model on the hosted verifier ${client.url}, so the SDK image is not needed yet. The files under prism/src/ are sent, unlisted but not private.`
+      : `Correcting an axiom set and proving again (round ${round})...`);
+    let project;
+    try {
+      project = hosted.hostedProject(dir);
+    } catch (error) {
+      if (error.code !== 'hosted.layout') throw error;
+      return { ok: false, message: `The hosted verifier cannot take this app (${error.message}). This is a Prism bug: the app folder should have the template's shape.` };
+    }
+    const all = { ...project, entrypoints: project.files.map((f) => f.path).filter((p) => hosted.moduleOf(p)) };
+    let outcome;
+    try {
+      outcome = await hosted.hostedVerify(client, all, { onWait: (s) => s % 30 < 5 && log(`Lean is working, ${s} s...`) });
+    } catch (error) {
+      if (!String(error.code).startsWith('hosted.')) throw error;
+      return { ok: false, message: `The hosted verifier did not prove the model: ${error.message}` };
+    }
+    rememberModel(dir, session);
+    const seconds = Math.round((Date.now() - started) / 1000);
+    if (outcome.state === 'verified') {
+      const record = hosted.writeHostedRecord(dir, { ...outcome, url: client.url, entrypoints: all.entrypoints });
+      return provedResult(dir, session, seconds, { where: 'hosted', attestation: outcome.record.attestation_id, record: relative(dir, record).split('\\').join('/') });
+    }
+    const diagnostics = outcome.diagnostics.map(fromHosted);
+    const fixes = axiomViolations(diagnostics);
+    if (fixes.length && diagnostics.filter((d) => !isWarning(d)).every((d) => d.code === 'LLV7005')) {
+      for (const f of fixes) session.axioms[f.name] = f.axioms;
+      continue;
+    }
+    const output = diagnostics.map((d) => `${d.severity}[${d.code}]: ${d.message}${d.span ? `\n  --> ${d.span.file}:${d.span.line}:${d.span.column}` : ''}`).join('\n');
+    return explainFailure(dir, session, { run: { code: 1, output }, diagnostics, failed: { step: 'verify', code: 1 }, seconds });
   }
   return { ok: false, message: 'The axiom sets did not settle after several rounds. This is a Prism bug; the last output is in prism/.prism-last.log.' };
 }
@@ -94,6 +186,7 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
   const failing = [];
   const other = [];
   for (const d of diagnostics) {
+    if (isWarning(d)) continue;
     const decl = d.span && /\.lex\.tex$/.test(d.span.file) ? declarationAt(source(d.span.file), d.span.line) : null;
     const property = decl && byTheorem[decl];
     if (property && d.code === 'LLV7002') {
@@ -133,9 +226,17 @@ export async function build(dir, session, { log = () => {}, overwrite = false } 
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
   }
+  // A build needs the image, and a hosted proof did not: pull it now if it is missing, saying so, and pin the app to it.
+  const ready = await prepare(dir, session, log, { pull: true });
+  if (!ready.ok) return { ok: false, stage: 'build', message: ready.message };
   const started = Date.now();
   log('Building the app: Lean export, Rust, WebAssembly, the holo and its independent acceptance run. The first build takes ten minutes or more...');
   const run = await runInImage(dir, BUILD_SCRIPT, { socket: true, onLine: (l) => /^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l) && log(l) });
+  // The build formats the model; remember it as formatted, so the next proof does not take it for a hand edit.
+  const wasProved = session.status.proved?.modelSha === session.status.modelSha;
+  rememberModel(dir, session);
+  // Formatting changes no meaning, so a proof of the model before it still stands.
+  if (wasProved) session.status.proved.modelSha = session.status.modelSha;
   const seconds = Math.round((Date.now() - started) / 1000);
   writeFileSync(join(dir, '.prism-last.log'), run.output);
   if (run.code !== 0) {

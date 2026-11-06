@@ -53,12 +53,12 @@ const TOOLS = [
   },
   {
     name: 'prism_prove',
-    description: 'Write the LexLean model and ask Lean to prove every property, in the SDK image. Takes two to five minutes. Returns state running while it works; call again to keep waiting.',
+    description: 'Write the LexLean model and ask Lean to prove every property: in the SDK image when it is on this machine, else on the hosted verifier at https://mcp.uor.foundation/, which receives the files under prism/src/ (unlisted, not private). Takes one to five minutes. Returns state running while it works; call again to keep waiting.',
     inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' } }, additionalProperties: false },
   },
   {
     name: 'prism_build',
-    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. The first build takes ten minutes or more. Returns state running while it works; call again to keep waiting.',
+    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. The build needs the SDK image; when it is not on this machine it is downloaded first (about 5.5 GB). The first build takes ten minutes or more. Returns state running while it works; call again to keep waiting.',
     inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' } }, additionalProperties: false },
   },
   {

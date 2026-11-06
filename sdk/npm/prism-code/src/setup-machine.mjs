@@ -8,8 +8,11 @@
  *             `wsl.exe -d <distro> -- docker` on Windows without Docker
  *             Desktop. Recorded in `$PRISM_HOME/config.json`, so every later
  *             check, build and verify spawns it without probing.
- *   image     the SDK image the project's `prismpm.lock` pins (or `--image`),
- *             pulled when it is not here yet; the pull streams its progress.
+ *   image     the SDK image the project's `prismpm.lock` pins (or `--image`).
+ *             It is pulled only with `--pull` or `--image`, and the pull
+ *             streams its progress. Otherwise a missing image is deferred:
+ *             `build --check` and `verify --lean` run hosted without it, and
+ *             the first build, verify or axioms pulls it, saying so first.
  *   cache     a volume per image, mounted at /tmp in place of the 2 GB
  *             in-memory tmpfs, so the SDK's 1.2 GB Cargo home is on disk, not
  *             in memory beside the build, and is kept for the next run.
@@ -23,6 +26,8 @@ import { cacheVolumeName, commandDisplay, sdkImageFromLock } from './docker.mjs'
 import { hostConfigEntry, readHostConfig, resolveDocker } from './host.mjs';
 
 export const GITATTRIBUTES_LINE = '* text eol=lf';
+/** The compressed size of the SDK image the template pins, measured on ghcr.io on 2026-11-06 (`prismpm-sdk-candidate@sha256:cd3b47d7…`, amd64: 5.51 GB; 20.9 GB unpacked). */
+export const SDK_IMAGE_DOWNLOAD = '5.5 GB';
 /** The files a project is known by. */
 const PROJECT_MARKERS = ['prism.toml', 'prismpm.lock', 'lexlean.toml', 'prismpm.toml'];
 /** The sources LexLean reads; a CRLF in one of them is LLC0101. */
@@ -75,11 +80,18 @@ function planImage({ image, pull }, context, resolved) {
   if (!resolved) return { id: 'image', status: 'manual', detail: `${reference} (${from}); not checked, Docker is missing`, reference };
   const id = ask(context, resolved, ['image', 'inspect', '--format', '{{.Id}}', reference]);
   if (id) return { id: 'image', status: 'already', detail: `${reference} (${from}), ${id.slice(0, 19)}`, reference, steps: [] };
-  if (!pull) return { id: 'image', status: 'manual', detail: `${reference} (${from}) is not here; --no-pull, so pull it yourself: docker pull ${reference}`, reference };
+  if (!pull) {
+    return {
+      id: 'image',
+      status: 'deferred',
+      detail: `${reference} (${from}) is not here; build --check and verify --lean run hosted without it, and build, verify and axioms pull it on first use (about ${SDK_IMAGE_DOWNLOAD}); setup --pull gets it now`,
+      reference,
+    };
+  }
   return {
     id: 'image',
     status: 'configure',
-    detail: `${reference} (${from}): pull, about 5 GB`,
+    detail: `${reference} (${from}): pull, about ${SDK_IMAGE_DOWNLOAD}`,
     reference,
     steps: [{ kind: 'command', command: resolved.command, args: [...resolved.args, 'pull', reference], options: {}, inherit: true, display: `docker pull ${reference}` }],
   };
@@ -127,8 +139,12 @@ function planEndings(context) {
   return { id: 'endings', status: 'configure', detail: `.gitattributes: ${GITATTRIBUTES_LINE}${note}`, steps: [{ kind: 'write', path, content }] };
 }
 
-/** Everything the machine half would do. `image` overrides the lockfile; `pull` false leaves a missing image alone. */
-export function planMachine({ image, pull = true } = {}, context) {
+/**
+ * Everything the machine half would do. `image` overrides the lockfile. A
+ * missing image is pulled only when `pull` is true (`--pull`, or `--image`
+ * naming one); otherwise it is deferred to the first command that needs it.
+ */
+export function planMachine({ image, pull = false } = {}, context) {
   const node = planNode(context);
   const docker = planDocker(context);
   const resolved = docker.resolved?.kind === 'missing' ? null : docker.resolved;
@@ -215,6 +231,7 @@ const WORDS = {
   already: ['ok', 'ok'],
   'not-found': ['skipped', 'skipped'],
   manual: ['manual', 'manual'],
+  deferred: ['deferred', 'deferred'],
   failed: ['failed', 'failed'],
 };
 

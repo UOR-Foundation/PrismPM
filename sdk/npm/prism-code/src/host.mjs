@@ -126,6 +126,24 @@ export function hostDocker({ configDir, env = process.env, platform = process.pl
 }
 
 /**
+ * Whether the SDK image is on this machine already: false when Docker is
+ * missing, does not answer, or has no such image. A dry run never probes and
+ * says false.
+ */
+export function hostImagePresent({ image, env = process.env, run = spawnSync, docker = null } = {}) {
+  if (env.PRISM_CODE_DRY_RUN) return false;
+  let host = docker;
+  try {
+    host ??= hostDocker({ configDir: prismHome(env), env, run });
+  } catch (error) {
+    if (error.code === 'docker.missing') return false;
+    throw error;
+  }
+  const result = run(host.command, [...host.args, 'image', 'inspect', '--format', '{{.Id}}', image], { encoding: 'utf8', timeout: 60000, windowsHide: true });
+  return !result.error && result.status === 0;
+}
+
+/**
  * The Docker invocation for one delegated command on this host: the program
  * `setup` recorded (or a fresh resolution), its arguments, and `run ...` with
  * this host's user, Docker socket group, mount style and cache volume.

@@ -56,11 +56,23 @@ const project = (lock = { sdk_image: IMAGE }) => {
   return dir;
 };
 
-test('a fresh machine: Docker is recorded, the image pulled, the cache created, and sources kept LF', () => {
+test('a fresh machine: the image is deferred by default, with what runs without it and what pulls it', () => {
   const cwd = project();
   const configDir = join(scratch(), '.prism');
   const ctx = context({ cwd, configDir, resolved: WSL });
-  const plan = planMachine({}, ctx);
+  const r = rows(planMachine({}, ctx));
+  assert.equal(r.image.status, 'deferred', 'setup pulls nothing unless asked');
+  assert.equal(r.image.steps, undefined);
+  assert.match(r.image.detail, /is not here; build --check and verify --lean run hosted without it, and build, verify and axioms pull it on first use \(about 5\.5 GB\); setup --pull gets it now/);
+  assert.equal(r.cache.status, 'configure', 'the cache volume is cheap and ready for the first pull');
+  assert.match(formatMachine(planMachine({}, ctx), { dryRun: true }), /image {11}deferred {12}ghcr\.io/);
+});
+
+test('a fresh machine with --pull: Docker is recorded, the image pulled, the cache created, and sources kept LF', () => {
+  const cwd = project();
+  const configDir = join(scratch(), '.prism');
+  const ctx = context({ cwd, configDir, resolved: WSL });
+  const plan = planMachine({ pull: true }, ctx);
   const r = rows(plan);
   assert.equal(r.node.status, 'already');
   assert.equal(r.docker.status, 'configure');
@@ -104,7 +116,7 @@ test('no Docker: the row is a manual step with the reason, the image and cache a
   assert.equal(rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism'), nodeVersion: '20.11.0' }))).node.status, 'failed');
 });
 
-test('outside a project: no lockfile means no image unless --image names one; --no-pull reports instead of pulling', () => {
+test('outside a project: no lockfile means no image unless --image names one; without a pull it is deferred', () => {
   const cwd = scratch();
   const configDir = join(scratch(), '.prism');
   const none = rows(planMachine({}, context({ cwd, configDir })));
@@ -113,8 +125,8 @@ test('outside a project: no lockfile means no image unless --image names one; --
   assert.equal(none.cache.status, 'not-found');
   assert.equal(none.endings.status, 'not-found');
   const named = rows(planMachine({ image: IMAGE, pull: false }, context({ cwd, configDir })));
-  assert.equal(named.image.status, 'manual');
-  assert.match(named.image.detail, /docker pull ghcr\.io/);
+  assert.equal(named.image.status, 'deferred');
+  assert.match(named.image.detail, /--image\) is not here; .*setup --pull gets it now/);
   assert.equal(named.cache.status, 'configure', 'the cache volume is created for the named image even before it is pulled');
   const bad = rows(planMachine({}, context({ cwd: project({ sdk_image: 'ghcr.io/x/y:latest' }), configDir })));
   assert.equal(bad.image.status, 'failed');
@@ -140,7 +152,7 @@ test('applying a plan: the config merge keeps keys another writer set, a failed 
   const configDir = join(scratch(), '.prism');
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, 'config.json'), JSON.stringify({ preferredAgent: 'claude-code' }));
-  const plan = planMachine({}, context({ cwd, configDir, resolved: WSL }));
+  const plan = planMachine({ pull: true }, context({ cwd, configDir, resolved: WSL }));
   const calls = [];
   applyMachine(plan, {
     run: (command, args) => {
@@ -175,7 +187,12 @@ process.exit(1);
 `);
   const pulled = join(scratch(), 'pulled');
   const env = { ...process.env, HOME: home, USERPROFILE: home, PRISM_HOME: join(home, '.prism'), PRISM_DOCKER: `"${process.execPath}" "${stub}"`, PULLED: pulled };
-  const dry = spawnSync(process.execPath, [bin, 'setup', '--dry-run'], { cwd, env, encoding: 'utf8' });
+  const plain = spawnSync(process.execPath, [bin, 'setup', '--dry-run'], { cwd, env, encoding: 'utf8' });
+  assert.equal(plain.status, 0, plain.stderr);
+  assert.match(plain.stdout, /image {11}deferred {12}/, 'without --pull the image waits for its first use');
+  assert.doesNotMatch(plain.stdout, /run docker pull/);
+  assert.equal(spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--pull', '--no-pull'], { cwd, env, encoding: 'utf8' }).status, 64);
+  const dry = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--pull'], { cwd, env, encoding: 'utf8' });
   assert.equal(dry.status, 0, dry.stderr);
   assert.match(dry.stdout, /^prism-code setup --dry-run: this machine\n/);
   assert.match(dry.stdout, /docker {10}would configure {5}docker 29\.1\.3/);
