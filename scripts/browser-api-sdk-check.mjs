@@ -163,7 +163,7 @@ export function verifyImage(value,image,architecture,revision){
  assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
  assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
- assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.3.0');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.4.0');
 }
 
 export function verifyTap(tap,minimum){
