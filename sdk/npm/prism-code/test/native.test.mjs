@@ -123,9 +123,9 @@ test('the deprecated check spelling takes the same host path', { skip: !posix },
 
 test('a host prismpm of another version is passed over for the image, with a note', { skip: !posix }, () => {
   const dir = project();
-  const r = prismCode(dir, ['build', '--check'], { PRISM_PRISMPM: fakePrismpm('0.3.0', join(scratch(), 'ran.txt')), PRISM_CODE_DRY_RUN: '1', PRISM_DOCKER: 'docker' });
+  const r = prismCode(dir, ['build', '--check', '--local'], { PRISM_PRISMPM: fakePrismpm('0.3.0', join(scratch(), 'ran.txt')), PRISM_CODE_DRY_RUN: '1', PRISM_DOCKER: 'docker' });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /is prismpm 0\.3\.0, and prismpm\.lock pins 0\.4\.0; checking in the SDK image/);
+  assert.match(r.stderr, /is prismpm 0\.3\.0, and prismpm\.lock pins 0\.4\.0; not used/);
   assert.match(r.stdout, new RegExp(`${IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} prismpm check\\n$`));
 });
 
@@ -143,7 +143,7 @@ test('build, verify and conformance stay in the image even with a matching host 
 test('PRISM_NATIVE=0 keeps the check in the image', { skip: !posix }, () => {
   const dir = project();
   const prismpm = fakePrismpm('0.4.0', join(scratch(), 'ran.txt'));
-  const r = prismCode(dir, ['build', '--check'], { PRISM_PRISMPM: prismpm, PRISM_NATIVE: '0', PRISM_CODE_DRY_RUN: '1', PRISM_DOCKER: 'docker' });
+  const r = prismCode(dir, ['build', '--check', '--local'], { PRISM_PRISMPM: prismpm, PRISM_NATIVE: '0', PRISM_CODE_DRY_RUN: '1', PRISM_DOCKER: 'docker' });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /prismpm check\n$/);
   assert.ok(!r.stdout.startsWith(prismpm));
@@ -160,4 +160,21 @@ test('the versioned cache in $PRISM_HOME is found without any variable', { skip:
   const r = spawnSync(process.execPath, [bin, 'build', '--check'], { cwd: dir, env: { ...process.env, PRISM_HOME: home, PRISM_PRISMPM: '', PRISM_CODE_DRY_RUN: '1' }, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout, `${join(cached, 'prismpm')} check\n`);
+});
+
+test('with no SDK image, a matching host prismpm checks before the hosted verifier', { skip: !posix }, () => {
+  const dir = project();
+  const prismpm = fakePrismpm('0.4.0', join(scratch(), 'ran.txt'));
+  // A dry run sees no image on this machine, so without a host prismpm this check would go hosted.
+  const r = prismCode(dir, ['build', '--check'], { PRISM_PRISMPM: prismpm, PRISM_CODE_DRY_RUN: '1' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, `${prismpm} check\n`);
+  assert.doesNotMatch(r.stderr, /hosted verifier/);
+});
+
+test('--hosted passes a matching host prismpm over', { skip: !posix }, () => {
+  const dir = project();
+  const prismpm = fakePrismpm('0.4.0', join(scratch(), 'ran.txt'));
+  const r = prismCode(dir, ['build', '--check', '--hosted'], { PRISM_PRISMPM: prismpm, PRISM_CODE_DRY_RUN: '1' });
+  assert.ok(!r.stdout.startsWith(prismpm), `the host prismpm ran: ${r.stdout}`);
 });

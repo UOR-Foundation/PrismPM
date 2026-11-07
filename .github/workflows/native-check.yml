@@ -171,15 +171,17 @@ jobs:
               writeFileSync("prismpm.lock", canonicalJson(lock));
             ' "$workspace/sdk/npm/prism-code/src/archive.mjs" "$workspace/sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json" "$1"
           }
-          check() { code=0; out=$(node "$workspace/sdk/npm/prism-code/bin/prism-code.mjs" build --check 2>&1) || code=$?; echo "exit $code: $out"; }
-          # Another version: passed over with a note, and the check goes to the image.
+          check() { code=0; out=$(node "$workspace/sdk/npm/prism-code/bin/prism-code.mjs" build --check "$@" 2>&1) || code=$?; echo "exit $code: $out"; }
+          # Another version: passed over with a note. --local sends the check to the image,
+          # which is unreachable here; without it the check would go to the hosted verifier.
           lock 0.0.0
-          check
+          check --local
           test "$code" -eq 69
-          printf '%s\n' "$out" | grep -qF "is prismpm $version, and prismpm.lock pins 0.0.0; checking in the SDK image"
-          # The built version: the host prismpm runs. Rewriting the version breaks the
+          printf '%s\n' "$out" | grep -qF "is prismpm $version, and prismpm.lock pins 0.0.0; not used"
+          # The built version: the host prismpm runs, before the hosted verifier that a
+          # check with no image would otherwise use. Rewriting the version breaks the
           # lock's inventory binding, so prismpm itself refuses it with PP5401; only a
-          # host run can answer that, since the image is unreachable here.
+          # host run can answer that, since nothing else is reachable here.
           lock "$version"
           check
           test "$code" -eq 4

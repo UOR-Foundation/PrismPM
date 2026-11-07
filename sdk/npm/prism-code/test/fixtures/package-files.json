@@ -49,6 +49,7 @@
   "src/generate/wit.mjs",
   "src/handler.mjs",
   "src/host.mjs",
+  "src/hosted.mjs",
   "src/index.mjs",
   "src/init-cli.mjs",
   "src/init.mjs",

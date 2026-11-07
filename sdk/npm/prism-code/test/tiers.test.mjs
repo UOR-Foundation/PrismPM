@@ -47,20 +47,20 @@ test('the --project argument names the file inside the container', () => {
   assert.equal(lexleanProjectArgument('/home/u/app', 'app', 'linux'), '/home/u/app/app/lexlean.toml');
 });
 
-test('verify --lean runs lexlean verify in the image without the Docker socket (dry run)', () => {
+test('verify --lean runs lexlean verify in the image without the Docker socket with --local (dry run)', () => {
   const dir = scratch();
   writeFileSync(join(dir, 'prismpm.lock'), JSON.stringify({ sdk_image: IMAGE }));
   mkdirSync(join(dir, 'app', 'src'), { recursive: true });
   writeFileSync(join(dir, 'app', 'lexlean.toml'), 'spec = "lexlean/project/1"\n');
   writeFileSync(join(dir, 'prism.toml'), '[application]\nname = "tiers"\nversion = "0.1.0"\n\n[model]\nsource = "app/src"\n\n[capabilities]\n');
   const env = { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: join(scratch(), '.prism') };
-  const r = spawnSync(process.execPath, [bin, 'verify', '--lean', '--all'], { cwd: dir, env, encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [bin, 'verify', '--lean', '--local', '--all'], { cwd: dir, env, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   const workdir = process.platform === 'win32' ? '/work' : realpathSync(dir);
   assert.ok(r.stdout.endsWith(`${IMAGE} lexlean verify --project ${workdir}/app/lexlean.toml --all\n`), r.stdout);
   assert.ok(!r.stdout.includes('docker.sock'), 'no socket for a Lean-only verify');
   assert.ok(spawnSync(process.execPath, [bin, 'verify'], { cwd: dir, env, encoding: 'utf8' }).stdout.includes(`${IMAGE} prismpm verify`));
-  const named = spawnSync(process.execPath, [bin, 'verify', '--lean', '--project', 'app', '--all'], { cwd: dir, env, encoding: 'utf8' });
+  const named = spawnSync(process.execPath, [bin, 'verify', '--lean', '--local', '--project', 'app', '--all'], { cwd: dir, env, encoding: 'utf8' });
   assert.ok(named.stdout.endsWith(`lexlean verify --project ${workdir}/app/lexlean.toml --all\n`), named.stdout);
   const bare = spawnSync(process.execPath, [bin, 'verify', '--lean'], { cwd: scratch(), env, encoding: 'utf8' });
   assert.equal(bare.status, 64, 'no lockfile is usage, as for every delegated verb');
