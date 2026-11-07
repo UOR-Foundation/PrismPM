@@ -58,8 +58,8 @@ const TOOLS = [
   },
   {
     name: 'prism_build',
-    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. The build needs the SDK image; when it is not on this machine it is downloaded first (about 5.5 GB). The first build takes ten minutes or more. Returns state running while it works; call again to keep waiting.',
-    inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' } }, additionalProperties: false },
+    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. The build needs the SDK image; when it is not on this machine it is downloaded first (about 5.5 GB). The first build takes ten minutes or more. With remote: "github", the repository\'s own GitHub Actions builds the committed app instead and this machine verifies what comes back, so no Docker or image is needed here; the app folder must be committed first. Returns state running while it works; call again to keep waiting.',
+    inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' }, remote: { type: 'string', enum: ['github'], description: 'Build on the repository\'s GitHub Actions (needs its build.yml, a token and the app committed) instead of in a local SDK image.' } }, additionalProperties: false },
   },
   {
     name: 'prism_try',
@@ -155,7 +155,7 @@ export function createServer({ cwd = process.cwd(), send }) {
         s.spec = validateSpec(s.spec ?? session.spec);
         s.status.job = { kind, pid: process.pid, started: Date.now() };
         save(s);
-        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite }) : await prove(dir, s, { log, overwrite: args.overwrite });
+        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite, remote: args.remote ?? null }) : await prove(dir, s, { log, overwrite: args.overwrite });
         if (kind === 'prove' || result.ok) s.status.lastSpec = JSON.stringify(s.spec);
         if (kind === 'build' && result.ok) s.status.lastBuild = { modelSha: s.status.modelSha, holo: result.holo, result };
         delete s.status.job;

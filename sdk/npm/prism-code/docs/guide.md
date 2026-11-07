@@ -733,6 +733,47 @@ anything is sent, and runs with `--local`. The hosted attestation is not the
 local one byte for byte: the profile has its own `module_prefix`. `axioms`
 reads the local build directory, so it needs the image.
 
+#### Without Docker at all: GitHub builds, this machine checks
+
+```
+npx prism-code build --remote github
+```
+
+The repository's own GitHub Actions builds one commit and this machine verifies
+what comes back; nothing here needs Docker, the SDK image or a toolchain. The
+principle is build anywhere, verify locally: the runner is not trusted, it is
+checked.
+
+1. The commit (`HEAD`, or `--ref <commit>`) is pushed to
+   `refs/heads/prism/build/<sha>`, so the run is that commit and no other,
+   whatever the branch does meanwhile. A working tree with changes is refused
+   unless `--allow-dirty`, because a remote build cannot see them. A run that
+   already exists for the commit, from `pages.yml` for instance, is reused.
+2. The repository's `build.yml` (the template's, which `pages.yml` calls too)
+   runs `prismpm verify` in the SDK image, uploads the artifact
+   `prism-build-<sha>` and signs the holo's provenance with
+   `actions/attest-build-provenance`.
+3. Before anything is written under `.prism/build/`, in this order: `build.json`
+   names this commit and this repository; the holo's SHA-256 is the one
+   recorded; the provenance statement is about that SHA-256 and names this
+   repository and commit; its signature verifies and the signer is a workflow
+   of this repository through `https://token.actions.githubusercontent.com`;
+   `check` reaches a verdict at the P0 policy (`--policy` raises it; the
+   provenance is the bundle beside the holo, which `check` does not read); the
+   fingerprint is the one recorded; every acceptance vector replays here.
+4. The build directory lands at `<project>/.prism/build/<build>/` and the
+   record and bundle at `<project>/.prism/remote/<sha>/`; the build ref is
+   deleted.
+
+The signature is checked by prism-code's own Sigstore verifier when its
+optional packages are installed (Node 22.22.2 or newer), else by
+`gh attestation verify`, else refused. A refusal is typed (`remote.*`, exit 2);
+bytes that differ from their digest exit 1; a verdict or a vector that fails
+exits as `check` or `vectors` would. The token (`GITHUB_TOKEN`, `GH_TOKEN` or
+`gh auth token`) goes to `api.github.com` and nowhere else, and is never
+printed. Pages on a private repository needs a paid plan; the artifact and the
+run's summary (fingerprint, provenance, how to verify) need none.
+
 ### Settle the axioms in one pass (experimental)
 
 ```

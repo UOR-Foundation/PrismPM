@@ -40,7 +40,8 @@ function context({ cwd, configDir, resolved = NATIVE, answers = {}, nodeVersion 
     exists: (path) => readText(path) !== null,
     readFile: readText,
     run: (command, args) => {
-      const line = args.slice(resolved.args.length).join(' ');
+      // Docker's own arguments are cut off the line; git and gh, which the github row asks, have none.
+      const line = args.slice(command === 'git' || command === 'gh' ? 0 : (resolved.args ?? []).length).join(' ');
       calls.push(line);
       const hit = Object.entries(answers).find(([key]) => line.startsWith(key));
       return hit ? { status: 0, stdout: hit[1], stderr: '' } : { status: 1, stdout: '', stderr: 'no' };
@@ -98,7 +99,7 @@ test('a machine already set up changes nothing, and a second run says so', () =>
   writeFileSync(join(configDir, 'config.json'), JSON.stringify({ preferredAgent: 'codex', docker: { command: NATIVE.command, args: [], mount: 'native' }, cache: true }));
   writeFileSync(join(cwd, '.gitattributes'), '*.png binary\n* text eol=lf\n');
   const plan = planMachine({}, context({ cwd, configDir, answers: { 'image inspect': 'sha256:abcdef0123456789\n', 'volume inspect': `${VOLUME}\n` } }));
-  assert.deepEqual(plan.rows.map((row) => [row.id, row.status]), [['node', 'already'], ['docker', 'already'], ['image', 'already'], ['cache', 'already'], ['endings', 'already']]);
+  assert.deepEqual(plan.rows.map((row) => [row.id, row.status]), [['node', 'already'], ['docker', 'already'], ['image', 'already'], ['cache', 'already'], ['endings', 'already'], ['github', 'not-found']]);
   assert.equal(plan.rows.every((row) => (row.steps ?? []).length === 0), true);
   assert.match(formatMachine(plan), /^prism-code setup: this machine\n {2}node {12}ok {18}node 22\.21\.0\n/);
 });
@@ -208,10 +209,35 @@ process.exit(1);
   const report = JSON.parse(json.stdout);
   assert.equal(report.schema, 'prism/setup-report/1');
   assert.equal(report.dryRun, true);
-  assert.deepEqual(report.machine.map((row) => row.id), ['node', 'docker', 'image', 'cache', 'endings']);
+  assert.deepEqual(report.machine.map((row) => row.id), ['node', 'docker', 'image', 'cache', 'endings', 'github']);
   assert.ok(Array.isArray(report.agents));
 
   const agents = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--agents-only', '--json'], { cwd, env, encoding: 'utf8' });
   assert.equal(JSON.parse(agents.stdout).machine, null);
   assert.equal(spawnSync(process.execPath, [bin, 'setup', '--image'], { cwd, env, encoding: 'utf8' }).status, 64);
+});
+
+test('the github row: no origin is not a repository; a github.com origin with a token and build.yml is ready, and each missing piece is named', () => {
+  const cwd = project();
+  const configDir = join(scratch(), '.prism');
+  const git = (origin) => (command, args) => (command === 'git' && args.includes('get-url') ? { status: 0, stdout: `${origin}\n`, stderr: '' } : { status: 1, stdout: '', stderr: 'no' });
+  const none = rows(planMachine({}, context({ cwd, configDir })));
+  assert.equal(none.github.status, 'not-found');
+  assert.match(none.github.detail, /no git remote named origin/);
+
+  const elsewhere = rows(planMachine({}, { ...context({ cwd, configDir }), run: git('https://gitlab.com/acme/app.git') }));
+  assert.equal(elsewhere.github.status, 'manual');
+  assert.match(elsewhere.github.detail, /gitlab\.com.*not a github\.com repository/);
+
+  const noToken = rows(planMachine({}, { ...context({ cwd, configDir }), run: git('git@github.com:acme/app.git') }));
+  assert.equal(noToken.github.status, 'manual');
+  assert.match(noToken.github.detail, /^acme\/app; no token: set GITHUB_TOKEN or GH_TOKEN, or run gh auth login; no \.github\/workflows\/build\.yml: add the template's, https:\/\/github\.com\/UOR-Foundation\/template/);
+
+  mkdirSync(join(cwd, '.github', 'workflows'), { recursive: true });
+  writeFileSync(join(cwd, '.github', 'workflows', 'build.yml'), 'name: build\n');
+  const ready = rows(planMachine({}, { ...context({ cwd, configDir }), env: { GH_TOKEN: 'secret' }, run: git('https://github.com/acme/app') }));
+  assert.equal(ready.github.status, 'already');
+  assert.equal(ready.github.detail, 'acme/app; token from GH_TOKEN; .github/workflows/build.yml present');
+  assert.ok(!ready.github.detail.includes('secret'), 'the token itself is never shown');
+  assert.equal(ready.github.steps, undefined, 'the row applies nothing');
 });
