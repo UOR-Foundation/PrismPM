@@ -723,9 +723,9 @@ tier in the image. T2 always needs the image.
 
 | | In the image | Hosted |
 | --- | --- | --- |
-| T0 `build --check` | `prismpm check`: model, lockfile and SDK pins | `prism.toml` here and `lexlean check --all` there; the lockfile and SDK pins are skipped, and the last line says so |
+| T0 `build --check` | `prismpm check`: model, lockfile and SDK pins, when a `prismpm.toml` is here | `prism.toml` here and `lexlean check --all` there: syntax and types, not proofs; the lockfile and SDK pins are skipped, and the last line says so |
 | T1 `verify --lean` | `lexlean verify` with the project's own `lexlean.toml` | `lexlean verify` of the project's entrypoints on the profile's pinned toolchain; it passes only when every entrypoint's module comes back verified (`hosted.coverage`), and the record goes to `.lexlean/hosted/<attestation_id>.json` |
-| What is sent | nothing | the files under `src/`, unlisted but not private |
+| What is sent | nothing | the files under `src/`, stored unlisted: not searchable, but readable by anyone with the draft's ID |
 
 The profile takes a project whose only source root is `src` and whose lexicon
 packages it carries; any other shape is refused with `hosted.layout` before

@@ -17,7 +17,8 @@
  * under `.lexlean/verified/` that `axioms` reads. The record of a hosted
  * verification is written to `.lexlean/hosted/<attestation_id>.json`.
  *
- * Drafts on the server are unlisted, not private.
+ * Drafts on the server are unlisted, not private: nothing lists or searches
+ * them, but `lexlean_draft_read` serves a draft to anyone who has its ID.
  */
 import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -261,7 +262,24 @@ export function writeHostedRecord(projectDir, { draft, profile, record, url, ent
   return path;
 }
 
-/** One line per diagnostic: its code and the first line of its message. */
-export function formatDiagnostics(diagnostics) {
-  return diagnostics.map((d) => `  ${d.code ?? 'diagnostic'} ${String(d.message ?? '').split('\n')[0]}`.trimEnd()).join('\n');
+/** At most this many lines of one diagnostic's message are printed; Lean's goals can run long. */
+const DIAGNOSTIC_LINES = 20;
+
+/**
+ * Each diagnostic as `file:line:column: CODE message`, the file relative to
+ * where the command ran (`dir` is the project's directory there), and the rest
+ * of the message, Lean's goal included, indented under it.
+ */
+export function formatDiagnostics(diagnostics, { dir = '.' } = {}) {
+  return diagnostics
+    .map((d) => {
+      const p = d.primary;
+      const file = p?.path ? (dir === '.' ? p.path : `${dir.replace(/\\/g, '/')}/${p.path}`) : null;
+      const where = file ? `${file}${p.line_start ? `:${p.line_start}` : ''}${p.line_start && p.column_start ? `:${p.column_start}` : ''}: ` : '';
+      const [first = '', ...more] = String(d.message ?? '').replace(/\s+$/, '').split('\n');
+      const kept = more.slice(0, DIAGNOSTIC_LINES - 1).map((line) => `    ${line}`.trimEnd());
+      if (more.length > kept.length) kept.push(`    ... ${more.length - kept.length} more line${more.length - kept.length === 1 ? '' : 's'}`);
+      return [`  ${where}${d.code ?? 'diagnostic'} ${first}`.trimEnd(), ...kept].join('\n');
+    })
+    .join('\n');
 }

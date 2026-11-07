@@ -6,6 +6,15 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [Unreleased]
+
+### Bugs Fixed
+- The tiers find `prismpm.lock` here or in a parent directory, up to the repository's root. In a template instance's `app/`, `build --check` and `verify --lean` used to run hosted even with the SDK image on the machine, and said there was no image; `verify --lean --local` there now runs in the image the root lockfile pins. A hosted tier's first line says why it is hosted (`--hosted`, no lockfile, no image, or, for `build --check`, no `prismpm.toml` for `prismpm check` to read), and the `skipped prismpm check` line no longer offers to pull an image that is already here.
+- A proof the hosted verifier refuses is printed as `file:line:column: CODE message`, with Lean's goal under it (at most 20 lines), where it used to stop at the message's first line.
+- `--help` after any built-in command prints that command's usage and options and exits 0, without reading a lockfile or reaching Docker. `build --help` at a project's root used to announce a 5.5 GB download and start the image for `prismpm build --help`; `setup --help` and `build --remote github --help` were refused as unknown options.
+- `setup` leaves a `.gitattributes` whose root rule turns conversion off (`* -text` or `* binary`) as it is, since such a file already keeps sources LF as committed, and an appended `* text eol=lf` would have overridden it.
+- `build --check` says that it checks syntax and types, not proofs. The hosted tiers say what "unlisted" means: nothing lists or searches a draft, but anyone with its ID can read it.
+
 ## [0.5.0] - 2026-11-07
 
 ### Features Added
