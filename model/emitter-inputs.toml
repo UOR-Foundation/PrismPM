@@ -1,5 +1,5 @@
 spec = "prismpm/emitter-inputs/1"
-digest = "e2e8cb380dc45d0892b8b743d50ff43ef636309d4721642405fac156cf4636b8"
+digest = "b80944f6b2d8327d0a381a3022ec52517e4913bb30c58e7bc181c53d4086fed2"
 inputs = [
     "crates/prismpm/src/application_build.rs",
     "crates/prismpm/src/brand.rs",
@@ -18,6 +18,10 @@ inputs = [
     "crates/prismpm/src/holo/mod.rs",
     "crates/prismpm/src/holo/model_document.rs",
     "crates/prismpm/src/holo/projector.rs",
+    "crates/prismpm/src/holo/server_application.rs",
+    "crates/prismpm/src/holo/server_application/model.rs",
+    "crates/prismpm/src/holo/server_application/source.rs",
+    "crates/prismpm/src/holo/server_application/wire.rs",
     "crates/prismpm/src/holo/text_cli.rs",
     "crates/prismpm/src/holo/validate.rs",
     "crates/prismpm/src/holo/workbench.rs",
@@ -31,6 +35,7 @@ inputs = [
     "schemas/model-document-v4.schema.json",
     "schemas/model-document-v5.schema.json",
     "schemas/model-document-v6.schema.json",
+    "schemas/model-document-v7.schema.json",
     "schemas/model-document.schema.json",
     "schemas/workbench-view-projection.schema.json",
     "vendor/hologram-brand/fonts/Archivo-SemiBold.woff2",
