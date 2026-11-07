@@ -217,6 +217,10 @@ path = "crates/prismpm/src/sdk/"
 module = "verify"
 
 [[owner]]
+path = "crates/prismpm/src/server_build.rs"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/server_host.rs"
 module = "images"
 

@@ -826,12 +826,16 @@ impl Controller {
         crate::input_lock::enforce(&self.root, update_lock, || self.pinned_inputs(prepared))?;
         // Only an application build writes a holo to describe. A server build writes a
         // certified core and its host adapter, and no holo, so it carries no statement.
-        let stamp = if prepared.model.application.as_ref().is_some_and(|application| {
-            !matches!(
-                application,
-                crate::holo::model_document::Application::Server(_)
-            )
-        }) {
+        let stamp = if prepared
+            .model
+            .application
+            .as_ref()
+            .is_some_and(|application| {
+                !matches!(
+                    application,
+                    crate::holo::model_document::Application::Server(_)
+                )
+            }) {
             Stamp::begin(provenance, || {
                 Ok(crate::sdk::committed_lock(&self.root)?.map(|(_, bytes)| bytes))
             })?
