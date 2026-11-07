@@ -395,10 +395,7 @@ fn host_effect_system_named_release_selects_and_binds_its_source() {
     let projections = crate::system::projections(system, &[]).unwrap();
     let compose: Value = serde_json::from_slice(&projections[0].bytes).unwrap();
     assert_eq!(projections[0].path, "projections/compose.json");
-    assert_eq!(
-        compose["services"]["gateway"]["ports"][0]["host_ip"],
-        "127.0.0.1"
-    );
+    assert_eq!(compose["services"]["gateway"]["network_mode"], "host");
     drop(prepared);
 
     let path = root.join("src/Release.lex.tex");
@@ -444,7 +441,13 @@ fn host_effect_system_named_release_selects_and_binds_its_source() {
 /// The text/3 command-line system fixture: the ho-11 text application raised
 /// to text/3 with a modeled command line, contained by a browser system that
 /// declares the browser component and, second, the command-line component.
+/// A browser system binds `<name>.holo` as a release path, so the fixture's
+/// spaced name `Text Request` is renamed to `Text-Request`.
 fn text_command_line_system_project() -> tempfile::TempDir {
+    text_command_line_system_project_named("Text-Request")
+}
+
+fn text_command_line_system_project_named(name: &str) -> tempfile::TempDir {
     const V3: &str = "Foundation.View.Text.V3.Model";
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path();
@@ -510,6 +513,10 @@ fn text_command_line_system_project() -> tempfile::TempDir {
     let mut application = std::fs::read_to_string(&application_path).unwrap();
     for (from, to) in [
         (
+            "name := \"Text Request\",".to_owned(),
+            format!("name := \"{name}\","),
+        ),
+        (
             "result: Foundation.View.Text.V1.Model::TextApplication,".to_owned(),
             format!("result: {V3}::TextApplication,"),
         ),
@@ -527,7 +534,9 @@ fn text_command_line_system_project() -> tempfile::TempDir {
         ),
         (
             "responseError := \"Invalid response\"})})".to_owned(),
-            format!("responseError := \"Invalid response\"}}), cli := {cli}}})"),
+            format!(
+                "responseError := \"Invalid response\"}}), cli := {cli}, workbench := (ctor Option.none [{V3}::WorkbenchView])}})"
+            ),
         ),
         (
             "\\importmodule{Foundation.View.Text.V1.Model}".to_owned(),
@@ -569,6 +578,22 @@ fn text_command_line_system_project() -> tempfile::TempDir {
 
 const CLI_ARTIFACT: &str = "(record Production.BrowserSystem::GeneratedArtifact {id := \"text-program\", role := \"command-line-program\", licenseExpression := \"MIT OR Apache-2.0\"})";
 const CLI_COMPONENT: &str = "(record Production.BrowserSystem::Component {id := \"text-command-line\", artifact := \"text-program\", kind := \"cli\", version := \"0.1.0\"})";
+
+#[test]
+fn text_application_name_outside_the_release_path_rule_is_refused_at_check() {
+    // The text profile admits a spaced name, but a browser-system release
+    // binds `<name>.holo` under the browser-system-release/1 path rule, which
+    // has no space. `check` must refuse what `build` cannot bind.
+    let temporary = text_command_line_system_project_named("Text Request");
+    let root = temporary.path();
+    let error = Controller::load(root)
+        .unwrap()
+        .check(CheckRequest { config_path: None })
+        .expect_err("a browser system accepted an application name it cannot bind");
+    assert_eq!(error.code, "PP2101", "{error:?}");
+    assert!(error.message.contains("\"Text Request.holo\""), "{error:?}");
+    assert!(!root.join(".prism/build").exists());
+}
 
 #[test]
 fn browser_system_admits_one_command_line_component_of_a_text_command_line_application() {
@@ -1267,8 +1292,15 @@ fn assert_receipt(root: &Path, receipt: &VerifyResult, build: &BuildResult) {
         content_id(&std::fs::read(root.join(&build.model_path)).unwrap())
     );
     let acceptance_bytes = std::fs::read(verified.join("application-acceptance.json")).unwrap();
-    assert_eq!(manifest["acceptance_sha256"], content_id(&acceptance_bytes));
     let acceptance: Value = serde_json::from_slice(&acceptance_bytes).unwrap();
+    let mut acceptance_for_hash = acceptance.clone();
+    if let Some(object) = acceptance_for_hash.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    assert_eq!(
+        manifest["acceptance_sha256"],
+        content_id(&encode_value(&acceptance_for_hash).unwrap())
+    );
     assert_eq!(acceptance["build_id"], build.build_id);
     assert_eq!(acceptance["source_id"], build.source_id);
     assert_eq!(acceptance["status"], "verified");

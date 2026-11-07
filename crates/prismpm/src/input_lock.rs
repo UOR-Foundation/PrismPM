@@ -32,7 +32,8 @@ const CORE_WASM_WORLD_SHA256: &str =
 const SPEC_DOMAIN: &[u8] = b"prismpm/spec-inputs/1\n";
 const SPEC_MAX_FILES: usize = 4096;
 const SPEC_MAX_BYTES: u64 = 512 * 1024 * 1024;
-const SPEC_TREES: [&str; 3] = ["examples", "intent", "types"];
+const SPEC_INTENT: &str = "intent.md";
+const SPEC_TREES: [&str; 2] = ["examples", "types"];
 
 /// Everything a build knows that the input lock pins.
 pub(crate) struct InputSources<'a> {
@@ -49,6 +50,8 @@ pub(crate) fn sdk_projection(lock: &Value) -> Value {
     let mut value = lock.clone();
     if let Some(object) = value.as_object_mut() {
         object.remove("inputs");
+        // Written by `prism-code build --unstable-author` (#325); the SDK rules never read it.
+        object.remove("authoring");
         object.insert("schema".to_owned(), Value::String(SDK_LOCK_V2.to_owned()));
     }
     value
@@ -135,7 +138,7 @@ fn reconcile(
 }
 
 /// The `inputs.<field>` names whose values differ, in field order.
-fn changed_fields(locked: &Value, current: &Value) -> Vec<String> {
+pub(crate) fn changed_fields(locked: &Value, current: &Value) -> Vec<String> {
     let mut names = BTreeSet::new();
     for value in [locked, current] {
         if let Some(object) = value.as_object() {
@@ -150,7 +153,7 @@ fn changed_fields(locked: &Value, current: &Value) -> Vec<String> {
 }
 
 /// A `/3` lock with every SDK field of `lock` and the given `inputs`.
-fn with_inputs(lock: &Value, inputs: Value) -> Result<CanonicalDocument, PrismError> {
+pub(crate) fn with_inputs(lock: &Value, inputs: Value) -> Result<CanonicalDocument, PrismError> {
     let mut value = lock.clone();
     let object = value
         .as_object_mut()
@@ -161,7 +164,11 @@ fn with_inputs(lock: &Value, inputs: Value) -> Result<CanonicalDocument, PrismEr
 }
 
 /// Replace `prismpm.lock` atomically, never over bytes this build did not read.
-fn write_lock(root: &Path, original: &[u8], lock: &CanonicalDocument) -> Result<(), PrismError> {
+pub(crate) fn write_lock(
+    root: &Path,
+    original: &[u8],
+    lock: &CanonicalDocument,
+) -> Result<(), PrismError> {
     let failed = |error: std::io::Error| {
         PrismError::new("PP5401", format!("cannot update prismpm.lock: {error}"))
     };
@@ -181,6 +188,29 @@ fn write_lock(root: &Path, original: &[u8], lock: &CanonicalDocument) -> Result<
         ));
     }
     staged.persist(&path).map_err(|error| failed(error.error))?;
+    Ok(())
+}
+
+/// Write a first `prismpm.lock`, never over a file that appeared meanwhile.
+pub(crate) fn create_lock(root: &Path, lock: &CanonicalDocument) -> Result<(), PrismError> {
+    let failed = |error: std::io::Error| {
+        PrismError::new("PP5401", format!("cannot create prismpm.lock: {error}"))
+    };
+    let mut staged = tempfile::Builder::new()
+        .prefix(".prismpm.lock.")
+        .tempfile_in(root)
+        .map_err(failed)?;
+    staged.write_all(lock.bytes()).map_err(failed)?;
+    staged.as_file().sync_all().map_err(failed)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(0o644))
+            .map_err(failed)?;
+    }
+    staged
+        .persist_noclobber(root.join("prismpm.lock"))
+        .map_err(|error| failed(error.error))?;
     Ok(())
 }
 
@@ -240,6 +270,9 @@ fn spec_files(
     let mut files = SpecFiles::default();
     if exists(&root.join("prism.toml"))? {
         files.add(root, "prism.toml")?;
+        if exists(&root.join(SPEC_INTENT))? {
+            files.add(root, SPEC_INTENT)?;
+        }
         for tree in SPEC_TREES {
             if exists(&root.join(tree))? {
                 files.walk(root, tree, |_| true)?;
@@ -408,6 +441,38 @@ pub(crate) fn sample_inputs() -> Value {
     })
 }
 
+/// A `/2` lock value accepted by the platform rules, built like `sdk::tests`.
+/// A different `salt` yields a different SDK image, as a later SDK would.
+#[cfg(test)]
+pub(crate) fn sample_platform_lock(salt: &str) -> Value {
+    let digest = |value: &[u8]| format!("sha256:{:x}", Sha256::digest(value));
+    let mut manifests = Vec::new();
+    let mut platforms = Vec::new();
+    for architecture in ["amd64", "arm64"] {
+        let manifest = digest(format!("{salt}{architecture}/manifest").as_bytes());
+        let inventory = json!([{"id":"prismpm","kind":"binary","version":"0.3.0",
+            "digest":digest(format!("{salt}{architecture}/binary").as_bytes())}]);
+        let document = serde_json::to_string(&json!({
+            "schema":"prismpm/sdk-inventory/1",
+            "artifacts":inventory,
+            "commands":[{"command":"prismpm","executable":"/usr/local/bin/prismpm","sha256":"a".repeat(64)}]
+        }))
+        .unwrap();
+        manifests.push(
+            json!({"mediaType":"application/vnd.oci.image.manifest.v1+json",
+            "digest":manifest,"size":100,"platform":{"os":"linux","architecture":architecture}}),
+        );
+        platforms.push(json!({"platform":format!("linux/{architecture}"),"manifest_digest":manifest,
+            "inventory_digest":digest(document.as_bytes()),"inventory_document":document,"inventory":inventory}));
+    }
+    let index = serde_json::to_string(&json!({"schemaVersion":2,
+        "mediaType":"application/vnd.oci.image.index.v1+json","manifests":manifests}))
+    .unwrap();
+    json!({"schema":SDK_LOCK_V2,"sdk_version":"0.3.0",
+        "sdk_image":format!("example.invalid/test-sdk@{}", digest(index.as_bytes())),
+        "sdk_index":index,"standards_lock":digest(b"standards"),"platforms":platforms})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,30 +503,7 @@ mod tests {
 
     /// A `/2` lock value accepted by the platform rules, built like `sdk::tests`.
     fn platform_lock() -> Value {
-        let digest = |value: &[u8]| format!("sha256:{:x}", Sha256::digest(value));
-        let mut manifests = Vec::new();
-        let mut platforms = Vec::new();
-        for architecture in ["amd64", "arm64"] {
-            let manifest = digest(format!("{architecture}/manifest").as_bytes());
-            let inventory = json!([{"id":"prismpm","kind":"binary","version":"0.3.0",
-                "digest":digest(format!("{architecture}/binary").as_bytes())}]);
-            let document = serde_json::to_string(&json!({
-                "schema":"prismpm/sdk-inventory/1",
-                "artifacts":inventory,
-                "commands":[{"command":"prismpm","executable":"/usr/local/bin/prismpm","sha256":"a".repeat(64)}]
-            }))
-            .unwrap();
-            manifests.push(json!({"mediaType":"application/vnd.oci.image.manifest.v1+json",
-                "digest":manifest,"size":100,"platform":{"os":"linux","architecture":architecture}}));
-            platforms.push(json!({"platform":format!("linux/{architecture}"),"manifest_digest":manifest,
-                "inventory_digest":digest(document.as_bytes()),"inventory_document":document,"inventory":inventory}));
-        }
-        let index = serde_json::to_string(&json!({"schemaVersion":2,
-            "mediaType":"application/vnd.oci.image.index.v1+json","manifests":manifests}))
-        .unwrap();
-        json!({"schema":SDK_LOCK_V2,"sdk_version":"0.3.0",
-            "sdk_image":format!("example.invalid/test-sdk@{}", digest(index.as_bytes())),
-            "sdk_index":index,"standards_lock":digest(b"standards"),"platforms":platforms})
+        sample_platform_lock("")
     }
 
     #[test]
@@ -499,7 +541,7 @@ mod tests {
             lexlean::LEAN_TOOLCHAIN,
             format!("leanprover/lean4:{}", pinned["lean"].as_str().unwrap())
         );
-        assert_eq!(pinned["lexlean"], "0.3.0");
+        assert_eq!(pinned["lexlean"], "0.4.0");
     }
 
     #[test]
@@ -557,12 +599,32 @@ mod tests {
         calculator_like(root.path());
         write(root.path(), "prism.toml", b"name = \"calculator\"\n");
         write(root.path(), "examples/add.json", b"{}");
-        write(root.path(), "intent/README.md", b"intent");
+        write(root.path(), "intent.md", b"add never overflows.\n");
+        write(root.path(), "types/calculator.ts", b"export type T = 1;\n");
+        write(root.path(), "intent/README.md", b"not part of the spec");
         let (basis, files) = spec_files(root.path(), "lexlean.toml").unwrap();
         assert_eq!(basis, "prism-toml");
         assert_eq!(
             files.keys().map(String::as_str).collect::<Vec<_>>(),
-            ["examples/add.json", "intent/README.md", "prism.toml"]
+            [
+                "examples/add.json",
+                "intent.md",
+                "prism.toml",
+                "types/calculator.ts"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_calculator_authoring_fixture_has_the_digest_javascript_pins() {
+        // sdk/npm/prism-code/test/author.test.mjs pins the same value, so the two readers cannot drift.
+        let root =
+            manifest_dir().join("../../sdk/npm/prism-code/test/fixtures/authoring/calculator");
+        let (basis, files) = spec_files(&root, "lexlean.toml").unwrap();
+        assert_eq!(basis, "prism-toml");
+        assert_eq!(
+            spec_digest(&files),
+            "5487513160c873eb0dcf02a42146fc8bbadc06d1d701ea2b08a3169d4c814d1a"
         );
     }
 
@@ -602,6 +664,29 @@ mod tests {
             changed_fields(&locked, &current),
             ["inputs.model", "inputs.spec"]
         );
+    }
+
+    #[test]
+    fn the_authoring_record_stays_in_the_lock_and_out_of_the_projection() {
+        let v2 = CanonicalDocument::from_value(SDK_LOCK_V2, platform_lock()).unwrap();
+        let mut value = with_inputs(v2.value(), sample_inputs())
+            .unwrap()
+            .value()
+            .clone();
+        value["authoring"] = json!({
+            "agent": {"adapter": "anthropic", "model": "claude-opus-5-5"},
+            "model_tree": {"blake3": "a".repeat(64)},
+            "spec": {"blake3": "b".repeat(64)}
+        });
+        let v3 = CanonicalDocument::from_value(SDK_LOCK_V3, value.clone()).unwrap();
+        assert_eq!(
+            crate::sdk::parse_lock(v3.bytes()).unwrap().bytes(),
+            v2.bytes()
+        );
+        let updated = with_inputs(v3.value(), sample_inputs()).unwrap();
+        assert_eq!(updated.value()["authoring"], value["authoring"]);
+        value["authoring"]["surprise"] = json!(true);
+        assert!(CanonicalDocument::from_value(SDK_LOCK_V3, value).is_err());
     }
 
     #[test]

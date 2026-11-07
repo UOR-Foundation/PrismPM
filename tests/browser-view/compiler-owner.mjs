@@ -15,6 +15,8 @@ const families = Object.freeze({
   'session-operation': Object.freeze({directory: 'browser-session-operation', executable: 'browser-session-operation-driver'}),
   'signed-context': Object.freeze({directory: 'browser-signed-context', executable: 'browser-signed-context-driver'}),
   'session-retention': Object.freeze({directory: 'browser-session-journal-retention', executable: 'browser-session-journal-retention-driver'}),
+  'session-journal-reservation': Object.freeze({directory: 'browser-session-journal', driver: 'reservation-driver', executable: 'browser-session-journal-driver'}),
+  'session-recovery-frames': Object.freeze({directory: 'browser-session-recovery-frames', executable: 'browser-session-recovery-frames-driver'}),
   'publication-linkage': Object.freeze({directory: 'publication-context-linkage', executable: 'publication-context-linkage-driver'}),
   'account-genesis': Object.freeze({directory: 'browser-account-genesis', executable: 'browser-account-genesis-driver'}),
   p256: Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
@@ -32,8 +34,10 @@ function family(name) {
   assert.ok(typeof name === 'string' && Object.hasOwn(families, name), 'registered compiler family required');
   return families[name];
 }
+// A family directory may hold several drivers; `driver` names the owned one.
+const driverManifest = selected => 'tests/' + selected.directory + '/' + (selected.driver ?? 'driver') + '/Cargo.toml';
 function requiredInputs(name) {
-  const selected = family(name), manifest = 'tests/' + selected.directory + '/driver/Cargo.toml';
+  const selected = family(name), manifest = driverManifest(selected);
   const paths = new Set([manifest, manifest.replace('Cargo.toml', 'Cargo.lock'), manifest.replace('Cargo.toml', 'src/main.rs'),
     'lean-toolchain', 'rust-toolchain.toml', 'model/dependencies.toml', 'model/authorities.toml',
     'vendor/lean4-prod/lean.tar', 'tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
@@ -164,9 +168,25 @@ export function captureCompilerRuntime(root) {
 }
 
 export function createCompilerOwner(name, selectedInputs = captureCompilerInputs(name)) {
+  return constructCompilerOwner(name, selectedInputs, () => mkdtempSync(join(tmpdir(), 'prismpm-compiler-owner-')));
+}
+
+// SDK image construction has an isolated filesystem and one install invocation.
+// A fresh stable path keeps Cargo's path-package identities reproducible. Never
+// reuse an existing path; normal owners retain independent random workspaces.
+export function createSdkAccountGenesisCompilerOwner() {
+  assert.equal(repository, '/opt/prismpm/source', 'SDK construction source root required');
+  return constructCompilerOwner('account-genesis', captureCompilerInputs('account-genesis'), () => {
+    const work = '/tmp/prismpm-sdk-account-genesis-compiler';
+    mkdirSync(work, {mode: 0o700});
+    return work;
+  });
+}
+
+function constructCompilerOwner(name, selectedInputs, makeWorkspace) {
   const selected = family(name), inputs = inputMap(selectedInputs);
   assert.deepEqual(Object.keys(inputs), requiredInputs(name), 'complete closed compiler input closure required');
-  const manifest = 'tests/' + selected.directory + '/driver/Cargo.toml';
+  const manifest = driverManifest(selected);
   const driverFiles = [manifest, manifest.replace('Cargo.toml', 'Cargo.lock'), manifest.replace('Cargo.toml', 'src/main.rs')];
   for (const path of [...driverFiles, 'lean-toolchain', 'rust-toolchain.toml', 'model/dependencies.toml',
     'model/authorities.toml', 'vendor/lean4-prod/lean.tar', 'vendor/lean4-prod/rust/MANIFEST.sha256',
@@ -179,7 +199,7 @@ export function createCompilerOwner(name, selectedInputs = captureCompilerInputs
       assert.equal(inputs[tree + '/' + match[2]], match[1], 'complete registered compiler source inventory');
     }
   }
-  const work = mkdtempSync(join(tmpdir(), 'prismpm-compiler-owner-')), staged = new Map();
+  const work = makeWorkspace(), staged = new Map();
   function stage(path, bytes) {
     const target = join(work, path); mkdirSync(dirname(target), {recursive: true, mode: 0o700});
     writeFileSync(target, bytes, {flag: 'wx', mode: 0o600}); staged.set(path, sha(bytes));

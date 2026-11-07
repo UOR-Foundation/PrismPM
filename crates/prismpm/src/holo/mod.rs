@@ -2,6 +2,7 @@
 
 pub mod application;
 pub mod archive;
+pub mod attestation;
 pub mod browser_application;
 pub mod canonical;
 mod facet_validate;
@@ -9,8 +10,10 @@ mod facets;
 pub mod library;
 pub mod model_document;
 pub mod projector;
+pub mod provenance;
 pub mod server_application;
 pub mod text_cli;
 pub mod validate;
+pub mod workbench;
 
 pub use model_document::ModelDocument;

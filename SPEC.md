@@ -17,7 +17,7 @@ reproduce a standard, grant certification, or prove facts asserted by a
 standard. ISO/IEC 25019, ISO/IEC 27034 parts other than 1 and 5, quality-in-use
 outcomes, and organizational certification are outside the Holo/1 baseline.
 
-The normative PrismPM 0.3.0 interface is the digest-pinned Linux SDK OCI index
+The normative PrismPM 0.4.0 interface is the digest-pinned Linux SDK OCI index
 for `linux/amd64` and `linux/arm64`. Native archives support
 `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`; other hosts use the
 SDK through Docker and the Development Container Specification. Rust 1.97.1
@@ -64,6 +64,30 @@ build artifact or a manifest-owned reviewed golden, never authoritative source.
 The immutable LexLean and `lean4-prod` revisions and source/crate hashes are in
 `model/dependencies.toml`; adjacent repositories and mutable references are not
 dependencies.
+
+#### 1.2.1 Browser closure v2
+
+Every generated browser page (the Text/1 page and the Text/3 workbench) is
+closure v2: the six-file page `index.html`, `app.css`, `app.js`, `<stem>.js`,
+`<stem>_bg.wasm` and `provenance.json`, plus ten brand files beside them:
+`Geist-Regular.woff2`, `Geist-Medium.woff2`, `Geist-SemiBold.woff2`,
+`GeistMono-Regular.woff2`, `Archivo-SemiBold.woff2`, `OFL-Geist.txt`,
+`OFL-Archivo.txt`, `icon.svg`, `icon-512.png` and `manifest.webmanifest`. All
+sixteen are flat and same-origin. The fonts, licences and icons are the
+`hologram-brand` vendored dependency (`vendor/hologram-brand`, pinned by tree
+manifest in `model/dependencies.toml`); `crates/prismpm/src/brand.rs` owns
+the names, `@font-face` rules, head links and the per-application web app
+manifest, whose bytes are a pure function of the view title. No remote font,
+image or script is loaded. The HOLOVIEW bundle carries the same files.
+
+`provenance.json` is `prismpm/browser-provenance/2`: every v1 field plus
+`files`, the SHA-256 of every other closure file. `export-browser` and
+`verify-browser-publication` return `prismpm/browser-export/2` and
+`prismpm/browser-publication-integrity/2`, whose file lists hold exactly
+closure v1 (six files, from releases built before closure v2) or exactly
+closure v2 (sixteen). Release verification accepts either and, for v2, checks
+every `files` digest. The `/1` contracts remain registered for existing
+receipts.
 
 ### 1.3 Compiler pipeline
 
@@ -219,6 +243,66 @@ not decide that a call is an interface call or that an acceptance row is
 executed: the name must resolve to a definition, and what the definition is
 remains the consuming model's statement.
 
+### 2.3 Threat models
+
+FT-14 and FT-15 admit a threat model and its control mapping. `Foundation.Sec`
+records stay the identity of every asset, threat and control. The stdlib module
+`Production.ThreatModel` declares the facts they lack, as definitions whose
+result type is one of its row types and whose body is a closed literal record:
+
+| Row | States |
+| --- | --- |
+| `ControlSet` | the `title`, `text`, `version` and `lastModified` of the document |
+| `ModeledAsset` | the `name` and `text` of the `Foundation.Sec::Asset` named by `asset` |
+| `ModeledThreat` | the `name`, `text` and `Stride` `category` of the `Foundation.Sec::Threat` named by `threat` |
+| `ModeledControl` | the `name`, `text` and `Evidence` list of the `Foundation.Sec::ApplicationSecurityControl` named by `control` |
+| `ThreatMapping` | the `controls` that answer the threat named by `threat` |
+| `AcceptedRisk` | the `rationale` for accepting the threat named by `threat` |
+
+Each reference is the qualified `<module>::<declaration>` identifier the model
+document gives the record. `Stride` is `spoofing`, `tampering`, `repudiation`,
+`informationDisclosure`, `denialOfService` or `elevationOfPrivilege`. An
+`Evidence` value carries an `EvidenceKind` of `gate`, `proof` or `review` and a
+`reference`. A model declares exactly one `ControlSet`. Its `lastModified` is
+stated by the model, in the form `YYYY-MM-DDThh:mm:ssZ`, because a build reads
+no clock. Threat models are checked, not projected: they are not part of
+`prismpm/model-document`, so no model-document schema, standards profile or
+emitter digest depends on them.
+
+`check` and `build` run the check over the snapshot of every entrypoint, because
+a threat model usually sits outside the application roots. A model with no row
+is unaffected. A model with any row is held to the whole rule: every asset,
+threat and control of the model document must have its row. The check is the
+executable form of `Production.ThreatModel.validateNormalizedThreatModel`, whose
+soundness and completeness theorem holds with an empty axiom set and whose
+finite theorems prove the verdict on the accepted vector and on each refused
+one. Failures are reported in a fixed order, one diagnostic at a time: the rows,
+each asset, then by threat identifier and then by control identifier.
+
+| Code | Failure |
+| --- | --- |
+| `PP2019` | a threat has no mapped control and no accepted risk |
+| `PP2020` | a control names no evidence |
+| `PP2021` | a threat has no `ModeledThreat` row, so it has no STRIDE category |
+| `PP2022` | a row is not a closed literal record, is repeated, is blank or out of bounds, or names no record of the model document; the model does not declare exactly one control set with a valid time; or an asset has no row |
+
+A name, title, version or evidence reference has no control character and no
+edge whitespace, is not blank and has at most 256 characters. A text or rationale
+is not blank, has no control character other than line feed and has at most 4096
+characters. The check does not decide that named evidence exists or is true.
+
+AU-08 makes `build` emit `oscal/component-definition.json` for a checked model:
+one OSCAL 1.1.0 component definition with one component and, when the model has
+controls, one control implementation. Each control is an implemented requirement
+whose `control-id` is its identifier with `::` replaced by `.`, and whose
+properties state its evidence, with the kind as `class`, and the threats mapped
+to it, with the category as `class`. The asset names are properties of the
+component and the accepted risks are stated in its `remarks`, so that they cannot
+be read as mitigated. The implementation's `source` names a back-matter resource,
+because these controls are declared by the model and not by a published catalog.
+The document is reproducible: every UUID has the version 5 form and is derived by
+SHA-256 from identifiers and, for the document itself, from its content.
+
 ## 3. Canonical Holo contract
 
 Holo/1 is the Prism application profile defined by the generated declarations
@@ -259,6 +343,103 @@ allocation bound so the core can receive them.
 At least one vector must have request length exactly equal to that guest
 allocation bound, so independent runtime verification checks its modeled
 response without assuming that it equals an empty-request response.
+
+The closed `Foundation.View.Text.V3.Model.TextApplication` (text/3, below) also
+declares one optional field, `workbench : Option WorkbenchView` (HO-19). `none`
+keeps the Text/1 page (closure v2, below) and the generated command line exactly as without
+the field. `some` replaces only the browser and Hologram page with the generated
+workbench; the `view`, `cli`, byte-guest, package, empty-capability, layer and
+independent input-allocation/output-response resource contracts are unchanged,
+so a text/3 application keeps one model, one profile and one
+`prismpm/model-document/6` for its command line and its workbench. The
+closed `WorkbenchView` adds typed source-owned operations, ordered field descriptors, per-operation
+examples, purpose/audience/guidance, documentation, absolute credential-free
+HTTPS links, error hints, lifecycle copy and a finite design choice. It grants
+no BrowserApplication effects, arbitrary markup/style/script or host callbacks;
+that distinct profile still rejects with PP2011. Existing Text/1 and Text/2
+canonical shapes and generator bytes remain unchanged.
+
+Every operation has 1–32 fields and 1–64 examples; at most 32 operations,
+32 guide sections, 32 links, 128 error hints and eight guidance steps are admitted.
+ASCII letter-led IDs contain only letters, digits, hyphens or underscores and
+have at most 64 bytes. Operation, field-within-operation, example-within-operation,
+section and error-code IDs are unique; prefixes are globally unique and cannot
+collide with the modeled raw prefix. Initial operation/example and error-field
+references must resolve. Choice fields have unique, nonempty values; other
+field kinds have no choices. Natural is a keyboard hint: original string values
+reach LexLean without JavaScript numeric coercion or domain normalization.
+Every example has exactly one value per ordered field and binds its exact framed
+request and exact expected UI JSON response to an explicit acceptance vector.
+Example descriptions/explanations are guidance, and exact expected JSON is under
+a collapsed, labeled disclosure. Neither populates actual computed results.
+
+Guided framing is the modeled operation prefix, U+001F, then ordered values
+joined by U+001F. Raw framing is its separate modeled prefix, U+001F, then the
+exact protocol draft. Literal U+001F in an individual field and lone UTF-16
+surrogates are refused before allocation/encoding; tabs and newlines are not
+normalized by SDK application code. Source-required empty inputs and unknown
+closed Choice values receive the modeled input error. HTML input and textarea
+normalization is an explicit portable-oracle category; original source bytes
+remain exercised by actual direct native invocations. UTF-8 length is checked
+before framed transport allocation. Domain parsing, canonicalization, arithmetic,
+protocol responses and all human result explanations remain LexLean-owned.
+
+The UI result is an exact JSON object with all eleven required keys:
+`version:1`, `status:"ok"|"error"`, `operation`, `message`, `rows`, `columns`,
+`cells`, `details`, `request`, `response`, `error`. Other than version and natural
+dimensions, scalars and array items are strings. Duplicate/missing/unknown keys,
+malformed UTF-8 or Unicode scalars, wrong operation, unknown status/error,
+unsafe/bounded dimensions, extra cells/details or inconsistent row-major shape
+are rejected. Guided operation equals its source ID; raw operation equals `raw`.
+Success has empty error and `rows*columns=cells.length`, including zero-sized
+matrices. Errors have a modeled code and zero rows/columns/cells. Source display
+bounds admit at most 4096 cells and 128 details. Rendering uses plain DOM text,
+a real captioned table with row/column headers, contained matrix scrolling and
+separate exact request/response inspection; `#result` mirrors only the actual
+underlying protocol response. Error hints name current-operation fields for
+aria-invalid/describedby and focus; raw errors focus the raw editor. Empty hint
+field lists provide global assistance without inventing a field error.
+
+The generated SDK workbench owns responsive two-pane/one-column layout, a
+visible-on-focus skip link, named navigation, keyboard-native controls, explicit
+labels/help and live polite lifecycle copy. Every UI and accessibility label,
+including JavaScript-required fallback copy, is modeled. Static HTML includes
+purpose, guidance, documentation, disabled raw compute, form-action:none,
+metadata description and canonical homepage before modules initialize. No
+external fonts, images, scripts or extra assets are loaded. Indigo/Ocean,
+Comfortable/Compact, Balanced/Wide and System/Light/Dark are finite token choices;
+finite automated/keyboard/layout checks are not a universal accessibility claim.
+
+Browser computation runs in a module Worker loaded from the same `app.js` URL,
+without blob URLs or any asset beyond the closure v2 files. Its required source-owned
+`Execution.wasmCachePolicy` has the single closed `WasmCachePolicy.NoStore`
+constructor, projected as `execution.wasm_cache_policy: "no-store"`. The worker
+explicitly fetches its same-origin generated Wasm with that HTTP cache policy,
+refuses redirects and unsuccessful responses, and passes the response to the
+unchanged byte binding initializer. It cannot silently reuse a previous
+deployment's cached Wasm; there is no omitted-field default or cache opt-out.
+The Hologram intent projection does not fetch standalone browser Wasm.
+Initialization and execution have modeled
+100–120000 ms deadlines. Busy state paints independently of computation. Cancel
+and timeout terminate the worker; retry recreates it and recomputes an actual
+captured request. Input edits, operation/example changes and reset invalidate
+pending generations and clear old output. Reset restores current source field
+initial values and clears example selection. Replies require the exact active
+worker epoch and request generation; late replies cannot replace edited drafts.
+The Hologram View uses its existing asynchronous intent transport and aborts/
+invalidates cancelled work; this is logical UI cancellation, not a claim of host
+computation quiescence. Both targets retain the exact six-asset export closure.
+`prismpm/workbench-view-projection/1` binds both projections, the unchanged byte
+adapter, bundle, exact model/View/core identities and transport bounds.
+
+HO-19 requires at least one successful guided vector, one successful raw wrapper
+and one framed typed error. Its portable oracle preserves all UTF-8 source
+vectors up to the request cap as real direct invocations and partitions the UI
+corpus explicitly into representable frames, reserved-separator/required-input
+refusals, HTML-normalized inputs and unrepresentable arity/Choice frames. Missing,
+extra, reordered or forged journey/index evidence cannot satisfy verification.
+Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
+source-fixture verification supplement model/projection/schema mutation checks.
 
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
@@ -378,6 +559,26 @@ manifest, one Metadata section, two extensions (the upstream application
 directory and Prism provenance), four content blobs, and one footer. Unknown,
 duplicate, missing, reordered, overlapping, truncated, trailing, over-limit,
 or cross-reference-invalid content is rejected.
+
+`Foundation.Holo.V1.Format` numbers every section kind by its physical
+discriminant, KernelCalls 1 through ContentBlob 16, and
+`Foundation.Holo.V1.Manifest` numbers every layer kind, Wasm code module 0
+through inference model 4. A closed theorem fixes each code table. Wire also
+defines the general canonical physical-v4 frame of ADR-016: any section count;
+AppManifest first, then ascending kind; only Extension and ContentBlob repeat,
+strictly ordered by extension key bytes or κ label, so a duplicate is rejected;
+no zero-length section; valid UTF-8 extension keys and valid κ labels; zero
+flags and padding; contiguous payloads and no trailing bytes. Its encoder
+sorts an unordered section list into that order, so its output depends only
+on the section set. The portable and browser profiles are constraints on this
+frame: a profile archive must first be canonical, so the profile encoders
+reject an empty Metadata section. A signed archive is outside this frame: it is
+a canonical profile archive with the attestation Extension appended as a ninth
+row after the content blobs, a layout ADR-016 §4.2 replaces, and stripping
+that row must yield the canonical archive. Ordering inside a section's payload
+and the
+footer value are outside the frame; the footer remains 32 bytes checked by the
+host BLAKE3 adapter.
 
 Portable View bytes start with `HOLOVIEW`, use big-endian bundle version 1,
 have entry `index.html`, and encode lexically ordered portable paths with u32
@@ -688,6 +889,16 @@ subsystem code and structured locations; Rust debug formatting is not part of
 the contract. User-controlled input must produce a registered diagnostic and
 must not panic.
 
+`prismpm replay <history|dir>... --holo PATH [--statement PATH]` re-executes
+`prism/history/1` histories against a `.holo` and compares every outcome byte
+for byte. Unlike the commands above it reads no project. A difference is
+`PP5701`, exit 1; a replay that cannot be carried out is `PP5706`, exit 2. On
+success it returns `prismpm/replay-result/1`. On both, `--statement` writes the
+`https://uor.foundation/prism/replay/v1` in-toto statement, whose one subject is
+the guest blob and which holds no clock. A replay is evidence for assurance level
+P3; it proves nothing about the Lean model, and a statement from another guest or
+model, or one that records a divergence, withholds P3.
+
 ## 5. Prism-stdlib contract
 
 `prism-stdlib` is the first portable foundation/runtime layer: the ecosystem
@@ -880,7 +1091,7 @@ coverage/lexicon-closure artifact below `lexlean/build/`, and
 `manifest.json`. For an application, the tree additionally contains named-root LCNF/coverage, the
 generated Cargo package and `.crate`, Core-Wasm package and guest, evaluated
 View and projection manifest, Hologram assets/bundle, browser adapter/lock/
-Wasm/six-file production closure, source manifest, capability/manifest/
+Wasm/closure v2 production closure, source manifest, capability/manifest/
 directory/provenance values, `ApplicationName.holo`, identities, and build
 manifest. Each file row fixes its relative path, kind, byte length, and
 SHA-256; undeclared extras and symlinks fail reuse.
@@ -1053,9 +1264,9 @@ and verification are offline. Canonical platform-independent artifacts contain
 no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
 
-The only imported Lean-source exception is the registered LexLean 0.3.0 package
-at pinned `release/v0.4` revision `cee0fbade479891479e0b748aaa8b60e0a1aaf07`
-(the v0.4.0 release binding replaces this commit pin when that release exists).
+The only imported Lean-source exception is the registered LexLean 0.4.0 package
+at revision `e0b74b81e6f49c83596a957d232c8383a5db1a25`, the commit of the
+annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
 Its exact 4-file compiler-authority closure is the following paths under
 `vendor/lexlean/language/preservation-1.2/`:
 `modules/LexLeanTarget/{RustSemantics,RustSyntax,TargetSemantics,TargetSyntax}.lean`.
@@ -1070,7 +1281,7 @@ revision and crate path, and clean package VCS provenance. It then independently
 decodes the registered archive and requires the exact 4-member Lean set and
 complete archive-member/tree-manifest membership and byte equality, including
 the package VCS file and every non-Lean file. Only the extracted tree's root
-`MANIFEST.sha256` and `lexlean-0.3.0.crate`, added by the normal package importer,
+`MANIFEST.sha256` and `lexlean-0.4.0.crate`, added by the normal package importer,
 are excluded from archive membership; no nested path or `target/` is excluded.
 Duplicate, traversing, aliased, nonregular, missing, substituted or additional
 Lean members are refused, including a separately resealed tree. Archive admission
@@ -1394,6 +1605,16 @@ compiled defects for invalid acceptance, wrong editions and unstable capture.
 Changed compiled schema bytes must produce an unavailable-oracle refusal.
 Source-only registration or a locally overridden engine cannot accept it.
 
+The validator is bound as the `oscal-1.1.0-structural` oracle through
+`standards.lock`, with the `OSCAL-1-1-0`, `OSCAL-COMPONENT-SCHEMA-1-1-0` and
+`JSONSCHEMA-ENGINE-0-58-2` authorities, is installed in the SDK image as
+`oscal-validator`, and runs as the `oscal` profile of `prismpm oracle` under the
+isolation of §10. AU-08 validates the component definition of §2.3 with it. A
+build does not run it, as a build runs no other oracle. Rejected subjects exit 4
+and map to `PP5404`. Invocation, resource and unavailable outcomes map to
+`PP5403`. Acceptance carries the limits of the previous paragraph: the emitted
+document is structurally valid, not an established control implementation.
+
 ## 11. Production system model and projections
 
 `prismpm/system-model/1` is a closed projection of one LexLean semantic graph.
@@ -1461,11 +1682,14 @@ Presence of ownership text does not authenticate an owner.
 application digest and exact ordered artifact path/size/SHA-256 rows.
 Rows cover all generated build artifacts except the containing system,
 system projections and the self-identifying build manifest. The generated
-Holo/1 application and exact supported six-file browser projection are
+Holo/1 application and exact supported closure v1 or v2 browser projection are
 required, and a declared `cli` component additionally requires both static
 programs and `cli/sbom.spdx.json` in the closure; the SPDX projection then
 describes both packages. This profile accepts only the existing Legacy and Text application
 variants; empty Holo capabilities do not admit browser-effect requirements.
+The selected application's name is the stem of its `<name>.holo` row, so
+`check` refuses with PP2101 a name whose row the binding's artifact path rule
+rejects, such as a text application name containing a space.
 `build-inputs/2` separately binds the complete final artifact
 table, including both system projections. This avoids a circular source
 digest without trusting authored predictions of generated bytes.
@@ -1504,12 +1728,26 @@ The application profile names the server application contract
 and lists the effects that application declares: at least one, each once, each
 a dotted lowercase name. The effect vocabulary belongs to the application, not
 to this profile. Components are `api`, `worker`, `job` or `telemetry-collector`,
-each with one declared image, parameters, secret references, volumes, networks
-and resources. A component depends only on components declared before it, so
-the dependency order is its own acyclicity witness. Listeners are the only
-published ports. A listener belongs to an `api` component that sits on at least
-one non-internal network, binds `127.0.0.1`, uses TCP and publishes a port no
-other listener publishes. The single target is the pinned Compose adapter.
+each with one declared image, parameters, secret references, volumes and
+resources. A component depends only on components declared before it, so the
+dependency order is its own acyclicity witness. An `api` component declares no
+network, because it runs on the host network, and every other component declares
+at least one. An `api` component runs exactly one replica: on the host network
+a second would bind the same loopback port as the first. Other components may
+run several. A listener belongs to an `api` component, binds `127.0.0.1`, uses
+TCP and takes a port no other listener takes. The single target is the pinned
+Compose adapter.
+
+The `api` component is on the host network because a served application
+listens on `127.0.0.1` only, and Docker forwards a port published from a bridge
+network to the container's interface, never to its loopback: such a listener is
+unreachable however the port is published. On the host network the container's
+loopback is the host's, so the listener is reached from the host's `127.0.0.1`
+and from no other interface. The loopback-only guarantee then rests on the
+address the application binds, which is the listener's `bind_address`; this
+profile states that address but does not yet tie it to the serving declaration
+of the selected server application (see the last paragraph). A Linux engine is
+assumed: Docker Desktop gives host networking another meaning.
 
 An authored `SystemManifest` and the generated empty-axiom theorem
 `manifestValidation_sound_complete`, with `validateManifest model manifest =
@@ -1517,23 +1755,29 @@ true` decided for the selected model and manifest, bind the application model
 digest, the product identity, the declared effects and the published listener
 identities. Planted defects are decided theorems: a wildcard, hostname or other
 loopback address, a missing, zero or out-of-range port, a listener on a worker
-or on an unknown component or on internal networks only, two listeners on one
-port, a wrong contract or protocol, no declared effect, a repeated effect, an
-unknown kind, a forward or unknown dependency, an unknown image or network, a
-repeated identity and each manifest mismatch.
+or on an unknown component, an `api` component on a network, a worker on none,
+an `api` component with a second replica, two listeners on one port, a wrong contract or protocol, no declared effect, a
+repeated effect, an unknown kind, a forward or unknown dependency, an unknown
+image or network, a repeated identity and each manifest mismatch.
 
 The Compose adapter descriptor lists the profiles it projects in
-`model_schemas` and names the one address a published port may bind in its
-projection policy as `loopback_address`. The projection copies each listener
-as `host_ip`, `published`, `target` and `protocol`, and refuses a listener that
-does not name that address instead of rewriting it. The closed schema carries
+`model_schemas` and names the one address a listener may bind in its
+projection policy as `loopback_address`. The projection gives each `api`
+service `network_mode: host` and no networks, gives every other service its
+declared networks, and publishes no port; it refuses a listener that does not
+name the loopback address instead of rewriting it. The closed schema carries
 the same constant, so a wildcard binding is refused three times: by the
 contract, by the validator and by the projection. A Compose project is also
-audited as emitted bytes: every service port is long-form and names the
-loopback address, and no service uses the host network. The locked Compose
-oracle accepts any host address, so that audit is the check a wildcard cannot
-pass. The projection set is the Compose project and SPDX, both validated by
-their locked oracles.
+audited as emitted bytes against the roles the model gives its components: the
+services are exactly the components; an `api` service has `network_mode: host`,
+no networks and one replica; every other service names no network mode and is on
+exactly its declared networks; and no service publishes or exposes a port. The
+locked Compose oracle accepts any published port and any network mode, so that
+audit is the check a published wildcard, or a worker moved onto the host
+network, cannot pass.
+It cannot see which address a process binds, which is why the address is held
+by the contract, the validator and the projection. The projection set is the
+Compose project and SPDX, both validated by their locked oracles.
 
 This profile does not claim that the declared effects equal the host protocol
 of the selected application: the server application model that issue 216
@@ -1870,8 +2114,31 @@ admitted. `build` and `verify` recompute `inputs` before compiling and reject a
 disagreeing `/3` lock with PP5401, naming the changed fields. Only the explicit
 `build --update`, never with `-t` or `--locked`, rewrites `inputs` (and upgrades
 a `/2` lock to `/3`); it never changes an SDK field. Absent, `/1` and `/2` locks
-build as before. The product-release provenance names the complete lock bytes
-as `urn:prismpm:sdk-lock`.
+keep their input rules. The product-release provenance names the complete lock
+bytes as `urn:prismpm:sdk-lock`.
+A plain `build` of an application writes one unsigned SLSA provenance v1 statement
+into the attestation section of its holo, derived from the `/2` or `/3` lock
+(docs/proposals/268-build-provenance.md). `--provenance=min`, the default, is
+deterministic; `--provenance=max` adds the arguments, platform, invocation id and
+timestamps; `--no-provenance` writes none and warns. An absent or `/1` lock is
+refused with PP3018 before compiling unless `--no-provenance` is given. A product
+release (`-t`) and the archive `verify` builds carry no statement.
+`lock` and `update` rewrite `prismpm.lock` without building and report the change
+as `prismpm/sdk-lock-change/1` (docs/proposals/265-lock-update.md). `lock` computes
+`inputs` like a build and rewrites only the pins the project determines (model,
+spec, world), upgrading a `/2` lock to `/3`; it leaves every pin that still
+resolves alone, refuses a moved toolchain or generator pin with PP5401 naming it,
+and with `--check` writes nothing and fails with PP5401 when the lock is stale.
+`update` also moves those pins; with `--toolchain <digest-ref>` it captures the
+platform lock of that exact SDK image (the same bounded metadata acquisition as
+`lock update`, standards-lock digest from `standards.lock` unless
+`--standards-lock` is given) and pins it, creating `prismpm.lock` when it is absent;
+`--dry-run` prints the change and writes nothing. Both print the old and new value of
+every pin that changed, including the SDK image, platform manifest and inventory
+digests and the lock's own digest. An absent lock for `lock`, a legacy `/1` lock, or an
+SDK image that cannot be resolved fails with PP1101 (exit 2) and writes nothing. The
+SDK fields of a lock still change only through `update --toolchain` or an adopted
+`lock update` proposal, never through a build.
 For a platform lock, `DK-28` acquires the exact pinned OCI index, its two child
 manifests, configurations and terminal metadata layers. It never pulls ordinary
 filesystem layers, synthesizes Docker inspection results, or starts target code.
@@ -2614,6 +2881,16 @@ Cycles, missing definitions, open calls and budget exhaustion fail with
 `PP2001`, never a stack overflow or a silent module fallback. Independent fields
 may reuse an alias. Root-list expansion retains its separate bounds above.
 
+Acceptance-vector byte metadata admits exact literal Bytes, closed zero-argument
+Bytes aliases and the binary `append` primitive with an exact Bytes result.
+Only this finite constant form is evaluated; named parameterized function calls
+and other primitives are refused. Source owners and result types are checked,
+aliases are path-cycle checked, work is bounded to 65,536 nodes/calls, depth to
+128 and decoded bytes to 16 MiB per field before application request/response
+limits are enforced. Literal chunks preserve the exact source-owned large
+responses without increasing compiler recursion/proof limits. Existing literal
+byte vectors retain identical projected bytes.
+
 Application acceptance-vector lists also admit closed zero-argument aliases
 at every list tail, including imported chunks. Iterative expansion preserves
 each vector and its order and resolves unqualified head aliases in the list
@@ -2960,7 +3237,10 @@ The generic adapter preserves exact input bytes, native labels, autofill/paste,
 reading order, focus visibility, responsive reflow and forced-color overrides.
 Secret metadata changes clear prior drafts. Complete metadata/catalogue preflight
 precedes DOM mutation; a changed equal-revision envelope cannot replace context.
-Shape validity is neither authority nor contrast/usability evidence.
+Shape validity is neither authority nor contrast/usability evidence. Catalogue
+admission additionally requires the source-stated WCAG text and focus contrast
+pairs; the Hologram catalogue is admitted by a kernel-checked theorem. Passing
+those pairs is not complete contrast or usability evidence.
 
 Acceptance requires independent complete source/kernel/native/no_std/Wasm
 corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
@@ -3272,7 +3552,7 @@ request for it, in order, with the host's encoded outcome for each. Validation
 decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
-The build of a server application is refused with PP2022. What exists is the
+The build of a server application is refused with PP2023. What exists is the
 declaration and `prismpm::server_host::generate`, which renders two Cargo
 packages as members of the consumer's workspace, a fixed template composed with
 code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
@@ -3410,7 +3690,7 @@ integrity only. Independent producer authorization, target policy, readiness,
 publication and deployed-product acceptance remain mandatory and separate.
 
 `verify-browser-publication NAME@sha256:DIGEST --url HTTPS_BASE` compares the
-source-free, reverified six-file browser closure and the base URL's index bytes
+source-free, reverified closure v1 or v2 browser files and the base URL's index bytes
 against HTTPS responses. It accepts no caller receipt or local exported tree as
 authority. The base is an explicitly selected target, not proof of target
 authorization: lowercase DNS labels, HTTPS default port, and a slash-terminated
@@ -3767,9 +4047,10 @@ model output so PrismPM cannot author the sole policy that authorizes itself.
 
 ## 18. Version and compatibility policy
 
-Holo/1 is frozen. PrismPM 0.3.0 adds the production-system SDK and lifecycle;
-prism-stdlib 0.2.0 adds compatible system profiles while preserving every
-0.1.x application API and Calculator artifact contract. Public JSON schemas and
+Holo/1 is frozen. PrismPM 0.4.0 is the current production-system SDK release and
+carries the SDK and lifecycle added by 0.3.0; prism-stdlib 0.2.0 adds compatible
+system profiles while preserving every 0.1.x application API and Calculator
+artifact contract. Public JSON schemas and
 media types have exact major compatibility; only contracts explicitly marked
 `exact-major-additive-minor` may add optional minor-version fields. Unknown
 fields in a `/1` value remain errors. An incompatible Holo change requires
@@ -3818,6 +4099,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `FT-11` | `facets` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. | §2 |
 | `FT-12` | `facets` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. | §2 |
 | `FT-13` | `facets` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. | §2 |
+| `FT-14` | `facets` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. | §2 |
+| `FT-15` | `facets` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. | §2 |
 | `HO-01` | `holo` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. | §3 |
 | `HO-02` | `holo` | Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
 | `HO-03` | `holo` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. | §3 |
@@ -3836,9 +4119,25 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
 | `HO-18` | `holo` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. | §3 |
+| `HO-19` | `holo` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. | §3 |
+| `HO-31` | `holo` | A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build. | §3 |
 | `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
-| `HO-21` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §3 |
-| `HO-22` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §3 |
+| `HO-23` | `holo` | A holo without the attestation section loads and verifies with the same bytes and identities as before the section existed, and reports no attestations. | §3 |
+| `HO-24` | `holo` | An attestation section is an Extension row named https://uor.foundation/extension/attestation-bundle/v1, is the last row, appears at most once, and the footer is BLAKE3 of the body including it. | §3 |
+| `HO-25` | `holo` | Removing the attestation section yields the unsigned archive byte for byte; rows 0 to 7, every blob label and application_kappa are unchanged by adding it, and the Rust and JavaScript writers produce the same bytes. | §3 |
+| `HO-26` | `holo` | Every attestation line is one Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1, and every subject names a content blob of the archive with matching sha256 and blake3. | §3 |
+| `HO-27` | `holo` | A blank line, a v0.2 bundle, a messageSignature, a single-digest subject and an oci-manifest subject inside the holo are each refused with a registered diagnostic. | §3 |
+| `HO-28` | `holo` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. | §3 |
+| `HO-29` | `holo` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. | §3 |
+| `HO-30` | `holo` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. | §3 |
+| `HO-32` | `holo` | A build stamped with provenance carries exactly one unsigned SLSA provenance v1 statement in the attestation section with no flag, keeps every other row byte for byte, records the identities of the stamped archive, writes in min mode the same bytes as the JavaScript reference on every run, and stays at P0. | §3 |
+| `HO-33` | `holo` | The provenance statement's subjects, build type, external parameters, builder and dependencies equal the lock and the archive, and PP3018 refuses a lock that does not describe the build and an archive that already has a statement. | §3 |
+| `HO-34` | `holo` | --provenance=max adds exactly the arguments, platform, invocation id and whole-second timestamps, and min records none of them. | §3 |
+| `HO-35` | `holo` | --no-provenance writes no statement and needs no lock, and an application build that asked for provenance with nothing to derive it from is refused with PP3018 before compiling. | §3 |
+| `AL-03` | `assurance` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. | §8 |
+| `AL-05` | `assurance` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. | §8 |
+| `AL-06` | `assurance` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. | §8 |
+| `AL-07` | `assurance` | The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors. | §8 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
@@ -3850,6 +4149,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
+| `CT-12` | `controller` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |
@@ -3909,6 +4209,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SE-06` | `security` | Memory safety is enforced across all Rust crates with unsafe code forbidden. | §9 |
 | `SE-07` | `security` | Input parsing rejects excessively large inputs before memory exhaustion. | §9 |
 | `SE-08` | `security` | Dependency audits with cargo-deny enforce license and advisory policies. | §9 |
+| `SE-09` | `security` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. | §9 |
 | `AU-01` | `authorities` | Every standards claim uses a typed immutable authority binding distinct from its executable oracle. | §10 |
 | `AU-02` | `authorities` | Authority resolution writes a canonical reviewable lock and locked resolution rejects drift. | §10 |
 | `AU-03` | `authorities` | Fetch verifies signatures and digests before atomically publishing immutable cached inputs. | §10 |
@@ -3916,6 +4217,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
 | `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
+| `AU-08` | `authorities` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |
@@ -3924,7 +4226,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
 | `SY-07` | `system` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. | §11 |
 | `SY-08` | `system` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. | §11 |
-| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services whose published ports bind loopback only and pass the locked Compose oracle. | §11 |
+| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. | §11 |
 | `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
 | `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
 | `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |
@@ -3962,6 +4264,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-37` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-38` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-35` | `sdk` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. | §12 |
+| `DK-39` | `sdk` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. | §12 |
+| `DK-40` | `sdk` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

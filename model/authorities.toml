@@ -218,6 +218,63 @@ realized_by = ["AU-01", "SY-04"]
 # Oracles are deliberately separate from their authorities. The lock resolves
 # each executable through the SDK inventory and hashes this wrapper source.
 
+[[authority]]
+id = "OSCAL-1-1-0"
+name = "OSCAL 1.1.0 complete JSON schema"
+issuer = "NIST"
+canonical_identifier = "usnistgov/OSCAL/oscal_complete_schema.json"
+edition = "1.1.0"
+source_role = "normative"
+immutable_url = "https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_complete_schema.json"
+revision = "ef4df067c280e718e107c646f7567c053c2abfc8"
+acquired_sha256 = "c57fe854b05dd6c249343349ea76aaf59cca87289e5c791ba832eedc2a0ae653"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/schema+json"
+license = "CC0-1.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-30"
+supersession_policy = "explicit-lock-update-only"
+statement = "The OSCAL 1.1.0 complete schema is one of the two JSON structural boundaries of an emitted component definition; it does not establish control implementation or whole-standard conformance."
+realized_by = ["AU-07", "AU-08"]
+
+[[authority]]
+id = "OSCAL-COMPONENT-SCHEMA-1-1-0"
+name = "OSCAL 1.1.0 component definition JSON schema"
+issuer = "NIST"
+canonical_identifier = "usnistgov/OSCAL/oscal_component_schema.json"
+edition = "1.1.0"
+source_role = "normative"
+immutable_url = "https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_component_schema.json"
+revision = "ef4df067c280e718e107c646f7567c053c2abfc8"
+acquired_sha256 = "41c14d6a7d6798a7cc3b87d07bf2888b2027210acd79d27f10b6579610f3afd2"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/schema+json"
+license = "CC0-1.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-30"
+supersession_policy = "explicit-lock-update-only"
+statement = "The OSCAL 1.1.0 component schema defines the structure of the component definition a threat model emits."
+realized_by = ["AU-07", "AU-08"]
+
+[[authority]]
+id = "JSONSCHEMA-ENGINE-0-58-2"
+name = "jsonschema 0.58.2 Rust crate"
+issuer = "Stranger6667/jsonschema"
+canonical_identifier = "crates.io/jsonschema"
+edition = "0.58.2"
+source_role = "informative"
+immutable_url = "https://static.crates.io/crates/jsonschema/jsonschema-0.58.2.crate"
+revision = "3d48b9026c6518e7f3a2ecc6c9c94a9f77f6083c"
+acquired_sha256 = "657c6a38b0e00dda091d9c006cc1741957ba2377f00dccfd6e79df4c95619bb1"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/gzip"
+license = "MIT"
+redistribution = "redistributable"
+retrieval_date = "2026-10-30"
+supersession_policy = "explicit-lock-update-only"
+statement = "The published engine executes the pinned OSCAL schemas without network retrieval; it is the validator, not a standard."
+realized_by = ["AU-07", "AU-08"]
+
 [[oracle]]
 id = "oci-layout-1.1"
 authority_ids = ["OCI-IMAGE-1-1-1"]
@@ -1220,3 +1277,23 @@ retrieval_date = "2026-09-06"
 supersession_policy = "explicit-lock-update-only"
 statement = "The exact official CloudEvents Go SDK supplies the executable CloudEvents event-validation behavior and its upstream tests."
 realized_by = ["AU-06", "SY-04"]
+
+[[oracle]]
+id = "oscal-1.1.0-structural"
+authority_ids = ["JSONSCHEMA-ENGINE-0-58-2", "OSCAL-1-1-0", "OSCAL-COMPONENT-SCHEMA-1-1-0"]
+edition = "1.1.0"
+executable = "oscal-validator"
+supported_platforms = ["linux/amd64", "linux/arm64"]
+input_media_types = ["application/oscal+json"]
+output_schema = "prismpm/validation-result/1"
+arguments = ["{input}"]
+timeout_ms = 120000
+memory_bytes = 1073741824
+output_bytes = 4194304
+network = "deny"
+normalization = "prismpm/oracle-diagnostics/1"
+covers = ["JSON structural validity of one OSCAL 1.1.0 document against its model schema and the complete schema, under strict JSON decoding and bounded single-file capture"]
+does_not_cover = ["profile resolution, control implementation, the truth of named evidence, assessment authenticity, inheritance, security, and whole-standard conformance"]
+expected_exits = ["0=pass", "2=invocation error", "4=invalid", "5=resource refusal", "6=unavailable"]
+upstream_payload_sha256 = "41c14d6a7d6798a7cc3b87d07bf2888b2027210acd79d27f10b6579610f3afd2"
+wrapper_source = "sdk/oracles/oscal/src/main.rs"

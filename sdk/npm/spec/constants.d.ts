@@ -12,6 +12,7 @@ import type {
   HoloviewLimits,
   SectionKind,
   SectionKindCode,
+  World,
 } from './types/holo.js';
 
 export declare const FORMAT_REVISION: '2026-10-23';
@@ -58,6 +59,9 @@ export declare const CORE_WASM: Readonly<{
   WORLD: 'worlds/core-wasm.wit';
 }>;
 
+/** The WIT world of each guest contract (issue #278). */
+export declare const WORLDS: Readonly<Record<CoreWasmContract, World>>;
+
 export declare const HOLOVIEW: Readonly<HoloviewLimits>;
 
 export declare const ATTESTATION: Readonly<{
@@ -77,7 +81,59 @@ export declare const ATTESTATION_BUNDLE: Readonly<{
   SCHEMA: 'schemas/attestation/sigstore-bundle.schema.json';
   PROVENANCE_PREDICATE_TYPE: 'https://slsa.dev/provenance/v1';
   OCI_ANNOTATIONS: Readonly<{ CONTENT: 'dev.sigstore.bundle.content'; PREDICATE_TYPE: 'dev.sigstore.bundle.predicateType' }>;
+
+/** A holo as an OCI artifact, issue #292. Part of the digest of its manifest. */
+export declare const OCI: Readonly<{
+  HOLO_MEDIA_TYPE: 'application/vnd.uor.prism.holo.v1';
+  CREATED: '1970-01-01T00:00:00Z';
+  ANNOTATIONS: Readonly<{
+    FINGERPRINT: 'foundation.uor.prism.holo.fingerprint';
+    APPLICATION: 'foundation.uor.prism.holo.application';
+    BLAKE3: 'foundation.uor.prism.digest.blake3';
+  }>;
+  FINGERPRINT_TAG_PREFIX: 'blake3-';
+}>;
   OCI_CONTENT: 'dsse-envelope';
+}>;
+
+/** Build provenance of a holo (#268). */
+export declare const PROVENANCE: Readonly<{
+  PREDICATE_TYPE: 'https://slsa.dev/provenance/v1';
+  BUILD_TYPE: 'https://uor.foundation/prism/holo-build/v1';
+  SCHEMA: 'schemas/attestation/provenance-v1.schema.json';
+  MODES: Readonly<{ MIN: 'min'; MAX: 'max' }>;
+  DEFAULT_MODE: 'min';
+  FLAGS: Readonly<{ MODE: '--provenance'; DISABLE: '--no-provenance' }>;
+  SUBJECTS: Readonly<{
+    GUEST: 'core-wasm/<cargo_name with - as _>_core_wasm.wasm';
+    VIEW: 'view/hologram/view.holoview';
+    MODEL: 'model.prism.json';
+    CAPABILITIES: 'application/capability-request.bin';
+  }>;
+  DEPENDENCIES: Readonly<{
+    LOCK: 'urn:prismpm:sdk-lock';
+    STANDARDS_LOCK: 'urn:prismpm:standards-lock';
+    TOOLCHAIN: 'urn:prismpm:toolchain:';
+    GENERATOR: 'urn:prismpm:generator:';
+    LOCK_MEDIA_TYPES: Readonly<{
+      'prismpm/sdk-lock/2': 'application/vnd.prismpm.sdk-lock.v2+json';
+      'prismpm/sdk-lock/3': 'application/vnd.prismpm.sdk-lock.v3+json';
+    }>;
+  }>;
+  UNSIGNED: Readonly<{ SIGNATURE: '' }>;
+}>;
+
+/** The policy file of `prism check --policy` (issue #285). A policy never lives in a holo. */
+export declare const POLICY: Readonly<{
+  INPUT: 'prism/policy-input/1';
+  INPUT_SCHEMA: 'schemas/policy/policy-input-v1.schema.json';
+  LANGUAGE: 'rego';
+  PACKAGE: 'prism.policy';
+  SHIPPED: Readonly<{
+    default: 'policies/default.rego';
+    'pure-only': 'policies/pure-only.rego';
+    'provenance-only': 'policies/provenance-only.rego';
+  }>;
 }>;
 
 export type * from './assurance-levels.js';

@@ -14,6 +14,12 @@ import { SCHEMA_FILES } from './vendor/schemas.mjs';
 import { sha256Hex } from './sha256.mjs';
 import { readStructure } from './reader.mjs';
 import * as assurance from './vendor/assurance-levels.mjs';
+import * as transparency from './transparency.mjs';
+import { levelOf } from './level.mjs';
+import { checkReplayStatement, checkProofStatement, checkProvenanceStatement } from './statements.mjs';
+import { checkWorld, checkWorldPolicy, capabilitySetProblem, compareWorldPin, declaredImports, describeWorld, effectsOutsidePolicy, IMPURE_EFFECTS } from './world.mjs';
+import { parseRego, RegoError } from './rego.mjs';
+import * as policies from './policy.mjs';
 
 /** The newest holo format revision this package reads, from @prism-code/spec. */
 export const FORMAT_REVISION = spec.FORMAT_REVISION;
@@ -24,11 +30,18 @@ export const FORMAT_REVISION = spec.FORMAT_REVISION;
  */
 export const ASSURANCE = assurance.ASSURANCE;
 
+/** The source of each policy this package ships, by name: `default`, `pure-only` and `provenance-only` (issue #285). */
+export const POLICIES = policies.POLICIES;
+
+/** The `schema` member of the document a policy judges (issue #285). */
+export const POLICY_INPUT_SCHEMA = spec.POLICY.INPUT;
+
 /**
  * Thrown when no verdict can be reached: the input is not bytes, the policy is
- * invalid, the file is not a readable holo, or it is a holo of a format
- * revision this package does not know. A holo that fails a check is a
- * Verdict, not an error.
+ * invalid, does not parse (`policy.parse`) or cannot be evaluated
+ * (`policy.evaluation`), the file is not a readable holo, or it is a holo of a
+ * format revision this package does not know. A holo that fails a check, or a
+ * policy that denies it, is a Verdict, not an error.
  */
 export class VerifyError extends Error {
   constructor(code, message) {
@@ -48,12 +61,13 @@ const DIGEST_TARGETS = ['archive', 'capabilities', 'guest', 'view', 'model'];
 /** Internal checks, in evaluation order. The structural ones decide whether the file is a readable holo at all. */
 const STRUCTURE_IDS = ['archive.magic', 'archive.version', 'archive.flags', 'archive.table'];
 const ARCHIVE_IDS = [...STRUCTURE_IDS, 'archive.footer', 'blob.labels'];
-const DOCUMENT_IDS = ['format.revision', 'manifest.wire', 'metadata.schema', 'directory.schema', 'provenance.schema', 'model.schema', 'references', 'model.sha256'];
+const DOCUMENT_IDS = ['format.revision', 'manifest.wire', 'metadata.schema', 'directory.schema', 'provenance.schema', 'model.schema', 'references', 'model.sha256', 'world.contract'];
 /**
  * The verdict check id each internal check reports under. `holo.integrity`
  * covers every fingerprint that must recompute or agree; `holo.documents`
- * covers the documents inside. Both withhold P1, as the integrity half of P1
- * in docs/proposals/269-assurance-levels.md.
+ * covers the documents inside. `world.contract` is the guest not having the
+ * interface its WIT world declares (issue #278). All withhold P1, as the
+ * integrity half of P1 in docs/proposals/269-assurance-levels.md.
  */
 const REPORTED_AS = Object.freeze({
   'archive.footer': 'holo.integrity',
@@ -66,6 +80,7 @@ const REPORTED_AS = Object.freeze({
   'directory.schema': 'holo.documents',
   'provenance.schema': 'holo.documents',
   'model.schema': 'holo.documents',
+  'world.contract': 'world.contract',
 });
 const HEX64 = /^[0-9a-f]{64}$/;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
@@ -347,6 +362,26 @@ function analyze(bytes) {
     add('documents', 'model.sha256', problems.length === 0, problems.length === 0 ? `the model document's sha256 ${actual} equals the recorded model_id` : problems.join('; '));
   }
 
+  // world.contract: the guest module has the imports and exports its contract's WIT world declares.
+  {
+    const wasm = directory?.layers?.find((l) => l.kind === 'wasm');
+    const guestBlob = facts.roles.guest ? blobByLabel.get(facts.roles.guest) : undefined;
+    if (!wasm || !guestBlob) skip('documents', 'world.contract', 'not checked: the directory or the guest blob is missing');
+    else if (guestBlob.problem || !guestBlob.labelMatches) skip('documents', 'world.contract', 'not checked: the guest blob fails its label, which blob.labels reports');
+    else {
+      const world = checkWorld(wasm.contract, guestBlob.content);
+      if (!world.known) skip('documents', 'world.contract', `not checked: this package has no world for the contract ${wasm.contract}`);
+      else {
+        add(
+          'documents',
+          'world.contract',
+          world.conforms,
+          world.conforms ? `the guest has exactly the imports and exports of the ${wasm.contract} world` : `the guest does not match the ${wasm.contract} world: ${world.problems.join('; ')}`,
+        );
+      }
+    }
+  }
+
   // format.revision: an archive carries no date; its identifiers name the revision.
   {
     const differencesFrom = (revision) => {
@@ -410,13 +445,39 @@ function analyze(bytes) {
   return { checks, facts };
 }
 
+/**
+ * The world a guest contract names, as the `world` member of an inspection
+ * prints it (issue #278): WIT package, name, file, digests, imports, exports
+ * and whether the guest module conforms. `prism-code`'s `inspect` calls this
+ * one function, so the two cannot disagree. `guest` may be null, and then
+ * `conforms` is null.
+ *
+ * @param {string} contract for example `hologram:guest/core-wasm@1`
+ * @param {Uint8Array | null} guest the guest module
+ */
+export function worldOf(contract, guest) {
+  return describeWorld(contract, guest);
+}
+
+/**
+ * Is the world a contract names within a granted capability set, and is it
+ * pure (issue #283)? Read from the world's declared imports alone; nothing is
+ * instantiated. `set` is one set of a `prism/capabilities/1` file, or null
+ * when nothing is granted. Returns `{ known, within, problems, pure, effects }`;
+ * `known` is false, and nothing is claimed, for a contract this reader has no
+ * world for. `prism-code` calls this one function before it compiles a guest.
+ *
+ * @param {string} contract
+ * @param {object | null} set
+ */
+export function worldPolicy(contract, set) {
+  const problem = set === null || set === undefined ? null : capabilitySetProblem(set);
+  if (problem) throw new VerifyError('policy.invalid', `capabilities: ${problem}`);
+  return checkWorldPolicy(contract, set ?? null);
+}
+
 /** The schema of an inspection, shared with `prism-code`'s `inspect` (issue #271, PR #335). */
 export const INSPECTION_SCHEMA = 'prismpm/holo-inspection/1';
-
-/** Worlds by guest contract: `worlds/core-wasm.wit` in @prism-code/spec, an import-free module with three exports. */
-const WORLDS = Object.freeze({
-  [spec.CORE_WASM.CONTRACT]: Object.freeze({ imports: Object.freeze([]), exports: spec.CORE_WASM.EXPORTS }),
-});
 
 /** The fields of the 86-byte manifest suffix, which `manifest.wire` checks byte for byte against the Wire constant. */
 const MANIFEST_SUFFIX_FIELDS = Object.freeze({
@@ -484,7 +545,7 @@ function inspectionOf(bytes, facts, checks) {
   const capabilities = blobOf('capabilities');
   const wasm = directory?.layers?.find((l) => l.kind === 'wasm');
   const contract = wasm?.contract ?? provenance?.core_wasm_contract ?? null;
-  const world = contract ? WORLDS[contract] : undefined;
+  const guest = blobOf('guest');
 
   return {
     schema: INSPECTION_SCHEMA,
@@ -535,9 +596,7 @@ function inspectionOf(bytes, facts, checks) {
     world:
       contract && capabilities
         ? {
-            contract,
-            imports: world ? [...world.imports] : null,
-            exports: world ? [...world.exports] : null,
+            ...describeWorld(contract, guest ? guest.content : null),
             capability_set: { label: capabilities.label, empty: hex(capabilities.content) === spec.CAPABILITY_SET.EMPTY_HEX },
           }
         : null,
@@ -569,17 +628,67 @@ export function inspect(source) {
   return inspectionOf(bytes, facts, checks);
 }
 
+/**
+ * Parse a Rego policy (issue #285). Throws `VerifyError` `policy.parse`, whose
+ * message names the line and the construct.
+ *
+ * @param {string} source
+ */
+export function parsePolicy(source) {
+  try {
+    return parseRego(source);
+  } catch (error) {
+    if (error instanceof RegoError) throw new VerifyError('policy.parse', `the policy does not parse: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Evaluate a parsed policy against a `prism/policy-input/1` document (issue
+ * #285). Throws `VerifyError` `policy.evaluation`, whose message names the rule.
+ * Returns `{ minimum, denied, denials }`; the level is the evidence's, not the policy's.
+ *
+ * @param {object} policy from `parsePolicy`
+ * @param {object} input
+ */
+export function evaluatePolicy(policy, input) {
+  try {
+    return policies.decide(policy, input);
+  } catch (error) {
+    if (error instanceof RegoError) throw new VerifyError('policy.evaluation', `the policy cannot be evaluated: ${error.message}`);
+    throw error;
+  }
+}
+
+function checkCapabilities(capabilities) {
+  if (capabilities === undefined || capabilities === null) return null;
+  const problem = capabilitySetProblem(capabilities);
+  if (problem) throw new VerifyError('policy.invalid', `policy.capabilities: ${problem}`);
+  return capabilities;
+}
+
+function checkName(name) {
+  if (typeof name !== 'string' || name.length < 1 || name.length > 1024) throw new VerifyError('policy.invalid', 'policy.name must be a string of 1 to 1024 characters');
+  return name;
+}
+
 function checkPolicy(policy) {
-  const { LEVELS, DEFAULT_MINIMUM, DEFAULT_POLICY } = ASSURANCE;
-  if (policy === undefined || policy === null) return { name: DEFAULT_POLICY, minimum: DEFAULT_MINIMUM, digests: {} };
+  const { LEVELS, DEFAULT_POLICY } = ASSURANCE;
+  // `program` is the policy that decides; `minimum` is only ever a caller's override of the default policy's.
+  if (policy === undefined || policy === null) return { name: DEFAULT_POLICY, program: policies.shippedPolicy(DEFAULT_POLICY), minimum: null, digests: {}, world: undefined, capabilities: null, effects: null };
   if (typeof policy !== 'object') throw new VerifyError('policy.invalid', 'the policy must be an object');
   for (const key of Object.keys(policy)) {
-    if (!['name', 'minimum', 'digests'].includes(key)) throw new VerifyError('policy.invalid', `unknown policy member ${key}; expected name, minimum or digests`);
+    if (!['name', 'rego', 'minimum', 'digests', 'world', 'capabilities', 'effects', 'replay', 'statements'].includes(key)) throw new VerifyError('policy.invalid', `unknown policy member ${key}; expected name, rego, minimum, digests, world, capabilities or effects`);
   }
-  const name = policy.name ?? DEFAULT_POLICY;
-  if (typeof name !== 'string' || name.length < 1 || name.length > 1024) throw new VerifyError('policy.invalid', 'policy.name must be a string of 1 to 1024 characters');
-  const minimum = policy.minimum ?? DEFAULT_MINIMUM;
-  if (!LEVELS.includes(minimum)) throw new VerifyError('policy.invalid', `policy.minimum ${JSON.stringify(minimum)} is not one of ${LEVELS.join(', ')}`);
+  if (policy.rego !== undefined) {
+    // A policy file is the whole policy. What it decides, a level or a pin, it says in Rego, where a reader can see it.
+    const other = Object.keys(policy).find((key) => !['name', 'rego', 'capabilities', 'replay', 'statements'].includes(key));
+    if (other) throw new VerifyError('policy.invalid', `policy.${other} cannot be given with policy.rego; a Rego policy states it itself`);
+    return { name: checkName(policy.name ?? 'policy'), program: parsePolicy(policy.rego), minimum: null, digests: {}, world: undefined, capabilities: checkCapabilities(policy.capabilities), effects: null, replay: policy.replay, statements: policy.statements };
+  }
+  const name = checkName(policy.name ?? DEFAULT_POLICY);
+  const minimum = policy.minimum ?? null;
+  if (minimum !== null && !LEVELS.includes(minimum)) throw new VerifyError('policy.invalid', `policy.minimum ${JSON.stringify(minimum)} is not one of ${LEVELS.join(', ')}`);
   const digests = policy.digests ?? {};
   if (typeof digests !== 'object') throw new VerifyError('policy.invalid', 'policy.digests must be an object');
   for (const [target, set] of Object.entries(digests)) {
@@ -591,7 +700,33 @@ function checkPolicy(policy) {
       if (!HEX64.test(set[algorithm])) throw new VerifyError('policy.invalid', `policy.digests.${target}.${algorithm} is not 64 lowercase hex characters`);
     }
   }
-  return { name, minimum, digests };
+  const capabilities = checkCapabilities(policy.capabilities);
+  // effects (#282): the impure effects the policy allows the world. Absent allows any; [] is the pure-world policy.
+  const effects = policy.effects ?? null;
+  if (effects !== null) {
+    if (!Array.isArray(effects) || effects.some((e) => !IMPURE_EFFECTS.includes(e))) throw new VerifyError('policy.invalid', `policy.effects must be an array of ${IMPURE_EFFECTS.join(', ')}`);
+    if (new Set(effects).size !== effects.length) throw new VerifyError('policy.invalid', 'policy.effects repeats an effect');
+  }
+  return { name, program: policies.shippedPolicy(DEFAULT_POLICY), minimum, digests, world: checkWorldPin(policy.world), capabilities, effects, replay: policy.replay, statements: policy.statements };
+}
+
+/**
+ * The `world` member of a policy: the lock's `inputs.world` (issue #278), so a
+ * caller passes it unchanged. `undefined` pins nothing; `null` says no world
+ * is expected.
+ */
+function checkWorldPin(pin) {
+  if (pin === undefined || pin === null) return pin;
+  if (typeof pin !== 'object' || Array.isArray(pin)) throw new VerifyError('policy.invalid', 'policy.world must be an object, as in the inputs.world of the lock, or null');
+  for (const key of Object.keys(pin)) {
+    if (!['contract', 'blake3', 'sha256'].includes(key)) throw new VerifyError('policy.invalid', `policy.world.${key} is not one of contract, blake3, sha256`);
+  }
+  if (Object.keys(pin).length === 0) throw new VerifyError('policy.invalid', 'policy.world names nothing');
+  if (pin.contract !== undefined && (typeof pin.contract !== 'string' || pin.contract.length < 1)) throw new VerifyError('policy.invalid', 'policy.world.contract must be a string');
+  for (const algorithm of ['blake3', 'sha256']) {
+    if (pin[algorithm] !== undefined && !HEX64.test(pin[algorithm])) throw new VerifyError('policy.invalid', `policy.world.${algorithm} is not 64 lowercase hex characters`);
+  }
+  return pin;
 }
 
 /** A detail line as one plain sentence, within the verdict schema's 1024 characters. */
@@ -613,23 +748,39 @@ const STATEMENTS = Object.freeze([
 ]);
 
 /**
- * Check a holo and return its verdict, a `prism/verdict/1` object
- * (docs/proposals/269-assurance-levels.md). The level is computed from the
- * evidence; the policy only decides `passed`. Every check runs, so the
- * reasons list every problem at once.
- *
- * Rejects with VerifyError when no verdict can be reached: input that is not
- * bytes, an invalid policy, a file whose header or section table cannot be
- * read, or an intact holo of a format revision this package does not know.
- * Asynchronous so that bundle signature verification (issue #267), which
- * needs WebCrypto, can join without an API change.
- *
- * @param {Uint8Array | ArrayBuffer} source the whole holo
- * @param {{ name?: string, minimum?: 'P0' | 'P1' | 'P2' | 'P3', digests?: Record<string, { sha256?: string, blake3?: string }> }} [policy]
+ * A replay statement handed to the check beside the holo. Nothing signed it, so
+ * it says what a replay found and can withhold P3, but cannot support it. The
+ * caller cannot claim otherwise: only a signed statement inside the holo will,
+ * once the check reads the attestation section (#267).
  */
-export async function verify(source, policy) {
-  const bytes = asBytes(source);
-  const wanted = checkPolicy(policy);
+const DETACHED = Object.freeze({ verified: false, message: "The replay statement came from beside the holo and is unsigned; only a signed statement in the holo's attestation section can support P3 (issues #267 and #270)." });
+
+/**
+ * The `statements` option: `{ provenance, proof }`, each `{ statement, envelope }`
+ * where `statement` is the decoded in-toto Statement and `envelope` is
+ * `{ verified, message? }`, the outcome of the DSSE signature check against a
+ * trust root the caller holds. This package verifies no signature itself; a
+ * statement whose `envelope.verified` is not true fails its envelope check and
+ * supports nothing.
+ */
+function checkedStatements(statements) {
+  if (statements === undefined) return {};
+  if (statements === null || typeof statements !== 'object' || Array.isArray(statements)) throw new VerifyError('policy.invalid', 'policy.statements must be an object');
+  for (const [kind, entry] of Object.entries(statements)) {
+    if (!['provenance', 'proof'].includes(kind)) throw new VerifyError('policy.invalid', `policy.statements.${kind} is not provenance or proof`);
+    if (entry === undefined) continue;
+    if (entry === null || typeof entry !== 'object' || typeof entry.envelope?.verified !== 'boolean' || !('statement' in entry)) {
+      throw new VerifyError('policy.invalid', `policy.statements.${kind} must be { statement, envelope: { verified } }`);
+    }
+  }
+  return { provenance: statements.provenance, proof: statements.proof };
+}
+
+/**
+ * What a holo's bytes show, before any policy judges them. Rejects with
+ * VerifyError when there is nothing to judge.
+ */
+function evidenceOf(bytes, capabilities, replay, statements) {
   const { checks, facts } = analyze(bytes);
 
   const unreadable = checks.find((c) => c.status === 'fail' && STRUCTURE_IDS.includes(c.id));
@@ -642,16 +793,124 @@ export async function verify(source, policy) {
   for (const check of checks) {
     if (check.status === 'fail' && REPORTED_AS[check.id]) reasons.push({ check: REPORTED_AS[check.id], withholds: 'P1', message: sentence(check.detail) });
   }
-  for (const statement of STATEMENTS) reasons.push({ ...statement });
+  // proof.* and provenance.* (#266, #268): a statement the caller has already decoded and whose signature it has checked.
+  const attested = checkedStatements(statements);
+  const digests = (role) => facts.sections.find((s) => s.label === facts.roles[role])?.digests ?? null;
+  for (const statement of STATEMENTS) {
+    if (statement.check === 'replay.statement' && replay !== undefined) continue;
+    if (statement.check === 'provenance.statement' && attested.provenance) {
+      reasons.push(...checkProvenanceStatement(attested.provenance.statement, { blobs: facts.sections.filter((s) => s.label && s.digests) }, attested.provenance.envelope));
+    } else if (statement.check === 'proof.statement' && attested.proof) {
+      reasons.push(...checkProofStatement(attested.proof.statement, { guest: digests('guest'), model: digests('model'), provenance: facts.documents.provenance }, attested.proof.envelope));
+    } else reasons.push({ ...statement });
+  }
+  // replay.* (#284): the replay check's own reasons replace the one that says no statement is there.
+  if (replay !== undefined) {
+    reasons.push(...checkReplayStatement(replay, { guest: digests('guest'), model: digests('model') }, DETACHED));
+  }
 
-  const { LEVELS, RANK } = ASSURANCE;
-  const lowestWithheld = Math.min(...reasons.filter((r) => r.withholds).map((r) => RANK[r.withholds]), LEVELS.length);
-  const level = LEVELS[lowestWithheld - 1];
+  // world.capabilities (#283): the declared world's imports within the granted set. It withholds P3; whether it fails the holo is the policy's to say.
+  const contract = facts.documents.directory?.layers?.find((l) => l.kind === 'wasm')?.contract ?? facts.documents.provenance?.core_wasm_contract ?? null;
+  const world = contract === null ? null : checkWorldPolicy(contract, capabilities);
+  if (world?.known && !world.within) {
+    reasons.push({ check: 'world.capabilities', code: 'PP5602', withholds: 'P3', message: sentence(`the world exceeds the granted capabilities: ${world.problems.join('; ')}`) });
+  }
 
-  let passed = true;
-  if (RANK[level] < RANK[wanted.minimum]) {
+  return { facts, reasons, contract, world, replay, attested, level: levelOf(reasons) };
+}
+
+/** A checked statement as the policy input shows it: null when absent or when a check of its kind other than the envelope failed. */
+function predicateOf(entry, reasons, prefix) {
+  if (!entry || reasons.some((r) => r.check.startsWith(prefix) && r.check !== `${prefix}envelope`)) return null;
+  const statement = entry.statement;
+  return { predicateType: statement.predicateType, verified: entry.envelope.verified === true && !reasons.some((r) => r.check === `${prefix}envelope`), predicate: statement.predicate };
+}
+
+/** The `prism/policy-input/1` document of a holo's evidence (issue #285). */
+function inputOf(bytes, evidence, capabilities) {
+  const { facts, reasons, contract, world, replay, attested, level } = evidence;
+  const blob = (role) => (facts.roles[role] ? facts.sections.find((s) => s.label === facts.roles[role]) : undefined);
+  const digests = { archive: digestsOf(bytes) };
+  for (const role of ['capabilities', 'guest', 'view', 'model']) {
+    const section = blob(role);
+    if (section?.digests) digests[role] = section.digests;
+  }
+  const capabilitySet = blob('capabilities');
+  const named = typeof contract === 'string' && contract.length > 0;
+  return {
+    schema: spec.POLICY.INPUT,
+    holo: { fingerprint: facts.fingerprint, revision: facts.revision, digests },
+    verdict: { level, reasons },
+    world: named
+      ? {
+          contract,
+          known: world.known,
+          within: world.within,
+          pure: world.pure,
+          effects: world.effects,
+          imports: declaredImports(contract),
+          problems: world.problems,
+          capability_set: capabilitySet?.content ? { label: capabilitySet.label, empty: hex(capabilitySet.content) === spec.CAPABILITY_SET.EMPTY_HEX } : null,
+        }
+      : null,
+    capabilities,
+    // Statements join with the format revision that admits the attestation section (#267). Until then a holo carries none, and only a replay statement can come from beside it.
+    predicates: {
+      provenance: predicateOf(attested.provenance, reasons, 'provenance.'),
+      proof: predicateOf(attested.proof, reasons, 'proof.'),
+      replay: replay === undefined || reasons.some((r) => r.check === 'replay.statement') ? null : { predicateType: replay.predicateType, verified: DETACHED.verified, predicate: replay.predicate },
+    },
+  };
+}
+
+/**
+ * The document a policy judges for this holo, `prism/policy-input/1` (issue
+ * #285). Write it to a file to try a policy under `opa eval`. Rejects like `verify`.
+ *
+ * @param {Uint8Array | ArrayBuffer} source the whole holo
+ * @param {{ capabilities?: object | null, replay?: object }} [options] the set the caller grants, and a decoded `prism/replay/v1` statement from beside the holo
+ */
+export async function policyInput(source, options) {
+  const bytes = asBytes(source);
+  const capabilities = checkCapabilities(options?.capabilities);
+  return inputOf(bytes, evidenceOf(bytes, capabilities, options?.replay, options?.statements), capabilities);
+}
+
+/**
+ * Check a holo and return its verdict, a `prism/verdict/1` object
+ * (docs/proposals/269-assurance-levels.md). The level is computed from the
+ * evidence; the policy only decides `passed`. Every check runs, so the
+ * reasons list every problem at once.
+ *
+ * The policy is a shipped file or the caller's (docs/proposals/285-policy-file.md).
+ * With `rego`, that source decides. Without it, the shipped default policy
+ * decides, and `minimum`, `digests`, `effects` and `world` adjust it: they are
+ * the options of the same check from before policy files.
+ *
+ * Rejects with VerifyError when no verdict can be reached: input that is not
+ * bytes, an invalid policy, a policy that does not parse or cannot be evaluated,
+ * a file whose header or section table cannot be read, or an intact holo of a
+ * format revision this package does not know. Asynchronous so that bundle
+ * signature verification (issue #267), which needs WebCrypto, can join without an API change.
+ *
+ * @param {Uint8Array | ArrayBuffer} source the whole holo
+ * @param {{ name?: string, rego?: string, minimum?: 'P0' | 'P1' | 'P2' | 'P3', digests?: Record<string, { sha256?: string, blake3?: string }>, world?: { contract?: string, sha256?: string, blake3?: string } | null }} [policy]
+ */
+export async function verify(source, policy) {
+  const bytes = asBytes(source);
+  const wanted = checkPolicy(policy);
+  const evidence = evidenceOf(bytes, wanted.capabilities, wanted.replay, wanted.statements);
+  const { facts, level, contract, world: worldPolicy } = evidence;
+  const reasons = [...evidence.reasons];
+
+  const decision = evaluatePolicy(wanted.program, inputOf(bytes, evidence, wanted.capabilities));
+  const minimum = wanted.minimum ?? decision.minimum;
+  const { RANK } = ASSURANCE;
+
+  let passed = !decision.denied;
+  if (RANK[level] < RANK[minimum]) {
     passed = false;
-    reasons.push({ check: 'policy.level', code: 'PP5601', withholds: null, message: `The level is ${level}; the policy requires ${wanted.minimum} or above.` });
+    reasons.push({ check: 'policy.level', code: 'PP5601', withholds: null, message: `The level is ${level}; the policy requires ${minimum} or above.` });
   }
   for (const [target, expected] of Object.entries(wanted.digests)) {
     let actual = null;
@@ -668,12 +927,54 @@ export async function verify(source, policy) {
     }
   }
 
+  if (wanted.effects !== null && worldPolicy?.known) {
+    const outside = effectsOutsidePolicy(worldPolicy.effects, wanted.effects);
+    if (outside.length > 0) {
+      passed = false;
+      const allowed = wanted.effects.length === 0 ? 'the policy allows a pure world only' : `the policy allows ${wanted.effects.join(', ')}`;
+      reasons.push({ check: 'policy.effects', withholds: null, message: sentence(`the world imports ${outside.join(', ')}, and ${allowed}`) });
+    }
+  }
+
+  if (wanted.world !== undefined) {
+    const mismatches = contract === null ? ['the holo declares no guest contract to compare with the pinned world'] : compareWorldPin(contract, wanted.world);
+    if (mismatches.length > 0) {
+      passed = false;
+      reasons.push({ check: 'world.hash', withholds: null, message: sentence(`the world does not match the policy: ${mismatches.join('; ')}`) });
+    }
+  }
+
+  for (const { rule, message } of decision.denials) reasons.push({ check: rule, withholds: null, message: sentence(message) });
+
   return {
     schema: ASSURANCE.VERDICT,
     holo: facts.fingerprint,
     level,
-    policy: { name: wanted.name, minimum: wanted.minimum },
+    policy: { name: wanted.name, minimum },
     passed,
     reasons,
   };
+}
+
+/**
+ * Check the transparency log entries and RFC 3161 timestamps of one Sigstore
+ * bundle against a pinned Sigstore trusted root, offline (issue #275,
+ * docs/proposals/275-transparency-log.md). The result lists every problem at
+ * once; `reasons` has the shape of a verdict's `reasons`.
+ *
+ * Rejects with VerifyError `trustedroot.invalid` when the trusted root is not
+ * usable, and `input` when the bundle is not an object.
+ *
+ * @param {object} bundle a Sigstore bundle v0.3
+ * @param {object} trustedRoot a Sigstore `trusted_root.json`, pinned by the caller
+ * @param {{ crypto?: { subtle: SubtleCrypto }, entries?: number, timestamps?: number }} [options]
+ */
+export async function verifyTransparency(bundle, trustedRoot, options) {
+  if (bundle === null || typeof bundle !== 'object' || Array.isArray(bundle)) throw new VerifyError('input', 'the bundle must be an object');
+  try {
+    return await transparency.verifyTransparency(bundle, trustedRoot, options);
+  } catch (error) {
+    if (error instanceof transparency.TrustedRootError) throw new VerifyError('trustedroot.invalid', error.message);
+    throw error;
+  }
 }

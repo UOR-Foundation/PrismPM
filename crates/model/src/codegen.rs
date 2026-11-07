@@ -27,7 +27,7 @@ pub fn render_spec_appendix(model: &Model) -> String {
             "stdlib" => "§5",
             "artifacts" => "§6",
             "execution" => "§7",
-            "verification" => "§8",
+            "verification" | "assurance" => "§8",
             "security" => "§9",
             "authorities" => "§10",
             "system" => "§11",
@@ -226,6 +226,16 @@ pub fn render_errors(model: &Model) -> String {
     let _ = writeln!(w, "| Byte | Modeled rejection |\n|---|---|");
     for row in &view.rejection {
         let _ = writeln!(w, "| {} | `{}` |", row.byte, row.name);
+    }
+    let _ = writeln!(w, "\n## Prism SDK module diagnostics\n");
+    let _ = writeln!(w, "Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modules raise, in a namespace separate from the CLI PP codes.\n");
+    let _ = writeln!(w, "| Code | Owner | Meaning |\n|---|---|---|");
+    for row in &model.sdk_diagnostics.error {
+        let _ = writeln!(
+            w,
+            "| `{}` | `{}` | {} |",
+            row.code, row.capability, row.statement
+        );
     }
     out
 }

@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { EXAMPLES, lintFiles, readPages, render, renderSite } from '../lib/generate.mjs';
+import { EXAMPLES, lintFiles, moduleMap, readPages, render, renderSite } from '../lib/generate.mjs';
 import { runExample } from '../lib/examples.mjs';
 import { FIXTURE_DIR, prismCode } from '../lib/runtime.mjs';
 import { ROOT, headCommit, loadSpec } from '../lib/spec.mjs';
@@ -20,18 +20,21 @@ const files = await render({ spec, runtime });
 
 test('every page in the list is rendered with the page shape', () => {
   const pages = readPages().groups.flatMap((g) => g.pages);
-  assert.equal(files.size, pages.length + 2);
+  // Every page, plus llms.txt, llms-full.md and release-status.json; then the Mintlify tree: every page, docs.json, llms.txt and llms-full.txt.
+  assert.equal(files.size, pages.length + 3 + pages.length + 3);
   for (const page of pages) {
     const text = files.get(`${page.path}.md`);
     assert.ok(text, `${page.path} rendered`);
-    assert.match(text, new RegExp(`^---\\ntitle: ${page.title}\\ndescription: `));
     assert.match(text, /\n## Next steps\n\n- \[/);
+    assert.deepEqual(lintText(text, page.path), [], `${page.path} passes the vocabulary lint`);
+    if (page.narrative) continue;
+    assert.match(text, new RegExp(`^---\\ntitle: ${page.title}\\ndescription: .+\\navailable_in: "${page.available_in.replace(/\./g, '\\.')}"\\n---\\n`));
     assert.match(text, /\nGenerated from .+\.\n$/);
     if (page.status) assert.ok(text.includes(`\nStatus: ${page.status}\n`), `${page.path} carries its status line`);
-    assert.deepEqual(lintText(text, page.path), [], `${page.path} passes the vocabulary lint`);
   }
   assert.ok(files.get('llms.txt').startsWith('# Prism\n'));
   assert.ok(files.get('llms-full.md').includes('<!-- reference/holo-format -->'));
+  assert.ok(files.get('llms-full.md').includes('<!-- get-started/quickstart -->'));
 });
 
 test('the spec pages name the checkout they were generated from', () => {
@@ -58,15 +61,17 @@ test('the spec package page lists every schema and predicate between generated-r
 });
 
 test('the executed examples print what the pages show', () => {
-  const map = { 'prism-code': runtime.url, '@prism-code/spec': spec.url };
+  const map = moduleMap(runtime, spec);
   const outputs = Object.fromEntries(EXAMPLES.map((n) => [n, runExample(n, { map, cwd: FIXTURE_DIR }).output]));
   assert.equal(outputs.load, 'Calculator\ntrue\n{ request: 52, response: 27, guestAllocation: 65536 }\n');
   assert.equal(outputs.dispatch, '"1\\tok\\t42"\n');
   assert.equal(outputs.acceptance, '{ total: 22, passed: 22, failed: [] }\n');
+  assert.equal(outputs.verify, "{ level: 'P0', passed: true }\nVerificationError verification_failed provenance.statement\n");
   assert.ok(outputs['spec-constants'].startsWith(`${spec.module.FORMAT_REVISION}\nHOLO 4 8\n`));
   assert.ok(files.get('api/load.md').includes(`\`\`\`text\n${outputs.load}\`\`\``));
   assert.ok(files.get('api/dispatch.md').includes(`\`\`\`text\n${outputs.dispatch}\`\`\``));
   assert.ok(files.get('api/history-and-replay.md').includes(`\`\`\`text\n${outputs.acceptance}\`\`\``));
+  assert.ok(files.get('api/verify.md').includes(`\`\`\`text\n${outputs.verify}\`\`\``));
 });
 
 test('an example that fails to run fails the generation', () => {
@@ -118,7 +123,7 @@ test('verify names every page that shows an example the runtime cannot run', asy
     const { files: rendered, problems } = await renderSite({ spec, runtime: { ...runtime, url: pathToFileURL(entry).href } });
     assert.deepEqual(
       problems.map((p) => `${p.page} ${p.kind}`).sort(),
-      ['api/history-and-replay example', 'api/dispatch example', 'api/index example', 'api/load example'].sort(),
+      ['api/history-and-replay example', 'api/dispatch example', 'api/index example', 'api/load example', 'api/verify example', 'examples/call-a-holo example', 'examples/check-a-holo example', 'examples/inspect-a-holo example', 'examples/replay-examples example', 'guides/run-a-holo example', 'guides/test-your-application example', 'guides/write-a-middleware example', 'sdks/typescript example'].sort(),
     );
     assert.ok(rendered.has('reference/holo-format.md'), 'pages that run nothing still render');
     assert.ok(!rendered.has('llms.txt'), 'the site index is not written from a partial site');

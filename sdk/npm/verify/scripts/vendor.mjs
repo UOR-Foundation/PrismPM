@@ -29,6 +29,13 @@ const header = (origin, note) =>
 /** The holo section schemas the reader checks, by their key in HOLO_SCHEMAS. */
 const HOLO_KEYS = ['ARCHIVE', 'APP_MANIFEST', 'SOURCE_MANIFEST', 'APPLICATION_DIRECTORY'];
 
+/**
+ * The predicate schemas the statement checks validate against (src/statements.mjs, #266).
+ * A file of their own, so the browser build and prism-code's copy carry them only once
+ * `verify` reads statements.
+ */
+const PREDICATE_PATHS = ['predicates/proof-v1.schema.json', 'predicates/replay-v1.schema.json'];
+
 /** The `schema` names of the documents a reader of the spec's format revisions checks. */
 function documentNames(spec) {
   const names = new Set();
@@ -78,6 +85,24 @@ function specIndex(spec) {
   );
 }
 
+function predicateModule() {
+  const lines = PREDICATE_PATHS.map((path) => `  ${JSON.stringify(path)}: ${JSON.stringify(JSON.parse(read(`../../spec/${path}`)))},`);
+  return (
+    header('sdk/npm/spec/predicates', 'The predicate schemas the statement checks need, keyed by their path in @prism-code/spec, whitespace removed.') +
+    `export const PREDICATE_SCHEMAS = Object.freeze({\n${lines.join('\n')}\n});\n`
+  );
+}
+
+/** The policies this package ships and the schema of the document they judge (issue #285). */
+function policyModule(spec) {
+  const sources = Object.entries(spec.POLICY.SHIPPED).map(([name, path]) => `  ${JSON.stringify(name)}: ${JSON.stringify(read(`../../spec/${path}`))},`);
+  const schema = JSON.stringify(JSON.parse(read(`../../spec/${spec.POLICY.INPUT_SCHEMA}`)));
+  return (
+    header('sdk/npm/spec/policies', 'The source of each shipped policy, and the prism/policy-input/1 schema, whitespace removed.') +
+    `export const POLICY_SOURCES = Object.freeze({\n${sources.join('\n')}\n});\n\nexport const POLICY_INPUT_JSON_SCHEMA = ${schema};\n`
+  );
+}
+
 const spec = await loadSpec();
 
 const outputs = {
@@ -94,6 +119,8 @@ const outputs = {
       'Published here as the validator for the documents inside a holo; it rejects any keyword it does not implement.',
     ) + read('../../spec/test/json-schema.mjs'),
   'src/vendor/schemas.mjs': await schemaModule(spec),
+  'src/vendor/predicates.mjs': predicateModule(),
+  'src/vendor/policies.mjs': policyModule(spec),
 };
 
 let stale = 0;

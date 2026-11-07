@@ -1,10 +1,322 @@
 /** prism-code — JavaScript runtime for Prism SDK (PrismPM) applications. */
 
-export class PrismCodeError extends Error {
+/** Base of every error the package throws. `code` is stable: a class's own code, or for `PrismCodeError` the check that failed. */
+export class PrismError extends Error {
+  static readonly code: string;
+  code: string;
+  /** The verdict reason's check id, such as `holo.integrity` or `proof.subject`, or the reason no verdict was reached. */
+  check?: string;
+  /** The registered diagnostic of the reason, such as `PP5601`. */
+  diagnostic?: string;
+  details?: unknown;
+  /** The whole verdict, when the error explains a failed one. */
+  verdict?: Verdict;
+  reasons?: VerdictReason[];
+  constructor(
+    message: string,
+    options?: { code?: string; check?: string; diagnostic?: string; details?: unknown; verdict?: Verdict; reasons?: VerdictReason[]; cause?: unknown },
+  );
+}
+
+export class PrismCodeError extends PrismError {
   /** The check that failed, e.g. `archive.magic`, `core.exports`, `closure.provenance`, `lock.image`. */
   code: string;
-  details?: unknown;
+  constructor(code: string, message: string, details?: unknown);
 }
+
+/** `verification_failed`: no verdict was reached, or a `holo.*`, `provenance.*` or `policy.*` check failed. */
+export class VerificationError extends PrismError {
+  static readonly code: 'verification_failed';
+}
+/** `proof_mismatch`: a `proof.*` check failed. */
+export class ProofMismatchError extends PrismError {
+  static readonly code: 'proof_mismatch';
+}
+/** `capability_denied`: the declared world exceeds the granted capabilities (`world.capabilities`), or the runtime denied a guest import or a resource (`capabilities.*`, #279). */
+export class CapabilityDeniedError extends PrismError {
+  static readonly code: 'capability_denied';
+}
+/**
+ * `world_mismatch`: the guest does not have the imports and exports of its declared WIT world (`world.contract`),
+ * or the declared world is not the one the caller pinned (`world.hash`). Issue #278.
+ */
+export class WorldMismatchError extends PrismError {
+  static readonly code: 'world_mismatch';
+}
+/** `policy_parse_failed`: the policy file does not parse, or uses a construct outside the subset (`policy.parse`). No verdict; `check` exits 2. Issue #285. */
+export class PolicyParseError extends VerificationError {
+  static readonly code: 'policy_parse_failed';
+}
+/** `policy_evaluation_failed`: the policy file parsed but produced no decision (`policy.evaluation`); the message names the rule. No verdict; `check` exits 2. Issue #285. */
+export class PolicyEvaluationError extends VerificationError {
+  static readonly code: 'policy_evaluation_failed';
+}
+/** `policy_denied`: a rule of a policy file denied the holo; `check` is the rule, such as `policy.pure-only.effects`. `check` exits 1. Issue #285. */
+export class PolicyDeniedError extends VerificationError {
+  static readonly code: 'policy_denied';
+}
+/** `determinism_violation`: a replay diverged from its recorded history (`replay.divergence`). */
+export class DeterminismViolationError extends PrismError {
+  static readonly code: 'determinism_violation';
+}
+/** `replay_failed`: a replay could not be carried out, or another `replay.*` check failed. */
+export class ReplayError extends PrismError {
+  static readonly code: 'replay_failed';
+}
+/** `signing_failed`: `attest` could not sign. `check` is `sign.key`, `sign.identity`, `sign.service`, `sign.config`, `sign.predicate` or `sign.subject`. */
+export class SigningError extends PrismError {
+  static readonly code: 'signing_failed';
+}
+/** `signature_invalid`: the DSSE signature, the signing key or the certificate chain of a bundle does not verify. */
+export class SignatureInvalidError extends PrismError {
+  static readonly code: 'signature_invalid';
+}
+/** `identity_mismatch`: the signer is valid but is not the certificate identity or OIDC issuer the policy names. */
+export class IdentityMismatchError extends PrismError {
+  static readonly code: 'identity_mismatch';
+}
+/** `transparency_failed`: a log entry or signed timestamp is missing, untrusted or not about this bundle. */
+export class TransparencyError extends PrismError {
+  static readonly code: 'transparency_failed';
+}
+/** `subject_mismatch`: a statement subject is not a content blob of the holo, or its digests differ from the blob's. */
+export class SubjectMismatchError extends PrismError {
+  static readonly code: 'subject_mismatch';
+}
+/** `attestation_not_found`: the holo has no attestation, or none of the requested predicate type. */
+export class AttestationNotFoundError extends PrismError {
+  static readonly code: 'attestation_not_found';
+}
+/** Running a provider service failed (#294). `details` names the capability and the provider type. */
+export class ProviderError extends PrismError {
+  static readonly code: 'provider_error' | 'provider_not_found' | 'provider_reply_invalid' | 'provider_failed';
+}
+/** No `prism-provider-<type>` is on the PATH. */
+export class ProviderNotFoundError extends ProviderError {
+  static readonly code: 'provider_not_found';
+}
+/** A provider broke the protocol (`provider.reply`), or a variable it returned has a second source (`provider.collision`). */
+export class ProviderReplyError extends ProviderError {
+  static readonly code: 'provider_reply_invalid';
+}
+/** A provider failed (`provider.failed`), would not start (`provider.spawn`) or ran out of time (`provider.timeout`). */
+export class ProviderFailedError extends ProviderError {
+  static readonly code: 'provider_failed';
+}
+/** `trust_root_invalid`: the pinned trusted root cannot be read or does not pin what the policy needs. */
+export class TrustRootError extends PrismError {
+  static readonly code: 'trust_root_invalid';
+}
+/** `registry_failed`: a registry or a local store could not do what was asked. `check` is `registry.*` or `store.*`. */
+export class RegistryError extends PrismError {
+  static readonly code: 'registry_failed';
+}
+/** `registry_auth_failed`: the registry refused the credentials, or asked for them where they must not be sent. */
+export class RegistryAuthError extends PrismError {
+  static readonly code: 'registry_auth_failed';
+}
+/** `referrers_unsupported`: no referrers API, and the referrers tag cannot be read or written, or the fallback is off. */
+export class ReferrersUnsupportedError extends PrismError {
+  static readonly code: 'referrers_unsupported';
+}
+/** `manifest_not_found`: the reference names nothing in the registry or the store. */
+export class ManifestNotFoundError extends PrismError {
+  static readonly code: 'manifest_not_found';
+}
+/** `digest_mismatch`: bytes differ from the digest a descriptor, a reference, a registry header or an annotation claimed. */
+export class DigestMismatchError extends PrismError {
+  static readonly code: 'digest_mismatch';
+}
+/** `pull_verification_failed`: a pulled holo failed its verdict, its attestations or the signer policy; nothing was written. */
+export class PullVerificationError extends PrismError {
+  static readonly code: 'pull_verification_failed';
+}
+/** `reference_invalid`: the text is not a registry or store reference. `check` is `reference.*`. */
+export class ReferenceInvalidError extends PrismError {
+  static readonly code: 'reference_invalid';
+}
+/** `export_mismatch`: a browser export's bytes differ from the release. `check` is `export.manifest`, `export.layer`, `export.files` or `export.tree`. */
+export class ExportMismatchError extends PrismError {
+  static readonly code: 'export_mismatch';
+}
+/**
+ * `middleware_failed`: a middleware threw something that is not a `PrismError` (#295).
+ * `details` names it and `cause` is what it threw; a `PrismError` a middleware throws passes through as it is.
+ */
+export class MiddlewareError extends PrismError {
+  static readonly code: 'middleware_failed';
+  details: { name: string | null; step: MiddlewareStep; tags: string[] };
+}
+export const ERROR_CLASSES: Readonly<Record<string, typeof PrismError>>;
+/** The class a verdict reason's check id maps to. */
+export function classForCheck(check: string): typeof PrismError;
+export function errorForReason(reason: VerdictReason, verdict?: Verdict): PrismError;
+/** The error that explains a failed verdict, or null for a passed one. `ranks` is `ASSURANCE.RANK`. */
+export function errorFromVerdict(verdict: Verdict, ranks: Record<AssuranceLevel, number>): PrismError | null;
+
+/** One row of the exit table. `error` names a class, null for success, or `anything else`. */
+export interface ExitCodeRow {
+  readonly exit: number;
+  readonly error: string | null;
+  /** Narrows `error`: `with a verdict` or `no verdict`. */
+  readonly when?: string;
+  readonly meaning: string;
+}
+/** Experimental. What a run exits with: the single source of truth for containers and the command line (#348). */
+export const EXIT_CODES: readonly ExitCodeRow[];
+/** Experimental. The exit code for how a run ended: null is 0, a typed error takes its row, anything else is 70. */
+export function exitCodeFor(error: unknown): number;
+
+/** Experimental. The `schema` of `Container.inspect()`. */
+export const CONTAINER_SCHEMA: 'prism/container/1';
+export type ContainerStatus = 'created' | 'running' | 'exited';
+
+/** What `Container.inspect()` returns (#348). */
+export interface ContainerRecord {
+  schema: 'prism/container/1';
+  /** 64 lowercase hex characters. A unique prefix also names the container. */
+  id: string;
+  image: {
+    name: string | null;
+    kind: 'holo' | 'closure' | null;
+    /** The archive fingerprint, `blake3:` and 64 hex characters, as in `verdict.holo`. Null for a closure. */
+    digest: string | null;
+  };
+  /** ISO 8601. */
+  created: string;
+  rm: boolean;
+  state: {
+    status: ContainerStatus;
+    /** Null until exited. */
+    exitCode: number | null;
+    /** What ended the run, or null. */
+    error: { name: string; code: string | null; message: string; check?: string; diagnostic?: string } | null;
+    /** Null until running, and null for good when check refused the holo: the guest never ran. */
+    startedAt: string | null;
+    finishedAt: string | null;
+  };
+  /** The verdict of the check this run was gated on, or null when none was reached. */
+  verdict: Verdict | null;
+  /** The output the guest returned, as text when it is valid UTF-8, otherwise as hex. Never the input. */
+  output: { encoding: 'utf-8' | 'hex'; data: string } | null;
+}
+
+/** Experimental. One run of a holo (#348). */
+export interface Container {
+  readonly id: string;
+  readonly status: ContainerStatus;
+  readonly exitCode: number | null;
+  /** The bytes the guest returned, or null. */
+  readonly output: Uint8Array | null;
+  /** The typed error that ended this run, or null. A container read back from a store has the summary in `inspect()` instead. */
+  readonly error: unknown;
+  /** The output as text, or null. */
+  text(): string | null;
+  /** Run it, and resolve to this container once it has exited. A failed run is the exit code, never a rejection. Again after exit runs it again. */
+  start(): Promise<Container>;
+  /** Rejects with `container.missing` once removed. */
+  inspect(): Promise<ContainerRecord>;
+  /** Refused with `container.running` while it runs. */
+  remove(): Promise<void>;
+}
+
+/** Where records are kept. `memoryContainerStore` is the default. */
+export interface ContainerStore {
+  put(record: ContainerRecord): Promise<void>;
+  get(id: string): Promise<ContainerRecord | undefined>;
+  /** The full ids that start with this prefix. */
+  find(prefix: string): Promise<string[]>;
+  remove(id: string): Promise<void>;
+}
+export function memoryContainerStore(): ContainerStore;
+
+export interface ContainerOptions extends LoadOptions {
+  /** The policy to gate on, as `experimental_verify` takes it, or a function that returns it. Default: P2 or above, or `PRISM_MINIMUM_LEVEL`. */
+  policy?: VerifyOptions | (() => VerifyOptions | Promise<VerifyOptions>);
+  /** Run a holo that fails check, or that check cannot judge. Warns on every start; never the default. */
+  allowUnverified?: boolean;
+  /** Remove the container when it exits, as `docker run --rm` does. */
+  rm?: boolean;
+}
+
+/** Experimental. `prism.containers` (#348). `image` is what `load` takes, or an application it returned. */
+export interface Containers {
+  /** Create and start: resolves to the container once it has exited, whatever its exit code. */
+  run(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
+  /** Open the image and make a container in state `created`. An image that cannot be opened makes no container. */
+  create(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
+  start(id: string): Promise<Container>;
+  /** The container with this id or unique id prefix. Rejects with `container.missing` or `container.ambiguous`. */
+  get(id: string): Promise<Container>;
+  remove(id: string): Promise<void>;
+}
+
+/** Experimental. The default client. Its records live in memory until removed. */
+export const prism: { readonly containers: Containers };
+/** Experimental. A client with containers of its own. `warn` receives the warning of an unverified run. */
+export function createPrism(options?: { store?: ContainerStore; warn?: (message: string) => void }): { readonly containers: Containers };
+
+export type AssuranceLevel = 'P0' | 'P1' | 'P2' | 'P3';
+
+export interface VerdictReason {
+  check: string;
+  code?: string;
+  withholds: AssuranceLevel | null;
+  message: string;
+}
+
+/** `prism/verdict/1`: what `prism check`, `holo.verify()` and `@prism-code/verify` return. */
+export interface Verdict {
+  schema: 'prism/verdict/1';
+  /** The archive fingerprint, `blake3:` and 64 hex characters. */
+  holo: string;
+  /** The highest level whose evidence checks out, never the policy's minimum. */
+  level: AssuranceLevel;
+  policy: { name: string; minimum: AssuranceLevel };
+  passed: boolean;
+  reasons: VerdictReason[];
+}
+
+export interface VerifyOptions {
+  name?: string;
+  /** Default: `PRISM_MINIMUM_LEVEL`, then `P2`. */
+  minimum?: AssuranceLevel;
+  /** Digests the holo (`archive`) or one of its parts (`capabilities`, `guest`, `view`, `model`) must have. */
+  digests?: Partial<Record<'archive' | 'capabilities' | 'guest' | 'view' | 'model', Partial<DigestSet>>>;
+  /**
+   * The world the holo must declare, in the shape of the lock's `inputs.world`, so a caller passes `lock.inputs.world`
+   * unchanged. Any digest may be left out. `null` expects no world, which no holo satisfies. A mismatch is a
+   * `world.hash` reason, never changes the level, and throws `WorldMismatchError` with `throw: true`.
+   */
+  world?: { contract?: string; blake3?: string; sha256?: string } | null;
+  /**
+   * The capability set granted (#283): one set of a `prism/capabilities/1` file, or null. A world importing a kind
+   * the set grants none of is a `world.capabilities` reason (`PP5602`). `holo.experimental_verify` defaults it to
+   * the set the holo was loaded with.
+   */
+  capabilities?: CapabilitySet | null;
+  /** The impure effects the policy allows the world (#282). Absent allows any; `[]` is the pure-world policy (`policy.effects`). */
+  effects?: Array<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'>;
+  /**
+   * A decoded `prism/replay/v1` statement from beside the holo (#284). Its checks join the reasons as `replay.*`. It is
+   * unsigned, so it can withhold P3 and never support it. A signed statement inside the holo waits on #270.
+   */
+  replay?: unknown;
+  /** Throw the typed error for a verdict that did not pass. Default false. */
+  throw?: boolean;
+  /** Where `PRISM_MINIMUM_LEVEL` is read. Default `process.env`. */
+  env?: Record<string, string | undefined>;
+}
+
+export const MINIMUM_LEVEL_ENV: 'PRISM_MINIMUM_LEVEL';
+/** Experimental until the v0.6 freeze. Check a holo (bytes, a Blob or an opened holo) and return its verdict. Throws `VerificationError` when no verdict can be reached. */
+export function experimental_verify(source: Uint8Array | ArrayBuffer | Blob | Application, options?: VerifyOptions): Promise<Verdict>;
+export interface Client {
+  readonly options: Readonly<VerifyOptions>;
+  verify(source: Uint8Array | ArrayBuffer | Blob | Application, options?: VerifyOptions): Promise<Verdict>;
+}
+/** Experimental. A client whose options apply to every call and are replaced by the options of one call. */
+export function experimental_createClient(options?: VerifyOptions): Client;
 
 export interface Limits {
   /** `application.request_maximum`: longer requests get a modeled refusal. */
@@ -83,21 +395,229 @@ export interface Application {
   identities: ArchiveIdentities | ClosureIdentities;
   evidence: Evidence;
   view: View;
+  /** The capability set in force (#279). Without a capability file it grants nothing. */
+  capabilities: CapabilityGrant;
+  /**
+   * The declared world against the grant, checked before the guest compiled (#283). A world outside the grant
+   * never loads: it throws `CapabilityDeniedError` (`world.capabilities`). `pure` is true when the world imports no
+   * clock, random, socket, filesystem or unknown interface, so its runs replay. Every member but `contract` is null
+   * for a contract this reader has no world for; all are null for a closure.
+   */
+  world: {
+    readonly contract: string | null;
+    readonly within: boolean | null;
+    readonly pure: boolean | null;
+    readonly effects: ReadonlyArray<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'> | null;
+  };
   /** Run one request through the guest on a fresh instance; bytes in, bytes out. */
   dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
   /** Replay every acceptance vector, comparing bytes. */
   acceptance(): Promise<AcceptanceResult>;
+  /** The acceptance vectors as a history, this application's first. Rejects with `replay.history` when it carries none. */
+  history(): Promise<History>;
+  /** Experimental. Record dispatches as they run. */
+  experimental_recorder(): Recorder;
+  /** Experimental. Re-execute histories against this build; see `experimental_replay`. */
+  experimental_replay(histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
   /** What the holo says about itself, without running the guest. Rejects with `inspect.kind` for a closure. */
   inspect(): Promise<Inspection>;
+  /** Experimental. The verdict `prism check` returns for this holo. Rejects with `VerificationError` for a closure. */
+  experimental_verify(options?: VerifyOptions): Promise<Verdict>;
   /** The bundles of the attestation section (#267), in order; empty without the section and for closures. Signatures are not verified. */
   attestations(): Attestation[];
+  /** Experimental. The middleware around this application's verify, instantiate, dispatch and record steps (#295). */
+  experimental_middleware: MiddlewareStack;
 }
+
+/** The steps the runtime performs, in order. A closure instantiates once at load and runs no `instantiate` step. */
+export type MiddlewareStep = 'verify' | 'instantiate' | 'dispatch' | 'record';
+export const MIDDLEWARE_STEPS: readonly ['verify', 'instantiate', 'dispatch', 'record'];
+
+/** What each step takes and returns. */
+export interface MiddlewareSteps {
+  verify: { args: { options: VerifyOptions | undefined }; result: Verdict };
+  instantiate: { args: { module: WebAssembly.Module; imports: WebAssembly.Imports }; result: WebAssembly.Instance };
+  /** `instance` is absent for a closure. */
+  dispatch: { args: { request: Uint8Array; instance?: WebAssembly.Instance }; result: Uint8Array };
+  record: { args: { request: Uint8Array; response: Uint8Array }; result: Uint8Array };
+}
+
+export interface MiddlewareContext {
+  step: MiddlewareStep;
+  application: Application;
+}
+
+export type MiddlewareHandler<S extends MiddlewareStep = MiddlewareStep> = (
+  args: MiddlewareSteps[S]['args'],
+) => Promise<MiddlewareSteps[S]['result']>;
+
+/** `(next, context) => handler`. Call `next(args)` to run the rest of the step; the first middleware of a step is the outermost. */
+export type Middleware<S extends MiddlewareStep = MiddlewareStep> = (next: MiddlewareHandler<S>, context: MiddlewareContext) => MiddlewareHandler<S>;
+
+export interface MiddlewareOptions {
+  /** Unique on the stack. Needed to place another middleware relative to this one, or to remove it by name. */
+  name?: string;
+  tags?: string[];
+  /** Replace a middleware of the same name instead of refusing with `middleware.name`. */
+  override?: boolean;
+}
+
+export interface AbsoluteMiddlewareOptions<S extends MiddlewareStep = MiddlewareStep> extends MiddlewareOptions {
+  step: S;
+  /** Within a step: `high` first, then `normal` (the default), then `low`; ties in the order added. */
+  priority?: 'high' | 'normal' | 'low';
+}
+
+export interface RelativeMiddlewareOptions extends MiddlewareOptions {
+  relation: 'before' | 'after';
+  /** The name of the middleware to sit next to, at its step. It must be on the stack when the step runs (`middleware.relative`). */
+  toMiddleware: string;
+}
+
+/** Anything that adds middleware: `stack.use(pluggable)`. */
+export interface Pluggable {
+  applyToStack(stack: MiddlewareStack): void;
+}
+
+export interface MiddlewareStack {
+  add<S extends MiddlewareStep>(middleware: Middleware<S>, options: AbsoluteMiddlewareOptions<S>): this;
+  addRelativeTo(middleware: Middleware, options: RelativeMiddlewareOptions): this;
+  /** By name or by the function itself; true when something was removed. */
+  remove(nameOrMiddleware: string | Middleware): boolean;
+  removeByTag(tag: string): boolean;
+  use(pluggable: Pluggable): this;
+  clone(): MiddlewareStack;
+  /** Every entry in the order it runs: by step, then outermost first. */
+  identify(): { step: MiddlewareStep; name: string | null; tags: string[] }[];
+  /** The handler for one step: every middleware at that step around `terminal`. */
+  resolve<S extends MiddlewareStep>(
+    step: S,
+    terminal: (args: MiddlewareSteps[S]['args']) => MiddlewareSteps[S]['result'] | Promise<MiddlewareSteps[S]['result']>,
+    context?: Partial<MiddlewareContext>,
+  ): MiddlewareHandler<S>;
+}
+
+/** The part of an OpenTelemetry `Tracer` tracing uses; `trace.getTracer()` from `@opentelemetry/api` is one. */
+export interface TracerLike {
+  startActiveSpan<T>(name: string, options: { kind?: number; attributes?: Record<string, unknown> }, fn: (span: SpanLike) => T): T;
+}
+export interface SpanLike {
+  setAttribute(key: string, value: unknown): unknown;
+  setAttributes(attributes: Record<string, unknown>): unknown;
+  recordException(exception: unknown): unknown;
+  setStatus(status: { code: number; message?: string }): unknown;
+  end(): void;
+}
+
+/**
+ * Experimental. One span per step, named `prism.<step>`, from the tracer you pass; the package depends on no tracing library.
+ * Adds `tracing.<step>` middleware, tagged `tracing`, first in each step.
+ */
+export function experimental_tracing(options: { tracer: TracerLike; steps?: MiddlewareStep[] }): Pluggable;
 
 /** sha256 and BLAKE3, lowercase hex, over the same bytes (ADR-015). */
 export interface DigestSet {
   sha256: string;
   blake3: string;
 }
+
+/** One recorded dispatch. Bytes are lowercase hex; `error` is a stable code such as `core.allocation`. */
+export type HistoryEvent = { request: string; response: string; error?: never } | { request: string; error: string; response?: never };
+
+/** A history, `prism/history/1`: the dispatches of one application, in order. */
+export interface History {
+  schema: 'prism/history/1';
+  /** The name of the application when it was recorded. Replay never compares it. */
+  application: string | null;
+  /** The build it was recorded from; absent for a closure. Replay never compares it. */
+  recordedFrom?: { guest: DigestSet; model: DigestSet };
+  events: HistoryEvent[];
+}
+
+/** A history as text, UTF-8 bytes or a parsed value. */
+export type HistorySource = string | Uint8Array | ArrayBuffer | History;
+
+export declare const HISTORY_SCHEMA: 'prism/history/1';
+export declare const REPLAY_PREDICATE_TYPE: 'https://uor.foundation/prism/replay/v1';
+/** Read a history. Rejects with `ReplayError` (`replay.history`) for anything the schema rejects. */
+export function parseHistory(source: HistorySource): History;
+/** The bytes both digests of a history cover: its canonical JSON, with no trailing newline. */
+export function historyBytes(history: HistorySource): Uint8Array;
+/** Both digests of a history, as `prism/replay/v1` names it. */
+export function historyDigest(history: HistorySource): Promise<DigestSet>;
+/** A history as a file: canonical JSON and one LF. */
+export function historyJson(history: HistorySource): string;
+/** The acceptance vectors of an application as a history. */
+export function acceptanceHistory(app: Application): Promise<History>;
+
+export interface Recorder {
+  /** Behaves as `app.dispatch` does, a refusal included, and records the outcome. */
+  dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
+  /** What has finished, in call order. Rejects with `replay.history` when nothing has. */
+  history(): Promise<History>;
+  /** How many dispatches have finished. */
+  events(): number;
+}
+
+/** Experimental. Record dispatches as they run. */
+export function experimental_recorder(app: Application): Recorder;
+
+export type ReplayOutcome = { response: string; error?: never } | { error: string; response?: never };
+
+/** One event whose outcome differs from the recording. */
+export interface ReplayDivergence {
+  /** The event's position in its history. */
+  index: number;
+  /** The request, lowercase hex. */
+  request: string;
+  expected: ReplayOutcome;
+  actual: ReplayOutcome;
+}
+
+export interface ReplayedHistoryResult {
+  digest: DigestSet;
+  application: string | null;
+  events: number;
+  divergences: ReplayDivergence[];
+}
+
+/** An in-toto Statement v1 with predicate type `https://uor.foundation/prism/replay/v1` and the guest blob as its one subject. */
+export interface ReplayStatement {
+  _type: 'https://in-toto.io/Statement/v1';
+  subject: [{ name: string; digest: DigestSet }];
+  predicateType: 'https://uor.foundation/prism/replay/v1';
+  predicate: {
+    runtime: { name: string; version: string };
+    model: DigestSet;
+    histories: Array<{ digest: DigestSet; events: number; divergences: number }>;
+    divergenceCount: number;
+  };
+}
+
+export interface ReplayResult {
+  application: string | null;
+  runtime: { name: string; version: string };
+  /** Events re-executed, across every history. */
+  events: number;
+  divergenceCount: number;
+  histories: ReplayedHistoryResult[];
+  /** Null for a closure, which has no guest blob to name. */
+  statement: ReplayStatement | null;
+}
+
+export interface ReplayOptions {
+  /** False resolves to the result on a divergence, instead of rejecting. Default true. */
+  throw?: boolean;
+  /** The runtime the statement names. Default this package. */
+  runtime?: { name: string; version: string };
+}
+
+/**
+ * Experimental. Re-execute histories against an opened application; every event runs. On a divergence it rejects with
+ * `DeterminismViolationError` (`replay.divergence`), whose `details` is the result, unless `throw` is false. A replay
+ * that cannot be carried out always rejects with `ReplayError`.
+ */
+export function experimental_replay(app: Application, histories: HistorySource | HistorySource[], options?: ReplayOptions): Promise<ReplayResult>;
 
 export type SectionRole =
   | 'app-manifest'
@@ -179,11 +699,25 @@ export interface Inspection {
     stdlib_semantics_id: string | null;
     lexlean_commit: string | null;
   };
-  /** The guest contract and its world; `imports` and `exports` are null for a contract this reader does not know. */
+  /** The guest contract and its world (issue #278); every member but `contract` and `capability_set` is null for a contract this reader does not know. */
   world: {
     contract: string;
+    /** The WIT package, for example `hologram:guest@1.0.0`. */
+    package: string | null;
+    /** The world's name in that package. */
+    name: string | null;
+    /** The WIT file in `@prism-code/spec`. */
+    file: string | null;
+    /** Digests of the WIT file: the lock's `inputs.world` without `contract`. */
+    digest: DigestSet | null;
     imports: string[] | null;
     exports: string[] | null;
+    /** Whether the guest module has exactly the imports and exports of the world. */
+    conforms: boolean | null;
+    /** No clock, random, socket, filesystem or unknown import, so the world is replayable (issue #283, VER-09). */
+    pure: boolean | null;
+    /** The impure effects the world imports, sorted: `clock`, `filesystem`, `random`, `socket`, `unknown`. */
+    effects: Array<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'> | null;
     capability_set: { label: string; empty: boolean };
   } | null;
   /** Empty until holos carry an attestation section (#267). */
@@ -203,15 +737,119 @@ export interface LoadOptions {
   /** For browser closure URLs: the `<stem>_bg.wasm` prefix when it cannot be discovered from app.js. */
   stem?: string;
   files?: string[];
+  /**
+   * A `prism/capabilities/1` file (#279): text, bytes or a parsed value, and in
+   * Node's `fromFile` a path. Without one the application is granted nothing.
+   */
+  capabilities?: Capabilities | Uint8Array | string | URL | null;
+  /** The set of `capabilities` to apply. Default `default`. */
+  capabilitySet?: string;
 }
+
+/** The resource kinds a capability set grants. */
+export type CapabilityKind = 'outbound-hosts' | 'key-value-stores' | 'variables' | 'providers';
+
+/** A `prism/capabilities/1` file; see `@prism-code/spec` `schemas/capabilities/capabilities-v1.schema.json`. */
+export interface Capabilities {
+  schema: 'prism/capabilities/1';
+  sets: { default: CapabilitySet; [name: string]: CapabilitySet };
+}
+export interface CapabilitySet {
+  'allow-outbound-hosts'?: readonly string[];
+  'deny-outbound-hosts'?: readonly string[];
+  'allow-key-value-stores'?: readonly string[];
+  'deny-key-value-stores'?: readonly string[];
+  'allow-variables'?: readonly string[];
+  'deny-variables'?: readonly string[];
+  'allow-providers'?: readonly string[];
+  'deny-providers'?: readonly string[];
+}
+
+/** What a runtime enforces: one set of a capability file, or nothing. A deny entry wins over an allow entry. */
+export interface CapabilityGrant {
+  /** The set in force, or null when no capability file was given. */
+  readonly set: string | null;
+  /** The members of that set, or null when no capability file was given. */
+  readonly members: CapabilitySet | null;
+  /** True when an allow entry of `kind` matches `resource` and no deny entry does. Outbound hosts take a URL. */
+  allows(kind: CapabilityKind, resource: string): boolean;
+  /** Throws `CapabilityDeniedError` (`capabilities.<kind>`) unless `allows(kind, resource)`. */
+  assert(kind: CapabilityKind, resource: string): void;
+  /** Throws `CapabilityDeniedError` (`capabilities.import`) for a guest import the grant does not link. */
+  linkImport(entry: WebAssembly.ModuleImportDescriptor): void;
+}
+
+export const CAPABILITIES_SCHEMA: 'prism/capabilities/1';
+export const CAPABILITY_KINDS: readonly ['outbound-hosts', 'key-value-stores', 'variables', 'providers'];
+export const DEFAULT_SET: 'default';
+/** Validate a capability file and return it frozen. Throws `PrismCodeError` `capabilities.invalid`; unknown members are errors. */
+export function parseCapabilities(source: Capabilities | Uint8Array | string): Capabilities;
+/** The grant of one set of a parsed file, or of nothing when `capabilities` is null. */
+export function grantOf(capabilities: Capabilities | null, setName?: string): CapabilityGrant;
+
+/** `prism.toml` after the overlay for the target is merged in; see `@prism-code/spec` `schemas/manifest/manifest-v1.schema.json` (#280). */
+export interface Manifest {
+  manifest_version?: 1;
+  application: { name: string; version: string; description?: string; authors?: readonly string[] };
+  model?: { source?: string; build?: string; watch?: readonly string[] };
+  /** A capability file and set, or the members of one capability set inline, and any capabilities a provider provisions. Absent grants nothing. */
+  capabilities?: ({ file: string; set?: string } | CapabilitySet) & { [name: string]: unknown };
+  variables?: Readonly<Record<string, string | { value?: string; secret?: boolean }>>;
+}
+export type ManifestTarget = 'browser' | 'node';
+
+/** One provider a manifest declares (#294). `flags` are its options as `--<key>=<value>` arguments, sorted by key. */
+export interface ManifestProviderDeclaration {
+  readonly name: string;
+  readonly type: string;
+  readonly options: Readonly<Record<string, string | number | boolean | readonly (string | number | boolean)[]>>;
+  readonly flags: readonly string[];
+}
+/** The providers a manifest declares, in order of capability name. */
+export function manifestProviders(manifest: Manifest): readonly ManifestProviderDeclaration[];
+/** A lint finding: `secret-literal` and `credential` are errors, `variable-not-granted` a warning. */
+export interface ManifestFinding {
+  rule: 'secret-literal' | 'credential' | 'variable-not-granted';
+  /** The dotted path of the member, such as `variables.api_key.value`. */
+  at: string;
+  message: string;
+}
+export interface ParsedManifest {
+  readonly manifest: Manifest;
+  readonly target: ManifestTarget | null;
+  readonly warnings: readonly ManifestFinding[];
+}
+export const MANIFEST_FILE: 'prism.toml';
+export const MANIFEST_TARGETS: readonly ['browser', 'node'];
+export const MANIFEST_VERSION: 1;
+/**
+ * Parse `prism.toml`, merge `overlay` (the text of `prism.<target>.toml`) when given, validate and lint.
+ * Throws `PrismCodeError` `manifest.toml` (not TOML this reader takes), `manifest.invalid`, `manifest.overlay`,
+ * `manifest.secret` (a lint error: a literal secret or a credential) or `capabilities.invalid`.
+ */
+export function parseManifest(
+  source: string | Uint8Array | Record<string, unknown>,
+  options?: { target?: ManifestTarget | null; overlay?: string | Uint8Array | Record<string, unknown> | null },
+): ParsedManifest;
+/** Throws `PrismCodeError` `manifest.invalid` naming the first member the schema rejects. */
+export function validateManifest(manifest: unknown): Manifest;
+export function lintManifest(manifest: Manifest): { errors: ManifestFinding[]; warnings: ManifestFinding[] };
+/** Tables merge key by key; any other value, arrays included, replaces the one it overrides. */
+export function mergeOverlay(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown>;
+/** The grant a manifest makes: an inline set as a parsed capability file, or the file it names, unread. */
+export function manifestCapabilities(manifest: Manifest): { capabilities: Capabilities | null; capabilitySet: string; file: string | null };
+/** Variable name to value; `env(NAME)` reads `env`. An unset name throws `PrismCodeError` `manifest.env`. */
+export function resolveVariables(manifest: Manifest, env: Record<string, string | undefined>): Readonly<Record<string, string>>;
+/** The strict TOML subset a manifest uses. Throws `PrismCodeError` `manifest.toml` naming the line. */
+export function parseToml(source: string | Uint8Array): Record<string, unknown>;
 
 /** Open a `.holo` (bytes, Blob, path or URL) or a closure (directory path or URL). */
 export function load(source: Uint8Array | ArrayBuffer | Blob | string | URL, options?: LoadOptions): Promise<Application>;
-export function loadArchive(source: Uint8Array | ArrayBuffer): Promise<Application>;
+export function loadArchive(source: Uint8Array | ArrayBuffer, options?: Pick<LoadOptions, 'capabilities' | 'capabilitySet'>): Promise<Application>;
 export function loadClosure(
   files: Map<string, Uint8Array>,
   importGlue: (name: string) => Promise<Record<string, unknown>>,
-  options?: { model?: Record<string, unknown> | Uint8Array | null },
+  options?: { model?: Record<string, unknown> | Uint8Array | null } & Pick<LoadOptions, 'capabilities' | 'capabilitySet'>,
 ): Promise<Application>;
 
 export interface ParsedArchive {
@@ -245,7 +883,8 @@ export function canonicalJson(value: unknown): string;
 export function decodeHoloview(bytes: Uint8Array): View;
 export function encodeHoloview(view: View): Uint8Array;
 
-export function compileGuest(wasm: Uint8Array): Promise<WebAssembly.Module>;
+/** Compile the guest and link its imports against `grant` (default: nothing granted, so any import throws `CapabilityDeniedError`). */
+export function compileGuest(wasm: Uint8Array, grant?: CapabilityGrant): Promise<WebAssembly.Module>;
 export function runGuest(module: WebAssembly.Module, request: Uint8Array, limits?: Partial<Limits>): Uint8Array;
 export function runAcceptance(vectors: Vector[], dispatch: (request: Uint8Array) => Uint8Array | Promise<Uint8Array>): Promise<AcceptanceResult>;
 
@@ -284,6 +923,8 @@ export interface Attestation {
   mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json';
   verificationMaterial: Record<string, unknown>;
   envelope: { payload: string; payloadType: 'application/vnd.in-toto+json'; signatures: { keyid?: string; sig: string }[] };
+  /** At least one signature is non-empty. The provenance placeholder `prismpm build` writes has one empty signature; no verifier accepts it. */
+  signed: boolean;
   /** The in-toto Statement v1 decoded from the DSSE payload. */
   statement: { _type: 'https://in-toto.io/Statement/v1'; subject: unknown[]; predicateType: string; predicate?: unknown };
   predicateType: string;
@@ -305,6 +946,59 @@ export function decodeBundle(line: string | Uint8Array, labels?: Set<string>): O
 export function appendAttestations(source: Uint8Array | ArrayBuffer | ParsedArchive, bundles: BundleInput[]): Uint8Array;
 /** The archive without its attestation row: the unsigned archive. */
 export function stripAttestations(source: Uint8Array | ArrayBuffer | ParsedArchive): Uint8Array;
+/** `https://slsa.dev/provenance/v1`. */
+export const PROVENANCE_PREDICATE_TYPE: 'https://slsa.dev/provenance/v1';
+/** The build type of a holo built by `prismpm build`. */
+export const HOLO_BUILD_TYPE: 'https://uor.foundation/prism/holo-build/v1';
+export const PROVENANCE_MODES: Readonly<{ MIN: 'min'; MAX: 'max' }>;
+
+/** One resolved dependency row of a provenance statement. */
+export interface ProvenanceDependency {
+  name: string;
+  uri: string;
+  digest?: { blake3?: string; sha256?: string };
+  mediaType?: string;
+}
+
+export interface ProvenanceStatement {
+  _type: 'https://in-toto.io/Statement/v1';
+  subject: { name: string; digest: { blake3: string; sha256: string } }[];
+  predicateType: 'https://slsa.dev/provenance/v1';
+  predicate: Record<string, unknown>;
+}
+
+export interface ProvenanceOptions {
+  /** The bytes of `prismpm.lock`, schema `prismpm/sdk-lock/2` or `/3`. */
+  lock: Uint8Array | string;
+  /** `min` unless told otherwise. Max records the arguments, platform, invocation id and timestamps. */
+  mode?: 'min' | 'max';
+  /** Max only: the command line after `prismpm`. */
+  arguments?: string[];
+  /** Max only: the OCI platform of the builder, for example `linux/amd64`. */
+  platform?: string;
+  /** Max only. */
+  invocationId?: string;
+  /** Max only, UTC RFC 3339 without fractions. */
+  startedOn?: string;
+  /** Max only, UTC RFC 3339 without fractions. */
+  finishedOn?: string;
+  /** The build-manifest path of each blob; the defaults are the paths `prismpm build` writes. */
+  subjectNames?: { guest?: string; view?: string; model?: string; capabilities?: string };
+}
+
+/** The resolved dependency rows a lock gives, sorted by uri then name. */
+export function resolvedDependencies(lock: Uint8Array | string): Promise<ProvenanceDependency[]>;
+/** The SLSA provenance v1 statement of a holo. Throws `provenance.*` errors. */
+export function provenanceStatement(source: Uint8Array | ArrayBuffer | ParsedArchive, options: ProvenanceOptions): Promise<ProvenanceStatement>;
+/** The bytes a DSSE envelope signs: canonical JSON of the statement. */
+export function statementBytes(statement: ProvenanceStatement): Uint8Array;
+/** One unsigned bundle line for a statement, as canonical JSON bytes. */
+export function provenanceBundle(statement: ProvenanceStatement): Uint8Array;
+/** The provenance statements an archive carries, with their mode and whether any signature is present. */
+export function readProvenance(source: Uint8Array | ArrayBuffer | ParsedArchive): { index: number; mode: 'min' | 'max'; signed: boolean; statement: ProvenanceStatement }[];
+/** A new archive that carries its provenance statement as an unsigned bundle. Refuses an archive that already has one. */
+export function attachProvenance(source: Uint8Array | ArrayBuffer | ParsedArchive, options: ProvenanceOptions): Promise<Uint8Array>;
+
 /** Encode header, table, bodies and BLAKE3 footer from rows. */
 export function encodeArchive(sections: { kind: number; body: Uint8Array }[], options?: { version?: number; flags?: number }): Uint8Array;
 

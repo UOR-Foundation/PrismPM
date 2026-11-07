@@ -46,6 +46,10 @@ enum Rule {
     FeatureStep,
     JourneyActor,
     FeatureDeclaration,
+    ThreatAnswer,
+    ControlEvidence,
+    ThreatCategory,
+    ThreatModelDeclaration,
 }
 
 impl Rule {
@@ -74,6 +78,10 @@ impl Rule {
             | Self::FeatureStep
             | Self::JourneyActor
             | Self::FeatureDeclaration => feature_specimens(self),
+            Self::ThreatAnswer
+            | Self::ControlEvidence
+            | Self::ThreatCategory
+            | Self::ThreatModelDeclaration => threat_model_specimens(self),
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
@@ -156,6 +164,10 @@ impl Rule {
             | Self::FeatureStep
             | Self::JourneyActor
             | Self::FeatureDeclaration => crate::features::probe(value).is_ok(),
+            Self::ThreatAnswer
+            | Self::ControlEvidence
+            | Self::ThreatCategory
+            | Self::ThreatModelDeclaration => crate::threat_model::probe(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
@@ -280,7 +292,19 @@ probes!(
         FeatureDeclaration
     ),
     (
+        "PP2019",
+        "threat-without-control-or-accepted-risk",
+        ThreatAnswer
+    ),
+    ("PP2020", "control-without-evidence", ControlEvidence),
+    ("PP2021", "threat-without-stride-category", ThreatCategory),
+    (
         "PP2022",
+        "invalid-threat-model-declaration",
+        ThreatModelDeclaration
+    ),
+    (
+        "PP2023",
         "server-application-build-unavailable",
         ServerBuild
     ),
@@ -298,6 +322,16 @@ probes!(
     ("PP3013", "extension-disagreement", Complete),
     ("PP3014", "source-manifest-disagreement", Exact),
     ("PP3015", "prism-provenance-disagreement", Exact),
+    ("PP3016", "attestation-section-disagreement", Exact),
+    ("PP3017", "attestation-bundle-disagreement", Exact),
+    ("PP3018", "build-provenance-refused", Exact),
+    ("PP3101", "attestation-signing-failure", Complete),
+    ("PP3102", "attestation-signature-invalid", Exact),
+    ("PP3103", "attestation-identity-mismatch", Exact),
+    ("PP3104", "attestation-transparency-failure", Complete),
+    ("PP3105", "attestation-subject-mismatch", Exact),
+    ("PP3106", "attestation-not-found", Required),
+    ("PP3107", "trusted-root-invalid", Required),
     ("PP4001", "artifact-checksum-mismatch", ArtifactIntegrity),
     ("PP4002", "missing-published-artifact", Required),
     ("PP4003", "emitter-input-digest-drift", Digest),
@@ -325,7 +359,27 @@ probes!(
     ("PP5204", "view-intent-disagreement", Exact),
     ("PP5205", "view-surface-disagreement", Complete),
     ("PP5301", "upstream-hologram-oracle-disagreement", Exact),
+    ("PP5501", "proof-statement-signature-failure", Authorized),
+    ("PP5502", "proof-statement-shape-failure", Canonical),
+    ("PP5503", "proof-subject-disagreement", Digest),
+    ("PP5504", "proof-model-disagreement", Exact),
+    ("PP5505", "proof-verifier-disagreement", Exact),
+    ("PP5506", "proof-verdict-failure", Complete),
+    ("PP5507", "proof-tcb-incomplete", Complete),
+    (
+        "PP5601",
+        "assurance-level-below-policy-minimum",
+        PositiveBound
+    ),
+    ("PP5602", "world-exceeds-granted-capabilities", Reference),
+    ("PP5603", "no-verdict-reached", Required),
     ("PP6001", "reference-model-identity-drift", Digest),
+    ("PP5701", "replay-diverged", Exact),
+    ("PP5702", "replay-statement-signature-invalid", Authorized),
+    ("PP5703", "replay-statement-absent-or-malformed", Complete),
+    ("PP5704", "replay-statement-names-another-guest", Digest),
+    ("PP5705", "replay-statement-names-another-model", Digest),
+    ("PP5706", "replay-not-carried-out", Required),
     ("PP6002", "incomplete-application-acceptance", Complete),
     ("PP6003", "application-execution-disagreement", Exact),
     ("PP6004", "ecosystem-release-incomplete", Complete),
@@ -406,6 +460,25 @@ fn feature_specimens(rule: Rule) -> (Value, Value) {
             invalid["journeys"]["Probe::journey"]["actor"] = json!("Probe::unknown")
         }
         _ => invalid["definitions"] = json!(["Probe::acceptance"]),
+    }
+    (valid, invalid)
+}
+
+fn threat_model_specimens(rule: Rule) -> (Value, Value) {
+    let valid = json!({
+        "last_modified": "2026-10-30T00:00:00Z",
+        "threats": ["Probe::threat"],
+        "controls": ["Probe::control"],
+        "categorized": ["Probe::threat"],
+        "mappings": {"Probe::threat": ["Probe::control"]},
+        "evidence": {"Probe::control": ["Probe gate"]},
+    });
+    let mut invalid = valid.clone();
+    match rule {
+        Rule::ThreatAnswer => invalid["mappings"] = json!({}),
+        Rule::ControlEvidence => invalid["evidence"] = json!({"Probe::control": []}),
+        Rule::ThreatCategory => invalid["categorized"] = json!([]),
+        _ => invalid["last_modified"] = json!("yesterday"),
     }
     (valid, invalid)
 }
@@ -520,6 +593,15 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
             | Rule::FeatureDeclaration
     ) {
         return crate::features::probe(value);
+    }
+    if matches!(
+        spec.rule,
+        Rule::ThreatAnswer
+            | Rule::ControlEvidence
+            | Rule::ThreatCategory
+            | Rule::ThreatModelDeclaration
+    ) {
+        return crate::threat_model::probe(value);
     }
     if spec.rule.accepts(value) {
         Ok(())

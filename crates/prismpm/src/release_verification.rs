@@ -1303,6 +1303,38 @@ fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
     Ok(platform)
 }
 
+// The per-vector summary `verify` writes from the oracle's dispatch-to-render
+// samples, in whole microseconds so the acceptance document stays canonical.
+fn browser_timing(value: &Value) -> Result<(), PrismError> {
+    for row in array(value)? {
+        keys(
+            row,
+            &[
+                "engine",
+                "engine_version",
+                "maximum_microseconds",
+                "median_microseconds",
+                "repetitions",
+                "vector_index",
+            ],
+        )?;
+        ensure(
+            [
+                "maximum_microseconds",
+                "median_microseconds",
+                "repetitions",
+                "vector_index",
+            ]
+            .iter()
+            .all(|field| row[*field].is_u64())
+                && row["engine"].is_string()
+                && row["engine_version"].is_string(),
+            "application browser timing differs from its summary shape",
+        )?;
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn application_binding(
     manifest: &Value,
@@ -1331,11 +1363,22 @@ fn application_binding(
         owned || manifest["schema"] == "prismpm/application-verification-manifest/1",
         "application verification family differs",
     )?;
+    // `browser_timing` is a per-run measurement, not a modeled fact: `verify`
+    // binds `acceptance_sha256` to the acceptance document without it, so two
+    // runs of one build share an attestation id. Bind the same projection here
+    // and hold the unbound timing to its closed summary shape.
+    let acceptance = canonical_json(file(files, "application-acceptance.json")?, false)?;
+    let mut comparable_acceptance = acceptance.clone();
+    if let Some(timing) = comparable_acceptance
+        .as_object_mut()
+        .and_then(|object| object.remove("browser_timing"))
+    {
+        browser_timing(&timing)?;
+    }
+    let comparable_bytes =
+        encode_value(&comparable_acceptance).map_err(|error| invalid(error.message))?;
     for (key, bytes) in [
-        (
-            "acceptance_sha256",
-            file(files, "application-acceptance.json")?,
-        ),
+        ("acceptance_sha256", comparable_bytes.as_slice()),
         (
             "lexlean_attestation_sha256",
             file(files, "lexlean-attestation.json")?,
@@ -1356,7 +1399,6 @@ fn application_binding(
     let guest_name = format!("core-wasm/{stem}_core_wasm.wasm");
     let guest = file(build_files, &guest_name)?;
     let identities = application_archive(application, model, build_files, guest)?;
-    let acceptance = canonical_json(file(files, "application-acceptance.json")?, false)?;
     let mut modeled_acceptance = json!({
         "application":application.name(), "artifact_closure":"verified", "browser_projection":"verified",
         "build_id":build_id, "cargo_package":{"name":application.cargo_name(),"sha256":hex(file(build_files, &crate_name)?),"version":application.cargo_version()},
@@ -1387,7 +1429,7 @@ fn application_binding(
         )?;
     }
     ensure(
-        acceptance == modeled_acceptance,
+        comparable_acceptance == modeled_acceptance,
         "application acceptance differs from actual model or artifacts",
     )?;
     let mut expected = PREFLIGHT.to_vec();
@@ -1720,26 +1762,14 @@ fn application_archive(
         "application LCNF evidence differs",
     )?;
     let stem = application.cargo_name().replace('-', "_");
-    let expected_browser: BTreeSet<_> = [
-        "app.css".to_owned(),
-        "app.js".to_owned(),
-        "index.html".to_owned(),
-        format!("{stem}.js"),
-        format!("{stem}_bg.wasm"),
-        "provenance.json".to_owned(),
-    ]
-    .into_iter()
-    .map(|name| format!("view/browser/{name}"))
-    .collect();
-    ensure(
-        files
-            .keys()
-            .filter(|name| name.starts_with("view/browser/"))
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            == expected_browser,
-        "application browser closure differs",
-    )?;
+    // Exactly closure v1 (the six-file page) or closure v2 (v1 plus the brand files).
+    let browser_names = files
+        .keys()
+        .filter_map(|name| name.strip_prefix("view/browser/"))
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let closure = crate::brand::closure_version(&browser_names, &stem);
+    ensure(closure.is_some(), "application browser closure differs")?;
     let browser_bytes = file(files, "view/browser/provenance.json")?;
     let browser = canonical_json(browser_bytes, false)?;
     ensure(
@@ -1755,6 +1785,28 @@ fn application_archive(
             && browser["view_model_id"] == provenance["view_binding"]["view_model_id"],
         "application browser provenance differs",
     )?;
+    if closure == Some(2) {
+        // Closure v2 provenance names the digest of every other closure file.
+        let mut listed = BTreeSet::new();
+        for name in browser_names
+            .iter()
+            .filter(|name| name.as_str() != "provenance.json")
+        {
+            ensure(
+                browser["schema"] == "prismpm/browser-provenance/2"
+                    && browser["files"][name.as_str()]
+                        == hex(file(files, &format!("view/browser/{name}"))?),
+                "application browser provenance differs",
+            )?;
+            listed.insert(name.as_str());
+        }
+        ensure(
+            browser["files"].as_object().is_some_and(|rows| {
+                rows.len() == listed.len() && rows.keys().all(|name| listed.contains(name.as_str()))
+            }),
+            "application browser provenance differs",
+        )?;
+    }
     Ok(identities)
 }
 

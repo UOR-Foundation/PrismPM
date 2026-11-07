@@ -186,14 +186,6 @@ pub(crate) fn browser_files<T: AsRef<[u8]>>(
         .application
         .ok_or_else(|| failure("release has no browser application"))?;
     let stem = application.cargo_name().replace('-', "_");
-    let expected = BTreeSet::from([
-        "app.css".to_owned(),
-        "app.js".to_owned(),
-        "index.html".to_owned(),
-        format!("{stem}.js"),
-        format!("{stem}_bg.wasm"),
-        "provenance.json".to_owned(),
-    ]);
     let files = build_files
         .iter()
         .filter_map(|(path, bytes)| {
@@ -201,9 +193,12 @@ pub(crate) fn browser_files<T: AsRef<[u8]>>(
                 .map(|name| (name.to_owned(), bytes.as_ref()))
         })
         .collect::<BTreeMap<_, _>>();
-    if expected.len() != 6 || files.keys().cloned().collect::<BTreeSet<_>>() != expected {
+    // Closure v1 (the six-file page) or closure v2 (v1 plus the brand files), exactly.
+    if crate::brand::closure_version(&files.keys().cloned().collect::<BTreeSet<_>>(), &stem)
+        .is_none()
+    {
         return Err(failure(
-            "verified browser projection is not the exact six-file profile",
+            "verified browser projection is neither the exact six-file nor the exact closure v2 profile",
         ));
     }
     Ok(files)
@@ -397,13 +392,13 @@ pub(super) fn export(root: &Path, reference: &str, output: &Path) -> Result<Valu
             .collect::<Vec<_>>();
         let tree_digest = sha(&encode_value(&json!(files))?);
         let result = json!({
-            "schema":"prismpm/browser-export/1", "reference":reference,
+            "schema":"prismpm/browser-export/2", "reference":reference,
             "release_digest":captured.state.root.digest,
             "model_digest":sha(&captured.build_files["model.prism.json"]),
             "build_digest":sha(&captured.build_manifest), "output":output,
             "files":files, "tree_digest":tree_digest
         });
-        CanonicalDocument::from_value("prismpm/browser-export/1", result.clone())?;
+        CanonicalDocument::from_value("prismpm/browser-export/2", result.clone())?;
         publish(&directory, output, &browser)?;
         Ok(result)
     }

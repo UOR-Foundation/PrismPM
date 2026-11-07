@@ -65,7 +65,7 @@ fn test_hologram_oracle_pinned_source_identities() {
     );
     assert_eq!(
         sha256_file(&r.join("crates/prismpm/src/embedded/hologram-oracle.browser.mjs")),
-        "b7c8e777c320db392843105cffe0bb9b511efabe5835a7d4ee6557587dc11e69",
+        "35b282789fed82efcebf22479d4cfc63b0e282d55c1ff8c294dfae94381280e8",
         "hologram-oracle browser.mjs checksum changed"
     );
 

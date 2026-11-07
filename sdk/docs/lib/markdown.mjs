@@ -2,8 +2,13 @@
  * Markdown building blocks shared by every page generator. Output is LF only.
  */
 
-export function frontmatter(title, description) {
-  return `---\ntitle: ${title}\ndescription: ${description}\n---\n`;
+/**
+ * `available_in` is quoted: unquoted, YAML reads `1.0` as the number 1.
+ * The validation in lib/site.mjs rejects a page without it.
+ */
+export function frontmatter(title, description, availableIn) {
+  const release = availableIn === undefined ? '' : `available_in: "${availableIn}"\n`;
+  return `---\ntitle: ${title}\ndescription: ${description}\n${release}---\n`;
 }
 
 export function heading(level, text) {
@@ -28,6 +33,13 @@ export function table(header, rows) {
   const line = (cells) => `| ${cells.map((c, i) => cell(c).padEnd(widths[i])).join(' | ')} |`;
   const rule = `| ${widths.map((w) => '-'.repeat(w)).join(' | ')} |`;
   return `${[line(header), rule, ...rows.map(line)].join('\n')}\n`;
+}
+
+/** The same table without alignment padding, for text that ships in a package, such as the agent skill. */
+export function compactTable(header, rows) {
+  if (rows.length === 0) throw new Error('compactTable() needs at least one row');
+  const line = (cells) => `| ${cells.map((c) => cell(c)).join(' | ')} |`;
+  return `${[line(header), `| ${header.map(() => '---').join(' | ')} |`, ...rows.map(line)].join('\n')}\n`;
 }
 
 export function fence(language, body) {

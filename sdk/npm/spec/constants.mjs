@@ -95,6 +95,38 @@ export const CORE_WASM = freeze({
   WORLD: 'worlds/core-wasm.wit',
 });
 
+/**
+ * The worlds a guest can target, by guest contract (issue #278,
+ * docs/proposals/278-wit-world.md). A holo declares its world by naming its
+ * contract; the world's hash is a function of that name through this table.
+ *
+ * `version` is the version of a row's shape, not of the world. A world's own
+ * version is the `@N` of its contract: a change to imports, exports or a
+ * signature is a new contract and a new row, and a row is never edited.
+ * `digest` is over the bytes of `file`, the lock's `inputs.world` without
+ * `contract`. `exports` are core-module terms: the canonical ABI names
+ * (`holo-run` is `holo_run`) and lowered signatures. `memory` is listed
+ * because WIT cannot name an exported memory.
+ */
+export const WORLDS = freeze({
+  [CORE_WASM.CONTRACT]: freeze({
+    version: 1,
+    package: 'hologram:guest@1.0.0',
+    world: 'core-wasm',
+    file: CORE_WASM.WORLD,
+    digest: freeze({
+      blake3: '0774a8ecbfa945a427712ee7d7ad406195b2d07492ceae15cca0067276c9ced8',
+      sha256: 'a566c87a359cadf98f652747f1b3574aa307ff5f652a190c6d99c350db9cf369',
+    }),
+    imports: freeze([]),
+    exports: freeze([
+      freeze({ name: 'holo_alloc', kind: 'func', params: freeze(['i32']), results: freeze(['i32']) }),
+      freeze({ name: 'holo_run', kind: 'func', params: freeze(['i32', 'i32']), results: freeze(['i64']) }),
+      freeze({ name: 'memory', kind: 'memory' }),
+    ]),
+  }),
+});
+
 /** The portable view bundle, big-endian (SPEC section 3). */
 export const HOLOVIEW = freeze({
   MAGIC: 'HOLOVIEW',
@@ -141,6 +173,28 @@ export const ATTESTATION_BUNDLE = freeze({
 });
 
 /**
+ * A holo as an OCI artifact, issue #292 (docs/proposals/292-push-pull-oci.md). The manifest is a pure
+ * function of the holo's bytes (ADR-015), so these values are part of its digest. Descriptors are `sha256`;
+ * BLAKE3 travels in annotations, because registries refuse `blake3:` digests.
+ */
+export const OCI = freeze({
+  /** The artifact type of the manifest and the media type of its one layer, the whole `.holo` file. */
+  HOLO_MEDIA_TYPE: 'application/vnd.uor.prism.holo.v1',
+  /** Every manifest's `org.opencontainers.image.created`. Fixed, so no clock enters the digest. */
+  CREATED: '1970-01-01T00:00:00Z',
+  ANNOTATIONS: freeze({
+    /** On the manifest: `blake3:<footer>`, the archive fingerprint. */
+    FINGERPRINT: 'foundation.uor.prism.holo.fingerprint',
+    /** On the manifest: `application_kappa`, the identity that survives signing. */
+    APPLICATION: 'foundation.uor.prism.holo.application',
+    /** On the layer: BLAKE3 of the same bytes as the layer's `sha256`. Not the footer. */
+    BLAKE3: 'foundation.uor.prism.digest.blake3',
+  }),
+  /** The tag a fingerprint is reachable through: this prefix and the 64 hex characters. */
+  FINGERPRINT_TAG_PREFIX: 'blake3-',
+});
+
+/**
  * Every format revision, mapped to the identifiers a reader uses to recognize
  * it. An archive does not carry its revision date, so each new revision must
  * change at least one of these identifiers.
@@ -165,4 +219,63 @@ export const FORMAT_REVISIONS = freeze({
     ]),
   }),
 });
+/**
+ * Build provenance of a holo, issue #268 (docs/proposals/268-build-provenance.md). The predicate is SLSA
+ * provenance v1; Prism adds the build type and the rules for each member. Schema: SCHEMA.
+ */
+export const PROVENANCE = freeze({
+  /** The predicate type of the statement. Standard SLSA v1, not a Prism URI. */
+  PREDICATE_TYPE: 'https://slsa.dev/provenance/v1',
+  /** The build type of a holo built by `prismpm build`. The URL names the document that defines the members below. */
+  BUILD_TYPE: 'https://uor.foundation/prism/holo-build/v1',
+  /** JSON Schema of the predicate member of the statement. */
+  SCHEMA: 'schemas/attestation/provenance-v1.schema.json',
+  /** `min` is the default and is always written; `max` is opt-in because it records build arguments. */
+  MODES: freeze({ MIN: 'min', MAX: 'max' }),
+  DEFAULT_MODE: 'min',
+  /** The command line flags of `prismpm build`. `--no-provenance` is documented as unsafe. */
+  FLAGS: freeze({ MODE: '--provenance', DISABLE: '--no-provenance' }),
+  /** The subjects of the statement: the four content blobs, in this order, with the build-manifest path that names each. */
+  SUBJECTS: freeze({
+    GUEST: 'core-wasm/<cargo_name with - as _>_core_wasm.wasm',
+    VIEW: 'view/hologram/view.holoview',
+    MODEL: 'model.prism.json',
+    CAPABILITIES: 'application/capability-request.bin',
+  }),
+  /** The `uri` of each resolved dependency row that is not an OCI reference, and the `mediaType` of the lock row. */
+  DEPENDENCIES: freeze({
+    LOCK: 'urn:prismpm:sdk-lock',
+    STANDARDS_LOCK: 'urn:prismpm:standards-lock',
+    TOOLCHAIN: 'urn:prismpm:toolchain:',
+    GENERATOR: 'urn:prismpm:generator:',
+    LOCK_MEDIA_TYPES: freeze({
+      'prismpm/sdk-lock/2': 'application/vnd.prismpm.sdk-lock.v2+json',
+      'prismpm/sdk-lock/3': 'application/vnd.prismpm.sdk-lock.v3+json',
+    }),
+  }),
+  /**
+   * An unsigned statement is stored as a bundle whose envelope carries one
+   * signature with an empty `sig` and whose verification material is an empty
+   * `publicKey`. No verifier accepts it; `prism attest` replaces it.
+   */
+  UNSIGNED: freeze({ SIGNATURE: '' }),
+});
+
+/**
+ * The policy file of `prism check --policy` (issue #285, docs/proposals/285-policy-file.md). A policy never
+ * lives in a holo. `SHIPPED` names the policies this package carries as files, and `default` is the one a
+ * check uses when it is given none.
+ */
+export const POLICY = freeze({
+  INPUT: 'prism/policy-input/1',
+  INPUT_SCHEMA: 'schemas/policy/policy-input-v1.schema.json',
+  LANGUAGE: 'rego',
+  PACKAGE: 'prism.policy',
+  SHIPPED: freeze({
+    default: 'policies/default.rego',
+    'pure-only': 'policies/pure-only.rego',
+    'provenance-only': 'policies/provenance-only.rego',
+  }),
+});
+
 export { ASSURANCE } from './assurance-levels.mjs';

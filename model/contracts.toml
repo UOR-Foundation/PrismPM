@@ -1,6 +1,16 @@
 spec = "prismpm/contracts/1"
 
 [[contract]]
+schema = "prismpm/workbench-view-projection/1"
+path = "schemas/workbench-view-projection.schema.json"
+media_type = "application/vnd.prismpm.workbench-view-projection.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/model-document/7"
 path = "schemas/model-document-v7.schema.json"
 media_type = "application/vnd.prismpm.model-document.v7+json"
@@ -44,6 +54,16 @@ compatibility = "exact-major"
 schema = "prismpm/browser-publication-integrity/1"
 path = "schemas/browser-publication-integrity.schema.json"
 media_type = "application/vnd.prismpm.browser-publication-integrity.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
+schema = "prismpm/browser-publication-integrity/2"
+path = "schemas/browser-publication-integrity-v2.schema.json"
+media_type = "application/vnd.prismpm.browser-publication-integrity.v2+json"
 identity = "sha256-canonical-json"
 maximum_bytes = 1048576
 maximum_items = 4096
@@ -104,6 +124,16 @@ compatibility = "exact-major"
 schema = "prismpm/browser-export/1"
 path = "schemas/browser-export.schema.json"
 media_type = "application/vnd.prismpm.browser-export.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
+schema = "prismpm/browser-export/2"
+path = "schemas/browser-export-v2.schema.json"
+media_type = "application/vnd.prismpm.browser-export.v2+json"
 identity = "sha256-canonical-json"
 maximum_bytes = 1048576
 maximum_items = 4096
@@ -486,6 +516,36 @@ extension_policy = "closed"
 compatibility = "exact-major-additive-minor"
 
 [[contract]]
+schema = "prismpm/replay-result/1"
+path = "schemas/replay-result.schema.json"
+media_type = "application/vnd.prismpm.replay-result.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 16777216
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major-additive-minor"
+
+[[contract]]
+schema = "prismpm/attest-result/1"
+path = "schemas/attest-result.schema.json"
+media_type = "application/vnd.prismpm.attest-result.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major-additive-minor"
+
+[[contract]]
+schema = "prismpm/attestation-verification-result/1"
+path = "schemas/attestation-verification-result.schema.json"
+media_type = "application/vnd.prismpm.attestation-verification-result.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major-additive-minor"
+
+[[contract]]
 schema = "prismpm/promotion-policy/1"
 path = "schemas/promotion-policy.schema.json"
 media_type = "application/vnd.prismpm.promotion-policy.v1+json"
@@ -572,6 +632,16 @@ media_type = "application/vnd.prismpm.sdk-lock-update.v2+json"
 identity = "sha256-canonical-json"
 maximum_bytes = 201326592
 maximum_items = 262144
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
+schema = "prismpm/sdk-lock-change/1"
+path = "schemas/sdk-lock-change.schema.json"
+media_type = "application/vnd.prismpm.sdk-lock-change.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
 extension_policy = "closed"
 compatibility = "exact-major"
 

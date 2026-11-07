@@ -21,6 +21,7 @@ function inspect(bytes: Uint8Array | ArrayBuffer): Inspection;
 const FORMAT_REVISION: string; // "2026-10-23"
 const ASSURANCE: { LEVELS, RANK, NAMES, DEFAULT_MINIMUM, ... };
 const INSPECTION_SCHEMA: "prismpm/holo-inspection/1";
+function verifyTransparency(bundle: object, trustedRoot: object, options?: TransparencyOptions): Promise<TransparencyResult>;
 class VerifyError extends Error { code: string }
 ```
 
@@ -34,6 +35,9 @@ class VerifyError extends Error { code: string }
 | `policy.minimum` | `"P0"` to `"P3"` | The lowest level the policy accepts. Default `"P2"`. |
 | `policy.name` | string | The policy name shown in the verdict. Default `"default"`. |
 | `policy.digests` | object | Expected digests for `archive`, `guest`, `view`, `model` or `capabilities`. Each takes `sha256`, `blake3` or both. Every digest given must match. |
+| `policy.capabilities` | object or `null` | The capability set granted to the holo: one set of a `prism/capabilities/1` file (`allow-` and `deny-` lists of outbound hosts, key-value stores and variables), or `null`, the default, for nothing. A world that imports a kind the set grants none of is a `world.capabilities` reason (issue #283). |
+| `policy.effects` | array | The impure effects the world may import (issue #282): any of `clock`, `random`, `socket`, `filesystem`, `unknown`. Absent allows any; `[]` is the pure-world policy. A world importing an effect not listed is a `policy.effects` reason. |
+| `policy.world` | object or `null` | The WIT world the holo must declare, in the shape of the lock's `inputs.world` (`contract`, `sha256`, `blake3`), so a project's lock is passed unchanged. Any member may be left out. `null` expects no world, which no holo satisfies. A mismatch is a `world.hash` reason. |
 
 `archive` is the whole file. The others are the content blobs the documents name.
 
@@ -62,7 +66,7 @@ Damage after the section table is reported, not thrown. A document that does not
 
 ## Levels today
 
-The levels are P0 unverified, P1 provenance, P2 proof checked and P3 proof, replay and world. P1 needs the archive to recompute and a signed provenance statement. No holo carries signed statements yet, so every holo is P0 today, and the default policy, P2, fails.
+The levels are P0 unverified, P1 provenance, P2 proof checked and P3 proof, replay and world. P1 needs the archive to recompute and a signed provenance statement. `verify` verifies no signature. A caller that has checked the signatures of the statements in a holo's attestation section hands them in as the `statements` option, `{ provenance, proof }`, each `{ statement, envelope: { verified } }`; `prism-code check` does this with `--key` or a certificate identity. A provenance statement whose envelope verified and whose subjects are blobs of the holo supports P1, and a proof statement that passes the proof checks supports P2. A holo with no statements handed in is P0 today, and the default policy, P2, fails it.
 
 What this package does check today appears as reasons that withhold P1:
 
@@ -70,13 +74,25 @@ What this package does check today appears as reasons that withhold P1:
 |---|---|
 | `holo.integrity` | The footer is not the BLAKE3 of the body, a content blob's `blake3:` label is not the BLAKE3 of its content, the manifest, directory and provenance name different blobs, or the model document's sha256 is not the `model_id` the provenance records. |
 | `holo.documents` | The application manifest is not the 356-byte Wire form, or the source manifest, directory, provenance or model document is not JSON valid against its schema, or names a contract or schema the format revision does not use. |
+| `world.contract` | The guest module does not have the imports and exports of the WIT world its contract names: an import the world does not list, a missing or extra export, or an export of another kind or signature (issue #278). Not checked when the guest fails its label, which `holo.integrity` already reports. |
 | `provenance.statement` | Always, until the attestation bundle exists (issues #267 and #268). |
 | `proof.statement` | Always, until the proof predicate is carried (issue #266). Withholds P2. |
-| `replay.statement` | Always, until replay arrives (issue #284). Withholds P3. |
+| `replay.statement` | Always, until `verify` reads statements (issue #267). Replay itself has arrived (issue #284): `prism-code replay` writes the statement. Withholds P3. |
 | `policy.level` | The level is below `policy.minimum`. Code `PP5601`. |
 | `policy.digests.<part>` | A pinned digest does not match. |
+| `world.capabilities` | The world the contract names imports a capability kind `policy.capabilities` grants nothing of, or an import that names no kind. Code `PP5602`. It withholds P3, and it fails the policy at every level: the default policy requires the world within the grant (issue #283). `worldPolicy(contract, set)` runs the same check alone and also reports whether the world is pure. |
+| `policy.effects` | The policy lists the effects it allows and the world imports another (issue #282). It withholds no level. |
+| `world.hash` | The policy pins a world and the holo's world differs: another contract, another digest, or `null`. It withholds no level. |
 
 So until the bundle lands, read a verdict this way: no `holo.integrity` and no `holo.documents` reason means the holo is intact and well-formed. A P0 policy accepts any readable holo, tampered or not, because P0 promises nothing. Pin a digest when you need a pass or fail answer today.
+
+## Policy files
+
+`verify(bytes, { name, rego, capabilities })` judges a holo by a Rego policy (issue #285, [docs/proposals/285-policy-file.md](../../../docs/proposals/285-policy-file.md)). Without `rego`, the shipped default policy decides, and `minimum`, `digests`, `world` and `effects` adjust it.
+
+`POLICIES` holds the source of `default`, `pure-only` and `provenance-only`. `policyInput(bytes, { capabilities })` returns the `prism/policy-input/1` document a policy reads. `parsePolicy(source)` and `evaluatePolicy(parsed, input)` run a policy on a document alone, and return `{ minimum, denied, denials }`.
+
+The evaluator, `src/rego.mjs`, is a closed subset of Rego v1 with no dependencies. It refuses what it does not implement, by name, and `test/rego-opa.test.mjs` pins its answers against OPA.
 
 ## Example
 
@@ -124,14 +140,55 @@ const verdict = await verify(bytes, {
 
 `browser.js` is one file with no imports. Load it from a page with no bundler and no import map. With a bundler, import `@prism-code/verify` instead.
 
+## Transparency log and timestamps
+
+`verifyTransparency(bundle, trustedRoot, options)` checks the two pieces of third-party evidence a Sigstore bundle carries, offline (issue #275, `docs/proposals/275-transparency-log.md`). It does not read a holo and does not change a verdict yet: pass it a bundle, such as the `bundle` of an entry that `prism-code`'s `readAttestations` returns.
+
+`trustedRoot` is a Sigstore `trusted_root.json` that you pin (`schemas/attestation/trusted-root.schema.json` in `@prism-code/spec`). The bundle never supplies its own. The verifier fetches nothing and reads no clock: the signed time of the timestamps decides which keys and certificates apply, so a bundle whose certificates have since expired still verifies.
+
+```js
+import { verifyTransparency } from "@prism-code/verify";
+
+const result = await verifyTransparency(bundle, trustedRoot);
+// { passed: true, time: "2026-05-13T19:23:33.000Z", checks: [...], reasons: [] }
+```
+
+| Option | Meaning |
+|---|---|
+| `entries` | The least number of log entries that must verify. Default 1. |
+| `timestamps` | The least number of RFC 3161 timestamps that must verify. Default 1. A Rekor v2 entry has no integrated time, so the timestamp is the clock. |
+| `crypto` | Where WebCrypto comes from. Default `globalThis.crypto`. |
+
+Every check runs. A failed one is a reason with the shape of a verdict reason (`check`, `withholds`, `message`):
+
+| Check | Fails when |
+|---|---|
+| `timestamp` | A timestamp is not signed by a pinned authority, is outside that authority's validity, does not cover the bundle's signature, or falls outside the signing certificate's validity. |
+| `certificate.chain` | The signing certificate does not chain to a pinned certificate authority that was valid at the signed time. |
+| `tlog.kind`, `tlog.log` | The entry is none of `hashedrekord` 0.0.2, `dsse` 0.0.2 (Rekor v2) or `dsse` 0.0.1 (Rekor v1), or names a log the root does not pin. |
+| `tlog.body` | The logged body is not this bundle's digest, signature or certificate. |
+| `tlog.inclusion` | The proof is missing, is for another index, or does not recompute the root hash. |
+| `tlog.checkpoint` | The checkpoint is malformed, disagrees with the proof, or carries no valid signature from the pinned log key. |
+| `timestamp.count`, `tlog.count` | Fewer verified than `timestamps` or `entries`. |
+| `crypto.unavailable` | WebCrypto is missing. |
+
+It rejects with `VerifyError` code `trustedroot.invalid` for a root that is not usable, and `input` for a bundle that is not an object.
+
+Not checked: the DSSE signature, the signing identity, revocation and checkpoint witnesses. Those belong to `prism verify` (issue #272). A Rekor v1 `dsse` entry is checked by its inclusion proof and signed checkpoint; its signed entry timestamp is not used.
+
+## Proof statement checks
+
+`src/statements.mjs` holds the eight checks of a `prism/proof/v1` statement against the holo it travels in (issue #266): `proof.envelope`, `proof.statement`, `proof.subject`, `proof.model`, `proof.verifier`, `proof.verdict` and `proof.tcb`, diagnostics `PP5501` to `PP5507`, each withholding P2. `proof.level` is a shape failure since #269 and reports as `proof.statement`. `verify` joins them through the `statements` option (#270): the caller has decoded the statement and checked its DSSE signature, and says so in `envelope.verified`. `checkProvenanceStatement` adds `provenance.envelope` and `provenance.subject`, each withholding P1. The module is not exported.
+
 ## Errors
 
-`verify` rejects, and `inspect` throws, only when there is no verdict to give. `prism check` exits 2 in the same cases.
+`verify` rejects, and `inspect` throws, only when there is no verdict to give. `prism-code check` (and later `prism check`) exits 2 in the same cases.
 
 | `VerifyError` code | When |
 |---|---|
 | `input` | `bytes` is not a typed array, a `DataView` or an `ArrayBuffer`. |
-| `policy.invalid` | The policy has an unknown member, an unknown level, or a digest that is not 64 lowercase hex characters. |
+| `policy.invalid` | The policy has an unknown member, an unknown level, a digest or `policy.world` digest that is not 64 lowercase hex characters, a `policy.world` with an unknown member, or a `policy.capabilities` with an unknown member or a list that is not strings. |
+| `trustedroot.invalid` | `verifyTransparency` only: the trusted root has the wrong media type, a missing validity period or a certificate that does not parse. |
 | `archive.magic`, `archive.version`, `archive.flags`, `archive.table` | The file is not a readable holo: wrong magic, another physical version, or a section table that does not end at the footer, as in a truncated file. |
 | `format.revision` | `verify` only: the holo is intact, but its sections or extensions match no format revision this package knows. Upgrade the package. |
 
@@ -139,7 +196,7 @@ A failed check is a reason in a verdict, not an error.
 
 ## Size
 
-`browser.js` is about 120 KB, 23 KB gzipped. Half of it is the JSON Schemas of the four model document versions a holo can carry.
+`browser.js` is about 265 KB. Most of it is the JSON Schemas of the model document versions a holo can carry, BLAKE3, the log and timestamp checks, and the Rego evaluator with the shipped policies.
 
 ## How it is built
 

@@ -6,7 +6,7 @@ on:
       version:
         description: Exact SemVer without a leading v
         required: true
-        default: 0.3.0
+        default: 0.4.0
         type: string
       publish-crates:
         description: Publish the already packaged crates through crates.io trusted publishing
@@ -15,7 +15,7 @@ on:
         type: boolean
   push:
     tags:
-      - v0.3.0
+      - v0.4.0
 
 # Never cancel a release in flight: partial publication is worse than queueing.
 concurrency:
@@ -42,6 +42,11 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Check native release contracts before building
+        run: node --test scripts/release-native-contract.test.mjs
       - id: version
         shell: bash
         env:
@@ -51,10 +56,14 @@ jobs:
           set -euo pipefail
           node scripts/release-phases.mjs policy >> "$GITHUB_OUTPUT"
           test "$(git status --porcelain)" = ""
-          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.3.0
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.4.0
+      # Reuse construction layers, never source verification results.
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
           runCmd: |
             set -euo pipefail
             bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
@@ -386,6 +395,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      # Two independent OCI exports must fit alongside the BuildKit cache.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft \
+            /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
+          df -h /
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: root-a
@@ -452,6 +468,21 @@ jobs:
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
             root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      - name: Diagnose differing OCI layers without changing acceptance
+        if: failure()
+        timeout-minutes: 5
+        run: |
+          if [ -f root-a.oci/index.json ] && [ -f root-b.oci/index.json ]; then
+            python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
+          fi
+      - name: Retain bounded reproducibility diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reproducibility-diagnostics-${{ matrix.name }}
+          path: reproducibility-diagnostics.*
+          if-no-files-found: warn
+          retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: reproducibility-${{ matrix.name }}
@@ -926,7 +957,7 @@ jobs:
               # Independently released inputs must be public before a fresh
               # crates.io consumer can resolve the packaged PrismPM manifest.
               if [ "$UPLOAD" = true ]; then
-                wait_for_crate lexlean 0.3.0
+                wait_for_crate lexlean 0.4.0
               fi
               release_parent=$(mktemp -d)
               release_sources="$release_parent/release-crates"
@@ -943,8 +974,8 @@ jobs:
                 "$release_sources/stdlib/Cargo.toml" \
                 "$release_sources/stdlib/target/package/prism-stdlib-0.2.0.crate" \
                 "$PWD/stdlib/generated/prism-stdlib-0.2.0.crate"
-              publish_exact prismpm 0.3.0 crates/prismpm/Cargo.toml \
-                "$PWD/target/package/prismpm-0.3.0.crate" -
+              publish_exact prismpm 0.4.0 crates/prismpm/Cargo.toml \
+                "$PWD/target/package/prismpm-0.4.0.crate" -
               rm -rf "$release_parent"
             '
 
@@ -1026,6 +1057,9 @@ jobs:
           target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           generate_release_notes: false
+          # release-please may already have created this release with the changelog
+          # entry as its body; add how to verify below that instead of replacing it.
+          append_body: true
           body_path: RELEASE_NOTES.md
           files: |
             release/*

@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 63] = [
+const CONTRACTS: [Contract; 70] = [
+    Contract {
+        id: "prismpm/workbench-view-projection/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4096,
+        schema: include_bytes!("../schemas/workbench-view-projection.schema.json"),
+    },
     Contract {
         id: "prismpm/model-document/7",
         maximum_bytes: 16_777_216,
@@ -48,6 +54,12 @@ const CONTRACTS: [Contract; 63] = [
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/browser-publication-integrity.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-publication-integrity/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-publication-integrity-v2.schema.json"),
     },
     Contract {
         id: "prismpm/library-build-binding/1",
@@ -86,6 +98,12 @@ const CONTRACTS: [Contract; 63] = [
         schema: include_bytes!("../schemas/browser-export.schema.json"),
     },
     Contract {
+        id: "prismpm/browser-export/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-export-v2.schema.json"),
+    },
+    Contract {
         id: "prismpm/workspace-view-labels/1",
         maximum_bytes: 8_192,
         // Each of the 39 closed properties contributes a key and a scalar.
@@ -109,6 +127,12 @@ const CONTRACTS: [Contract; 63] = [
         maximum_bytes: 201_326_592,
         maximum_items: 262_144,
         schema: include_bytes!("../schemas/sdk-lock-update-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/sdk-lock-change/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/sdk-lock-change.schema.json"),
     },
     Contract {
         id: "prismpm/sdk-lock/2",
@@ -247,6 +271,24 @@ const CONTRACTS: [Contract; 63] = [
         maximum_bytes: 16_777_216,
         maximum_items: 65_536,
         schema: include_bytes!("../schemas/inspect-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/replay-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/replay-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/attest-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/attest-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/attestation-verification-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/attestation-verification-result.schema.json"),
     },
     Contract {
         id: "prismpm/product-release-result/1",
@@ -399,6 +441,28 @@ fn contract(id: &str) -> Result<&'static Contract, PrismError> {
         .iter()
         .find(|contract| contract.id == id)
         .ok_or_else(|| PrismError::new("PP1101", format!("unsupported contract {id}")))
+}
+
+/// Whether `value` satisfies the subschema at `pointer` of the registered
+/// schema `id`, so an earlier check applies exactly the rule that contract
+/// enforces later instead of a copy of it.
+pub(crate) fn satisfies_subschema(
+    id: &str,
+    pointer: &str,
+    value: &Value,
+) -> Result<bool, PrismError> {
+    let schema: Value = serde_json::from_slice(contract(id)?.schema)
+        .map_err(|error| PrismError::new("PP9001", format!("registered schema {id}: {error}")))?;
+    let subschema = schema.pointer(pointer).ok_or_else(|| {
+        PrismError::new("PP9001", format!("registered schema {id} has no {pointer}"))
+    })?;
+    let validator = jsonschema::validator_for(subschema).map_err(|error| {
+        PrismError::new(
+            "PP9001",
+            format!("compile registered schema {id}{pointer}: {error}"),
+        )
+    })?;
+    Ok(validator.is_valid(value))
 }
 
 fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> bool {
@@ -583,7 +647,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1" => {
+        "prismpm/browser-export/1"
+        | "prismpm/browser-publication-integrity/1"
+        | "prismpm/browser-export/2"
+        | "prismpm/browser-publication-integrity/2" => {
             vec![("files", "path")]
         }
         "prismpm/capability-coverage/1" => {
@@ -948,7 +1015,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1"
+        "prismpm/browser-export/1"
+            | "prismpm/browser-publication-integrity/1"
+            | "prismpm/browser-export/2"
+            | "prismpm/browser-publication-integrity/2"
     ) {
         let reference = value["reference"]
             .as_str()
@@ -962,7 +1032,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             ));
         }
     }
-    if id == "prismpm/browser-publication-integrity/1" {
+    if matches!(
+        id,
+        "prismpm/browser-publication-integrity/1" | "prismpm/browser-publication-integrity/2"
+    ) {
         crate::oci::validate_browser_publication_receipt(value)?;
     }
     Ok(())

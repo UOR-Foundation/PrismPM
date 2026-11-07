@@ -7,6 +7,12 @@ requires_digest = true
 result_schema = "prismpm/backup-snapshot/1"
 
 [[command]]
+name = "attest"
+mutates = "attested-holo-file"
+requires_digest = false
+result_schema = "prismpm/attest-result/1"
+
+[[command]]
 name = "authority"
 mutates = "resolve-and-fetch-only"
 requires_digest = false
@@ -58,7 +64,7 @@ result_schema = "prismpm/deployment-evidence/1"
 name = "export-browser"
 mutates = "new-local-browser-directory"
 requires_digest = true
-result_schema = "prismpm/browser-export/1"
+result_schema = "prismpm/browser-export/2"
 
 [[command]]
 name = "fetch"
@@ -80,9 +86,9 @@ result_schema = "prismpm/inspect-result/1"
 
 [[command]]
 name = "lock"
-mutates = "temporary-metadata-acquisition-only"
+mutates = "explicit-update-only"
 requires_digest = false
-result_schema = "prismpm/sdk-lock-update/2"
+result_schema = "prismpm/sdk-lock-change/1"
 [command.subcommand_results]
 check = ["prismpm/sdk-lock/1", "prismpm/sdk-lock/2", "prismpm/sdk-lock/3"]
 migrate = ["prismpm/sdk-lock-migration/1"]
@@ -117,6 +123,12 @@ name = "push"
 mutates = "registry-content"
 requires_digest = true
 result_schema = "prismpm/push-result/1"
+
+[[command]]
+name = "replay"
+mutates = "local-evidence"
+requires_digest = false
+result_schema = "prismpm/replay-result/1"
 
 [[command]]
 name = "rollback"
@@ -161,16 +173,28 @@ requires_digest = false
 result_schema = "prismpm/template-result/1"
 
 [[command]]
+name = "update"
+mutates = "explicit-update-only"
+requires_digest = false
+result_schema = "prismpm/sdk-lock-change/1"
+
+[[command]]
 name = "verify"
 mutates = "local-evidence"
 requires_digest = false
 result_schema = "prismpm/verify-result/1"
 
 [[command]]
+name = "verify-attestation"
+mutates = "never"
+requires_digest = false
+result_schema = "prismpm/attestation-verification-result/1"
+
+[[command]]
 name = "verify-browser-publication"
 mutates = "never"
 requires_digest = true
-result_schema = "prismpm/browser-publication-integrity/1"
+result_schema = "prismpm/browser-publication-integrity/2"
 
 [[command]]
 name = "verify-release"

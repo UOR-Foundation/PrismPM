@@ -255,6 +255,9 @@ RUN cargo build --locked --release --package prismpm \
     && cargo fetch --locked \
     && cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
     && bash scripts/fetch-oracle-cargo.sh \
+    && cargo build --locked --offline --release --manifest-path sdk/oracles/oscal/Cargo.toml --target-dir /tmp/oscal-oracle-target \
+    && install -m 0755 /tmp/oscal-oracle-target/release/prismpm-oscal-oracle /usr/local/bin/oscal-validator \
+    && rm -rf /tmp/oscal-oracle-target \
     && mkdir -p /opt/prismpm/share \
     && node sdk/generate-account-genesis.mjs install \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
@@ -300,13 +303,16 @@ RUN set -eu; \
 
 RUN chmod -R a+rX,a-w /opt/prismpm/share
 
-RUN mkdir -p /opt/prismpm/cargo-home \
+# Keep the offline dependency content, not Cargo's access-time/GC database.
+RUN /usr/bin/python3 -I -B scripts/normalize-cargo-git.py /usr/local/cargo \
+    && mkdir -p /opt/prismpm/cargo-home \
     && cp -a /usr/local/cargo/registry /opt/prismpm/cargo-home/ \
     && if [ -d /usr/local/cargo/git ]; then cp -a /usr/local/cargo/git /opt/prismpm/cargo-home/; fi \
-    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /opt/prismpm/source
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git /opt/prismpm/source \
+    && rm -f /usr/local/cargo/.global-cache /usr/local/cargo/.global-cache-journal /usr/local/cargo/.global-cache-wal /usr/local/cargo/.global-cache-shm
 
 FROM build AS cli-archive-package
-ARG SDK_VERSION=0.3.0
+ARG SDK_VERSION=0.4.0
 ARG TARGETARCH
 COPY --from=source_inputs /prepared/source/LICENSE-APACHE /prepared/source/LICENSE-MIT /prepared/source/README.md /tmp/native-licenses/
 RUN set -eu; \
@@ -347,6 +353,8 @@ COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/fixt
 # Downstream template gates compile their small repository-specific policy
 # crates inside the SDK. Resolve the native linker exclusively from one
 # immutable Ubuntu archive snapshot; no consumer reaches a floating apt mirror.
+# Discard installation logs in this same layer: their contents contain wall
+# clock times that OCI rewrite-timestamp cannot normalize. Keep the package lock.
 RUN set -eu; \
     test "$(wc -l < /tmp/prismpm-runtime-os.lock)" -eq 5; \
     snapshot=$(sed -n 's/^snapshot=//p' /tmp/prismpm-runtime-os.lock); \
@@ -364,7 +372,8 @@ RUN set -eu; \
     && dpkg-query -W -f='${binary:Package}\t${Version}\n' \
       | LC_ALL=C sort > /usr/local/share/prismpm-runtime-dpkg.lock \
     && install -m 0444 /tmp/prismpm-runtime-os.lock /usr/local/share/prismpm-runtime-os.lock \
-    && rm -rf /var/lib/apt/lists/* /tmp/prismpm-runtime-os.lock
+    && rm -rf /var/lib/apt/lists/* /tmp/prismpm-runtime-os.lock \
+    && rm -f /var/log/dpkg.log /var/log/apt/history.log /var/log/apt/term.log /var/log/apt/eipp.log.xz /var/log/alternatives.log /var/cache/ldconfig/aux-cache
 
 COPY --from=build /usr/local/ /usr/local/
 COPY --from=build /opt/prismpm/ /opt/prismpm/
@@ -386,6 +395,7 @@ RUN set -eu; \
     mkdir -p /workspace /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
     && cp -a /opt/prismpm/cargo-home/. /home/vscode/.cargo/ \
     && chown -R 1000:1000 /workspace /home/vscode \
+    && chmod 0755 /home/vscode \
     && chmod -R a+rwX /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
     && chmod -R a+rX,a-w /opt/prismpm/cargo-home
 

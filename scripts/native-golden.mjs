@@ -135,7 +135,7 @@ export function validateSourceBaseline(source) {
 // literals in comments/disabled code cannot authorize a different recipe.
 export function validateApplicationGenerator(source) {
   const owner = regular(join(source, 'crates/prismpm/src/controller/mod.rs'), 1024 ** 2);
-  assert.equal(hash(owner), 'e267731f7ca80ad3cb1fa67b11c2335e7b4015ae3d2f8122e6999e17ccc29c66',
+  assert.equal(hash(owner), '2709684c666e873b7335d5bdbdfa29b1d5a37982801de40a9ccffcfb3a1b4980',
     'application generator recipe owner requires independent source review');
   const parts = ['application_build.rs', 'lean_project.rs', 'holo/archive.rs']
     .map(path => regular(join(source, 'crates/prismpm/src', path), 16 * 1024 ** 2));
@@ -510,7 +510,7 @@ export async function runReview({source, revision, destination}, transport = exe
   return result;
 }
 
-export const NATIVE_INPUT_PATHS = Object.freeze(["stdlib/**", "tests/golden/**", "vendor/lexlean/**", "crates/prismpm/src/**", "model/**", "schemas/**", "sdk/**", "lexlean.toml", "lexlean.lock", "lean-toolchain", "rust-toolchain.toml", "Cargo.toml", "Cargo.lock", "scripts/native-golden.mjs", "scripts/ci-observe.mjs", ".github/workflows/native-golden.yml"]);
+export const NATIVE_INPUT_PATHS = Object.freeze(["stdlib/**", "tests/golden/**", "vendor/lexlean/**", "crates/prismpm/src/**", "model/**", "schemas/**", "sdk/**", "!sdk/npm/**", "!sdk/docs/**", "lexlean.toml", "lexlean.lock", "lean-toolchain", "rust-toolchain.toml", "Cargo.toml", "Cargo.lock", "scripts/native-golden.mjs", "scripts/ci-observe.mjs", ".github/workflows/native-golden.yml"]);
 
 export function validateWorkflow(text) {
   assert.match(text, /^  pull_request:\n(?:    #.*\n)+    paths:\n((?:      - '.*'\n)+)  push:\n    branches: \[main\]\n    tags: \['v\*'\]\n  workflow_dispatch:\n/m);

@@ -16,7 +16,7 @@ export const repository = resolve(draft, '../..');
 export const modules = Object.freeze(['Fixture', 'Foundation.View.Browser.V1.Model',
   'Foundation.View.Browser.V1.Wire', 'Foundation.Bytes',
   'Foundation.Codec', 'Foundation.Codec.Cbor.V1.Primitive',
-  'Foundation.View.Browser.V1.Design', 'Foundation.View.Browser.V1.DesignWire',
+  'Foundation.View.Browser.V1.Design', 'Foundation.View.Browser.V1.DesignWire', 'Foundation.View.Browser.V1.HologramDesign',
   'Foundation.View.Browser.V1.Semantics', 'Foundation.View.Browser.V1.SemanticsWire'].sort());
 const modulePath = name => (name === 'Fixture' ? 'tests/browser-semantic-presentation' : 'stdlib')
   + '/src/' + name.replaceAll('.', '/') + '.lex.tex';

@@ -1,0 +1,168 @@
+// The hosted tiers: which projects the prism-app profile can take, the MCP exchange with a stand-in server,
+// the coverage rule that keeps an answer about other modules from passing, and where the CLI routes a tier.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { HOSTED_PROFILE, HOSTED_RECORD_SCHEMA, hostedCheck, hostedClient, hostedProject, hostedVerify, moduleOf, readLexleanToml, writeHostedRecord } from '../src/hosted.mjs';
+
+const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
+const template = fileURLToPath(new URL('../templates/text-request', import.meta.url));
+const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
+const scratch = () => mkdtempSync(join(tmpdir(), 'prism-hosted-'));
+const PROFILE = { id: 'p1', name: HOSTED_PROFILE, roots: ['src'], packages: [{ package: 'lexlean.core' }, { package: 'lexlean.std.nat' }, { package: 'prism.arch' }] };
+
+/** A copy of the init template, which has the shape the profile takes. */
+function instance() {
+  const dir = join(scratch(), 'app');
+  cpSync(template, dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * A stand-in for the server: answers each tool from `tools`, and each `tasks/get` from `polls` in turn.
+ * Records every request. `statuses` are HTTP statuses to answer before the real answer.
+ */
+function server({ tools = {}, polls = [], statuses = [] } = {}) {
+  const seen = [];
+  const fetch = async (_url, { headers, body }) => {
+    const request = JSON.parse(body);
+    seen.push({ method: request.method, name: headers['mcp-name'], params: request.params });
+    if (statuses.length > 0) return { status: statuses.shift(), text: async () => 'bad gateway' };
+    let result;
+    if (request.method === 'tasks/get') result = polls.shift();
+    else result = tools[request.params.name](request.params.arguments);
+    // The gateway answers some calls as a stream; the last event with an id is the answer.
+    const text = request.method === 'tasks/get' ? `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n\n` : JSON.stringify({ jsonrpc: '2.0', id: request.id, result });
+    return { status: 200, text: async () => text };
+  };
+  return { seen, client: hostedClient({ url: 'https://lexlean.example.test/', fetch, sleep: async () => {}, retryMs: 0 }) };
+}
+
+const profiles = () => ({ structuredContent: { profiles: [PROFILE] } });
+const draftWrite = (args) => ({ structuredContent: { draft: `prism-app/${args.files.length}files` } });
+const verified = (modules) => ({ taskId: 't1', status: 'completed', result: { content: [{ type: 'text', text: JSON.stringify({ attestation_id: 'a'.repeat(64), build_id: 'b', keyid: 'k', modules, semantic_id: 's', source_id: 'o' }) }], structuredContent: { state: 'verified' } } });
+
+test('a module is named by its path under src/', () => {
+  assert.equal(moduleOf('src/Foundation/Bytes.lex.tex'), 'Foundation.Bytes');
+  assert.equal(moduleOf('src/TextRequest.lex.tex'), 'TextRequest');
+  assert.equal(moduleOf('lib/TextRequest.lex.tex'), null);
+  assert.equal(moduleOf('src/notes.md'), null);
+});
+
+test('lexlean.toml: the top-level keys and the package of every [[lexicon_source]]', () => {
+  const config = readLexleanToml('spec = "lexlean/project/1"\r\nsource_roots = ["src"]\nentrypoints = ["src/A.lex.tex"]\n\n[[lexicon_source]]\npackage = "lexlean.std.nat"\nkind = "builtin"\n\n[limits]\npackage = "not a lexicon"\n\n[[lexicon_source]]\npackage = "prism.arch" # local\npath = "language/prism.arch"\n');
+  assert.deepEqual(config.source_roots, ['src']);
+  assert.deepEqual(config.entrypoints, ['src/A.lex.tex']);
+  assert.deepEqual(config.lexicon_source.map((s) => s.package), ['lexlean.std.nat', 'prism.arch']);
+});
+
+test('the init template has the shape the hosted profile takes; other shapes are hosted.layout', () => {
+  const project = hostedProject(instance());
+  assert.deepEqual(project.entrypoints, ['src/TextRequest.lex.tex']);
+  assert.deepEqual(project.packages, ['lexlean.std.nat', 'prism.arch']);
+  assert.ok(project.files.every((f) => f.path.startsWith('src/')), 'only the files under src/ are sent');
+  assert.ok(project.files.some((f) => f.path === 'src/Foundation/Bytes.lex.tex'));
+
+  const roots = instance();
+  writeFileSync(join(roots, 'lexlean.toml'), readFileSync(join(roots, 'lexlean.toml'), 'utf8').replace('source_roots = ["src"]', 'source_roots = ["src", "extra"]'));
+  assert.throws(() => hostedProject(roots), (e) => e.code === 'hosted.layout' && /source_roots/.test(e.message));
+  const entry = instance();
+  writeFileSync(join(entry, 'lexlean.toml'), readFileSync(join(entry, 'lexlean.toml'), 'utf8').replace('src/TextRequest.lex.tex', 'src/Missing.lex.tex'));
+  assert.throws(() => hostedProject(entry), (e) => e.code === 'hosted.layout' && /Missing\.lex\.tex is not in src/.test(e.message));
+  assert.throws(() => hostedProject(scratch()), (e) => e.code === 'hosted.layout');
+});
+
+test('a hosted verify sends the entrypoints, polls the task and returns the record when they are verified', async () => {
+  const project = hostedProject(instance());
+  const { seen, client } = server({
+    tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_verify: () => ({ taskId: 't1', status: 'working', pollIntervalMs: 5000 }) },
+    polls: [{ taskId: 't1', status: 'working' }, verified(['Foundation.Bytes', 'TextRequest'])],
+  });
+  const outcome = await hostedVerify(client, project);
+  assert.equal(outcome.state, 'verified');
+  assert.equal(outcome.record.attestation_id, 'a'.repeat(64));
+  const verify = seen.find((r) => r.name === 'lexlean_verify');
+  assert.deepEqual(verify.params.arguments.files, ['src/TextRequest.lex.tex'], 'the project names what is verified, not the profile');
+  assert.ok(verify.params._meta['io.modelcontextprotocol/clientCapabilities'].extensions['io.modelcontextprotocol/tasks'], 'verify runs as a task');
+  assert.equal(seen.filter((r) => r.method === 'tasks/get').length, 2);
+
+  const dir = scratch();
+  const path = writeHostedRecord(dir, { ...outcome, url: client.url, entrypoints: project.entrypoints }, { now: () => new Date('2026-11-06T00:00:00Z') });
+  assert.equal(path, join(dir, '.lexlean', 'hosted', `${'a'.repeat(64)}.json`));
+  const record = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(record.schema, HOSTED_RECORD_SCHEMA);
+  assert.equal(record.server, 'https://lexlean.example.test/');
+  assert.deepEqual(record.profile, { name: HOSTED_PROFILE, id: 'p1' });
+  assert.deepEqual(record.modules, ['Foundation.Bytes', 'TextRequest']);
+});
+
+test('planted: an answer about other modules is hosted.coverage, never a pass', async () => {
+  // What the server answered for the chess referee when no files were named: its profile's own entrypoint.
+  const { client } = server({
+    tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_verify: () => verified(['Contract', 'Foundation.Bytes']) },
+  });
+  await assert.rejects(hostedVerify(client, hostedProject(instance())), (e) => e.code === 'hosted.coverage' && /not the entrypoint module TextRequest; nothing about this project was proved/.test(e.message));
+});
+
+test('a refused proof returns its diagnostics; a missing package and a lost server are refusals', async () => {
+  const failed = { taskId: 't1', status: 'completed', result: { content: [{ type: 'text', text: JSON.stringify({ command: 'verify', diagnostics: [{ code: 'LLV7002', message: 'Lean rejected `X` (error): unsolved goals\nmore' }] }) }], structuredContent: { state: 'failed' } } };
+  const refused = server({ tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_verify: () => failed } });
+  const outcome = await hostedVerify(refused.client, hostedProject(instance()));
+  assert.equal(outcome.state, 'failed');
+  assert.equal(outcome.diagnostics[0].code, 'LLV7002');
+
+  const narrow = server({ tools: { lexlean_profiles: () => ({ structuredContent: { profiles: [{ ...PROFILE, packages: [{ package: 'lexlean.core' }] }] } }) } });
+  await assert.rejects(hostedVerify(narrow.client, hostedProject(instance())), (e) => e.code === 'hosted.layout' && /lexlean\.std\.nat, prism\.arch/.test(e.message));
+  assert.equal(narrow.seen.some((r) => r.name === 'lexlean_draft_write'), false, 'nothing is sent when the profile cannot take it');
+
+  const down = server({ statuses: [502, 502, 502] });
+  await assert.rejects(hostedVerify(down.client, hostedProject(instance())), (e) => e.code === 'hosted.unreachable');
+  assert.equal(down.seen.length, 3, 'a 502 is tried twice more, then refused');
+});
+
+test('a 502 is tried again, and a hosted check returns the command result', async () => {
+  const { seen, client } = server({
+    statuses: [502],
+    tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_check: (args) => ({ structuredContent: { command: 'check', success: true, diagnostics: [], modules: ['TextRequest'], all: args.all } }) },
+  });
+  const { outcome } = await hostedCheck(client, hostedProject(instance()));
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.all, true, 'every module is checked');
+  assert.equal(seen[0].name, 'lexlean_profiles');
+});
+
+test('routing: with no image a tier runs hosted, --local runs it in the image, and lexlean flags mean local (dry run)', () => {
+  const dir = scratch();
+  cpSync(template, join(dir, 'app'), { recursive: true });
+  writeFileSync(join(dir, 'prismpm.lock'), JSON.stringify({ sdk_image: IMAGE }));
+  const env = { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: join(scratch(), '.prism') };
+  const run = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd: dir, env, encoding: 'utf8' });
+
+  const lean = run('verify', '--lean');
+  assert.equal(lean.status, 0, lean.stderr);
+  assert.match(lean.stdout, /^hosted lexlean_verify https:\/\/mcp\.uor\.foundation\/ profile prism-app files src\/TextRequest\.lex\.tex\n$/);
+  assert.match(lean.stderr, /unlisted but not private; --local verifies in the SDK image instead/);
+  assert.match(run('verify', '--lean', '--all').stdout, /files src\/Foundation\/Bytes\.lex\.tex .*src\/TextRequest\.lex\.tex/);
+  assert.match(run('verify', '--lean', '--local').stdout, /prismpm-sdk@sha256:[0-9a-f]{64} lexlean verify --project /);
+  assert.match(run('verify', '--lean', '--trace').stdout, / lexlean verify --project .* --trace\n$/, 'a lexlean flag runs where lexlean is');
+  assert.equal(run('verify', '--lean', '--hosted', '--trace').status, 64, 'a lexlean flag is refused when hosted was asked for');
+  assert.equal(run('verify', '--lean', '--hosted', '--local').status, 64);
+
+  const check = run('build', '--check');
+  assert.equal(check.status, 0, check.stderr);
+  assert.match(check.stdout, /hosted lexlean_check https:\/\/mcp\.uor\.foundation\/ profile prism-app all\nskipped  prismpm check: the lockfile and its SDK pins are checked only in the image/);
+  assert.match(run('build', '--check', '--local').stdout, / prismpm check\n$/);
+  assert.match(run('build', '--check', '--verbose').stdout, / prismpm check --verbose\n$/);
+  assert.match(run('verify').stdout, / prismpm verify\n$/, 'a full verify always needs the image');
+
+  const layout = join(dir, 'app', 'lexlean.toml');
+  writeFileSync(layout, readFileSync(layout, 'utf8').replace('source_roots = ["src"]', 'source_roots = ["model"]'));
+  mkdirSync(join(dir, 'app', 'model'), { recursive: true });
+  const refused = run('verify', '--lean');
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /hosted\.layout: source_roots is \["model"\].*\nThis project cannot be verified on the hosted verifier; run it in the SDK image with --local/);
+});
