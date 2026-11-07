@@ -3,7 +3,7 @@
 // performed by some vector, and nothing undeclared can be encoded, decoded or run.
 use @HOST@::acceptance::{steps, TRANSCRIPTS, VECTORS};
 use @HOST@::exchange::{drive, step, turn, Step};
-use @HOST@::protocol::{self, Request, EFFECTS, REQUEST_MAXIMA};
+use @HOST@::protocol::{self, Request, CORE, EFFECTS, REQUEST_MAXIMA};
 use @HOST@::script::{self, ScriptedHost};
 use @HOST@::wire::Refusal;
 use @HOST@::{surface, Failure};
@@ -15,16 +15,26 @@ fn perform(tag: u32, payload: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Whether the core may request an effect at all; otherwise it is the plain frame function.
+fn performs() -> bool {
+    CORE.contains(&true)
+}
+
+/// The tag of the first effect the core may request.
+fn first() -> u32 {
+    CORE.iter().position(|core| *core).expect("the core requests an effect") as u32
+}
+
 fn first_step() -> script::Step {
     steps(
         TRANSCRIPTS
             .iter()
-            .find(|transcript| transcript.steps.iter().any(|step| step.tag == 0))
+            .find(|transcript| transcript.steps.iter().any(|step| step.tag == first()))
             .expect("some transcript performs the first effect")
             .vector,
     )
     .into_iter()
-    .find(|step| step.tag == 0)
+    .find(|step| step.tag == first())
     .expect("the first effect is scripted")
 }
 
@@ -43,7 +53,7 @@ fn every_vector_replays_its_transcript_to_its_response() {
 
 #[test]
 fn every_declared_effect_is_performed_by_some_vector() {
-    for tag in 0..EFFECTS.len() as u32 {
+    for tag in (0..EFFECTS.len() as u32).filter(|tag| CORE[*tag as usize]) {
         assert!(
             TRANSCRIPTS.iter().any(|transcript| transcript.steps.iter().any(|step| step.tag == tag)),
             "effect {} is exercised by no vector",
@@ -87,18 +97,25 @@ fn a_root_cannot_step_outside_the_protocol() {
     assert_eq!(step(&[0, 0, 0, 1, 0, 0]), Err(Failure::StepMalformed));
     assert_eq!(step(&[0, 0, 0, 0, 7]), Ok(Step::Done(&[7])));
     let too_long = vec![0u8; surface::RESPONSE_MAXIMUM + 1];
-    let response = if EFFECTS.is_empty() { too_long } else { [vec![0, 0, 0, 0], too_long].concat() };
+    let response = if !performs() { too_long } else { [vec![0, 0, 0, 0], too_long].concat() };
     assert_eq!(drive(|_| Ok(response.clone()), &mut host, b""), Err(Failure::ResponseLimit));
     let request = vec![0u8; surface::REQUEST_MAXIMUM + 1];
     assert_eq!(drive(|_| Ok(Vec::new()), &mut host, &request), Err(Failure::InputLimit));
     assert_eq!(drive(|_| Err(Failure::ComputeFailure), &mut host, b""), Err(Failure::ComputeFailure));
-    if EFFECTS.is_empty() {
+    if !performs() {
         return;
     }
     assert_eq!(
         drive(|_| Ok(vec![0, 0, 0, 2]), &mut host, b""),
         Err(Failure::StepMalformed)
     );
+    // An effect that only fills the request frame is not one the core may request.
+    for frame_only in (0..EFFECTS.len() as u32).filter(|tag| !CORE[*tag as usize]) {
+        assert_eq!(
+            drive(|_| Ok(perform(frame_only, &[])), &mut host, b""),
+            Err(Failure::EffectUndeclared)
+        );
+    }
     let undeclared = EFFECTS.len() as u32;
     assert_eq!(
         drive(|_| Ok(perform(undeclared, &[])), &mut host, b""),
@@ -108,17 +125,17 @@ fn a_root_cannot_step_outside_the_protocol() {
         drive(|_| Ok(perform(u32::MAX, &[])), &mut host, b""),
         Err(Failure::EffectUndeclared)
     );
-    let oversized = vec![0u8; REQUEST_MAXIMA[0] + 1];
+    let oversized = vec![0u8; REQUEST_MAXIMA[first() as usize] + 1];
     assert_eq!(
-        drive(|_| Ok(perform(0, &oversized)), &mut host, b""),
+        drive(|_| Ok(perform(first(), &oversized)), &mut host, b""),
         Err(Failure::EffectRequestLimit)
     );
     let recorded = first_step();
-    if recorded.request.len() < REQUEST_MAXIMA[0] {
+    if recorded.request.len() < REQUEST_MAXIMA[first() as usize] {
         let mut trailing = recorded.request.clone();
         trailing.push(0);
         assert_eq!(
-            drive(|_| Ok(perform(0, &trailing)), &mut host, b""),
+            drive(|_| Ok(perform(first(), &trailing)), &mut host, b""),
             Err(Failure::EffectMalformed)
         );
     }
@@ -126,14 +143,14 @@ fn a_root_cannot_step_outside_the_protocol() {
 
 #[test]
 fn the_effect_budget_bounds_every_exchange() {
-    if EFFECTS.is_empty() {
+    if !performs() {
         assert_eq!(surface::EFFECT_BUDGET, 0);
         return;
     }
     let recorded = first_step();
     let mut host = ScriptedHost::new(vec![recorded.clone(); surface::EFFECT_BUDGET + 1]);
     assert_eq!(
-        drive(|_| Ok(perform(0, &recorded.request)), &mut host, b""),
+        drive(|_| Ok(perform(first(), &recorded.request)), &mut host, b""),
         Err(Failure::EffectBudget)
     );
     assert_eq!(host.remaining(), 1);

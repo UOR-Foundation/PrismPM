@@ -131,33 +131,21 @@ A feature or journey is not a closed literal record, a feature statement is out 
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2019` --- Threat without a control or an accepted risk
+## `PP2022` --- Server application verification unavailable
 
-A threat of a threat model has no mapped control and no accepted risk.
-
-Class: `semantic`. Exit code: 1.
-
-## `PP2020` --- Control without evidence
-
-A control of a threat model names no evidence that realizes it.
+The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available.
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2021` --- Threat without a STRIDE category
+## `PP2019` --- Invalid serving declaration
 
-A threat of a threat model has no modeled threat row, so it has no STRIDE category.
-
-Class: `semantic`. Exit code: 1.
-
-## `PP2022` --- Invalid threat model declaration
-
-A threat model row is not a closed literal record, is repeated, is blank or out of bounds, names no record of the model document, or the model does not declare exactly one control set with a valid time, or an asset has no row.
+A server application's serving declaration names an address other than 127.0.0.1, a bound outside its closed range, an origin or media type that is not a valid value, a frame section that does not come from exactly one declared source, or a request frame that can exceed the exchange request maximum.
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2023` --- Server application build unavailable
+## `PP2020` --- Server core build refused
 
-The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available.
+The LexLean compiler refuses to export the declared core of a server application: the root is not a production root of the project, the project does not verify or changed while it was exported, or the exported package exhibits an effect the host adapter gives no bound for.
 
 Class: `semantic`. Exit code: 1.
 
@@ -250,66 +238,6 @@ Class: `holo`. Exit code: 1.
 The closed Prism model-provenance extension is malformed or disagrees with embedded evidence.
 
 Class: `holo`. Exit code: 1.
-
-## `PP3016` --- Attestation section disagreement
-
-The attestation section of a Holo archive holds no bundle, an empty or unterminated line, or a bundle that is already present.
-
-Class: `holo`. Exit code: 1.
-
-## `PP3017` --- Attestation bundle disagreement
-
-An attestation bundle is not a Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1 whose subjects carry exactly sha256 and blake3, or it names the OCI manifest.
-
-Class: `holo`. Exit code: 1.
-
-## `PP3018` --- Build provenance refused
-
-prismpm build could not make the provenance statement of the holo it built: prismpm.lock is absent or not /2 or /3, pins no image by digest, or does not describe this archive, or the archive already carries a statement.
-
-Class: `holo`. Exit code: 1.
-
-## `PP3101` --- Attestation signing failure
-
-An attestation could not be signed: the key, the predicate, its type or a subject cannot be used.
-
-Class: `attestation`. Exit code: 3.
-
-## `PP3102` --- Attestation signature invalid
-
-The DSSE signature of an attestation bundle does not verify under the signing certificate or the given key, or the certificate does not chain to the pinned root at a signed time with a verified signed certificate timestamp.
-
-Class: `attestation`. Exit code: 1.
-
-## `PP3103` --- Attestation identity mismatch
-
-The signer of an attestation is not the certificate identity or OIDC issuer the policy names; identities are compared exactly.
-
-Class: `attestation`. Exit code: 1.
-
-## `PP3104` --- Attestation transparency failure
-
-A log entry or timestamp of an attestation bundle is missing, is not about this bundle, or does not verify against the pinned trusted root.
-
-Class: `attestation`. Exit code: 1.
-
-## `PP3105` --- Attestation subject mismatch
-
-A statement subject names a blob that is not in the holo, or its digests are not the blob's.
-
-Class: `attestation`. Exit code: 1.
-
-## `PP3106` --- Attestation not found
-
-The holo has no attestation section, or none of its attestations has the requested predicate type.
-
-Class: `attestation`. Exit code: 1.
-
-## `PP3107` --- Trusted root invalid
-
-The Sigstore trusted root cannot be read, is not pinned, or pins none of what the policy relies on.
-
-Class: `attestation`. Exit code: 1.
 
 ## `PP4001` --- Artifact checksum mismatch
 
@@ -473,107 +401,11 @@ The pinned independent Hologram loader, planner, executor, or View encoder disag
 
 Class: `oracle`. Exit code: 1.
 
-## `PP5501` --- Proof statement signature failure
-
-The DSSE signature of a proof statement does not verify against the trust root, or no trust root is available to verify it.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5502` --- Proof statement shape failure
-
-A proof statement is not an in-toto Statement v1 with one subject and a prism/proof/v1 predicate whose verifiedLevels is exactly P2.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5503` --- Proof subject disagreement
-
-The subject of a proof statement is not the guest blob of the holo it travels in.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5504` --- Proof model disagreement
-
-The model a proof statement describes is not the model document and provenance of the holo.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5505` --- Proof verifier disagreement
-
-The verifier pins of a proof statement differ from the pins of the project lock.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5506` --- Proof verdict failure
-
-A proof statement reports a failed verification result, a failed theorem, or a theorem whose observed axioms are outside its policy.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5507` --- Proof TCB incomplete
-
-The named trusted computing base of a proof statement lacks one of its seven components.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5601` --- Assurance level below the policy minimum
-
-The level computed from the evidence in the holo is below the minimum the policy requires.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5602` --- Declared world exceeds the granted capabilities
-
-The world the holo declares imports a capability kind the granted capability set grants nothing of.
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5603` --- No verdict reached
-
-check could not judge the holo: the file is not a readable archive, its layout matches no format revision, or the policy file is unreadable or invalid.
-
-Class: `acceptance`. Exit code: 2.
-
 ## `PP6001` --- Reference model identity drift
 
 The reference repository model or lock is not byte-identical to the authoritative PrismPM getting-started source closure.
 
 Class: `acceptance`. Exit code: 1.
-
-## `PP5701` --- Replay diverged from its history
-
-Re-executing a recorded history against this build produced an outcome that differs from the recording, or a replay statement records a divergence (replay.divergence, DeterminismViolationError).
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5702` --- Replay statement signature invalid
-
-A prism/replay/v1 statement is not signed by a key or identity the trust root accepts (replay.envelope).
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5703` --- Replay statement absent or malformed
-
-A holo carries no prism/replay/v1 statement, or its statement has the wrong shape or a divergence count its histories do not sum to (replay.statement).
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5704` --- Replay statement names another guest
-
-The subject of a prism/replay/v1 statement is not the guest blob of this holo, by either digest (replay.subject).
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5705` --- Replay statement names another model
-
-The model of a prism/replay/v1 statement is not the model blob of this holo, by either digest (replay.model).
-
-Class: `acceptance`. Exit code: 1.
-
-## `PP5706` --- Replay could not be carried out
-
-A history is not prism/history/1, is repeated or cannot be read, or the holo cannot be read or fails its own integrity checks, so nothing was compared.
-
-Class: `configuration`. Exit code: 2.
 
 ## `PP6002` --- Incomplete application acceptance
 
@@ -884,16 +716,3 @@ The model-rejected detail is the exact generated byte:
 | 12 | `InvalidOutcome` |
 | 13 | `InvalidPage` |
 | 14 | `UnknownOperation` |
-
-## Prism SDK module diagnostics
-
-Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modules raise, in a namespace separate from the CLI PP codes.
-
-| Code | Owner | Meaning |
-|---|---|---|
-| `networks.exists` | `DK-39` | prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again. |
-| `networks.not-found` | `DK-39` | The capability file has no network of that name: no set with an outbound-hosts member. |
-| `networks.option` | `DK-39` | prism.networks was given an option it does not have, or a policy of the wrong shape; a Docker network option is refused and never ignored. |
-| `networks.protected` | `DK-39` | prism.networks.remove named the default set, which a capability file must have. |
-| `networks.store` | `DK-39` | prism.networks has no store to read the capability file from, or none to write it to, so nothing changed. |
-| `networks.unavailable` | `DK-39` | The call needs host effects (#216, #217), which this version does not have; nothing changed and no traffic can flow. |

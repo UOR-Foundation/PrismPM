@@ -397,6 +397,24 @@ level = "build"
 statement = "The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors."
 
 [[id]]
+id = "HO-36"
+suite = "holo"
+level = "build"
+statement = "The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic."
+
+[[id]]
+id = "HO-37"
+suite = "holo"
+level = "build"
+statement = "The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket."
+
+[[id]]
+id = "HO-38"
+suite = "holo"
+level = "build"
+statement = "A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

@@ -1548,7 +1548,7 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 
 /// Audit the exact Holo emitter input closure and its stored semantics digest.
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
-    const EXPECTED: [&str; 46] = [
+    const EXPECTED: [&str; 47] = [
         "crates/prismpm/src/application_build.rs",
         "crates/prismpm/src/brand.rs",
         "crates/prismpm/src/holo/application.rs",
@@ -1568,6 +1568,7 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "crates/prismpm/src/holo/projector.rs",
         "crates/prismpm/src/holo/server_application.rs",
         "crates/prismpm/src/holo/server_application/model.rs",
+        "crates/prismpm/src/holo/server_application/serving.rs",
         "crates/prismpm/src/holo/server_application/source.rs",
         "crates/prismpm/src/holo/server_application/wire.rs",
         "crates/prismpm/src/holo/text_cli.rs",

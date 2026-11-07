@@ -26,6 +26,7 @@ const APPLICATION: &[Row] = &[
     ("requestMaximum", "request_maximum", "UInt32"),
     ("responseMaximum", "response_maximum", "UInt32"),
     ("bindings", "bindings", "ListServerBinding"),
+    ("serving", "serving", "ListServerServing"),
     ("host", "host", "HostProtocol"),
 ];
 
@@ -41,6 +42,42 @@ fn fields(kind: &str) -> Option<&'static [Row]> {
             ("path", "path", "String"),
             ("crateName", "crate_name", "String"),
             ("host", "host", "String"),
+        ],
+        "ServerServing" => &[
+            ("address", "address", "String"),
+            ("port", "port", "UInt32"),
+            ("connectionMaximum", "connection_maximum", "UInt32"),
+            ("readTimeoutMillis", "read_timeout_millis", "UInt32"),
+            ("rootStackBytes", "root_stack_bytes", "UInt32"),
+            ("requestLineMaximum", "request_line_maximum", "UInt32"),
+            ("headerCountMaximum", "header_count_maximum", "UInt32"),
+            ("headerBytesMaximum", "header_bytes_maximum", "UInt32"),
+            ("bodyMaximum", "body_maximum", "UInt32"),
+            ("origins", "origins", "ListServingOrigin"),
+            ("accept", "accept", "ListString"),
+            ("contentTypes", "content_types", "ListString"),
+            ("enforcedMethods", "enforced_methods", "ListString"),
+            ("countedField", "counted_field", "String"),
+            ("countedValue", "counted_value", "String"),
+            ("frame", "frame", "ListFrameSection"),
+            ("vectors", "vectors", "ListServedVector"),
+        ],
+        "ServingOrigin" => &[
+            ("scheme", "scheme", "String"),
+            ("host", "host", "String"),
+            ("port", "port", "UInt32"),
+        ],
+        "FrameSection" => &[
+            ("name", "name", "String"),
+            ("kind", "kind", "FrameKind"),
+            ("effect", "effect", "String"),
+            ("field", "field", "String"),
+            ("values", "values", "ListString"),
+        ],
+        "ServedVector" => &[
+            ("vector", "vector", "UInt32"),
+            ("request", "request", "Bytes"),
+            ("response", "response", "Bytes"),
         ],
         "AcceptanceVector" => &[
             ("request", "request", "Bytes"),
@@ -144,7 +181,9 @@ impl<'a> Projector<'a> {
     ) -> Result<Value, PrismError> {
         let maximum = match element {
             "String" => 1024,
-            "ServerBinding" => 2,
+            "ServerBinding" | "ServerServing" => 2,
+            "ServingOrigin" => super::serving::MAXIMUM_ORIGINS + 1,
+            "FrameSection" => super::serving::MAXIMUM_SECTIONS + 1,
             "HostEffect" => super::MAXIMUM_EFFECTS + 1,
             "HostField" => super::MAXIMUM_FIELDS + 1,
             "HostStep" => super::MAXIMUM_BUDGET as usize + 1,
@@ -224,23 +263,25 @@ impl<'a> Projector<'a> {
         ))
     }
 
-    fn kind(value: &Value) -> Result<Value, PrismError> {
+    fn kind(value: &Value, owner: &str) -> Result<Value, PrismError> {
         if value["kind"] != "constructor"
             || value["constructor"]["module"] != MODULE
             || !value["arguments"].as_array().is_none_or(Vec::is_empty)
         {
-            return Err(invalid("host kind is not a source-owned constructor"));
+            return Err(invalid("kind is not a source-owned constructor"));
         }
-        let name = match value["constructor"]["name"]
+        let constructor = value["constructor"]["name"]
             .as_str()
-            .and_then(|name| name.strip_prefix("HostKind."))
-        {
-            Some("U32") => "u32",
-            Some("U64") => "u64",
-            Some("Flag") => "flag",
-            Some("Bytes") => "bytes",
-            Some("Text") => "text",
-            _ => return Err(invalid("unknown host kind constructor")),
+            .and_then(|name| name.strip_prefix(owner))
+            .and_then(|name| name.strip_prefix('.'));
+        let name = match (owner, constructor) {
+            ("HostKind", Some("U32")) | ("FrameKind", Some("U32")) => "u32",
+            ("HostKind", Some("U64")) | ("FrameKind", Some("U64")) => "u64",
+            ("HostKind", Some("Flag")) => "flag",
+            ("HostKind", Some("Bytes")) | ("FrameKind", Some("Bytes")) => "bytes",
+            ("HostKind", Some("Text")) | ("FrameKind", Some("Text")) => "text",
+            ("FrameKind", Some("TextList")) => "text-list",
+            _ => return Err(invalid("unknown kind constructor")),
         };
         Ok(json!(name))
     }
@@ -304,7 +345,7 @@ impl<'a> Projector<'a> {
             }
             "UInt32" | "UInt8" if value["kind"] == "integer" => Self::integer(value, kind),
             "Bytes" if value["kind"] == "bytes" => self.octets(value),
-            "HostKind" => Self::kind(value),
+            "HostKind" | "FrameKind" => Self::kind(value, kind),
             _ => self.record(owner, value, kind),
         }
     }

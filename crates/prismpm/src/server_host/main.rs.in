@@ -34,6 +34,9 @@ enum Invocation {
 //@BINDING-BEGIN
     Run(Option<OsString>),
 //@BINDING-END
+//@SERVING-BEGIN
+    Serve,
+//@SERVING-END
 }
 
 fn parse<I: IntoIterator<Item = OsString>>(arguments: I) -> Result<Invocation, Reported> {
@@ -61,6 +64,12 @@ fn parse<I: IntoIterator<Item = OsString>>(arguments: I) -> Result<Invocation, R
         return Ok(Invocation::Run(request));
     }
 //@BINDING-END
+//@SERVING-BEGIN
+    if command == "serve" {
+        if let Some(extra) = positional.next() { return Err(concerning(AdapterFailure::ExtraArgument, &extra)); }
+        return Ok(Invocation::Serve);
+    }
+//@SERVING-END
     if command != "exchange" { return Err(concerning(AdapterFailure::UnknownCommand, &command)); }
     let script = positional.next().ok_or_else(|| reported(AdapterFailure::MissingOperand))?;
     let request = positional.next();
@@ -98,6 +107,18 @@ fn run_binding(request_path: Option<&OsStr>) -> Result<(), Reported> {
 }
 //@BINDING-END
 
+//@SERVING-BEGIN
+// Listen on the declared loopback address and serve until the process is stopped.
+// The first line on standard output says where, so a client can find a port the
+// system chose.
+fn serve() -> Result<(), Reported> {
+    let listener = @HOST@::serve::declared_listener().map_err(reported)?;
+    let address = listener.local_addr().map_err(|_| reported(AdapterFailure::ListenIo))?;
+    publish(format!("listening {address}\n").as_bytes())?;
+    @HOST@::serve::run(listener, @SERVE_HOST@, @HOST@::exchange::core, None).map_err(reported)
+}
+//@SERVING-END
+
 fn run() -> Result<(), Reported> {
     match parse(std::env::args_os().skip(1))? {
         Invocation::Help => publish(surface::HELP.as_bytes()),
@@ -106,6 +127,9 @@ fn run() -> Result<(), Reported> {
 //@BINDING-BEGIN
         Invocation::Run(request) => run_binding(request.as_deref()),
 //@BINDING-END
+//@SERVING-BEGIN
+        Invocation::Serve => serve(),
+//@SERVING-END
     }
 }
 
@@ -159,6 +183,14 @@ mod tests {
         assert_eq!(parse(arguments(&["exchange", "a", "b", "c"])).unwrap_err().failure, AdapterFailure::ExtraArgument);
     }
 
+//@SERVING-BEGIN
+    #[test]
+    fn grammar_selects_the_serve_command() {
+        assert_eq!(parse(arguments(&["serve"])), Ok(Invocation::Serve));
+        assert_eq!(parse(arguments(&["serve", "x"])).unwrap_err().failure, AdapterFailure::ExtraArgument);
+    }
+
+//@SERVING-END
 //@BINDING-BEGIN
     #[test]
     fn grammar_selects_the_binding_command() {
