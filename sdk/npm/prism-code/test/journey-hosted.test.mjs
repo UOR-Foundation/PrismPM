@@ -70,7 +70,7 @@ test('a hosted proof names every module, the proofs module included, and records
   assert.equal(r.attestation, 'c'.repeat(64));
   assert.match(r.message, /^Lean proved all 2 properties for every request on the hosted verifier, in \d+ s\.$/);
   assert.deepEqual(verifies[0].files.sort(), ['src/Foundation/Bytes.lex.tex', 'src/Foundation/View/Text/V1/Model.lex.tex', 'src/PaymentApproval.lex.tex', 'src/PaymentApprovalProofs.lex.tex']);
-  assert.match(lines[0], /hosted verifier https:\/\/lexlean\.example\.test\/, so the SDK image is not needed yet\. The files under prism\/src\/ are sent, unlisted but not private\./);
+  assert.match(lines[0], /hosted verifier https:\/\/lexlean\.example\.test\/, so the SDK image is not needed yet\. The files under prism\/src\/ are sent and stored unlisted: not searchable, but readable by anyone with the draft's ID\./);
   assert.equal(session.status.proved.where, 'hosted');
   assert.equal(session.status.proved.record, `.lexlean/hosted/${'c'.repeat(64)}.json`);
   assert.ok(existsSync(join(dir, session.status.proved.record)));

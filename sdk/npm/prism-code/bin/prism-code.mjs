@@ -57,7 +57,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { createPrism } from '../src/index.mjs';
 import { fromFile, serve, readManifest, fileContainerStore, resolveProviders, releaseProviders } from '../src/node.mjs';
@@ -142,9 +142,10 @@ Usage:
                                                     verdict, attestations; the verify-attestation flags add a signer policy
   prism-code build --check [--hosted | --local] [args]
                                                     validate the model, write nothing: prismpm check in the SDK image
-                                                    named by ./prismpm.lock when it is here (or --local); else prism.toml
-                                                    here and lexlean check on the hosted verifier, which skips the
-                                                    lockfile pins and says so
+                                                    the nearest prismpm.lock pins, when the image is here and so is a
+                                                    prismpm.toml (or --local); else prism.toml here and lexlean check on
+                                                    the hosted verifier: syntax and types, not proofs (verify --lean
+                                                    proves), and it says what it skipped
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code build --remote github [--repo <owner/name>] [--ref <commit>] [--timeout <s>] [--allow-dirty] [--policy <file>] [--json]
                                                     the repository's own GitHub Actions builds one commit (pushed to
@@ -161,7 +162,8 @@ Usage:
                                                     lexlean verify on the project's LexLean project: every theorem through
                                                     Lean and leanchecker with its exact axioms, and nothing after; about a
                                                     minute. In the SDK image when it is here (or --local), else on the
-                                                    hosted verifier, which sends src/ (unlisted, not private), passes only
+                                                    hosted verifier, which sends src/ (stored unlisted: not searchable, but
+                                                    readable by anyone with the draft's ID), passes only
                                                     when every entrypoint is verified, and writes .lexlean/hosted/ (experimental)
   prism-code conformance [args]                     prismpm conformance
   prism-code axioms [--write] [--json] [--project <dir>]
@@ -261,7 +263,8 @@ Options for setup:    --agent <id>                 configure only this agent and
                                                    codex, cursor, vscode, claude-desktop, claude, chatgpt
                       --image <ref>                the SDK image to pull and cache, NAME@sha256:DIGEST; default the one
                                                    ./prismpm.lock pins
-                      --no-pull                    report a missing image instead of pulling it
+                      --pull                       pull the image now; without it the first build, verify or axioms does
+                      --no-pull                    the default: report a missing image instead of pulling it
                       --agents-only                skip the machine half: Docker, the image, the cache, line endings
                       --machine-only               only the machine half; configure no agent and register no handler
                       --json                       print the report as JSON
@@ -767,16 +770,19 @@ async function commandProviders(positional, options) {
   return 0;
 }
 
-async function commandDelegate(command, args, { program = 'prismpm' } = {}) {
+async function commandDelegate(command, args, { program = 'prismpm', image: found = null } = {}) {
   const cwd = process.cwd();
-  let lock;
-  try {
-    lock = await readFile(resolve(cwd, 'prismpm.lock'), 'utf8');
-  } catch {
-    process.stderr.write('prismpm.lock not found in the current directory\n');
-    return 64;
+  let image = found;
+  if (image === null) {
+    let lock;
+    try {
+      lock = await readFile(resolve(cwd, 'prismpm.lock'), 'utf8');
+    } catch {
+      process.stderr.write('prismpm.lock not found in the current directory\n');
+      return 64;
+    }
+    image = sdkImageFromLock(lock);
   }
-  const image = sdkImageFromLock(lock);
   let docker;
   try {
     docker = hostDockerArguments({ image, cwd, command, args, program });
@@ -919,26 +925,51 @@ function takeProject(args) {
 }
 
 /**
- * Where a LexLean tier runs: `--local` in the image, `--hosted` on the UOR MCP
- * server; with neither, in the image when it is on this machine, else hosted.
- * Returns `{ where, image, rest }` or `{ problem }`.
+ * The nearest `prismpm.lock` at or above `cwd`, stopping at the repository's
+ * root: `{ path, dir }`, or null. A template instance keeps it at the root and
+ * its LexLean project in app/, where the tiers run.
  */
-function tierRoute(cwd, args) {
+function findLock(cwd) {
+  for (let dir = resolve(cwd); ; ) {
+    const path = resolve(dir, 'prismpm.lock');
+    if (existsSync(path)) return { path, dir };
+    const parent = dirname(dir);
+    if (existsSync(resolve(dir, '.git')) || parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** Why a tier runs hosted, as its first line says. */
+const HOSTED_WHY = {
+  asked: '--hosted asked for it',
+  'no-lock': 'there is no prismpm.lock here or above',
+  'no-image': 'the SDK image is not on this machine',
+  'no-project': 'prismpm check needs a prismpm.toml here, and this is a LexLean project',
+};
+
+/**
+ * Where a LexLean tier runs: `--local` in the image, `--hosted` on the UOR MCP
+ * server; with neither, in the image when the nearest lockfile's image is on this
+ * machine and `needs` (a file the local tier reads) is here, else hosted, with
+ * `why` one of HOSTED_WHY. Returns `{ where, image, rest, forced, why }` or `{ problem }`.
+ */
+function tierRoute(cwd, args, { needs = null } = {}) {
   const local = args.includes('--local');
   const hosted = args.includes('--hosted');
   if (local && hosted) return { problem: '--local and --hosted name opposite places; give one' };
   const rest = args.filter((a) => a !== '--local' && a !== '--hosted');
-  let image = null;
-  try {
-    image = sdkImageFromLock(readFileSync(resolve(cwd, 'prismpm.lock'), 'utf8'));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
+  const lock = findLock(cwd);
+  const image = lock ? sdkImageFromLock(readFileSync(lock.path, 'utf8')) : null;
   if (local) return { where: 'local', image, rest, forced: true };
-  if (hosted) return { where: 'hosted', image, rest, forced: true };
-  if (image === null) return { where: 'hosted', image, rest, forced: false };
-  return { where: hostImagePresent({ image }) ? 'local' : 'hosted', image, rest, forced: false };
+  if (hosted) return { where: 'hosted', image, rest, forced: true, why: 'asked' };
+  if (image === null) return { where: 'hosted', image, rest, forced: false, why: 'no-lock' };
+  if (!hostImagePresent({ image })) return { where: 'hosted', image, rest, forced: false, why: 'no-image' };
+  if (needs && !existsSync(resolve(cwd, needs))) return { where: 'hosted', image, rest, forced: false, why: 'no-project' };
+  return { where: 'local', image, rest, forced: false };
 }
+
+/** What a hosted tier tells the user about the files it sends. */
+const SENT = 'which the server stores unlisted: not searchable, but readable by anyone with the draft\'s ID';
 
 /** The hosted tier's project, or the exit code of a refusal printed with the way to run it in the image. */
 async function hostedTier(cwd, explicit, verb, image) {
@@ -976,11 +1007,11 @@ async function commandLean(args) {
   if (route.where === 'hosted' && unknown.length > 0 && !route.forced) route.where = 'local';
   if (route.where === 'local') {
     if (route.image === null) {
-      process.stderr.write('prismpm.lock not found in the current directory\n');
+      process.stderr.write('prismpm.lock not found here or above\n');
       return 64;
     }
     const dir = lexleanProjectDir(cwd, await modelSource(cwd), explicit);
-    return commandDelegate('verify', ['--project', lexleanProjectArgument(cwd, dir), ...rest], { program: 'lexlean' });
+    return commandDelegate('verify', ['--project', lexleanProjectArgument(cwd, dir), ...rest], { program: 'lexlean', image: route.image });
   }
   if (unknown.length > 0) return usage(`the hosted verifier takes only --project and --all, not ${unknown.join(' ')}; run lexlean's own flags in the image with --local`);
   const tier = await hostedTier(cwd, explicit, 'verified', route.image);
@@ -988,7 +1019,7 @@ async function commandLean(args) {
   const { hosted, dir } = tier;
   const project = all ? { ...tier.project, entrypoints: tier.project.files.map((f) => f.path).filter((p) => hosted.moduleOf(p)) } : tier.project;
   const url = hosted.hostedUrl();
-  process.stderr.write(`verify --lean on the hosted verifier ${url} (profile ${hosted.HOSTED_PROFILE}): sending the ${project.files.length} file${project.files.length === 1 ? '' : 's'} under ${dir === '.' ? '' : `${dir}/`}src/, which the server keeps unlisted but not private; --local verifies in the SDK image instead.\n`);
+  process.stderr.write(`verify --lean on the hosted verifier ${url} (profile ${hosted.HOSTED_PROFILE}), because ${HOSTED_WHY[route.why]}: sending the ${project.files.length} file${project.files.length === 1 ? '' : 's'} under ${dir === '.' ? '' : `${dir}/`}src/, ${SENT}; --local verifies in the SDK image instead.\n`);
   if (process.env.PRISM_CODE_DRY_RUN) {
     process.stdout.write(`hosted lexlean_verify ${url} profile ${hosted.HOSTED_PROFILE} files ${project.entrypoints.join(' ')}\n`);
     return 0;
@@ -996,7 +1027,7 @@ async function commandLean(args) {
   const client = hosted.hostedClient({ url, version: VERSION });
   const outcome = await hosted.hostedVerify(client, project, { onWait: (s) => s % 30 < 5 && process.stderr.write(`  verifying, ${s} s\n`) });
   if (outcome.state === 'failed') {
-    process.stdout.write(`not verified: Lean refused the project\n${hosted.formatDiagnostics(outcome.diagnostics)}\n`);
+    process.stdout.write(`not verified: Lean refused the project\n${hosted.formatDiagnostics(outcome.diagnostics, { dir })}\n`);
     return 1;
   }
   const path = hosted.writeHostedRecord(resolve(cwd, dir), { ...outcome, url, entrypoints: project.entrypoints });
@@ -1007,12 +1038,12 @@ async function commandLean(args) {
 /** T0 of the tiers: `prismpm check` in the image, or, with no image, the manifest here and `lexlean check --all` hosted. */
 async function commandTierCheck(args) {
   const cwd = process.cwd();
-  const route = tierRoute(cwd, args);
+  const route = tierRoute(cwd, args, { needs: 'prismpm.toml' });
   if (route.problem) return usage(route.problem);
   const taken = takeProject(route.rest);
   if (taken.problem) return usage(taken.problem);
   // prismpm check's own flags mean the local tier, unless the caller asked for the hosted one.
-  if (route.where === 'local' || (taken.rest.length > 0 && !route.forced)) return commandDelegate('check', route.rest);
+  if (route.where === 'local' || (taken.rest.length > 0 && !route.forced)) return commandDelegate('check', route.rest, { image: route.image });
   if (taken.rest.length > 0) return usage(`the hosted check takes only --project, not ${taken.rest.join(' ')}; run prismpm check's own flags in the image with --local`);
   let failed = false;
   if (existsSync(resolve(cwd, 'prism.toml'))) {
@@ -1028,21 +1059,38 @@ async function commandTierCheck(args) {
   }
   const tier = await hostedTier(cwd, taken.explicit, 'checked', route.image);
   if (tier.code !== undefined) return tier.code;
-  const { hosted, project } = tier;
+  const { hosted, dir, project } = tier;
   const url = hosted.hostedUrl();
-  process.stderr.write(`build --check with no SDK image: lexlean check on the hosted verifier ${url} (profile ${hosted.HOSTED_PROFILE}), sending ${project.files.length} file${project.files.length === 1 ? '' : 's'} under src/, unlisted but not private.\n`);
+  process.stderr.write(`build --check: lexlean check on the hosted verifier ${url} (profile ${hosted.HOSTED_PROFILE}), because ${HOSTED_WHY[route.why]}: sending ${project.files.length} file${project.files.length === 1 ? '' : 's'} under src/, ${SENT}.\n`);
   if (process.env.PRISM_CODE_DRY_RUN) {
     process.stdout.write(`hosted lexlean_check ${url} profile ${hosted.HOSTED_PROFILE} all\n`);
   } else {
     const { outcome } = await hosted.hostedCheck(hosted.hostedClient({ url, version: VERSION }), project);
-    if (outcome.success) process.stdout.write(`ok       lexlean check: ${outcome.modules.length} module${outcome.modules.length === 1 ? '' : 's'}\n`);
+    if (outcome.success) process.stdout.write(`ok       lexlean check: ${outcome.modules.length} module${outcome.modules.length === 1 ? '' : 's'} parse and type-check; proofs are not checked here, verify --lean proves them\n`);
     else {
-      process.stdout.write(`failed   lexlean check\n${hosted.formatDiagnostics(outcome.diagnostics ?? [])}\n`);
+      process.stdout.write(`failed   lexlean check\n${hosted.formatDiagnostics(outcome.diagnostics ?? [], { dir })}\n`);
       failed = true;
     }
   }
-  process.stdout.write(`skipped  prismpm check: the lockfile and its SDK pins are checked only in the image; \`prism-code setup --pull\` gets it, or --local pulls it now\n`);
+  const skipped = {
+    'no-lock': 'there is no prismpm.lock here or above to check',
+    'no-project': 'it reads a prismpm.toml, and this LexLean project has none; the lockfile and its SDK pins are checked by the build',
+  }[route.why] ?? 'the lockfile and its SDK pins are checked only in the image; --local runs it there, and pulls the image first if it is missing';
+  process.stdout.write(`skipped  prismpm check: ${skipped}\n`);
   return failed ? 1 : 0;
+}
+
+/** One verb's usage lines and its options block, from the usage text, or null when the usage text has none. */
+function commandHelp(command) {
+  const lines = USAGE.split('\n');
+  const options = new RegExp(`^Options for ${command}( [^:]*)?:`);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!(lines[i] === `  prism-code ${command}` || lines[i].startsWith(`  prism-code ${command} `) || options.test(lines[i]))) continue;
+    out.push(lines[i]);
+    while (i + 1 < lines.length && /^ {20,}\S/.test(lines[i + 1])) out.push(lines[++i]);
+  }
+  return out.length ? `${out.join('\n')}\n` : null;
 }
 
 // Set once a verb or a plugin runs; error hooks run only after one did.
@@ -1066,6 +1114,15 @@ async function main(argv) {
   if (command === '--version' || command === '-v' || command === 'version') {
     process.stdout.write(`${version}\n`);
     return 0;
+  }
+  // `--help` after a built-in verb prints that verb's usage and never reaches Docker or a lockfile.
+  const own = rest.includes('--') ? rest.slice(0, rest.indexOf('--')) : rest;
+  if (BUILTINS.has(command) && (own.includes('--help') || own.includes('-h'))) {
+    const help = commandHelp(command);
+    if (help !== null) {
+      process.stdout.write(help);
+      return 0;
+    }
   }
   const { positional, options } = parse(rest);
   if (BUILTINS.has(command)) ran = command;
