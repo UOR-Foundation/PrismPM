@@ -127,11 +127,11 @@ test('a refused proof returns its diagnostics; a missing package and a lost serv
 test('a 502 is tried again, and a hosted check returns the command result', async () => {
   const { seen, client } = server({
     statuses: [502],
-    tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_check: (args) => ({ structuredContent: { command: 'check', success: true, diagnostics: [], modules: ['TextRequest'], all: args.all } }) },
+    tools: { lexlean_profiles: profiles, lexlean_draft_write: draftWrite, lexlean_check: (args) => ({ structuredContent: { command: 'check', success: true, diagnostics: [], modules: ['TextRequest'], args } }) },
   });
   const { outcome } = await hostedCheck(client, hostedProject(instance()));
   assert.equal(outcome.success, true);
-  assert.equal(outcome.all, true, 'every module is checked');
+  assert.deepEqual(Object.keys(outcome.args), ['project'], 'no all and no files: the server selects the draft\'s own files, not the profile\'s Contract');
   assert.equal(seen[0].name, 'lexlean_profiles');
 });
 
@@ -220,7 +220,7 @@ test('routing: with no image a tier runs hosted, --local runs it in the image, a
 
   const check = run('build', '--check');
   assert.equal(check.status, 0, check.stderr);
-  assert.match(check.stdout, /hosted lexlean_check https:\/\/mcp\.uor\.foundation\/ profile prism-app all\nskipped  prismpm check: the lockfile and its SDK pins are checked only in the image; --local runs it there/);
+  assert.match(check.stdout, /hosted lexlean_check https:\/\/mcp\.uor\.foundation\/ profile prism-app draft\nskipped  prismpm check: the lockfile and its SDK pins are checked only in the image; --local runs it there/);
   assert.doesNotMatch(check.stdout, /setup --pull/, 'an image that is here is not offered for download');
   assert.match(run('build', '--check', '--local').stdout, / prismpm check\n$/);
   assert.match(run('build', '--check', '--verbose').stdout, / prismpm check --verbose\n$/);

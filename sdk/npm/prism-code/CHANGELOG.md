@@ -16,6 +16,7 @@ None.
 - A proof the hosted verifier refuses is printed as `file:line:column: CODE message`, with Lean's goal under it (at most 20 lines), where it used to stop at the message's first line.
 - `--help` after any built-in command prints that command's usage and options and exits 0, without reading a lockfile or reaching Docker. `build --help` at a project's root used to announce a 5.5 GB download and start the image for `prismpm build --help`; `setup --help` and `build --remote github --help` were refused as unknown options.
 - `setup` leaves a `.gitattributes` whose root rule turns conversion off (`* -text` or `* binary`) as it is, since such a file already keeps sources LF as committed, and an appended `* text eol=lf` would have overridden it.
+- A hosted `build --check` checks exactly the files under `src/`. It asked the server for `all`, which on a draft also covers the profile's own `Contract` module, so the count read "sending 4 files" then "5 modules"; it now sends no `all` and the server selects the draft's files (lexlean-mcp#88).
 - `build --check` says that it checks syntax and types, not proofs. The hosted tiers say what "unlisted" means: nothing lists or searches a draft, but anyone with its ID can read it.
 
 ## [0.5.0] - 2026-11-07

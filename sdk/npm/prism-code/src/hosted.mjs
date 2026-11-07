@@ -198,10 +198,16 @@ export async function writeDraft(client, project) {
   return { draft, profile };
 }
 
-/** `lexlean check --all` on the draft: the command result, whose `success` and `diagnostics` say how it went. */
+/**
+ * `lexlean check` on the draft's own files: the command result, whose `success`
+ * and `diagnostics` say how it went. No `all`: a draft is the whole profile
+ * bundle with the draft's files laid over it, so `all` would check the
+ * profile's own modules too (its `Contract`); with no `files` the server
+ * selects exactly the draft's files.
+ */
 export async function hostedCheck(client, project) {
   const { draft, profile } = await writeDraft(client, project);
-  const result = await client.call('lexlean_check', { project: draft, all: true });
+  const result = await client.call('lexlean_check', { project: draft });
   const outcome = result?.structuredContent;
   if (!outcome || typeof outcome.success !== 'boolean') refused('lexlean_check', result);
   return { draft, profile, outcome };
