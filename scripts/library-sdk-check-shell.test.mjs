@@ -123,7 +123,7 @@ async function accepted(context){
  assert.equal(custody[custody.indexOf('--user')+1],'0:0');
  assert.ok(custody.includes('/opt/prismpm-custody:rw,noexec,nosuid,nodev,size=16m,mode=0700'));
  assert.deepEqual(custody.slice(-2),[image,'sdk/exporter-seed-custody.integration.mjs']);
- const runtime=created[4];for(const arg of ['--interactive','--read-only','--network','none','--user','1000:1000','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','CARGO_NET_OFFLINE=true'])assert.ok(runtime.includes(arg),arg);
+ const runtime=created[4];for(const arg of ['--interactive','--read-only','--network','none','--user','1000:1000','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','CARGO_NET_OFFLINE=true','CARGO_TARGET_DIR=/tmp/prismpm-library-target'])assert.ok(runtime.includes(arg),arg);
  assert.ok(!runtime.includes('--mount')&&!runtime.includes('--volume')&&!runtime.includes('--entrypoint'));
  assert.deepEqual(runtime.slice(-5),[image,'node','scripts/library-sdk-check.mjs','run',image]);
  const start=calls.findIndex(row=>row[0]==='container'&&row[1]==='start');assert.ok(start>=0,'runtime must actually start');

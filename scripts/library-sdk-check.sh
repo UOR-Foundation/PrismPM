@@ -100,9 +100,12 @@ docker container rm "$container" >/dev/null
 container=''
 # Execution has no network, credentials, host implementation, or writable mount.
 # The independently captured lock is the only explicit stdin data.
+# The installed source tree is read-only, so the semantic-source tool that
+# run builds with cargo writes its target below the bounded /tmp instead.
 container=$(docker container create --interactive --user 1000:1000 --read-only --network none --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
   --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
+  --env CARGO_TARGET_DIR=/tmp/prismpm-library-target \
   --workdir /opt/prismpm/share/conformance-root "$image" \
   node scripts/library-sdk-check.mjs run "$image")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
