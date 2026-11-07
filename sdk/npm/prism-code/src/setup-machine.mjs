@@ -138,6 +138,8 @@ function planEndings(context) {
   const crlf = sources(cwd).filter((file) => (context.readFile(file) ?? '').includes('\r\n'));
   const note = crlf.length ? `; ${crlf.length} file${crlf.length === 1 ? ' has' : 's have'} CRLF already, which LexLean refuses: run git add --renormalize . and commit` : '';
   if (text !== null && /^\*\s+text(\s+\S+)*\s+eol=lf\b/m.test(text)) return { id: 'endings', status: crlf.length ? 'manual' : 'already', detail: `.gitattributes keeps sources LF${note}` };
+  // A root rule that turns conversion off keeps every file as committed; a later `* text` line would override it, so it is left alone.
+  if (text !== null && /^\*\s+(-text|binary)\b/m.test(text)) return { id: 'endings', status: crlf.length ? 'manual' : 'already', detail: `.gitattributes keeps every file byte for byte, so sources stay LF as committed; left as it is${note}` };
   const content = text === null || text === '' ? `${GITATTRIBUTES_LINE}\n` : `${text}${text.endsWith('\n') ? '' : '\n'}${GITATTRIBUTES_LINE}\n`;
   return { id: 'endings', status: 'configure', detail: `.gitattributes: ${GITATTRIBUTES_LINE}${note}`, steps: [{ kind: 'write', path, content }] };
 }

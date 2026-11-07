@@ -143,7 +143,7 @@ async function proveHosted(dir, session, { log, client }) {
   for (let round = 1; round <= MAX_AXIOM_ROUNDS; round++) {
     writeApp(dir, session, { overwrite: true });
     log(round === 1
-      ? `Asking Lean to prove the model on the hosted verifier ${client.url}, so the SDK image is not needed yet. The files under prism/src/ are sent, unlisted but not private.`
+      ? `Asking Lean to prove the model on the hosted verifier ${client.url}, so the SDK image is not needed yet. The files under prism/src/ are sent and stored unlisted: not searchable, but readable by anyone with the draft's ID.`
       : `Correcting an axiom set and proving again (round ${round})...`);
     let project;
     try {

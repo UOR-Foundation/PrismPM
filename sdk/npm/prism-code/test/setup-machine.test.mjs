@@ -148,6 +148,21 @@ test('line endings: a project with CRLF sources is told to renormalize, and an e
   assert.equal(warned.status, 'manual', 'the rule is there, but the file on disk is still CRLF');
 });
 
+test('line endings: a root rule that turns conversion off is left alone, since a later * text line would override it', () => {
+  const cwd = project();
+  mkdirSync(join(cwd, 'src'));
+  writeFileSync(join(cwd, 'src', 'App.lex.tex'), '\\begin{lexlean}{App}\n\\end{lexlean}\n');
+  for (const rule of ['# byte for byte, for template check\n* -text\n', '* binary\n']) {
+    writeFileSync(join(cwd, '.gitattributes'), rule);
+    const row = rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism') }))).endings;
+    assert.equal(row.status, 'already', rule);
+    assert.match(row.detail, /byte for byte.*left as it is/);
+    assert.equal(row.steps, undefined, 'nothing is written');
+  }
+  writeFileSync(join(cwd, 'src', 'App.lex.tex'), '\\begin{lexlean}{App}\r\n\\end{lexlean}\r\n');
+  assert.equal(rows(planMachine({}, context({ cwd, configDir: join(scratch(), '.prism') }))).endings.status, 'manual', 'a CRLF source is still named');
+});
+
 test('applying a plan: the config merge keeps keys another writer set, a failed command marks its row and the next row still runs', () => {
   const cwd = project();
   const configDir = join(scratch(), '.prism');
