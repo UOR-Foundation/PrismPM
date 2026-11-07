@@ -106,7 +106,9 @@ export function executionEnvironment(work, image, socket) {
     PLAYWRIGHT_BROWSERS_PATH: '/ms-playwright',
     DOCKER_HOST: socket, DOCKER_CONFIG: join(work, 'docker'),
     GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
-    XDG_CACHE_HOME: join(work, 'cache'), TMPDIR: join(work, 'tmp'),
+    // Firefox under the read-only installed container hangs at launch without a
+    // writable HOME (rehearsal 42219829101). This fresh owned path is never the caller's.
+    HOME: join(work, 'home'), XDG_CACHE_HOME: join(work, 'cache'), TMPDIR: join(work, 'tmp'),
     LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: 'UTC', SOURCE_DATE_EPOCH: '0',
   };
 }
@@ -230,7 +232,7 @@ export async function runInstalled(image, revision, part, destination, socket) {
   const manifest = materializeClosure(join(SHARED, 'vv-inputs'), policy, join(destination, 'inputs'));
   assert.equal(manifestBytes.toString('utf8'), `${canonical(manifest)}\n`, 'captured and materialized input manifests differ');
   const source = join(destination, 'inputs/source');
-  for (const name of ['docker', 'cache', 'tmp', 'evidence']) mkdirSync(join(destination, name), { mode: 0o700 });
+  for (const name of ['home', 'docker', 'cache', 'tmp', 'evidence']) mkdirSync(join(destination, name), { mode: 0o700 });
   cpSync(cache, join(destination, 'cargo'), { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
   cacheEntries(join(destination, 'cargo'), true);
   // Cargo deny 0.20.2 resolves this exact RustSec URL directory below CARGO_HOME.

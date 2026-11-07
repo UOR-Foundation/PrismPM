@@ -199,9 +199,10 @@ test('execution environment uses fresh writable caches and fixed SDK tools, not 
   assert.equal(environment.CARGO_TARGET_DIR, '/fresh/inputs/source/target/vv-driver');
   assert.equal(environment.CARGO_NET_OFFLINE, 'true');
   assert.equal(environment.DOCKER_CONFIG, '/fresh/docker');
+  assert.equal(environment.HOME, '/fresh/home', 'HOME is a fresh owned directory, never inherited');
   assert.equal(environment.GIT_CONFIG_GLOBAL, '/dev/null');
   assert.equal(environment.PRISMPM_SDK_INVENTORY, '/opt/prismpm/share/inventory.json');
-  for (const key of ['LD_PRELOAD', 'RUSTC_WRAPPER', 'CARGO_ENCODED_RUSTFLAGS', 'GH_TOKEN', 'NODE_OPTIONS', 'BASH_ENV', 'ENV', 'HOME']) assert(!Object.hasOwn(environment, key));
+  for (const key of ['LD_PRELOAD', 'RUSTC_WRAPPER', 'CARGO_ENCODED_RUSTFLAGS', 'GH_TOKEN', 'NODE_OPTIONS', 'BASH_ENV', 'ENV']) assert(!Object.hasOwn(environment, key));
   for (const endpoint of ['tcp://remote:2375', 'unix://relative', 'unix:///tmp/../escape', 'unix:///']) assert.throws(() => executionEnvironment('/fresh', image, endpoint));
   for (const ref of ['sdk:latest', `${image}#other`, '', 'https://registry/image']) assert.throws(() => executionEnvironment('/fresh', ref, 'unix:///var/run/docker.sock'));
 });
