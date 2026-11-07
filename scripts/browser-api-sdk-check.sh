@@ -34,7 +34,10 @@ container=$(docker container create --network none --read-only --entrypoint /usr
 mkdir "$sdk_work/source" "$sdk_work/browser"
 while IFS= read -r path; do
   mkdir -p "$sdk_work/source/$(dirname "$path")"
-  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" "$sdk_work/source/$path"
+  # Stream the root as a tar so tracked relative symlinks such as
+  # crates/prismpm/model -> ../../model stay symlinks; docker cp refuses to
+  # extract a link that points outside its destination. verify checks every alias.
+  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - | tar -x -C "$sdk_work/source/$(dirname "$path")"
 done < <(node "$helper" roots)
 node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"
 docker container cp "$container:/opt/prismpm/browser/." "$sdk_work/browser"

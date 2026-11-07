@@ -956,6 +956,8 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
+          # The evidence directory is hidden; upload-artifact skips hidden files by default.
+          include-hidden-files: true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ matrix.target }}

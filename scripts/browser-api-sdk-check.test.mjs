@@ -304,7 +304,7 @@ function source(root){
 function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{
  'org.opencontainers.image.revision':revision,
  'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM',
- 'org.opencontainers.image.version':'0.3.0',
+ 'org.opencontainers.image.version':'0.4.0',
 }}}];}
 
 test('current SDK source closure binds helper, compiler, suite and every selected byte',async t=>{
