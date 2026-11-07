@@ -30,8 +30,10 @@ npx prism-code build --remote github # no Docker: your GitHub repository builds 
 
 `setup` pulls nothing by default. Until the SDK image (about 5.5 GB) is here,
 `build --check` and `verify --lean` run on the hosted verifier at
-`https://mcp.uor.foundation/`, which receives the files under `src/`, unlisted
-but not private; `--local` runs either in the image instead. The first
+`https://mcp.uor.foundation/`, which receives the files under `src/` and stores
+them unlisted: not searchable, but readable by anyone with the draft's ID.
+`--local` runs either in the image instead. `build --check` checks syntax and
+types, not proofs; `verify --lean` proves. The first
 `build`, `verify` or `axioms` pulls the image and says so first. With no Docker at
 all, `build --remote github` has the repository's own GitHub Actions build one
 commit (the template's `build.yml`) and verifies what comes back here: the
@@ -83,8 +85,8 @@ its `prism_start` tool. It asks six questions, one at a time:
 Each answer is checked as it arrives. A property the rules break comes back
 with the request that breaks it, and an example the rules contradict comes back
 with the rule that decides it. `prism_build` then writes the LexLean model in
-`prism/`, has Lean prove every property (hosted, sending `prism/src/` unlisted but not
-private, until the SDK image is here), builds the holo in the SDK image with
+`prism/`, has Lean prove every property (hosted, sending `prism/src/` to be stored
+unlisted, until the SDK image is here), builds the holo in the SDK image with
 the cache `setup` created, and replays its acceptance vectors through the
 guest. Wrong axiom sets are corrected without asking. Proving takes about a
 minute; a first build takes ten minutes or more. The properties are proved;
