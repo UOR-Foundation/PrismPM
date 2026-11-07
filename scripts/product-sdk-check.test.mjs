@@ -296,6 +296,8 @@ if(args[1]==='cp'){
  const from=args[2],to=args[3];if(to.includes(':/tmp/'))process.exit(0);
  if(from.endsWith('/usr/local/bin/prismpm-devcontainer-init')){fs.copyFileSync(path.join(env.RECORD_SOURCE,'sdk/devcontainer-init.sh'),to);process.exit(0);}
  if(from.endsWith('/.prism/oci')){fs.mkdirSync(to,{recursive:true});put(path.join(to,'index.json'),'{}');process.exit(0);}
+ if(to==='-'){const stage=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'cp-'));put(path.join(stage,path.basename(from)),'{}');
+  require('node:child_process').execFileSync('tar',['-c','-C',stage,path.basename(from)],{stdio:['ignore','inherit','inherit']});process.exit(0);}
  put(to,'{}');process.exit(0);
 }
 if(args[1]==='start'){

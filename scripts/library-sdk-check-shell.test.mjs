@@ -22,14 +22,16 @@ const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\\n')
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
 const id='c'.repeat(64);
 if(args[0]==='pull')process.exit(0);
-if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linux',Architecture:process.arch==='x64'?'amd64':'arm64',RepoDigests:[process.env.RECORDED_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.RECORDED_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}]));process.exit(0);}
+if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linux',Architecture:process.arch==='x64'?'amd64':'arm64',RepoDigests:[process.env.RECORDED_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.RECORDED_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.4.0'}}}]));process.exit(0);}
 if(args[0]==='container'&&args[1]==='create'){console.log(id);process.exit(0);}
 if(args[0]==='container'&&args[1]==='cp'){
  const from=args[2].split(':').slice(1).join(':'),prefix='/opt/prismpm/share/conformance-root/';
  if(from==='/opt/prismpm/share/inventory.json'){fs.copyFileSync(process.env.RECORDED_INVENTORY,args[3]);process.exit(0);}
  if(from==='/opt/prismpm/share/standards.lock'){fs.copyFileSync(path.join(root,'standards.lock'),args[3]);process.exit(0);}
  const input=from.startsWith(prefix)?path.join(root,from.slice(prefix.length)):from==='/usr/local/bin/prismpm-devcontainer-init'?path.join(root,'sdk/devcontainer-init.sh'):null;
- if(!input)process.exit(65);fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
+ if(!input)process.exit(65);
+ if(args[3]==='-'){require('node:child_process').execFileSync('tar',['-c','-C',path.dirname(input),path.basename(input)],{stdio:['ignore','inherit','inherit']});process.exit(0);}
+ fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
 }
 if(args[0]==='container'&&args[1]==='start'){
  const created=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1);
