@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { hostedClient } from '../src/hosted.mjs';
 import { compile } from '../src/journey/session.mjs';
 import { names } from '../src/journey/render.mjs';
-import { appDir, readSession, writeApp } from '../src/journey/project.mjs';
-import { fromHosted, isWarning, prove, proveWhere } from '../src/journey/engine.mjs';
+import { spawnSync } from 'node:child_process';
+import { appDir, readSession, rememberModel, writeApp } from '../src/journey/project.mjs';
+import { build, fromHosted, isWarning, prove, proveWhere } from '../src/journey/engine.mjs';
 
 const ANSWERS = {
   purpose: 'Payment approval: decide whether a payment request is approved.',
@@ -110,4 +111,31 @@ test('planted: Lean refusing a property marks that property failing, found by th
   assert.equal(session.status.properties[id], 'failing');
   assert.match(r.message, new RegExp(`${id}`));
   assert.match(readFileSync(join(dir, '.prism-last.log'), 'utf8'), new RegExp(`error\\[LLV7002\\]: .*\\n {2}--> src/${n.proofs}\\.lex\\.tex:${line}:`));
+});
+
+/** A session whose model is on disk and counts as proved, so `build` goes straight to building. */
+function provedApp() {
+  const { dir, session } = app();
+  writeApp(dir, session);
+  rememberModel(dir, session);
+  session.status.proved = { modelSha: session.status.modelSha, where: 'hosted' };
+  session.status.lastSpec = JSON.stringify(session.spec);
+  return { dir, session };
+}
+
+test('prism_build with remote github: outside a git repository, and in one with no GitHub origin, it says what is missing and builds nothing', async () => {
+  const outside = provedApp();
+  const r1 = await build(outside.dir, outside.session, { remote: 'github' });
+  assert.equal(r1.ok, false);
+  assert.equal(r1.stage, 'build');
+  assert.match(r1.message, /not inside a git repository/);
+  assert.equal(outside.session.status.built, undefined);
+
+  const { dir, session } = provedApp();
+  const root = join(dir, '..');
+  assert.equal(spawnSync('git', ['-C', root, 'init', '-q'], { encoding: 'utf8', windowsHide: true }).status, 0);
+  const r2 = await build(dir, session, { remote: 'github' });
+  assert.equal(r2.ok, false);
+  assert.match(r2.message, /The remote build was refused: remote\.repository: no git remote named origin/);
+  assert.equal(session.status.built, undefined);
 });

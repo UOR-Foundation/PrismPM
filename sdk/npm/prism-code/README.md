@@ -25,13 +25,17 @@ npx prism-code build --check        # T0: the model is well formed, seconds; hos
 npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute; hosted until the image is here
 npx prism-code axioms --write       # set every declaration's axiom policy in one pass
 npx prism-code verify               # T2: the guest, the vectors and the holo, minutes
+npx prism-code build --remote github # no Docker: your GitHub repository builds it, this machine verifies it
 ```
 
 `setup` pulls nothing by default. Until the SDK image (about 5.5 GB) is here,
 `build --check` and `verify --lean` run on the hosted verifier at
 `https://mcp.uor.foundation/`, which receives the files under `src/`, unlisted
 but not private; `--local` runs either in the image instead. The first
-`build`, `verify` or `axioms` pulls the image and says so first.
+`build`, `verify` or `axioms` pulls the image and says so first. With no Docker at
+all, `build --remote github` has the repository's own GitHub Actions build one
+commit (the template's `build.yml`) and verifies what comes back here: the
+commit, the digests, the signed provenance, the verdict and every vector.
 
 `setup` records the program that reaches Docker, so later commands spawn it,
 and moves `/tmp` off memory onto a cache volume: a full verify of the chess

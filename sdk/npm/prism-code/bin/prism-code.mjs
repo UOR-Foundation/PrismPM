@@ -148,6 +148,12 @@ Usage:
                                                     it is here (or --local); else prism.toml here and lexlean check on
                                                     the hosted verifier, which skips the lockfile pins and says so
   prism-code build [args]                           prismpm build (needs the Docker socket)
+  prism-code build --remote github [--repo <owner/name>] [--ref <commit>] [--timeout <s>] [--allow-dirty] [--policy <file>] [--json]
+                                                    the repository's own GitHub Actions builds one commit (pushed to
+                                                    prism/build/<sha>; needs its build.yml), and this machine verifies
+                                                    what comes back: the commit, the digests, the signed provenance, the
+                                                    verdict and every vector, before anything lands under .prism/build/.
+                                                    No Docker here. Token: GITHUB_TOKEN, GH_TOKEN or gh (experimental)
   prism-code build --unstable-author [--check] [--no-cache] [--project <dir>]
                                                     experimental: an agent writes model/ from examples/, intent.md
                                                     and types/, then the proof and the examples gate the build;
@@ -278,6 +284,10 @@ function usage(message) {
 
 // Options that take a value. `--subject` also repeats, and collects into an array.
 const VALUE_OPTIONS = [
+  'remote',
+  'repo',
+  'ref',
+  'timeout',
   'port',
   'host',
   'model',
@@ -895,6 +905,49 @@ async function commandAxioms(positional, options) {
   }
 }
 
+const REMOTE_BUILD_OPTIONS = ['remote', 'repo', 'ref', 'timeout', 'allow-dirty', 'policy', 'json'];
+
+/**
+ * `build --remote github`: the repository's own GitHub Actions builds one
+ * commit, and this machine verifies what comes back before it counts as
+ * built. No Docker, no SDK image here. Exit 0 when the verdict and every
+ * vector pass; else the exit code `check` or `vectors` would give, and 2 for
+ * a refusal (`remote.*`).
+ */
+async function commandRemoteBuild(positional, options) {
+  if (options.remote !== 'github') return usage(`--remote takes github, not ${JSON.stringify(options.remote)}`);
+  if (positional.length > 0) return usage('build --remote github takes no arguments');
+  const unknown = Object.keys(options).find((name) => !REMOTE_BUILD_OPTIONS.includes(name));
+  if (unknown) return usage(`build --remote github has no option --${unknown}`);
+  const bad = missingValue(options);
+  if (bad) return usage(`--${bad} takes a value`);
+  let timeoutMs = 30 * 60 * 1000;
+  if (options.timeout !== undefined) {
+    const seconds = Number(options.timeout);
+    if (!Number.isInteger(seconds) || seconds <= 0) return usage('--timeout takes a number of seconds');
+    timeoutMs = seconds * 1000;
+  }
+  const { remoteBuild } = await import('../src/remote-github.mjs');
+  const result = await remoteBuild({
+    cwd: process.cwd(),
+    repo: options.repo ?? null,
+    ref: options.ref ?? 'HEAD',
+    allowDirty: options['allow-dirty'] === true,
+    timeoutMs,
+    policy: options.policy,
+    version: VERSION,
+    log: (line) => process.stderr.write(`${line}\n`),
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify({ ...result, verdict: JSON.parse(verdictJson(result.verdict)) }, null, 2)}\n`);
+    return result.exitCode;
+  }
+  process.stdout.write(formatVerdict(result.verdict, result.holo));
+  const signer = result.signature.identity ?? `a workflow of ${result.repository}`;
+  process.stdout.write(`${result.vectors.passed} of ${result.vectors.total} vectors passed on this machine\nprovenance: ${signer}, through ${result.signature.issuer} (checked by ${result.signature.via})\nfingerprint ${result.fingerprint}\nrun ${result.run.url}\n${result.exitCode === 0 ? `holo ${result.holo}` : `not written under .prism/build/; what came back is at ${result.staging}`}\n`);
+  return result.exitCode;
+}
+
 /** `--project <dir>` taken out of a tier's arguments: `{ explicit, rest }`, or `{ problem }`. */
 function takeProject(args) {
   const at = args.findIndex((a) => a === '--project' || a.startsWith('--project='));
@@ -1122,6 +1175,7 @@ async function main(argv) {
       process.stderr.write('prism-code check without a holo is deprecated and is removed in 0.4.0; use prism-code build --check, which runs the same prismpm check\n');
       return commandDelegate('check', rest);
     case 'build':
+      if (options.remote !== undefined) return commandRemoteBuild(positional, options);
       if (rest.includes('--unstable-author')) {
         const { runAuthorBuild } = await import('../src/author/cli.mjs');
         const outcome = await runAuthorBuild({ positional, options }, usage);

@@ -18,11 +18,14 @@
  *             in memory beside the build, and is kept for the next run.
  *   endings   `.gitattributes` with `* text eol=lf` in a project, because
  *             LexLean refuses a file with CRLF and Git on Windows writes it.
+ *   github    what `build --remote github` needs: a github.com origin, a token
+ *             (GITHUB_TOKEN, GH_TOKEN or gh) and the build workflow. Read only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cacheVolumeName, commandDisplay, sdkImageFromLock } from './docker.mjs';
+import { BUILD_WORKFLOW, TEMPLATE_WORKFLOW_URL, originOf, tokenSource } from './github.mjs';
 import { hostConfigEntry, readHostConfig, resolveDocker } from './host.mjs';
 
 export const GITATTRIBUTES_LINE = '* text eol=lf';
@@ -140,6 +143,25 @@ function planEndings(context) {
 }
 
 /**
+ * What `build --remote github` would find here: the origin repository, a
+ * token's source and the build workflow. Nothing to apply; a missing piece is
+ * a manual step naming it, and no origin at all is simply not a repository.
+ */
+function planGitHub(context) {
+  const origin = originOf(context.cwd, context.run);
+  if (origin === null) return { id: 'github', status: 'not-found', detail: 'no git remote named origin here; build --remote github builds in one' };
+  if (!origin.repo) return { id: 'github', status: 'manual', detail: `origin is ${origin.url}, not a github.com repository, which build --remote github needs` };
+  const token = tokenSource(context.env, context.run);
+  const workflow = context.exists(join(context.cwd, ...BUILD_WORKFLOW.split('/')));
+  const detail = [
+    origin.repo.full,
+    token ? `token from ${token}` : 'no token: set GITHUB_TOKEN or GH_TOKEN, or run gh auth login',
+    workflow ? `${BUILD_WORKFLOW} present` : `no ${BUILD_WORKFLOW}: add the template's, ${TEMPLATE_WORKFLOW_URL}`,
+  ].join('; ');
+  return { id: 'github', status: token && workflow ? 'already' : 'manual', detail };
+}
+
+/**
  * Everything the machine half would do. `image` overrides the lockfile. A
  * missing image is pulled only when `pull` is true (`--pull`, or `--image`
  * naming one); otherwise it is deferred to the first command that needs it.
@@ -151,7 +173,8 @@ export function planMachine({ image, pull = false } = {}, context) {
   const imageRow = planImage({ image, pull }, context, resolved);
   const cache = planCache(context, resolved, imageRow.reference ?? null);
   const endings = planEndings(context);
-  return { rows: [node, docker, imageRow, cache, endings] };
+  const github = planGitHub(context);
+  return { rows: [node, docker, imageRow, cache, endings, github] };
 }
 
 const readText = (path) => {
