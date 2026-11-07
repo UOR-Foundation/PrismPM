@@ -32,7 +32,7 @@
  *                                                     watch the project, rebuild and re-check on every change, serve the local studio
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
- *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
+ *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image; --check on the host when the locked prismpm is there
  *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
  *   prism-code setup [--agent <id>] [--pull] [--dry-run] add the UOR MCP server to every agent here, register holo:// (experimental)
  *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
@@ -56,7 +56,7 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { createPrism } from '../src/index.mjs';
@@ -64,6 +64,7 @@ import { fromFile, serve, readManifest, fileContainerStore, resolveProviders, re
 import { replayFiles, recordingApplication, writeHistory, formatReplay, replayJson } from '../src/replay-cli.mjs';
 import { sdkImageFromLock, DELEGATED } from '../src/docker.mjs';
 import { hostDockerArguments, hostImagePresent } from '../src/host.mjs';
+import { resolveNativePrismpm } from '../src/native.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../src/setup-machine.mjs';
 import { VERSION } from '../src/version.mjs';
 import { lexleanProjectArgument, lexleanProjectDir } from '../src/tiers.mjs';
@@ -141,10 +142,11 @@ Usage:
                                                     fetch a holo and write it only after it verifies: digests, archive,
                                                     verdict, attestations; the verify-attestation flags add a signer policy
   prism-code build --check [--hosted | --local] [args]
-                                                    validate the model, write nothing: prismpm check in the SDK image
-                                                    named by ./prismpm.lock when it is here (or --local); else prism.toml
-                                                    here and lexlean check on the hosted verifier, which skips the
-                                                    lockfile pins and says so
+                                                    validate the model, write nothing: prismpm check on the host when a
+                                                    prismpm of the version ./prismpm.lock pins is found ($PRISM_PRISMPM,
+                                                    ~/.prism/bin, PATH; not with --hosted), else in the SDK image when
+                                                    it is here (or --local); else prism.toml here and lexlean check on
+                                                    the hosted verifier, which skips the lockfile pins and says so
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code build --remote github [--repo <owner/name>] [--ref <commit>] [--timeout <s>] [--allow-dirty] [--policy <file>] [--json]
                                                     the repository's own GitHub Actions builds one commit (pushed to
@@ -776,6 +778,10 @@ async function commandDelegate(command, args, { program = 'prismpm' } = {}) {
     process.stderr.write('prismpm.lock not found in the current directory\n');
     return 64;
   }
+  if (command === 'check' && program === 'prismpm') {
+    const native = nativeCheck(lock);
+    if (native) return runNative(native, [command, ...args]);
+  }
   const image = sdkImageFromLock(lock);
   let docker;
   try {
@@ -798,6 +804,39 @@ async function commandDelegate(command, args, { program = 'prismpm' } = {}) {
     child.on('error', (error) => {
       process.stderr.write(error.code === 'ENOENT' ? `${docker.command} is not installed or not on PATH; prism-code check/build/verify need Docker\n` : `${error.message}\n`);
       done(69);
+    });
+    child.on('exit', (code, signal) => done(code ?? (signal ? 1 : 0)));
+  });
+}
+
+/**
+ * `check` compiles nothing, so the prismpm the lock pins runs it on the host
+ * when one is found (src/native.mjs): the image's verdict, with no image and
+ * nothing sent anywhere. The path to run, or null; notes go to stderr.
+ */
+function nativeCheck(lockText) {
+  const native = resolveNativePrismpm({ lockText, probe: probeVersion });
+  for (const note of native.notes) process.stderr.write(`note: ${note}; ${native.path ? 'passed over' : 'not used'}\n`);
+  return native.path;
+}
+
+/** `<path> --version` on stdout, or null when it does not run or exits nonzero. */
+function probeVersion(path) {
+  const r = spawnSync(path, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+  return r.error || r.status !== 0 ? null : r.stdout;
+}
+
+/** Run a host prismpm in the project directory, as the image runs it in its mount. */
+function runNative(path, argv) {
+  if (process.env.PRISM_CODE_DRY_RUN) {
+    process.stdout.write(`${[path, ...argv].map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}\n`);
+    return 0;
+  }
+  return new Promise((done) => {
+    const child = spawn(path, argv, { stdio: 'inherit', windowsHide: true });
+    child.on('error', (error) => {
+      process.stderr.write(`${path}: ${error.message}\n`);
+      done(70);
     });
     child.on('exit', (code, signal) => done(code ?? (signal ? 1 : 0)));
   });
@@ -1011,6 +1050,18 @@ async function commandTierCheck(args) {
   if (route.problem) return usage(route.problem);
   const taken = takeProject(route.rest);
   if (taken.problem) return usage(taken.problem);
+  // A host prismpm of the locked version gives the image's check here, so it comes before the hosted
+  // verifier; only --hosted passes it over. commandDelegate tries it again on the image path.
+  if (route.where === 'hosted' && !route.forced) {
+    let lock = null;
+    try {
+      lock = readFileSync(resolve(cwd, 'prismpm.lock'), 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const native = lock === null ? null : nativeCheck(lock);
+    if (native) return runNative(native, ['check', ...route.rest]);
+  }
   // prismpm check's own flags mean the local tier, unless the caller asked for the hosted one.
   if (route.where === 'local' || (taken.rest.length > 0 && !route.forced)) return commandDelegate('check', route.rest);
   if (taken.rest.length > 0) return usage(`the hosted check takes only --project, not ${taken.rest.join(' ')}; run prismpm check's own flags in the image with --local`);

@@ -1598,7 +1598,16 @@ pub fn run() -> ExitCode {
         return holo_check(holo, policy.as_deref(), signer, cli.json);
     }
 
-    match crate::process_resources::configure().and_then(|()| execute(&cli)) {
+    // The 64 MiB stack limit is for the SDK compiler children a command starts.
+    // A project `check` compiles nothing and starts none; its model worker sets
+    // its own thread stack. macOS caps the hard stack limit just under 64 MiB,
+    // so requiring it here would refuse the host check there for nothing.
+    let resources = if matches!(cli.command, Commands::Check { holo: None, .. }) {
+        Ok(())
+    } else {
+        crate::process_resources::configure()
+    };
+    match resources.and_then(|()| execute(&cli)) {
         Ok((value, human)) => {
             let result = if cli.json {
                 canonical(&value).and_then(|bytes| write_line(std::io::stdout().lock(), &bytes))

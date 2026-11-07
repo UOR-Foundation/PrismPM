@@ -6,6 +6,11 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [Unreleased]
+
+### Features Added
+- `build --check` (and the deprecated `check` without a holo) runs `prismpm check` on the host, with no Docker, when it finds a prismpm whose `--version` is the version `prismpm.lock` pins: `$PRISM_PRISMPM`, then `$PRISM_HOME/bin/prismpm-<version>/prismpm[.exe]`, then `prismpm` on the PATH. `prismpm check` is in-process Rust that starts no other program, so the verdict is the image's; on Windows 11 it took 0.7 s for the Calculator example, where the image needs a 5.5 GB pull before the first check. It comes before the image and the hosted verifier, and only `--hosted` passes it over. A prismpm of another version is passed over with a note; a lock that pins no single prismpm version, and `PRISM_NATIVE=0`, leave the check to the image or the hosted verifier as before. `build`, `verify` and `conformance` stay in the image. The `native check` workflow builds prismpm on Linux, macOS and Windows and requires the same semantic ID for each example on all three and a planted defect refused on each.
+
 ## [0.5.0] - 2026-11-07
 
 ### Features Added

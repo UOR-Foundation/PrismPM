@@ -429,6 +429,10 @@ path = "sdk/npm/prism-code/src/middleware.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/native.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/networks.mjs"
 module = "networks"
 

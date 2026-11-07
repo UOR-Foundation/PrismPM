@@ -65,6 +65,7 @@
   "src/journey/spec.mjs",
   "src/manifest.mjs",
   "src/middleware.mjs",
+  "src/native.mjs",
   "src/networks.mjs",
   "src/node.mjs",
   "src/oci-auth.mjs",
