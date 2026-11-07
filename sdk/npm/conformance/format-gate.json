@@ -65,7 +65,7 @@
     },
     {
       "files": ["crates/prismpm/src/holo/model_document.rs"],
-      "reason": "Slice 1 of #216 (#246) adds the Server variant, model-document/7, which no holo can carry: building or verifying a server application is refused with PP2023 before any holo is assembled (application_build.rs, verification.rs). Every other application keeps its document version, and the accessors that now return owned values move no byte. The scenario comes with the slice that builds a server holo (#342)."
+      "reason": "Slice 1 of #216 (#246) adds the Server variant, model-document/7, which no holo can carry: building or verifying a server application is refused with PP2023 before any holo is assembled (application_build.rs, verification.rs). Every other application keeps its document version and its document layout; the accessors that now return owned values change no encoding. Existing holos change only through the emitter semantics id, as with any change to an emitter input. The scenario comes with the slice that builds a server holo (#342)."
     }
   ]
 }
