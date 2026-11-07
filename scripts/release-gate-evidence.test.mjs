@@ -454,6 +454,7 @@ function workflowContract(value) {
   const nativeUpload = value.jobs.native.steps.find(step => step.with?.name === 'sdk-equivalence-${{ matrix.arch }}');
   assert.equal(nativeUpload.if, 'always()'); assert.equal(nativeUpload.with.path, '.native-equivalence/');
   assert.equal(nativeUpload.with['if-no-files-found'], 'error');
+  assert.equal(nativeUpload.with['include-hidden-files'], true, 'the hidden native evidence directory must be uploaded');
   assert.deepEqual(value.jobs.native.strategy.matrix.include, [
     {os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'},
     {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'},
@@ -471,6 +472,7 @@ test('actual workflow retains every source part and complete native failure orig
     v => {v.jobs.gate.steps.find(s => s.with?.name === 'source-vv').if = 'always()';},
     v => {v.jobs.native.steps.find(s => s.run?.includes('release-gate-evidence.mjs native')).run += ' || true';},
     v => {v.jobs.native.steps.find(s => s.with?.name === 'sdk-equivalence-${{ matrix.arch }}').with.path = '.';},
+    v => {delete v.jobs.native.steps.find(s => s.with?.name === 'sdk-equivalence-${{ matrix.arch }}').with['include-hidden-files'];},
     v => {v.jobs.native.strategy.matrix.include[1].arch = 'amd64';},
   ]) {
     const changed = structuredClone(value); mutate(changed);
