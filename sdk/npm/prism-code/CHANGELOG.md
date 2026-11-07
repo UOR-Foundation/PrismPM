@@ -6,7 +6,10 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
-## [Unreleased]
+## [0.5.1] - 2026-11-07
+
+### Breaking Changes
+None.
 
 ### Bugs Fixed
 - The tiers find `prismpm.lock` here or in a parent directory, up to the repository's root. In a template instance's `app/`, `build --check` and `verify --lean` used to run hosted even with the SDK image on the machine, and said there was no image; `verify --lean --local` there now runs in the image the root lockfile pins. A hosted tier's first line says why it is hosted (`--hosted`, no lockfile, no image, or, for `build --check`, no `prismpm.toml` for `prismpm check` to read), and the `skipped prismpm check` line no longer offers to pull an image that is already here.
