@@ -135,7 +135,14 @@ function validateWorkflow(value) {
   const imageBuild = image.steps.at(-1);
   assert.equal(imageBuild.uses, 'devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca');
   assert.equal(imageBuild.with.push, 'never');
-  assert.match(imageBuild.with.runCmd, /\nnode scripts\/factory\.mjs checks\n/, 'the plumbing κ leaves out is checked on every run');
+  assert.match(imageBuild.with.runCmd, /\nPATH="\$PWD\/target\/release-tools:\$PATH" node scripts\/factory\.mjs checks\n/, 'the plumbing κ leaves out is checked on every run');
+  // The SBOM transport tests execute the pinned ORAS and cosign; the devcontainer has neither.
+  const tools = image.steps.find(step => step.name === 'Install the pinned transport and verifier tools');
+  assert(tools && image.steps.indexOf(tools) < image.steps.indexOf(imageBuild));
+  assert.equal(tools.if, undefined); assert.equal(tools['continue-on-error'], undefined);
+  assert.match(tools.run, /tools="\$GITHUB_WORKSPACE\/target\/release-tools"/);
+  assert.match(tools.run, /for tool in oras cosign; do/);
+  assert.match(tools.run, /bash scripts\/sdk-candidate\.sh "install-\$tool" "\$tools" && break/);
   assert.match(imageBuild.with.runCmd, /--project factory\/lexlean\.toml verify\n/, 'the factory model is verified on every run');
   assert.equal(imageBuild.with.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
   assert.equal(imageBuild.with.cacheTo, '${{ steps.cache.outputs.cache-to }}');
