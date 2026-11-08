@@ -323,7 +323,8 @@ const expectedMatrices = {
     reproducibility: products.flatMap(([image, dockerfile, target]) => platforms.map(({os, arch}) => ({os, platform: `linux/${arch}`, dockerfile, target, name: `${image}-${arch}`, image}))),
     'installed-sdk': platforms,
     'source-vv': vvStartOrder.map(part => ({part})),
-    'installed-vv': vvStartOrder.flatMap(part => platforms.map(({os, arch}) => ({os, arch, part}))),
+    // No installed-vv: re-running the eight source parts inside the shipped
+    // image verified the source a second time, on a projection (Factory.Release).
     'image-platforms': platforms,
     native: [{os: 'ubuntu-24.04', platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
@@ -370,7 +371,7 @@ function candidateContract(value) {
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
-const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 4, 'installed-vv': 8, native: 2}};
+const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 4, native: 2}};
 function publicationContract(name, value) {
   if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {

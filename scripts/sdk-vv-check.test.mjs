@@ -707,31 +707,24 @@ test('native release matrix executes the additional exact-image gate and preserv
     const jobs = [...source.matchAll(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:\\n)`, 'gm'))];
     assert.equal(jobs.length, 1); return jobs[0][1];
   };
-  const installed = extract('installed-sdk'), job = extract('installed-vv'), repro = extract('reproducibility');
-  assert.match(job, /^    runs-on: \$\{\{ matrix.os \}\}$/m);
-  assert.match(job, /^    needs: \[gate, images\]$/m);
-  assert.match(installed, /^    needs: \[gate, images, installed-vv\]$/m);
-  assert(installed.includes('sdk-release-evidence.mjs assemble-installed'));
-  assert(!/^    (?:if|continue-on-error):/m.test(job)); assert(!/^    (?:if|continue-on-error):/m.test(installed));
+  const installed = extract('installed-sdk'), repro = extract('reproducibility');
+  // Installed V&V re-ran the source parts on a projection; it is retired from
+  // the release route (Factory.Release). The product build stays mandatory.
+  assert(!/^  installed-vv:$/m.test(source));
+  assert.match(installed, /^    needs: \[policy, images\]$/m);
+  assert(!installed.includes('sdk-release-evidence.mjs assemble-installed'));
+  assert(!/^    (?:if|continue-on-error):/m.test(installed));
   const setupNode = '      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38\n        with:\n          node-version: 22.23.2\n';
   const hostPrerequisite = (job, command) => {
     assert.equal(job.split(setupNode).length, 2, 'exactly one pinned host Node setup required');
     const firstNode = job.indexOf(command);
     assert(firstNode > job.indexOf(setupNode), 'pinned Node must precede the first source helper');
   };
-  for (const [text, command] of [[installed, 'node root-a/scripts/product-sdk-check.mjs tests'], [repro, 'node "$root/scripts/sdk-image-inputs.mjs"']]) {
+  for (const [text, command] of [[installed, 'bash root-a/scripts/product-sdk-check.sh'], [repro, 'bash root-a/scripts/release-rebuild.sh root-b']]) {
     hostPrerequisite(text, command);
     assert.throws(() => hostPrerequisite(text.replace(setupNode, ''), command));
     assert.throws(() => hostPrerequisite(text.replace('node-version: 22.23.2', 'node-version: 20'), command));
   }
-  const sdkRows = [...job.matchAll(/          - os: ([^\n]+)\n            arch: ([^\n]+)\n            part: ([^\n]+)\n/g)];
-  assert.equal([...job.matchAll(/^            arch: /gm)].length, parts.length * 2);
-  assert.deepEqual(sdkRows.map(row => row.slice(1)).sort(),
-    [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']].flatMap(row => parts.map(part => [...row, part])).sort());
-  const steps = [...job.matchAll(/^      - name: Verify this installed-SDK part on the native isolated runner\n([\s\S]*?)(?=^      - )/gm)]; assert.equal(steps.length, 1);
-  const step = /^        shell: bash\n        env:\n          RESULT_NAME: sdk-\$\{\{ matrix.arch \}\}\n          NATIVE_PLATFORM: linux\/\$\{\{ matrix.arch \}\}\n          PART: \$\{\{ matrix.part \}\}\n        run: \|\n((?:          .*\n)+)$/.exec(steps[0][1]);
-  assert(step, 'closed mandatory SDK step required');
-  const run = step[1].split('\n').map(line => line.slice(10)).join('\n');
   const wrapper = readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url), 'utf8');
   const inner = /  '(node root-a\/scripts\/sdk-vv-check\.mjs tests; node root-a\/scripts\/sdk-vv-check\.mjs run [^'\n]+)'/.exec(wrapper);
   assert(inner, 'both original owning and installed operations must execute inside the pinned image');
@@ -740,6 +733,9 @@ test('native release matrix executes the additional exact-image gate and preserv
   assert(wrapper.includes('test "$(controlled actor-running 10 container inspect "$container_id" --format'));
   assert(wrapper.includes('absent id-absence "$container_id"'));
   assert(repro.includes('browser-api-sdk-check.sh')); assert(repro.includes('library-sdk-check.sh'));
+  // The launcher's own invocation, as an explicit installed run outside the release route uses it.
+  const run = 'set -euo pipefail\nbash root-a/scripts/sdk-vv-outer.sh "$(cat .shipped-image/sdk-image.txt)" \\\n'
+    + '  "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$PART" "$RESULT_NAME-full-sdk-vv-$PART"\n';
   const dir = mkdtempSync(join(tmpdir(), 'prismpm-vv-workflow-unit-')); t.after(() => rmSync(dir, {recursive:true, force:true}));
   mkdirSync(join(dir, '.shipped-image')); writeFileSync(join(dir, '.shipped-image/sdk-image.txt'), image + '\n');
   // Explicit workflow units, not real Docker/image/SDK acceptance. Execute the

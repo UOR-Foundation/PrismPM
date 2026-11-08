@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateConfig } from './sdk-candidate.mjs';
-import { parts as vvParts } from './vv-assemble.mjs';
 import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, verificationArguments } from './sdk-candidate-sbom.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
@@ -213,11 +212,14 @@ export function platformIndex(platforms) {
   return Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests}));
 }
 
-export function verifyReproducibility(image, indexBytes, architecture, revision, first, second) {
+// Each rebuild is an independent build in its own root; the shipped platform
+// manifest is the other. One rebuild establishes reproducibility.
+export function verifyReproducibility(image, indexBytes, architecture, revision, ...rebuilds) {
   assert.match(revision, /^[0-9a-f]{40}$/);
+  assert(rebuilds.length >= 1, 'at least one rebuild');
   const published = publishedPlatform(image, indexBytes, architecture);
   const owners = [];
-  for (const directory of [first, second]) {
+  for (const directory of rebuilds) {
     const {descriptor: rebuilt, verify} = rebuiltManifest(directory, architecture, revision);
     owners.push(verify);
     assert.equal(rebuilt.digest, published.digest, 'rebuilt bytes differ from the shipped platform manifest');
@@ -303,16 +305,15 @@ export function publicationNotes(revision) {
     'These immutable OCI/native assets passed the workflow prerequisites and are published for verification.\n' +
     'This phase does not publish Cargo packages, versioned discovery aliases, or an accepted SDK/ecosystem release.\n' +
     'Each platform has complete raw SPDX in a separately signed OCI artifact, not an inline SPDX attestation.\n' +
-    'Original native installed-SDK V&V part evidence is retained; independent SDK acceptance remains separate.\n' +
+    'Source V&V evidence is bound to its content identity in factory-route.json; independent SDK acceptance remains separate.\n' +
     'Public Cargo qualification and ecosystem acceptance are separate later phases.\n';
 }
 
 export function assetNames() {
   return [
-    'SHA256SUMS', 'source-vv.tar', 'sdk-metadata-native-join.json',
+    'SHA256SUMS', 'factory-route.json', 'source-vv.tar', 'sdk-metadata-native-join.json',
     ...['amd64', 'arm64'].flatMap(architecture => [
-      ...vvParts.map(part => `sdk-${architecture}-full-sdk-vv-${part}.tar`),
-      `sdk-${architecture}-vv-evidence.json`, `sdk-${architecture}-product-cli.tar`,
+      `sdk-${architecture}-product-cli.tar`,
       `sdk-${architecture}-native-equivalence.tar`,
       `sdk-${architecture}-native-metadata.tar`,
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
@@ -383,10 +384,10 @@ async function main([command, ...args]) {
     assert.equal(args.length, 1);
     requirePrerequisites(args[0], JSON.parse(process.env.RELEASE_NEEDS));
   } else if (command === 'reproducibility') {
-    assert.equal(args.length, 6);
-    const [reference, index, architecture, revision, first, second] = args;
+    assert.equal(args.length, 5);
+    const [reference, index, architecture, revision, rebuilt] = args;
     const image = readFileSync(reference, 'utf8').trim();
-    const digest = verifyReproducibility(image, readFileSync(index), architecture, revision, first, second);
+    const digest = verifyReproducibility(image, readFileSync(index), architecture, revision, rebuilt);
     process.stdout.write(`${revision} linux/${architecture} ${image} ${digest}\n`);
   } else if (command === 'image-index') {
     assert.equal(args.length, 5);

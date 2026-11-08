@@ -25,12 +25,14 @@ test('canonical Cargo Git caches retain every object and real locked offline sub
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
-  const compare = steps.find(step => step.env?.DOCKERFILE);
-  assert.match(compare.run, /cmp root-a.digest root-b.digest\n/);
-  assert.match(compare.run, /cmp root-a.oci\/index.json root-b.oci\/index.json\n/);
+  const compare = steps.find(step => step.env?.IMAGE);
+  // One independent rebuild against the shipped build; no third build on success.
+  assert.match(compare.run, /\nbash root-a\/scripts\/release-rebuild\.sh root-b\n/);
+  assert(!compare.run.includes('release-rebuild.sh root-a'));
+  assert.match(compare.run, /"\$GITHUB_SHA" \\\n +root-b\.oci > /);
   const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
   assert.equal(diagnostic.if, 'failure()');
-  assert.equal(diagnostic['timeout-minutes'], 5);
+  assert.match(diagnostic.run, /bash root-a\/scripts\/release-rebuild\.sh root-a; then/);
   assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
   const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
   assert.equal(retained.if, 'failure()');
@@ -118,15 +120,23 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs.rehearsal, '${{ needs.policy.outputs.rehearsal }}');
   assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert(value.jobs.policy.steps.some(step => step.run === 'node --test scripts/release-native-contract.test.mjs'));
-  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'devcontainer-image'],
-    'cheap release contracts and the one construction-cache writer precede source verification');
+  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'factory', 'devcontainer-image'],
+    'cheap release contracts, the factory route and the one construction-cache writer precede source verification');
+  assert.equal(value.jobs['source-vv'].if, "${{ needs.factory.outputs.route == 'establish' }}",
+    'source V&V runs exactly when no receipt exists for this κ');
+  const factory = value.jobs.factory;
+  assert.equal(factory.needs, 'policy');
+  assert.deepEqual(factory.permissions, {contents: 'read', actions: 'read'});
+  assert.equal(factory.steps.find(step => step.uses?.startsWith('actions/checkout')).with['fetch-depth'], 0, 'κ of ancestors needs history');
+  assert.match(factory.steps.find(step => step.id === 'route').run, /node scripts\/factory\.mjs find-receipt "\$GITHUB_SHA"/);
   const image = value.jobs['devcontainer-image'];
-  assert.equal(image.needs, 'policy');
+  assert.deepEqual(image.needs, ['policy', 'factory']);
   assert(!('strategy' in image) && !('if' in image), 'exactly one unconditional construction-cache writer');
   const imageBuild = image.steps.at(-1);
   assert.equal(imageBuild.uses, 'devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca');
   assert.equal(imageBuild.with.push, 'never');
-  assert.equal(imageBuild.with.runCmd, 'true', 'the cache writer verifies nothing and accepts nothing');
+  assert.match(imageBuild.with.runCmd, /\nnode scripts\/factory\.mjs checks\n/, 'the plumbing κ leaves out is checked on every run');
+  assert.match(imageBuild.with.runCmd, /--project factory\/lexlean\.toml verify\n/, 'the factory model is verified on every run');
   assert.equal(imageBuild.with.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
   assert.equal(imageBuild.with.cacheTo, '${{ steps.cache.outputs.cache-to }}');
   const sourceSteps = value.jobs['source-vv'].steps;
@@ -144,36 +154,37 @@ function validateWorkflow(value) {
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
-  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  const sourceUpload = value.jobs.gate.steps.find(step => step.uses?.startsWith('actions/upload-artifact') && step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
-  assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
-  const installed = value.jobs['installed-sdk'], parts = value.jobs['installed-vv'];
-  assert.deepEqual(installed.needs, ['gate', 'images', 'installed-vv']); assert.deepEqual(parts.needs, ['gate', 'images']);
-  for (const job of [installed, parts]) {assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], undefined); assert.equal(job['runs-on'], '${{ matrix.os }}');}
+  // The gate accepts exactly one route and records it.
+  const gate = value.jobs.gate;
+  assert.deepEqual(gate.needs, ['policy', 'factory', 'devcontainer-image', 'source-vv']);
+  for (const clause of ["needs.devcontainer-image.result == 'success'",
+    "(needs.factory.outputs.route == 'establish' && needs.source-vv.result == 'success')",
+    "(needs.factory.outputs.route == 'proved' && needs.source-vv.result == 'skipped')"])
+    assert(gate.if.includes(clause), `gate requires ${clause}`);
+  assert.equal(gate.steps.find(step => step.run?.includes('source-assemble')).if, "${{ needs.factory.outputs.route == 'establish' }}");
+  const receipt = gate.steps.find(step => step.run?.includes('source-receipt'));
+  assert.equal(receipt.if, "${{ needs.factory.outputs.route == 'proved' }}");
+  const receiptDownload = gate.steps.find(step => step.with?.['run-id']);
+  assert.equal(receiptDownload.with.name, 'source-vv'); assert.equal(receiptDownload.with['run-id'], '${{ needs.factory.outputs.run-id }}');
+  assert.match(gate.steps.find(step => step.id === 'source').run, /node scripts\/factory\.mjs route factory-route\/factory-route\.json/);
+  assert(gate.steps.some(step => step.with?.name === 'factory-route' && step.with['if-no-files-found'] === 'error'));
+  // Image stages establish projection obligations only and start beside source V&V.
+  assert.deepEqual(value.jobs.reproducibility.needs, ['policy', 'images']);
+  assert.equal(value.jobs['installed-vv'], undefined, 'installed V&V would verify the source a second time, on a projection');
+  const installed = value.jobs['installed-sdk'];
+  assert.deepEqual(installed.needs, ['policy', 'images']); assert.deepEqual(value.jobs.native.needs, ['policy', 'images']);
+  assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined); assert.equal(installed['runs-on'], '${{ matrix.os }}');
   assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
-  const byKey = row => `${row.arch}/${row.part}`;
-  assert.deepEqual(parts.strategy.matrix.include.map(byKey).sort(), [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]
-    .flatMap(row => vvParts.map(part => byKey({...row, part}))).sort());
-  assert.equal(parts.strategy.matrix.include.length, vvParts.length * 2);
-  for (const row of parts.strategy.matrix.include) assert.equal(row.os, row.arch === 'amd64' ? 'ubuntu-24.04' : 'ubuntu-24.04-arm');
-  const complete = parts.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
-  assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
-  assert.match(complete.run, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
-  const outer = readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url), 'utf8');
-  assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run'));
-  assert(outer.includes('--target registry_qualification_tools'));
-  assert(parts.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
-  const retained = parts.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}');
-  assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
-  assert(retained.with.path.includes('!sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/'), 'private transport data must not be uploaded');
-  const assembled = installed.steps.find(step => step.run?.includes('assemble-installed'));
-  assert(assembled); assert.equal(assembled.if, undefined); assert.equal(assembled['continue-on-error'], undefined);
+  const product = installed.steps.find(step => step.run?.includes('product-sdk-check.sh'));
+  assert(product); assert.equal(product.if, undefined); assert.equal(product['continue-on-error'], undefined);
   const platformJob = value.jobs['image-platforms'];
-  assert.deepEqual(platformJob.needs, 'gate');
+  assert.deepEqual(platformJob.needs, 'policy');
   assert.equal(platformJob['runs-on'], '${{ matrix.os }}');
   assert.deepEqual(platformJob.strategy.matrix.include, [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}]);
-  assert.deepEqual(value.jobs.images.needs, ['gate', 'image-platforms']);
+  assert.deepEqual(value.jobs.images.needs, ['policy', 'image-platforms']);
   for (const job of Object.values(value.jobs))
     assert.ok(!job.steps.some(step => step.uses?.startsWith('docker/setup-qemu-action')), 'every platform is built natively');
   const builds = platformJob.steps.find(step => step.id === 'build');
@@ -193,7 +204,9 @@ function validateWorkflow(value) {
   assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
   assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
   assert.ok(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
-  const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
+  const rebuildStep = value.jobs.reproducibility.steps.find(step => step.env?.IMAGE);
+  // The rebuild itself is the release plumbing script both reproducibility steps run.
+  const rebuild = {run: rebuildStep.run + readFileSync(new URL('./release-rebuild.sh', import.meta.url), 'utf8')};
   for (const key of ['created', 'revision', 'source', 'version']) {
     assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
       || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
@@ -260,10 +273,14 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs['installed-sdk'].if = '${{ false }}'; },
     value => { value.jobs['installed-sdk'].strategy.matrix.include.pop(); },
     value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'ubuntu-24.04'; },
-    value => { value.jobs['installed-vv'].strategy.matrix.include[3].os = 'ubuntu-24.04'; },
-    value => { value.jobs['installed-vv'].steps.find(step => step.run?.includes('sdk-vv-outer.sh')).if = '${{ false }}'; },
-    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('assemble-installed')).if = '${{ false }}'; },
-    value => { value.jobs['installed-vv'].strategy.matrix.include.pop(); },
+    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('product-sdk-check.sh')).if = '${{ false }}'; },
+    value => { value.jobs['source-vv'].if = undefined; },
+    value => { value.jobs['source-vv'].if = '${{ false }}'; },
+    value => { value.jobs.gate.if = '${{ always() }}'; },
+    value => { value.jobs.gate.needs = value.jobs.gate.needs.filter(name => name !== 'devcontainer-image'); },
+    value => { value.jobs.gate.steps.find(step => step.run?.includes('source-receipt')).if = '${{ false }}'; },
+    value => { value.jobs['devcontainer-image'].steps.at(-1).with.runCmd = 'true'; },
+    value => { value.jobs['installed-vv'] = {...value.jobs['installed-sdk']}; },
     value => { value.jobs['oci-native'].steps.find(step => step.run?.includes('publish-oci')).if = undefined; },
     value => { value.jobs.release.if = undefined; },
     value => { value.on.workflow_dispatch.inputs.rehearsal.default = false; },
@@ -305,7 +322,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).env.CARGO_REGISTRY_TOKEN
       = '${{ steps.auth.outputs.token }}'; },
     value => { value.jobs['source-vv'].steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
-    value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
+    value => { value.jobs.reproducibility.steps.find(step => step.env?.IMAGE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
       run => run + '\n--tag mutable:unaccepted\n',

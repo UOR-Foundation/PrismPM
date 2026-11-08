@@ -9,7 +9,7 @@ import {once} from 'node:events';
 import test from 'node:test';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import {bootstrapNames, canonical, hash, readOriginal, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
-import {assembleSourceEvidence, captureCommand, nativeInvocations, releaseContext, sourceEvidenceNames, validateCommand, validateSourcePart} from './release-gate-evidence.mjs';
+import {assembleSourceEvidence, captureCommand, nativeInvocations, releaseContext, sourceEvidenceNames, validateCommand, validateSourcePart, validateSourceReceipt} from './release-gate-evidence.mjs';
 import {captureEvidence, packEvidence} from './sdk-release-evidence.mjs';
 import {retainPart, vvParts} from './sdk-vv-run.mjs';
 const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
@@ -365,6 +365,21 @@ test('source and native archives preserve complete originals without promoting t
   }
 });
 
+test('a factory receipt is the complete source evidence of its own run, never a relabelled one', t => {
+  const root = temporary(t); sourceFixture(root);
+  const files = new Map(sourceEvidenceNames().map(name => [name, readOriginal(join(root, name), 256 * 1024 * 1024)]));
+  validateSourceReceipt(files, sourceContext);
+  // The receipt keeps its own commit and run; it is not accepted as this run's.
+  assert.throws(() => validateSourceReceipt(files, {...sourceContext, source_revision: 'c'.repeat(40)}));
+  assert.throws(() => validateSourceReceipt(files, {...sourceContext, run_id: '124'}));
+  const partial = new Map(files); partial.delete('source-gates-vv.json');
+  assert.throws(() => validateSourceReceipt(partial, sourceContext));
+  const extra = new Map(files); extra.set('factory-route.json', Buffer.from('{}'));
+  assert.throws(() => validateSourceReceipt(extra, sourceContext));
+  const changed = new Map(files); changed.set('source-vv.json', Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, status: 'passed', gates: [1]})));
+  assert.throws(() => validateSourceReceipt(changed, sourceContext));
+});
+
 test('missing bootstrap, failed command, substituted bytes and wrong native invocation fail closed', t => {
   for (const [kind, fixture, binding, changes] of [
     ['source-vv', sourceFixture, sourceContext, [
@@ -441,10 +456,14 @@ function workflowContract(value) {
   const partUpload = value.jobs['source-vv'].steps.find(step => step.with?.name === 'source-vv-part-${{ matrix.part }}');
   assert.equal(partUpload.if, 'always()'); assert.equal(partUpload.with['if-no-files-found'], 'error');
   assert.equal(partUpload.with.path, 'target/source-vv-evidence/');
-  assert.deepEqual(value.jobs.gate.needs, ['policy', 'source-vv']); assert.equal(value.jobs.gate.if, undefined);
+  assert.deepEqual(value.jobs.gate.needs, ['policy', 'factory', 'devcontainer-image', 'source-vv']);
+  assert(value.jobs.gate.if.includes("(needs.factory.outputs.route == 'establish' && needs.source-vv.result == 'success')"));
+  assert(value.jobs.gate.if.includes("(needs.factory.outputs.route == 'proved' && needs.source-vv.result == 'skipped')"));
   const assemble = value.jobs.gate.steps.find(step => step.run?.includes('release-gate-evidence.mjs source-assemble'));
-  assert.equal(assemble.if, undefined); assert.equal(assemble['continue-on-error'], undefined); assert(!assemble.run.includes('||'));
-  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  assert.equal(assemble.if, "${{ needs.factory.outputs.route == 'establish' }}"); assert.equal(assemble['continue-on-error'], undefined); assert(!assemble.run.includes('||'));
+  const receipt = value.jobs.gate.steps.find(step => step.run?.includes('release-gate-evidence.mjs source-receipt'));
+  assert.equal(receipt.if, "${{ needs.factory.outputs.route == 'proved' }}"); assert.equal(receipt['continue-on-error'], undefined); assert(!receipt.run.includes('||'));
+  const sourceUpload = value.jobs.gate.steps.find(step => step.uses?.startsWith('actions/upload-artifact') && step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   const native = value.jobs.native.steps.find(step => step.run?.includes('release-gate-evidence.mjs native'));
@@ -469,7 +488,9 @@ test('actual workflow retains every source part and complete native failure orig
     v => {v.jobs['source-vv'].steps.find(s => s.with?.name === 'source-vv-part-${{ matrix.part }}').if = 'success()';},
     v => {v.jobs.gate.needs.pop();},
     v => {v.jobs.gate.steps.find(s => s.run?.includes('source-assemble')).run += ' || true';},
-    v => {v.jobs.gate.steps.find(s => s.with?.name === 'source-vv').if = 'always()';},
+    v => {v.jobs.gate.steps.find(s => s.uses?.startsWith('actions/upload-artifact') && s.with?.name === 'source-vv').if = 'always()';},
+    v => {v.jobs.gate.steps.find(s => s.run?.includes('source-receipt')).run += ' || true';},
+    v => {v.jobs.gate.if = '${{ always() }}';},
     v => {v.jobs.native.steps.find(s => s.run?.includes('release-gate-evidence.mjs native')).run += ' || true';},
     v => {v.jobs.native.steps.find(s => s.with?.name === 'sdk-equivalence-${{ matrix.arch }}').with.path = '.';},
     v => {delete v.jobs.native.steps.find(s => s.with?.name === 'sdk-equivalence-${{ matrix.arch }}').with['include-hidden-files'];},

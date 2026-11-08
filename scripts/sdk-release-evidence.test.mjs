@@ -85,17 +85,16 @@ function validateWorkflow(workflow) {
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
     assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
   };
-  const parts = steps.filter(step => step.with?.pattern === 'full-sdk-vv-sdk-*');
-  assert.equal(parts.length, 1, 'missing or duplicate part evidence download');
-  assert.equal(parts[0].uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
-  assert.deepEqual(parts[0].with, {pattern: 'full-sdk-vv-sdk-*', 'merge-multiple': true, path: '.sdk-gate-evidence/full-sdk-vv'});
-  assert.equal(parts[0].if, undefined); assert.equal(parts[0]['continue-on-error'], undefined);
-  assert(steps.indexOf(parts[0]) < steps.indexOf(pack), 'evidence must arrive before capture');
+  // Installed V&V is retired (Factory.Release): no installed part evidence is
+  // downloaded or published, and the route record is.
+  assert(!steps.some(step => step.with?.pattern === 'full-sdk-vv-sdk-*' || step.with?.pattern === 'installed-vv-evidence-*'));
+  download('factory-route', 'release');
+  assert(assetNames().includes('factory-route.json'));
   for (const arch of ['amd64', 'arm64']) {
     download(`product-cli-sdk-${arch}`, `.sdk-gate-evidence/product-cli-sdk-${arch}`);
     assert(assetNames().includes(`sdk-${arch}-product-cli.tar`));
-    assert(assetNames().includes(`sdk-${arch}-vv-evidence.json`));
-    for (const part of vvParts) assert(assetNames().includes(`sdk-${arch}-full-sdk-vv-${part}.tar`));
+    assert(!assetNames().includes(`sdk-${arch}-vv-evidence.json`));
+    for (const part of vvParts) assert(!assetNames().includes(`sdk-${arch}-full-sdk-vv-${part}.tar`));
     download(`browser-sdk-sdk-${arch}`, 'release');
     download(`library-sdk-sdk-${arch}`, `.sdk-gate-evidence/library-sdk-sdk-${arch}`);
     for (const kind of ['browser', 'library']) assert(assetNames().includes(`sdk-${arch}-${kind}-sdk.log`));
@@ -110,17 +109,14 @@ function validateWorkflow(workflow) {
     '  . "$image" "$GITHUB_SHA" > release/sdk-metadata-native-join.json',
     'cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/',
     'cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/',
+    '# Source evidence is packed with the run that established it: this',
+    "# one, or the receipt's (release/factory-route.json says which).",
     'node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \\',
-    '  release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
-    'parts=$(node scripts/vv-assemble.mjs --list)',
+    '  release/source-vv.tar - "$SOURCE_REVISION" amd64 "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT"',
     'for architecture in amd64 arm64; do',
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
     '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
-    '  for part in $parts; do',
-    '    node scripts/sdk-release-evidence.mjs full-sdk-vv \\',
-    '      ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \\',
-    '      "$image" "$GITHUB_SHA" "$architecture" "$part"', '  done',
     '  node scripts/sdk-release-evidence.mjs product-cli \\',
     '    ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \\',
     '    "$image" "$GITHUB_SHA" "$architecture"',
@@ -130,6 +126,8 @@ function validateWorkflow(workflow) {
     'done', '',
   ].join('\n'));
   download('source-vv', '.sdk-gate-evidence/source-vv');
+  assert.deepEqual(pack.env, {SOURCE_REVISION: '${{ needs.gate.outputs.source-revision }}',
+    SOURCE_RUN_ID: '${{ needs.gate.outputs.source-run-id }}', SOURCE_RUN_ATTEMPT: '${{ needs.gate.outputs.source-run-attempt }}'});
   for (const arch of ['amd64', 'arm64']) download(`sdk-equivalence-${arch}`, `.sdk-gate-evidence/native-equivalence-sdk-${arch}`);
   assert(steps.indexOf(pack) < steps.findIndex(step => step.run?.includes('checksums=$(mktemp)')));
   assert.deepEqual(workflow.jobs['oci-native'].needs, ['gate', 'images', 'native', 'reproducibility', 'installed-sdk']);
@@ -155,11 +153,11 @@ test('OCI publication retains both native gate closures without granting SDK acc
   validateWorkflow(workflow);
   const steps = value => value.jobs['oci-native'].steps;
   const pack = value => steps(value).find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
-  const gate = value => steps(value).find(step => step.with?.pattern === 'full-sdk-vv-sdk-*');
+  const gate = value => steps(value).find(step => step.with?.name === 'factory-route');
   for (const mutate of [
     value => steps(value).splice(steps(value).indexOf(gate(value)), 1),
     value => steps(value).push(structuredClone(gate(value))),
-    value => {gate(value).with.path = 'release';},
+    value => {gate(value).with.path = '.sdk-gate-evidence';},
     value => {gate(value).uses = 'actions/download-artifact@main';},
     value => {gate(value).if = 'always()';},
     value => {gate(value)['continue-on-error'] = true;},
@@ -174,6 +172,9 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with.path = 'root-a/target/library-sdk-evidence/';},
     value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with['if-no-files-found'] = 'ignore';},
     value => {pack(value).run = pack(value).run.replace('"$GITHUB_SHA"', '"stale"');},
+    value => {pack(value).run = pack(value).run.replace('"$SOURCE_REVISION"', '"$GITHUB_SHA"');},
+    value => {pack(value).env.SOURCE_RUN_ID = '${{ github.run_id }}';},
+    value => {steps(value).push({uses: 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093', with: {pattern: 'full-sdk-vv-sdk-*', 'merge-multiple': true, path: '.sdk-gate-evidence/full-sdk-vv'}});},
     value => {pack(value).run = pack(value).run.replace('"$architecture"', '"$architecture" || true');},
     value => {const record = pack(value); steps(value).splice(steps(value).indexOf(record), 1); steps(value).push(record);},
     value => {value.jobs['oci-native'].needs.pop();},

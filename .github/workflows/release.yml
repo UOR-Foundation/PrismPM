@@ -68,6 +68,40 @@ jobs:
           test "$(git status --porcelain)" = ""
           test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.4.0
 
+  # The factory route (factory/src/Factory/Release.lex.tex, scripts/factory.mjs).
+  # Source V&V is established once per κ: the source tree without the release
+  # plumbing. When an ancestor on the release line with the same κ passed the
+  # gate, its retained source evidence is the receipt and source-vv is not run
+  # again. The plumbing's own tests run fresh in devcontainer-image every time.
+  factory:
+    needs: policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      kappa: ${{ steps.route.outputs.kappa }}
+      route: ${{ steps.route.outputs.route }}
+      source-revision: ${{ steps.route.outputs.source-revision }}
+      run-id: ${{ steps.route.outputs.run-id }}
+      run-attempt: ${{ steps.route.outputs.run-attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - id: route
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/factory.mjs find-receipt "$GITHUB_SHA" | tee -a "$GITHUB_OUTPUT"
+
   # One source pass, as the eight `just vv-part` parts of scripts/vv-assemble.mjs,
   # each under one 6 h hosted-job limit. Longest parts first so max-parallel
   # starts them before the short ones; tests derive the set from `parts`.
@@ -76,8 +110,8 @@ jobs:
   # this ref first; the source shards then import its layers instead of each
   # repeating every package, toolchain and snapshot.debian.org download.
   devcontainer-image:
-    name: Devcontainer image cache
-    needs: policy
+    name: Devcontainer image cache and plumbing checks
+    needs: [policy, factory]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -94,10 +128,17 @@ jobs:
           push: never
           cacheFrom: ${{ steps.cache.outputs.cache-from }}
           cacheTo: ${{ steps.cache.outputs.cache-to }}
-          runCmd: "true"
+          # κ leaves the plumbing out, so its own tests and the factory model
+          # are checked on every run, whichever route source V&V takes.
+          runCmd: |
+            set -euo pipefail
+            cargo fetch --locked
+            node scripts/factory.mjs checks
+            cargo run --locked --quiet --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean -- --project factory/lexlean.toml verify
 
   source-vv:
-    needs: [policy, devcontainer-image]
+    needs: [policy, factory, devcontainer-image]
+    if: ${{ needs.factory.outputs.route == 'establish' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
@@ -146,32 +187,78 @@ jobs:
           compression-level: 0
           retention-days: 30
 
+  # The gate accepts source V&V either established by source-vv on this commit
+  # or proved by the factory receipt, and records which in factory-route.json.
   gate:
-    needs: [policy, source-vv]
+    needs: [policy, factory, devcontainer-image, source-vv]
+    if: >-
+      ${{ !cancelled() && needs.policy.result == 'success' && needs.factory.result == 'success'
+      && needs.devcontainer-image.result == 'success'
+      && ((needs.factory.outputs.route == 'establish' && needs.source-vv.result == 'success')
+      || (needs.factory.outputs.route == 'proved' && needs.source-vv.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
+      actions: read
     outputs:
       version: ${{ needs.policy.outputs.version }}
       publish-crates: ${{ needs.policy.outputs.publish-crates }}
       rehearsal: ${{ needs.policy.outputs.rehearsal }}
+      source-revision: ${{ steps.source.outputs.revision }}
+      source-run-id: ${{ steps.source.outputs.run-id }}
+      source-run-attempt: ${{ steps.source.outputs.run-attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           submodules: false
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.23.2
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: ${{ needs.factory.outputs.route == 'establish' }}
         with:
           pattern: source-vv-part-*
           merge-multiple: true
           path: target/source-vv-evidence
       - name: Require every source part on this commit
+        if: ${{ needs.factory.outputs.route == 'establish' }}
         run: |
           node scripts/release-gate-evidence.mjs source-assemble . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" -
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: ${{ needs.factory.outputs.route == 'proved' }}
+        with:
+          name: source-vv
+          path: target/source-vv-evidence
+          run-id: ${{ needs.factory.outputs.run-id }}
+          github-token: ${{ github.token }}
+      - name: Require the receipt's every source part on its own commit and run
+        if: ${{ needs.factory.outputs.route == 'proved' }}
+        env:
+          SOURCE_REVISION: ${{ needs.factory.outputs.source-revision }}
+          SOURCE_RUN_ID: ${{ needs.factory.outputs.run-id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.factory.outputs.run-attempt }}
+        run: |
+          node scripts/release-gate-evidence.mjs source-receipt . target/source-vv-evidence "$SOURCE_REVISION" amd64 - "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" -
+      - id: source
+        env:
+          ROUTE: ${{ needs.factory.outputs.route }}
+          SOURCE_REVISION: ${{ needs.factory.outputs.source-revision }}
+          SOURCE_RUN_ID: ${{ needs.factory.outputs.run-id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.factory.outputs.run-attempt }}
+        run: |
+          set -euo pipefail
+          if [ "$ROUTE" = establish ]; then
+            route=established revision=$GITHUB_SHA run_id=$GITHUB_RUN_ID run_attempt=$GITHUB_RUN_ATTEMPT
+          else
+            test "$ROUTE" = proved
+            route=proved revision=$SOURCE_REVISION run_id=$SOURCE_RUN_ID run_attempt=$SOURCE_RUN_ATTEMPT
+          fi
+          mkdir factory-route
+          node scripts/factory.mjs route factory-route/factory-route.json "$GITHUB_SHA" "$route" "$revision" "$run_id" "$run_attempt"
+          printf 'revision=%s\nrun-id=%s\nrun-attempt=%s\n' "$revision" "$run_id" "$run_attempt" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: source-vv
@@ -179,12 +266,20 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: factory-route
+          path: factory-route/factory-route.json
+          if-no-files-found: error
+          retention-days: 30
 
   # Each platform is built on its own native runner: emulated arm64 builds
   # exceed the hosted job limit. One job per platform builds every image in
   # one Buildx builder, so the targets of sdk/Dockerfile share their stages.
+  # Image stages establish projection obligations only, so they start beside
+  # source V&V; only publication waits for the gate (Factory.Release).
   image-platforms:
-    needs: gate
+    needs: policy
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -223,7 +318,7 @@ jobs:
       - id: build
         env:
           ARCH: ${{ matrix.arch }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/image-platforms"
@@ -262,7 +357,7 @@ jobs:
           retention-days: 30
 
   images:
-    needs: [gate, image-platforms]
+    needs: [policy, image-platforms]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -491,7 +586,7 @@ jobs:
           retention-days: 30
 
   reproducibility:
-    needs: [gate, images]
+    needs: [policy, images]
     timeout-minutes: 360
     strategy:
       fail-fast: false
@@ -575,7 +670,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      # Two independent OCI exports must fit alongside the BuildKit cache.
+      # Two OCI exports (one on a failed comparison) must fit alongside the BuildKit cache.
       - name: Free runner disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
@@ -615,44 +710,33 @@ jobs:
           DOCKERFILE: ${{ matrix.dockerfile }}
           PLATFORM: ${{ matrix.platform }}
           TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
           IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
           identity_file=".shipped-image/$IMAGE-image.txt"
           identity=$(cat "$identity_file")
           docker buildx imagetools inspect --raw "$identity" > shipped-index.json
-          for root in root-a root-b; do
-            context=()
-            if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
-              build=(node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$GITHUB_SHA" "$TARGET")
-            else
-              test "$DOCKERFILE" = sdk/runtime/Dockerfile
-              build=(docker buildx build --file "$root/$DOCKERFILE")
-              context=("$root")
-            fi
-            "${build[@]}" --no-cache --provenance=false --sbom=false \
-              --build-arg SOURCE_DATE_EPOCH=0 \
-              --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
-              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --label "org.opencontainers.image.version=$VERSION" \
-              --platform "$PLATFORM" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
-            mkdir "$root.oci"
-            tar -xf "$root.oci.tar" -C "$root.oci"
-            jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
-          done
-          cmp root-a.digest root-b.digest
-          cmp root-a.oci/index.json root-b.oci/index.json
+          # The shipped build is one root; one independent no-cache rebuild in a
+          # second root on another runner establishes reproducibility. A third
+          # build would establish it again (Factory.Release, eachOnce).
+          bash root-a/scripts/release-rebuild.sh root-b
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
-            root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+            root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      # Only a failed comparison pays for a second rebuild, to locate the layers
+      # that differ; it never changes acceptance.
       - name: Diagnose differing OCI layers without changing acceptance
         if: failure()
-        timeout-minutes: 5
+        timeout-minutes: 240
+        shell: bash
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          PLATFORM: ${{ matrix.platform }}
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.policy.outputs.version }}
         run: |
-          if [ -f root-a.oci/index.json ] && [ -f root-b.oci/index.json ]; then
+          if [ -f root-b.oci/index.json ] && bash root-a/scripts/release-rebuild.sh root-a; then
             python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
           fi
       - name: Retain bounded reproducibility diagnostics
@@ -691,7 +775,6 @@ jobs:
           RESULT_NAME: ${{ matrix.name }}
         run: |
           set -euo pipefail
-          node root-a/scripts/library-sdk-check.mjs tests
           bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && matrix.image == 'sdk'
@@ -702,118 +785,12 @@ jobs:
             root-a/target/library-sdk-evidence/
           if-no-files-found: error
           retention-days: 30
-  # One installed pass per architecture, as the eight parts of
-  # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
-  # Part-major order so max-parallel 8 runs four parts on each architecture.
-  installed-vv:
-    needs: [gate, images]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 360
-    permissions:
-      contents: read
-      packages: read
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            arch: amd64
-            part: dk-3
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: dk-3
-          - os: ubuntu-24.04
-            arch: amd64
-            part: ho-oc
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: ho-oc
-          - os: ubuntu-24.04
-            arch: amd64
-            part: dk-2
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: dk-2
-          - os: ubuntu-24.04
-            arch: amd64
-            part: gates
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: gates
-          - os: ubuntu-24.04
-            arch: amd64
-            part: st-sy
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: st-sy
-          - os: ubuntu-24.04
-            arch: amd64
-            part: dk-0-1
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: dk-0-1
-          - os: ubuntu-24.04
-            arch: amd64
-            part: conformance
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: conformance
-          - os: ubuntu-24.04
-            arch: amd64
-            part: source
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: source
-    steps:
-      # The isolated image closure needs four times the 5.9 GB of compressed SDK, daemon and
-      # registry layers plus a 12 GiB reserve; the shorter list left 35 GB on amd64.
-      - name: Free runner disk
-        run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
-            /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft \
-            /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
-          df -h /
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          path: root-a
-          submodules: false
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.23.2
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          version: v0.28.0
-          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: sdk-image
-          path: .shipped-image
-      - name: Verify this installed-SDK part on the native isolated runner
-        shell: bash
-        env:
-          RESULT_NAME: sdk-${{ matrix.arch }}
-          NATIVE_PLATFORM: linux/${{ matrix.arch }}
-          PART: ${{ matrix.part }}
-        run: |
-          set -euo pipefail
-          bash root-a/scripts/sdk-vv-outer.sh "$(cat .shipped-image/sdk-image.txt)" \
-            "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$PART" "$RESULT_NAME-full-sdk-vv-$PART"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}
-          path: |
-            sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/
-            sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}-outer-owner/
-            !sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/
-          if-no-files-found: error
-          retention-days: 30
-
+  # Installed V&V re-ran the eight source parts inside the shipped image: the
+  # source obligation a second time, on a projection (Factory.Release,
+  # thePriorRouteVerifiedTheSourceTwice). The image is bound to the source by
+  # reproducibility, native equivalence and the installed product build below.
   installed-sdk:
-    needs: [gate, images, installed-vv]
+    needs: [policy, images]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -846,32 +823,12 @@ jobs:
         with:
           name: sdk-image
           path: .shipped-image
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: full-sdk-vv-sdk-${{ matrix.arch }}-*
-          merge-multiple: true
-          path: .installed-vv
-      - name: Require every installed part on this commit and image
-        shell: bash
-        env:
-          ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          node root-a/scripts/sdk-release-evidence.mjs assemble-installed .installed-vv \
-            "sdk-$ARCH-vv-evidence.json" "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$ARCH"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: installed-vv-evidence-${{ matrix.arch }}
-          path: sdk-${{ matrix.arch }}-vv-evidence.json
-          if-no-files-found: error
-          retention-days: 30
       - name: Verify genuine installed product CLI and source-free browser release
         shell: bash
         env:
           RESULT_NAME: sdk-${{ matrix.arch }}
         run: |
           set -euo pipefail
-          node root-a/scripts/product-sdk-check.mjs tests
           bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" \
             "$GITHUB_SHA" "$RESULT_NAME-product-cli"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -883,7 +840,7 @@ jobs:
           retention-days: 30
 
   native:
-    needs: [gate, images]
+    needs: [policy, images]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -924,7 +881,7 @@ jobs:
       - shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ needs.policy.outputs.version }}
         run: |
           set -euo pipefail
           node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" cli-archive \
@@ -1013,13 +970,7 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: full-sdk-vv-sdk-*
-          merge-multiple: true
-          path: .sdk-gate-evidence/full-sdk-vv
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: installed-vv-evidence-*
-          merge-multiple: true
+          name: factory-route
           path: release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -1059,6 +1010,10 @@ jobs:
           path: .sdk-gate-evidence/native-equivalence-sdk-arm64
       - name: Preserve complete native SDK gate evidence without changing acceptance scope
         shell: bash
+        env:
+          SOURCE_REVISION: ${{ needs.gate.outputs.source-revision }}
+          SOURCE_RUN_ID: ${{ needs.gate.outputs.source-run-id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.gate.outputs.source-run-attempt }}
         run: |
           set -euo pipefail
           image=$(cat release/sdk-image.txt)
@@ -1068,18 +1023,14 @@ jobs:
             . "$image" "$GITHUB_SHA" > release/sdk-metadata-native-join.json
           cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
+          # Source evidence is packed with the run that established it: this
+          # one, or the receipt's (release/factory-route.json says which).
           node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
-            release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
-          parts=$(node scripts/vv-assemble.mjs --list)
+            release/source-vv.tar - "$SOURCE_REVISION" amd64 "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT"
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
               "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
-            for part in $parts; do
-              node scripts/sdk-release-evidence.mjs full-sdk-vv \
-                ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \
-                "$image" "$GITHUB_SHA" "$architecture" "$part"
-            done
             node scripts/sdk-release-evidence.mjs product-cli \
               ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \
               "$image" "$GITHUB_SHA" "$architecture"
