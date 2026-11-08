@@ -1008,11 +1008,6 @@ fn declaration_audits(lex: &Value, modules: &[Value], closure: &Closure) -> Resu
     for row in array(&lex["declarations"])? {
         keys(row, &["name", "observed", "policy", "result"])?;
         let name = string(&row["name"])?;
-        let pinned = match expected.get(name) {
-            Some(policy) => Some((*policy).clone()),
-            None => crate::library_verification::runtime_declaration_axioms(name)?
-                .map(|axioms| json!({"axioms": axioms, "kind": "exact"})),
-        };
         ensure(
             seen.insert(name.to_owned())
                 && expected
@@ -1032,16 +1027,8 @@ fn declaration_audits(lex: &Value, modules: &[Value], closure: &Closure) -> Resu
         };
         ensure(permitted, "LexLean declaration has unapproved axioms")?;
     }
-    let runtime_names = runtime
-        .iter()
-        .flat_map(|module| module.declarations.iter().map(|(name, _)| name.clone()))
-        .collect::<BTreeSet<_>>();
     ensure(
-        seen == expected
-            .keys()
-            .cloned()
-            .chain(runtime_names)
-            .collect::<BTreeSet<_>>(),
+        seen == expected.keys().cloned().collect(),
         "LexLean declaration audit is incomplete",
     )
 }
@@ -1328,7 +1315,7 @@ fn lexlean_processes(lex: &Value, closure: &Closure) -> Result<(), PrismError> {
             digest(&row["recipe_id"])?;
             ensure(
                 row["byte_length"].as_u64().is_some_and(|length| length > 0)
-                    && project.contains(string(&row["module"])?),
+                    && modules.contains(string(&row["module"])?),
                 "LexLean PDF descriptor differs",
             )?;
             for key in ["compile", "version"] {
