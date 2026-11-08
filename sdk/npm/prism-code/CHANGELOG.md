@@ -6,7 +6,7 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
-## [Unreleased]
+## [0.6.0] - 2026-11-08
 
 ### Features Added
 - The guided journey builds without Docker by default (experimental). `prism_build` builds in the SDK image when it is on this machine, else on the repository's own GitHub Actions when a GitHub token is there (`GITHUB_TOKEN`, `GH_TOKEN` or `gh`), else in the image after downloading it; `remote: "github" | "local"` and `PRISM_CODE_TIER=local` choose. An app with no repository gets `needs: "repository"` and a suggested `<login>/prism-<name>`; once the user approves, `prism_build` with `repository` commits only Prism's paths (the app folder, `.github/workflows/build.yml`, the root `prismpm.lock`), creates the public repository with `gh` (or connects an existing empty one) and builds that commit, which this machine verifies as `build --remote github` does. A user file the commit does not name stays out.
