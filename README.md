@@ -105,7 +105,7 @@ The `Browser` application profile remains refused with `PP2011` until its genera
 authenticated effects, durable recovery and full owning verification are complete.
 The `Server` application profile declares and validates its host effects and generates a host adapter
 (an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
-the core of a server application is built through `production` (`PP2020` refuses an export the host
+the core of a server application is built through `production` (`PP2025` refuses an export the host
 adapter cannot bound), a served application listens on the loopback interface only and answers RFC 9112
 requests through the generated adapter, and `prismpm verify` of a server application builds the consumer's locked workspace
 around the production core and accepts the program (every vector with its effect transcript, the binding

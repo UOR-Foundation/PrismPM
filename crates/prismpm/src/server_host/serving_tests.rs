@@ -1,4 +1,4 @@
-//! HO-23 to HO-25: the generated listener and its RFC 9112 framing.
+//! HO-36 to HO-38: the generated listener and its RFC 9112 framing.
 //!
 //! The execution tests build the generated host adapter of a served application
 //! around a small stand-in core, start the real program with `serve` on a
@@ -417,7 +417,7 @@ fn changed(edit: impl FnOnce(&mut Value)) -> ServerApplication {
 
 fn refused(application: &ServerApplication) -> String {
     let error = validate(application).expect_err("the declaration is refused");
-    assert_eq!(error.code, "PP2019", "{}", error.message);
+    assert_eq!(error.code, "PP2024", "{}", error.message);
     error.message
 }
 
@@ -544,7 +544,7 @@ fn the_listener_binds_loopback_only_and_refuses_any_other_address() {
             "{address:?}"
         );
         // A declaration that is refused generates nothing.
-        assert_eq!(generate(&application).unwrap_err().code, "PP2019");
+        assert_eq!(generate(&application).unwrap_err().code, "PP2024");
     }
     generated_passed("the_listener_binds_loopback_only_and_refuses_any_other_address");
     let server = server();

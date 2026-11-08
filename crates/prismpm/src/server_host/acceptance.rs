@@ -15,7 +15,7 @@
 //! a core effect is reached by the steps of the transcripts the program replayed
 //! to the end (a script with a step left over is refused by the program), a
 //! frame effect by the served exchanges, each of which builds the whole request
-//! frame. An effect nothing reached is `PP2021`, never a verified application.
+//! frame. An effect nothing reached is `PP2026`, never a verified application.
 //!
 //! A served application is also run as a server: for every served vector the
 //! program is started with `serve` on its declared loopback listener, the
@@ -279,12 +279,12 @@ pub fn exercises(application: &ServerApplication, served: usize) -> Vec<Exercise
 /// Refuse a declared effect that no vector reached.
 ///
 /// # Errors
-/// Returns `PP2021` naming the first effect nothing reached.
+/// Returns `PP2026` naming the first effect nothing reached.
 pub fn require_exercised(exercises: &[Exercise]) -> Result<(), PrismError> {
     match exercises.iter().find(|exercise| !exercise.reached()) {
         None => Ok(()),
         Some(exercise) => Err(PrismError::new(
-            "PP2021",
+            "PP2026",
             match exercise.role {
                 Role::Core => format!(
                     "the host effect {} is exercised by no transcript step of any acceptance vector",
@@ -335,7 +335,7 @@ fn run(
 ///
 /// # Errors
 /// Returns `PP6003` when the program disagrees with the model for any vector
-/// or transport, `PP2021` when a declared effect is reached by no vector,
+/// or transport, `PP2026` when a declared effect is reached by no vector,
 /// `PP4002` when the work directory cannot be written and `PP2013` when
 /// `binding` is asked for and none is declared.
 pub fn execute(
@@ -408,7 +408,7 @@ pub fn execute(
 /// built it. The record that [`execute`] returns is this one and that digest.
 ///
 /// # Errors
-/// Returns `PP2021` when a declared effect is reached by no vector.
+/// Returns `PP2026` when a declared effect is reached by no vector.
 pub fn record(
     application: &ServerApplication,
     binding: bool,
@@ -447,7 +447,7 @@ pub fn record(
 /// the binding linked when one is declared and every served vector answered.
 ///
 /// # Errors
-/// Returns `PP2021` when a declared effect is reached by no vector.
+/// Returns `PP2026` when a declared effect is reached by no vector.
 pub fn modeled_record(application: &ServerApplication) -> Result<Value, PrismError> {
     record(
         application,

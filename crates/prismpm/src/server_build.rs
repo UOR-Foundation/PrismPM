@@ -45,7 +45,7 @@ pub struct ServerBuild {
 }
 
 fn refused(message: impl Into<String>) -> PrismError {
-    PrismError::new("PP2020", message)
+    PrismError::new("PP2025", message)
 }
 
 /// The production request that names the declared core.
@@ -54,7 +54,7 @@ fn refused(message: impl Into<String>) -> PrismError {
 /// project edited between the check and the export is stale, not exported.
 ///
 /// # Errors
-/// Returns `PP2020` when the compiler does not describe the `rust-std` target.
+/// Returns `PP2025` when the compiler does not describe the `rust-std` target.
 pub fn request(
     application: &ServerApplication,
     snapshot: &SemanticSnapshot,
@@ -89,7 +89,7 @@ pub fn request(
 /// Refuse a package that exhibits an effect the adapter gives no bound for.
 ///
 /// # Errors
-/// Returns `PP2020` naming the first effect that is not admitted.
+/// Returns `PP2025` naming the first effect that is not admitted.
 pub fn admit_effects(root: &str, effects: &[String]) -> Result<(), PrismError> {
     match effects
         .iter()
@@ -122,8 +122,8 @@ fn relative(path: &str) -> Result<&str, PrismError> {
 /// build root holds the production bundle until the packages are read out of it.
 ///
 /// # Errors
-/// Returns `PP2013` or `PP2019` for an invalid declaration, `PP2001` for a core
-/// root the snapshot does not define, and `PP2020` when the compiler refuses the
+/// Returns `PP2013` or `PP2024` for an invalid declaration, `PP2001` for a core
+/// root the snapshot does not define, and `PP2025` when the compiler refuses the
 /// export (a root that is not a production root of the project, a target the root
 /// does not declare, a verification failure, a stale project) or the package
 /// exhibits an effect that is not admitted.
@@ -139,7 +139,7 @@ pub fn build(
     // refused before the compiler spends its time.
     let generated = crate::server_host::generate(application)?;
     let output = production::build(engine, &request(application, snapshot)?)
-        .map_err(|error| PrismError::from_lexlean("PP2020", "server core export", error, limit))?;
+        .map_err(|error| PrismError::from_lexlean("PP2025", "server core export", error, limit))?;
     let bundle = root.join(output.bundle.as_str());
     let outcome = read_package(application, &output.result, &bundle);
     // The staging area is not the consumer's: the packages are read out of it, or refused.
@@ -160,7 +160,7 @@ pub fn build(
 /// holds the package the declaration names and it exhibits only admitted effects.
 ///
 /// # Errors
-/// Returns `PP2020` for a result without that output, a package other than the
+/// Returns `PP2025` for a result without that output, a package other than the
 /// declared one and an effect that is not admitted.
 pub fn core_output<'a>(
     application: &ServerApplication,
@@ -247,7 +247,7 @@ pub fn consumer_artifacts(
 /// Files of the build replace what is there; nothing else is touched.
 ///
 /// # Errors
-/// Returns `PP4002` when a file cannot be written and `PP2020` for a path that is
+/// Returns `PP4002` when a file cannot be written and `PP2025` for a path that is
 /// not confined to the workspace.
 pub fn publish(build: &ServerBuild, workspace: &Path) -> Result<(), PrismError> {
     for (path, bytes) in &build.files {

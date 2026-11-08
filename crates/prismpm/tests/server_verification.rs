@@ -1,4 +1,4 @@
-//! HO-26: `prismpm verify` of a server application, end to end.
+//! HO-39: `prismpm verify` of a server application, end to end.
 //!
 //! The example is `examples/EchoServer`. These tests build it through the
 //! controller, verify it, and read what verification published: the acceptance of

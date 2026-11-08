@@ -40,7 +40,7 @@ pub const MAXIMUM_HEADER_BYTES: u32 = 16 << 20;
 pub const CONTEXT: [(&str, HostKind); 2] = [("peer", HostKind::Text), ("counted", HostKind::Flag)];
 
 fn invalid(message: &str) -> PrismError {
-    PrismError::new("PP2019", message)
+    PrismError::new("PP2024", message)
 }
 
 fn token(value: &str) -> bool {
@@ -343,7 +343,7 @@ fn vectors(application: &ServerApplication, value: &ServerServing) -> Result<(),
 /// Validate the serving record of `application`, when there is one.
 ///
 /// # Errors
-/// Returns `PP2019` for a record that is not the closed declaration.
+/// Returns `PP2024` for a record that is not the closed declaration.
 pub fn validate(application: &ServerApplication) -> Result<(), PrismError> {
     if application.serving.len() > 1 {
         return Err(invalid(

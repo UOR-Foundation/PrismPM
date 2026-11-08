@@ -1,4 +1,4 @@
-//! HO-27: every declared effect is exercised by an acceptance vector, as the
+//! HO-40: every declared effect is exercised by an acceptance vector, as the
 //! acceptance observes it.
 //!
 //! Declaration validation already refuses a core effect that no transcript step
@@ -40,7 +40,7 @@ fn a_core_effect_no_vector_reaches_is_refused_with_pp2021() {
     let application = declared(tests::model_value(), audit());
     let error = acceptance::execute(&application, &built.program, work.path(), false)
         .expect_err("an effect no vector reaches is not verified");
-    assert_eq!(error.code, "PP2021", "{}", error.message);
+    assert_eq!(error.code, "PP2026", "{}", error.message);
     assert!(error.message.contains("audit.note"), "{}", error.message);
     assert!(
         error.message.contains("transcript step"),
@@ -68,7 +68,7 @@ fn a_frame_effect_no_served_exchange_reaches_is_refused_with_pp2021() {
     let unserved: ServerApplication = serde_json::from_value(value).unwrap();
     let error = acceptance::execute(&unserved, &built.program, work.path(), false)
         .expect_err("a frame effect no exchange reaches is not verified");
-    assert_eq!(error.code, "PP2021", "{}", error.message);
+    assert_eq!(error.code, "PP2026", "{}", error.message);
     assert!(
         error.message.contains("served exchange"),
         "{}",
@@ -104,7 +104,7 @@ fn the_record_names_every_effect_with_what_reached_it() {
     require_exercised(&rows).unwrap();
     assert_eq!(
         require_exercised(&exercises(&served, 0)).unwrap_err().code,
-        "PP2021"
+        "PP2026"
     );
 
     // One transcript step too few leaves exactly one core effect unreached.
@@ -117,6 +117,6 @@ fn the_record_names_every_effect_with_what_reached_it() {
     }
     let fewer: ServerApplication = serde_json::from_value(value).unwrap();
     let error = require_exercised(&exercises(&fewer, 0)).unwrap_err();
-    assert_eq!(error.code, "PP2021");
+    assert_eq!(error.code, "PP2026");
     assert!(error.message.contains("log.write"), "{}", error.message);
 }

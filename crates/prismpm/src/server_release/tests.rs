@@ -1,4 +1,4 @@
-//! HO-29: a release in the local OCI store, replayed by reference in a receiver
+//! HO-42: a release in the local OCI store, replayed by reference in a receiver
 //! that holds neither the source nor the build.
 
 use super::{replay_release, Files};

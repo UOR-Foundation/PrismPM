@@ -54,7 +54,7 @@ pub fn check(build_manifest: &[u8], build: &Files, verification: &Files) -> Resu
 /// Returns `PP6101` for a release that is not intact or holds no server
 /// application, `PP2013` for a workspace that does not hold the declared binding,
 /// `PP4103` and `PP5007` for the workspace build, `PP6003` for an acceptance the
-/// program does not meet or a record that is not the retained one, and `PP2021`
+/// program does not meet or a record that is not the retained one, and `PP2026`
 /// for a declared effect no vector reaches.
 pub fn replay(
     build_manifest: &[u8],

@@ -1,4 +1,4 @@
-//! HO-25: the core of a server application is built through the lexlean
+//! HO-38: the core of a server application is built through the lexlean
 //! production API and served over a real loopback socket.
 //!
 //! The example is `examples/EchoServer`, a LexLean 1.2 project: a core root
@@ -170,7 +170,7 @@ fn a_core_that_is_not_a_production_root_is_refused() {
     let error = controller
         .build(BuildRequest { config_path: None })
         .expect_err("a core that is no production root is not built");
-    assert_eq!(error.code, "PP2020", "{error}");
+    assert_eq!(error.code, "PP2025", "{error}");
     assert!(
         !root.path().join("echo_server_core").exists(),
         "nothing is laid out for a refused build"

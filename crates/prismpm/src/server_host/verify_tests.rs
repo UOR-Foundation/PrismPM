@@ -1,4 +1,4 @@
-//! HO-26: what `prismpm verify` of a server application refuses.
+//! HO-39: what `prismpm verify` of a server application refuses.
 //!
 //! The acceptance refuses a program that disagrees with the model, and the
 //! regeneration check refuses host packages that are not the declaration's. The

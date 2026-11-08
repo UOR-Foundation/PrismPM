@@ -1,4 +1,4 @@
-//! HO-29: the release of a server application, verified and replayed without its
+//! HO-42: the release of a server application, verified and replayed without its
 //! source tree.
 //!
 //! The example is `examples/EchoServer`. It is built and verified once in a
@@ -333,12 +333,12 @@ fn the_retired_diagnostic_is_not_registered() {
     // path raises.
     // The code is spelled in pieces: the error audit refuses any source that
     // names a code the register does not hold, and this one is not held.
-    let retired = format!("PP{}", 2022);
+    let retired = format!("PP{}", 2023);
     assert!(
         serde_json::from_value::<prismpm::DiagnosticCode>(json!(retired)).is_err(),
         "{retired} is registered"
     );
-    assert!(serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2021")).is_ok());
+    assert!(serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2026")).is_ok());
     let errors = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .ancestors()

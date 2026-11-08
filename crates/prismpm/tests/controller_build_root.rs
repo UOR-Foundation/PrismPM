@@ -1,4 +1,4 @@
-//! CT-12: the controller reads the LexLean build root from `lexlean.toml`.
+//! CT-13: the controller reads the LexLean build root from `lexlean.toml`.
 //!
 //! A LexLean project names its build root itself, and the compiler resolves it
 //! against the project directory, which need not be the Prism project root. The

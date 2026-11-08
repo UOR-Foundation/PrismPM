@@ -133,49 +133,49 @@ Feature: holo
     When Holo/1 validation executes
     Then every disagreement is rejected before acceptance
 
-  @HO-23 @build
+  @HO-36 @build
   Scenario: The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic.
     Given the Foundation.Server.V1.Model declaration of a served application with a listener, bounds, allowed origins, required media types, frame sections and served vectors
     When it is projected from source, validated and canonically encoded as a model-document/7
-    Then the document round-trips exactly and a listener address other than 127.0.0.1, a bound that is zero or that the request frame cannot hold, a frame section without a declared source and a served vector that disagrees with its frame vector are refused with PP2019
+    Then the document round-trips exactly and a listener address other than 127.0.0.1, a bound that is zero or that the request frame cannot hold, a frame section without a declared source and a served vector that disagrees with its frame vector are refused with PP2024
     And a frame effect is never an effect the core may request
 
-  @HO-24 @build
+  @HO-37 @build
   Scenario: The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket.
     Given a served application built with its core and a deterministic binding
     When a test client sends each served vector, and each malformed, oversized, forbidden or unacceptable request, over TCP to the generated program
     Then every vector is answered with the modeled response bytes, a non-loopback bind is refused, an oversized header section is a 431, an oversized body a 413, a bad Origin a 403 and a malformed request line a 400, and the core is not called for any refusal
     And the fields reach the core in the order received, unmerged, and the host-provided frame sections come from the declared host effects
 
-  @HO-25 @build
+  @HO-38 @build
   Scenario: A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback.
     Given the example server whose core is LexLean language 1.2 source
     When prismpm builds it and the generated program serves the example vectors over loopback
     Then the build artifacts hold the production package, the generated packages and the binding as workspace members and every vector is answered as modeled
     And a core root that is not a production root is refused before anything is published
 
-  @HO-26 @build
+  @HO-39 @build
   Scenario: prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic.
     Given the example server built from LexLean language 1.2 source, with a binding crate in the consumer's workspace
     When prismpm verify runs on it
     Then the build closure is checked, the host packages equal their regeneration from the declaration, the consumer's workspace builds, every acceptance vector is replayed with its effect transcript, the linked binding and the served exchanges answer as modeled, and the verified directory holds the acceptance evidence bound to the build
     And a workspace without the declared binding, a host package that differs from its regeneration, a vector with a wrong effect result and a served exchange with a different response are each refused
 
-  @HO-27 @build
-  Scenario: Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021.
+  @HO-40 @build
+  Scenario: Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2026.
     Given a server application that declares a core effect and a frame effect
     When its acceptance runs and one declared effect has no transcript step or no served exchange
     Then the record names every effect with the steps and served exchanges that reached it
-    And the effect that no vector reaches is refused with PP2021
+    And the effect that no vector reaches is refused with PP2026
 
-  @HO-28 @build
+  @HO-41 @build
   Scenario: The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013.
     Given a server application that declares how many seconds the build of its workspace may take
     When prismpm verify stages and builds the consumer's workspace
     Then the build runs under exactly the declared bound and the published acceptance records it
     And a declared bound of zero or over 7200 seconds is refused with PP2013
 
-  @HO-29 @build
+  @HO-42 @build
   Scenario: A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101.
     Given the release of a verified server application and no source tree
     When the release is replayed

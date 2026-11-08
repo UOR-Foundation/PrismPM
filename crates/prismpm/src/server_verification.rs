@@ -16,7 +16,7 @@
 //! 5. the program is accepted: every acceptance vector is replayed with its effect
 //!    transcript, through the linked binding when one is declared, and every
 //!    served vector is sent over a loopback socket, all answered with the modeled
-//!    bytes, and every declared effect is reached by some vector (`PP2021`).
+//!    bytes, and every declared effect is reached by some vector (`PP2026`).
 //!
 //! The evidence is `application-acceptance.json`, the lexlean attestation and a
 //! manifest binding them to the build, published under `verified/`. It binds the
@@ -148,7 +148,7 @@ pub struct CoreRecord {
 ///
 /// # Errors
 /// Returns `PP4004` for a record that is not one, `PP4001` for a record about
-/// other identities or a package that differs from its rows, and `PP2020` for a
+/// other identities or a package that differs from its rows, and `PP2025` for a
 /// package other than the declared one or an effect that is not admitted.
 pub fn check_core(
     application: &ServerApplication,
@@ -219,7 +219,7 @@ pub fn check_core_files(
             .strip_prefix(&format!("{}/", package.directory))
             .ok_or_else(|| {
                 PrismError::new(
-                    "PP2020",
+                    "PP2025",
                     "a package file lies outside its package directory",
                 )
             })?;

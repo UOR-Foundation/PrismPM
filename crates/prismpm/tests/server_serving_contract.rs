@@ -1,4 +1,4 @@
-//! HO-23: the closed serving declaration, and the vocabulary of refusals that the
+//! HO-36: the closed serving declaration, and the vocabulary of refusals that the
 //! generated listener answers with. Nothing here executes an application.
 
 mod support;
@@ -303,7 +303,7 @@ fn serving_rejects_every_invalid_declaration() {
         cases.push((name.to_owned(), edit));
     }
     for (name, value) in cases {
-        assert_eq!(verdict(value.clone()), "PP2019", "{name}");
+        assert_eq!(verdict(value.clone()), "PP2024", "{name}");
         assert!(rejected(value), "{name}");
     }
     // A frame effect is not the core's to request: no transcript may name it.
@@ -448,9 +448,9 @@ fn a_served_application_projects_from_source() {
     // when the source is projected.
     let open = text.replace("address := \"127.0.0.1\"", "address := \"0.0.0.0\"");
     assert_ne!(open, text);
-    assert_eq!(project(&open, MODEL).unwrap_err().code, "PP2019");
+    assert_eq!(project(&open, MODEL).unwrap_err().code, "PP2024");
     // A frame section of an undeclared effect is refused in the source as in the document.
     let undeclared = text.replace("effect := \"tool.calls\"", "effect := \"tool.nothing\"");
     assert_ne!(undeclared, text);
-    assert_eq!(project(&undeclared, MODEL).unwrap_err().code, "PP2019");
+    assert_eq!(project(&undeclared, MODEL).unwrap_err().code, "PP2024");
 }

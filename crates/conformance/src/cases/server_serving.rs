@@ -1,4 +1,4 @@
-//! HO-23, HO-24 and HO-25: the serving effect of a server application, its
+//! HO-36, HO-37 and HO-38: the serving effect of a server application, its
 //! RFC 9112 framing over a loopback socket, and the core built through the
 //! production API.
 
@@ -43,11 +43,11 @@ pub(super) fn require(id: &str, output: &str, names: &[&str]) {
     }
 }
 
-/// HO-23: the serving declaration and its closed validation.
+/// HO-36: the serving declaration and its closed validation.
 pub(super) fn verify_declaration(root: &Path) {
-    let contract = run(root, "HO-23", &["--test", "server_serving_contract"]);
+    let contract = run(root, "HO-36", &["--test", "server_serving_contract"]);
     require(
-        "HO-23",
+        "HO-36",
         &contract,
         &[
             "serving_declaration_roundtrips_and_requires_the_closed_record",
@@ -56,19 +56,19 @@ pub(super) fn verify_declaration(root: &Path) {
             "a_served_application_projects_from_source",
         ],
     );
-    let library = run(root, "HO-23", &["--lib", "server_application::serving"]);
+    let library = run(root, "HO-36", &["--lib", "server_application::serving"]);
     require(
-        "HO-23",
+        "HO-36",
         &library,
         &["a_frame_effect_is_never_an_effect_the_core_may_request"],
     );
 }
 
-/// HO-24: the generated listener and its framing, over a real socket.
+/// HO-37: the generated listener and its framing, over a real socket.
 pub(super) fn verify_framing(root: &Path) {
-    let library = run(root, "HO-24", &["--lib", "server_host::serving_tests"]);
+    let library = run(root, "HO-37", &["--lib", "server_host::serving_tests"]);
     require(
-        "HO-24",
+        "HO-37",
         &library,
         &[
             "the_listener_binds_loopback_only_and_refuses_any_other_address",
@@ -87,11 +87,11 @@ pub(super) fn verify_framing(root: &Path) {
     );
 }
 
-/// HO-25: the core through `production`, and the example server.
+/// HO-38: the core through `production`, and the example server.
 pub(super) fn verify_build(root: &Path) {
-    let contract = run(root, "HO-25", &["--test", "server_serving_build"]);
+    let contract = run(root, "HO-38", &["--test", "server_serving_build"]);
     require(
-        "HO-25",
+        "HO-38",
         &contract,
         &[
             "the_example_server_serves_its_vectors_end_to_end",

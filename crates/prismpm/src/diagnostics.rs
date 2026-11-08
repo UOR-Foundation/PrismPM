@@ -302,9 +302,9 @@ probes!(
         "invalid-feature-or-journey-declaration",
         FeatureDeclaration
     ),
-    ("PP2019", "invalid-serving-declaration", ServedApplication),
-    ("PP2020", "server-core-build-refused", ServerCore),
-    ("PP2021", "server-effect-not-exercised", ServerEffects),
+    ("PP2024", "invalid-serving-declaration", ServedApplication),
+    ("PP2025", "server-core-build-refused", ServerCore),
+    ("PP2026", "server-effect-not-exercised", ServerEffects),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -503,7 +503,7 @@ fn validate_server_specimen(value: &Value) -> Result<(), PrismError> {
 fn validate_server_core(value: &Value) -> Result<(), PrismError> {
     let root = value["root"]
         .as_str()
-        .ok_or_else(|| PrismError::new("PP2020", "invalid server core specimen"))?;
+        .ok_or_else(|| PrismError::new("PP2025", "invalid server core specimen"))?;
     let effects = value["effects"]
         .as_array()
         .map(|effects| {
@@ -512,13 +512,13 @@ fn validate_server_core(value: &Value) -> Result<(), PrismError> {
                 .filter_map(|effect| effect.as_str().map(str::to_owned))
                 .collect::<Vec<_>>()
         })
-        .ok_or_else(|| PrismError::new("PP2020", "invalid server core specimen"))?;
+        .ok_or_else(|| PrismError::new("PP2025", "invalid server core specimen"))?;
     crate::server_build::admit_effects(root, &effects)
 }
 
 fn validate_server_effects(value: &Value) -> Result<(), PrismError> {
     use crate::server_host::acceptance::{require_exercised, Exercise, Role};
-    let specimen = || PrismError::new("PP2021", "invalid server effects specimen");
+    let specimen = || PrismError::new("PP2026", "invalid server effects specimen");
     let rows = value["effects"]
         .as_array()
         .ok_or_else(specimen)?

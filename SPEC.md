@@ -3339,7 +3339,7 @@ record in `Foundation.Server.V1.Model`, in the `serving` field of
 the listener of the generated program and of everything it acts on:
 
 - `address` and `port`. The only admitted address is `127.0.0.1`. Any other
-  address, a name, `0.0.0.0` or an IPv6 address, is refused with `PP2019` when
+  address, a name, `0.0.0.0` or an IPv6 address, is refused with `PP2024` when
   the declaration is validated, and the generated listener refuses it again
   (`ListenAddress`) when it is asked to bind, so the program cannot be made to
   listen on another interface by editing generated source. Port 0 asks the
@@ -3372,7 +3372,7 @@ the listener of the generated program and of everything it acts on:
   the core; it is excluded from the effects the core may request, so a core with
   no other effect remains the plain frame function. A section that names no
   declared effect and field, or whose kind disagrees with the field's, is
-  refused with `PP2019`, as is a declaration whose largest request frame under
+  refused with `PP2024`, as is a declaration whose largest request frame under
   the declared bounds exceeds the exchange `requestMaximum`. A frame effect whose
   result is larger than declared or that fails answers the request
   `FrameUnavailable` (503) without calling the core.
@@ -3423,13 +3423,13 @@ it, hold everything the program is built from. A project without the manifest or
 the lock, a member that is a glob or leaves the project, or a link or special
 file in a member is refused with `PP2013`.
 
-The build is refused with `PP2020` when the compiler refuses the export: the
+The build is refused with `PP2025` when the compiler refuses the export: the
 root is not a production root of the project or does not declare the target, the
 project does not verify, or the project changed while it was exported. It is
-refused with `PP2020` as well when the exported package exhibits an effect other
+refused with `PP2025` as well when the exported package exhibits an effect other
 than `allocation` and `overflow`; `recursion` in particular is not admitted,
 because the stack of the root is a model bound. A declaration that cannot be
-generated is refused with `PP2013` or `PP2019` before the compiler is invoked.
+generated is refused with `PP2013` or `PP2024` before the compiler is invoked.
 The example server of the register is `examples/EchoServer`, a LexLean 1.2
 project whose core echoes the body of a request and the count of counted
 requests the host reports, whose binding crate implements that one host effect,
@@ -3449,7 +3449,7 @@ this order, and refuses at the first check that fails:
 2. the core package: `server/production-result.json` is the canonical record its
    identity names, it is about the verified source, semantic, compiler-semantics
    and attestation identities, the package is the declared one and exhibits only
-   admitted effects (`PP2020` otherwise), and the files of the package equal the
+   admitted effects (`PP2025` otherwise), and the files of the package equal the
    compiler's rows with none missing and none added (`PP4001`);
 3. the host packages: `{cargo_name}-host-api` and `{cargo_name}-host` equal their
    regeneration from the declaration byte for byte, and the build holds no file
@@ -3473,7 +3473,7 @@ this order, and refuses at the first check that fails:
    through the linked binding when one is declared, and every served vector is
    sent over a loopback socket, each answered with the modeled bytes (`PP6003`);
    a declared effect that no transcript step and no served exchange reaches is
-   refused with `PP2021`.
+   refused with `PP2026`.
 
 The evidence is published under `verified/` as `application-acceptance.json`
 (`prismpm/application-acceptance/1`), the LexLean attestation and a manifest
@@ -3521,7 +3521,7 @@ be it, with no filesystem, subprocess or network. They refuse with `PP6101`:
 - recorded bounds that differ from the model;
 - an acceptance record that differs from the one the model determines (the
   vectors, the transports, the served exchanges and what reached each declared
-  effect, `PP2021` when an effect is reached by none);
+  effect, `PP2026` when an effect is reached by none);
 - a release without the acceptance document, the attestation or the manifest,
   and a manifest or toolchain record that is not the one `prismpm verify` writes.
 
@@ -4042,13 +4042,13 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
 | `HO-21` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §3 |
 | `HO-22` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §3 |
-| `HO-23` | `holo` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. | §3 |
-| `HO-24` | `holo` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. | §3 |
-| `HO-25` | `holo` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. | §3 |
-| `HO-26` | `holo` | prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic. | §3 |
-| `HO-27` | `holo` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021. | §3 |
-| `HO-28` | `holo` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. | §3 |
-| `HO-29` | `holo` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. | §3 |
+| `HO-36` | `holo` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. | §3 |
+| `HO-37` | `holo` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. | §3 |
+| `HO-38` | `holo` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. | §3 |
+| `HO-39` | `holo` | prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic. | §3 |
+| `HO-40` | `holo` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2026. | §3 |
+| `HO-41` | `holo` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. | §3 |
+| `HO-42` | `holo` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
@@ -4060,7 +4060,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
-| `CT-12` | `controller` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. | §4 |
+| `CT-13` | `controller` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |
