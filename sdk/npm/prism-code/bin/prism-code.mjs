@@ -1035,7 +1035,7 @@ async function commandLean(args) {
   return 0;
 }
 
-/** T0 of the tiers: `prismpm check` in the image, or, with no image, the manifest here and `lexlean check --all` hosted. */
+/** T0 of the tiers: `prismpm check` in the image, or, with no image, the manifest here and `lexlean check` of the draft's files hosted. */
 async function commandTierCheck(args) {
   const cwd = process.cwd();
   const route = tierRoute(cwd, args, { needs: 'prismpm.toml' });
@@ -1063,7 +1063,7 @@ async function commandTierCheck(args) {
   const url = hosted.hostedUrl();
   process.stderr.write(`build --check: lexlean check on the hosted verifier ${url} (profile ${hosted.HOSTED_PROFILE}), because ${HOSTED_WHY[route.why]}: sending ${project.files.length} file${project.files.length === 1 ? '' : 's'} under src/, ${SENT}.\n`);
   if (process.env.PRISM_CODE_DRY_RUN) {
-    process.stdout.write(`hosted lexlean_check ${url} profile ${hosted.HOSTED_PROFILE} all\n`);
+    process.stdout.write(`hosted lexlean_check ${url} profile ${hosted.HOSTED_PROFILE} draft\n`);
   } else {
     const { outcome } = await hosted.hostedCheck(hosted.hostedClient({ url, version: VERSION }), project);
     if (outcome.success) process.stdout.write(`ok       lexlean check: ${outcome.modules.length} module${outcome.modules.length === 1 ? '' : 's'} parse and type-check; proofs are not checked here, verify --lean proves them\n`);
