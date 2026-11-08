@@ -46,8 +46,8 @@ function createContainer(socket, remap = false) {
         while getent group "$identity" >/dev/null || getent passwd "$identity" >/dev/null; do
           identity=$((identity + 1))
         done
-        groupmod --gid "$identity" "$(id -gn vscode)"
-        usermod --uid "$identity" --gid "$identity" vscode
+        /usr/sbin/groupmod --gid "$identity" "$(id -gn vscode)"
+        /usr/sbin/usermod --uid "$identity" --gid "$identity" vscode
         test "$(id -u vscode)" = "$identity"
         test "$(id -g vscode)" = "$identity"
       `]);
@@ -60,10 +60,10 @@ function createContainer(socket, remap = false) {
         gid=$(stat -c %g /var/run/docker.sock)
         primary=$(id -g vscode)
         if [ "$gid" = "$primary" ]; then
-          groupadd prismpm-test-primary
+          /usr/sbin/groupadd prismpm-test-primary
           primary=$(getent group prismpm-test-primary | cut -d: -f3)
         fi
-        usermod --gid "$primary" --groups "" vscode
+        /usr/sbin/usermod --gid "$primary" --groups "" vscode
       `]);
     }
     return container;
@@ -226,7 +226,7 @@ async function checkSocket(t, remap) {
       assert(fresh.groups.includes(socketGid));
       assert.throws(() => run(container, 'vscode', [helper, '/bin/sh', '-c', 'exit 17']),
         error => error.status === 17);
-      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      run(container, 'root', ['/usr/sbin/usermod', '--groups', '', 'vscode']);
       run(container, 'root', ['touch', '/tmp/prismpm-test-restart']);
       docker(['restart', '--time', '1', container]);
       const restarted = JSON.parse(run(container, 'vscode', [helper, 'node', '-e', probe]));
@@ -236,7 +236,7 @@ async function checkSocket(t, remap) {
     });
 
     await t.test('group visibility before shadow authorization cannot execute the user command', async () => {
-      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      run(container, 'root', ['/usr/sbin/usermod', '--groups', '', 'vscode']);
       const group = run(container, 'root', ['getent', 'group', String(socketGid)]).split(':')[0];
       const deniedProbe = pendingShell(container, 'read start; exec sg "$1" -c true', [group]);
       const repaired = pendingShell(container, 'read start; exec "$@"', [
@@ -276,7 +276,7 @@ async function checkSocket(t, remap) {
     });
 
     await t.test('missing shadow authorization times out without executing the command or prompting', async () => {
-      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      run(container, 'root', ['/usr/sbin/usermod', '--groups', '', 'vscode']);
       const group = run(container, 'root', ['getent', 'group', String(socketGid)]).split(':')[0];
       const blocked = pendingShell(container, 'read start; exec "$@"', [
         helper, 'touch', '/tmp/prismpm-unauthorized',
@@ -296,7 +296,7 @@ async function checkSocket(t, remap) {
     });
 
     await t.test('missing initialization fails within its deadline without executing the command', () => {
-      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      run(container, 'root', ['/usr/sbin/usermod', '--groups', '', 'vscode']);
       const started = Date.now();
       denied(container, 'vscode', [helper, 'touch', '/tmp/prismpm-uninitialized'], /timed out waiting/);
       assert(Date.now() - started >= 28_000);
