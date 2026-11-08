@@ -6,9 +6,9 @@ if [ -S /var/run/docker.sock ]; then
   group_name=$(getent group "$socket_gid" | cut -d: -f1 || true)
   if [ -z "$group_name" ]; then
     group_name=host-docker
-    /usr/sbin/groupadd --gid "$socket_gid" "$group_name"
+    groupadd --gid "$socket_gid" "$group_name"
   fi
-  /usr/sbin/usermod --append --groups "$group_name" vscode
+  usermod --append --groups "$group_name" vscode
 fi
 
 exec "$@"

@@ -23,11 +23,14 @@ const denied = (container, user, args, pattern) => {
 
 // The test uses the current devcontainer's already-built, content-addressed
 // image, not an unpinned pull or the SDK under publication test.
+// Installed V&V runs this inside the SDK image, whose PATH omits /usr/sbin;
+// the source entrypoint expects the source devcontainer's root PATH.
+const rootPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 function createContainer(socket, remap = false) {
   const image = docker(['inspect', hostname(), '--format', '{{.Image}}']);
   assert.match(image, /^sha256:[0-9a-f]{64}$/);
   const container = docker([
-    'create', '--entrypoint', '/bin/sh',
+    'create', '--entrypoint', '/bin/sh', '--env', `PATH=${rootPath}`,
     ...(socket ? ['--mount', 'type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock'] : []),
     image, '-c',
     `if [ -f /tmp/prismpm-test-restart ]; then ${initializer} true; fi; exec sleep infinity`,
