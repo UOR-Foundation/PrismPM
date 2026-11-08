@@ -21,6 +21,7 @@ mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
 mod server_host;
+mod server_serving;
 mod text_cli;
 mod threat_model;
 mod workbench;
@@ -539,6 +540,9 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-18" => design_views::verify_views(root),
         "HO-21" => server_host::verify_declaration(root),
         "HO-22" => server_host::verify_adapter(root),
+        "HO-36" => server_serving::verify_declaration(root),
+        "HO-37" => server_serving::verify_framing(root),
+        "HO-38" => server_serving::verify_build(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {

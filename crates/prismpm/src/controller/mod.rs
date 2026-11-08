@@ -824,8 +824,18 @@ impl Controller {
     ) -> Result<BuildResult, PrismError> {
         // Before any compilation: a stale input lock fails fast and writes nothing.
         crate::input_lock::enforce(&self.root, update_lock, || self.pinned_inputs(prepared))?;
-        // Only an application build writes a holo to describe.
-        let stamp = if prepared.model.application.is_some() {
+        // Only an application build writes a holo to describe. A server build writes a
+        // certified core and its host adapter, and no holo, so it carries no statement.
+        let stamp = if prepared
+            .model
+            .application
+            .as_ref()
+            .is_some_and(|application| {
+                !matches!(
+                    application,
+                    crate::holo::model_document::Application::Server(_)
+                )
+            }) {
             Stamp::begin(provenance, || {
                 Ok(crate::sdk::committed_lock(&self.root)?.map(|(_, bytes)| bytes))
             })?
@@ -979,8 +989,24 @@ impl Controller {
                         .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
                 ));
             }
-            let mut application_artifacts = match exporter_owner.as_deref_mut() {
-                Some(owner) => {
+            // A server application is built through the compiler's production API: the
+            // core is a certified package, the host adapter is generated around it.
+            let server_artifacts = match &prepared.model.application {
+                Some(crate::holo::model_document::Application::Server(server)) => {
+                    Some(crate::server_build::artifacts(&crate::server_build::build(
+                        &prepared.engine,
+                        &prepared.snapshot,
+                        server,
+                        &self.root,
+                        prepared.config.limits.max_diagnostics,
+                    )?))
+                }
+                _ => None,
+            };
+            let mut application_artifacts = match (server_artifacts, exporter_owner.as_deref_mut())
+            {
+                (Some(artifacts), _) => artifacts,
+                (None, Some(owner)) => {
                     crate::application_build::generate_owned(
                         &self.root,
                         &prepared.model,
@@ -992,7 +1018,7 @@ impl Controller {
                     )?
                     .artifacts
                 }
-                None => crate::application_build::generate(
+                (None, None) => crate::application_build::generate(
                     &self.root,
                     &prepared.model,
                     &prepared.model_bytes,

@@ -104,7 +104,9 @@ inductive{
     {name: ScriptMalformed, fields: []},
     {name: ScriptExhausted, fields: []},
     {name: ScriptMismatch, fields: []},
-    {name: ScriptUnused, fields: []}
+    {name: ScriptUnused, fields: []},
+    {name: ListenAddress, fields: []},
+    {name: ListenIo, fields: []}
   ]
 }
 
@@ -144,7 +146,9 @@ definition{
     | ServerFailure.ScriptMalformed => (ctor ServerFailureClass.Fault)
     | ServerFailure.ScriptExhausted => (ctor ServerFailureClass.Fault)
     | ServerFailure.ScriptMismatch => (ctor ServerFailureClass.Fault)
-    | ServerFailure.ScriptUnused => (ctor ServerFailureClass.Fault)),
+    | ServerFailure.ScriptUnused => (ctor ServerFailureClass.Fault)
+    | ServerFailure.ListenAddress => (ctor ServerFailureClass.Fault)
+    | ServerFailure.ListenIo => (ctor ServerFailureClass.Io)),
   axioms: []
 }
 
@@ -160,6 +164,129 @@ structure{
   type_parameters: [],
   parameters: [],
   fields: [{name: path, type: String}, {name: crateName, type: String}, {name: host, type: String}]
+}
+
+inductive{
+  name: ServingRefusal,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: RequestLineMalformed, fields: []},
+    {name: RequestLineTooLong, fields: []},
+    {name: VersionUnsupported, fields: []},
+    {name: FieldMalformed, fields: []},
+    {name: HostInvalid, fields: []},
+    {name: HeaderCountExceeded, fields: []},
+    {name: HeaderBytesExceeded, fields: []},
+    {name: LengthInvalid, fields: []},
+    {name: FramingAmbiguous, fields: []},
+    {name: TransferCodingUnsupported, fields: []},
+    {name: ExpectationUnsupported, fields: []},
+    {name: BodyTooLarge, fields: []},
+    {name: ChunkMalformed, fields: []},
+    {name: OriginForbidden, fields: []},
+    {name: AcceptRefused, fields: []},
+    {name: ContentTypeRefused, fields: []},
+    {name: ReadTimeout, fields: []},
+    {name: FrameUnavailable, fields: []},
+    {name: CoreFailed, fields: []},
+    {name: ResponseMalformed, fields: []},
+    {name: Busy, fields: []}
+  ]
+}
+
+definition{
+  name: refusalStatus,
+  parameters: [refusal : ServingRefusal],
+  result: Nat,
+  body: (match refusal
+    | ServingRefusal.RequestLineMalformed => 400
+    | ServingRefusal.RequestLineTooLong => 414
+    | ServingRefusal.VersionUnsupported => 505
+    | ServingRefusal.FieldMalformed => 400
+    | ServingRefusal.HostInvalid => 400
+    | ServingRefusal.HeaderCountExceeded => 431
+    | ServingRefusal.HeaderBytesExceeded => 431
+    | ServingRefusal.LengthInvalid => 400
+    | ServingRefusal.FramingAmbiguous => 400
+    | ServingRefusal.TransferCodingUnsupported => 501
+    | ServingRefusal.ExpectationUnsupported => 417
+    | ServingRefusal.BodyTooLarge => 413
+    | ServingRefusal.ChunkMalformed => 400
+    | ServingRefusal.OriginForbidden => 403
+    | ServingRefusal.AcceptRefused => 406
+    | ServingRefusal.ContentTypeRefused => 415
+    | ServingRefusal.ReadTimeout => 408
+    | ServingRefusal.FrameUnavailable => 503
+    | ServingRefusal.CoreFailed => 500
+    | ServingRefusal.ResponseMalformed => 500
+    | ServingRefusal.Busy => 503),
+  axioms: []
+}
+
+inductive{
+  name: FrameKind,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: U32, fields: []},
+    {name: U64, fields: []},
+    {name: Bytes, fields: []},
+    {name: Text, fields: []},
+    {name: TextList, fields: []}
+  ]
+}
+
+structure{
+  name: FrameSection,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: name, type: String},
+    {name: kind, type: FrameKind},
+    {name: effect, type: String},
+    {name: field, type: String},
+    {name: values, type: (List String)}
+  ]
+}
+
+structure{
+  name: ServingOrigin,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: scheme, type: String}, {name: host, type: String}, {name: port, type: UInt32}]
+}
+
+structure{
+  name: ServedVector,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: vector, type: UInt32}, {name: request, type: Bytes}, {name: response, type: Bytes}]
+}
+
+structure{
+  name: ServerServing,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: address, type: String},
+    {name: port, type: UInt32},
+    {name: connectionMaximum, type: UInt32},
+    {name: readTimeoutMillis, type: UInt32},
+    {name: rootStackBytes, type: UInt32},
+    {name: requestLineMaximum, type: UInt32},
+    {name: headerCountMaximum, type: UInt32},
+    {name: headerBytesMaximum, type: UInt32},
+    {name: bodyMaximum, type: UInt32},
+    {name: origins, type: (List ServingOrigin)},
+    {name: accept, type: (List String)},
+    {name: contentTypes, type: (List String)},
+    {name: enforcedMethods, type: (List String)},
+    {name: countedField, type: String},
+    {name: countedValue, type: String},
+    {name: frame, type: (List FrameSection)},
+    {name: vectors, type: (List ServedVector)}
+  ]
 }
 
 structure{
@@ -179,6 +306,7 @@ structure{
     {name: requestMaximum, type: UInt32},
     {name: responseMaximum, type: UInt32},
     {name: bindings, type: (List ServerBinding)},
+    {name: serving, type: (List ServerServing)},
     {name: host, type: HostProtocol}
   ]
 }
