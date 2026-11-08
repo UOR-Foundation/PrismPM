@@ -18,7 +18,7 @@ use crate::error::PrismError;
 use crate::holo::canonical::decode_canonical;
 use crate::holo::model_document::Application;
 use crate::server_host::{acceptance, program_name, workspace};
-use crate::server_verification::{build_workspace, declared_bounds, under};
+use crate::verification::server::{build_workspace, declared_bounds, under};
 use serde_json::{json, Value};
 use std::path::Path;
 

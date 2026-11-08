@@ -229,6 +229,10 @@ path = "crates/prismpm/src/server_host/"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/server_release.rs"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/supply_chain.rs"
 module = "images"
 
@@ -270,6 +274,10 @@ module = "images"
 
 [[owner]]
 path = "crates/prismpm/src/verification.rs"
+module = "images"
+
+[[owner]]
+path = "crates/prismpm/src/verification/"
 module = "images"
 
 [[owner]]

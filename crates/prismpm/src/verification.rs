@@ -3,6 +3,8 @@
 //! Validator probe intervals are allocation-free; separately registered public
 //! package APIs may allocate their owned outputs and have consumer API checks.
 
+pub mod server;
+
 use crate::config::ProjectConfig;
 use crate::controller::{BuildRequest, BuildResult, Controller, VerifyRequest, VerifyResult};
 use crate::error::PrismError;
@@ -3066,7 +3068,7 @@ pub(crate) fn run(
     ) {
         // A server application has no View, guest or archive: what is verified is the
         // acceptance of the program that its published build produces.
-        return crate::server_verification::run(crate::server_verification::ServerVerification {
+        return crate::verification::server::run(crate::verification::server::ServerVerification {
             project_root: &controller.root,
             config: &config,
             build,

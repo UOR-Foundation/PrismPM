@@ -7,7 +7,7 @@
 
 use super::{acceptance, generate, serving_tests, tests, workspace};
 use crate::holo::server_application::ServerApplication;
-use crate::server_verification::{build_workspace, check_generated};
+use crate::verification::server::{build_workspace, check_generated};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::path::Path;

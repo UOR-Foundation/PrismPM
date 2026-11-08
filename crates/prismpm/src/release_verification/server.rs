@@ -4,7 +4,7 @@
 //! A server application has no View, guest or archive. What its verification
 //! establishes is that the program built from the release's files is accepted, so
 //! what a release must show is the acceptance document that
-//! `crate::server_verification::document` derives from the model and those files,
+//! `crate::verification::server::document` derives from the model and those files,
 //! with the record of the acceptance the model determines. Nothing here runs a
 //! process: the packages, the consumer's workspace and the declared bounds are
 //! checked against the model, and the document the verification retained must be
@@ -15,7 +15,7 @@ use crate::error::PrismError;
 use crate::holo::model_document::ModelDocument;
 use crate::holo::server_application::ServerApplication;
 use crate::server_host::acceptance;
-use crate::server_verification::{check_subject, document, under, CoreIdentities, Files, Subject};
+use crate::verification::server::{check_subject, document, under, CoreIdentities, Files, Subject};
 use serde_json::{json, Value};
 
 /// Each part of the acceptance document and what it says when the retained one
