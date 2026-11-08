@@ -176,13 +176,6 @@ exit = 1
 statement = "A threat model row is not a closed literal record, is repeated, is blank or out of bounds, names no record of the model document, or the model does not declare exactly one control set with a valid time, or an asset has no row."
 
 [[error]]
-code = "PP2023"
-title = "Server application verification unavailable"
-class = "semantic"
-exit = 1
-statement = "The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available."
-
-[[error]]
 code = "PP2024"
 title = "Invalid serving declaration"
 class = "semantic"
@@ -195,6 +188,13 @@ title = "Server core build refused"
 class = "semantic"
 exit = 1
 statement = "The LexLean compiler refuses to export the declared core of a server application: the root is not a production root of the project, the project does not verify or changed while it was exported, or the exported package exhibits an effect the host adapter gives no bound for."
+
+[[error]]
+code = "PP2026"
+title = "Server effect not exercised"
+class = "semantic"
+exit = 1
+statement = "The acceptance of a server application observes a declared host effect that no vector reaches: a core effect that no replayed transcript step requests, or an effect that fills the request frame and no served exchange reaches."
 
 [[error]]
 code = "PP3001"
