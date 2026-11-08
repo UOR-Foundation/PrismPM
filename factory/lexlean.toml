@@ -16,6 +16,7 @@ kind = "builtin"
 [[lexicon_source]]
 package = "lexlean.std.nat"
 kind = "builtin"
+
 [limits]
 max_file_bytes = 4194304
 max_total_source_bytes = 67108864

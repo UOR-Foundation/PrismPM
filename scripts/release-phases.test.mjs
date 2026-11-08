@@ -25,12 +25,14 @@ test('canonical Cargo Git caches retain every object and real locked offline sub
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
-  const compare = steps.find(step => step.env?.DOCKERFILE);
-  assert.match(compare.run, /cmp root-a.digest root-b.digest\n/);
-  assert.match(compare.run, /cmp root-a.oci\/index.json root-b.oci\/index.json\n/);
+  const compare = steps.find(step => step.env?.IMAGE);
+  // One independent rebuild against the shipped build; no third build on success.
+  assert.match(compare.run, /\nbash root-a\/scripts\/release-rebuild\.sh root-b\n/);
+  assert(!compare.run.includes('release-rebuild.sh root-a'));
+  assert.match(compare.run, /"\$GITHUB_SHA" \\\n +root-b\.oci > /);
   const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
   assert.equal(diagnostic.if, 'failure()');
-  assert.equal(diagnostic['timeout-minutes'], 5);
+  assert.match(diagnostic.run, /bash root-a\/scripts\/release-rebuild\.sh root-a; then/);
   assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
   const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
   assert.equal(retained.if, 'failure()');
@@ -202,7 +204,9 @@ function validateWorkflow(value) {
   assert.match(assembly.run, /node scripts\/release-phases\.mjs image-index "\$\{platforms\[@\]\}"/);
   assert.match(assembly.run, /oras manifest push --media-type application\/vnd\.oci\.image\.index\.v1\+json \\\n +"\$REPOSITORY@\$digest"/);
   assert.ok(!assembly.run.includes('--tag') && !assembly.run.includes(':latest'), 'the index is pushed by digest only');
-  const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
+  const rebuildStep = value.jobs.reproducibility.steps.find(step => step.env?.IMAGE);
+  // The rebuild itself is the release plumbing script both reproducibility steps run.
+  const rebuild = {run: rebuildStep.run + readFileSync(new URL('./release-rebuild.sh', import.meta.url), 'utf8')};
   for (const key of ['created', 'revision', 'source', 'version']) {
     assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
       || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
@@ -318,7 +322,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).env.CARGO_REGISTRY_TOKEN
       = '${{ steps.auth.outputs.token }}'; },
     value => { value.jobs['source-vv'].steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
-    value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
+    value => { value.jobs.reproducibility.steps.find(step => step.env?.IMAGE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
       run => run + '\n--tag mutable:unaccepted\n',

@@ -37,6 +37,7 @@ export const plumbing = Object.freeze([
   'scripts/release-phases.md',
   'scripts/release-phases.mjs',
   'scripts/release-phases.test.mjs',
+  'scripts/release-rebuild.sh',
   'scripts/rust-oracle-tools-inputs.test.mjs',
   'scripts/sdk-candidate-sbom.test.mjs',
   'scripts/sdk-construction-handoff.test.mjs',

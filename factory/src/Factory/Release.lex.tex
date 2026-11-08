@@ -127,6 +127,31 @@ definition{
 }
 
 definition{
+  name: imageBuilds,
+  parameters: [stage : Stage],
+  result: Nat,
+  body: (match stage
+    | Stage.sourceVv => 0
+    | Stage.images => 1
+    | Stage.reproducibility => 1
+    | Stage.native => 0
+    | Stage.installedSdk => 0
+    | Stage.installedVv => 0
+    | Stage.publication => 0)
+}
+
+definition{
+  name: builds,
+  parameters: [stages : (List Stage)],
+  result: Nat,
+  body: (match stages
+    | List.nil => 0
+    | List.cons head tail => ((imageBuilds head) + (builds tail))),
+  axioms: [],
+  recursive_argument: stages
+}
+
+definition{
   name: route,
   parameters: [],
   result: (List Stage),
@@ -151,7 +176,7 @@ definition{
   name: plumbing,
   parameters: [],
   result: (List String),
-  body: (cons ".github/workflows/release.yml" (cons "factory/" (cons "scripts/browser-api-sdk-check.test.mjs" (cons "scripts/ci-capacity.test.mjs" (cons "scripts/factory.mjs" (cons "scripts/factory.test.mjs" (cons "scripts/library-sdk-check.test.mjs" (cons "scripts/product-sdk-check.test.mjs" (cons "scripts/release-gate-evidence.mjs" (cons "scripts/release-gate-evidence.test.mjs" (cons "scripts/release-native-contract.test.mjs" (cons "scripts/release-phases.md" (cons "scripts/release-phases.mjs" (cons "scripts/release-phases.test.mjs" (cons "scripts/rust-oracle-tools-inputs.test.mjs" (cons "scripts/sdk-candidate-sbom.test.mjs" (cons "scripts/sdk-construction-handoff.test.mjs" (cons "scripts/sdk-image-inputs.test.mjs" (cons "scripts/sdk-release-evidence.mjs" (cons "scripts/sdk-release-evidence.test.mjs" (cons "scripts/sdk-vv-check.test.mjs" (cons "scripts/unpublished-sdk-qualification.test.mjs" (nil String)))))))))))))))))))))))
+  body: (cons ".github/workflows/release.yml" (cons "factory/" (cons "scripts/browser-api-sdk-check.test.mjs" (cons "scripts/ci-capacity.test.mjs" (cons "scripts/factory.mjs" (cons "scripts/factory.test.mjs" (cons "scripts/library-sdk-check.test.mjs" (cons "scripts/product-sdk-check.test.mjs" (cons "scripts/release-gate-evidence.mjs" (cons "scripts/release-gate-evidence.test.mjs" (cons "scripts/release-native-contract.test.mjs" (cons "scripts/release-phases.md" (cons "scripts/release-phases.mjs" (cons "scripts/release-phases.test.mjs" (cons "scripts/release-rebuild.sh" (cons "scripts/rust-oracle-tools-inputs.test.mjs" (cons "scripts/sdk-candidate-sbom.test.mjs" (cons "scripts/sdk-construction-handoff.test.mjs" (cons "scripts/sdk-image-inputs.test.mjs" (cons "scripts/sdk-release-evidence.mjs" (cons "scripts/sdk-release-evidence.test.mjs" (cons "scripts/sdk-vv-check.test.mjs" (cons "scripts/unpublished-sdk-qualification.test.mjs" (nil String))))))))))))))))))))))))
 }
 
 theorem{
@@ -166,6 +191,14 @@ theorem{
   name: thePriorRouteVerifiedTheSourceTwice,
   parameters: [],
   statement: (((occurrences "source-verified" (priorRoute)) =? 2) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: eachImageIsBuiltOnceAndRebuiltOnce,
+  parameters: [],
+  statement: (((builds (route)) =? 2) = true),
   proof: decide{},
   axioms: []
 }

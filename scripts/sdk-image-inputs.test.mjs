@@ -912,11 +912,14 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     assert.notEqual(changed, command, name);
     assert.notEqual(transport.run(changed).status, 0); assert(!existsSync(transport.record));
   }
-  // Execute the unchanged build portion of the real two-root workflow loop.
+  // Execute the unchanged build portion of the real rebuild script in both of
+  // the roots the workflow gives it: root-b always, root-a on a failed comparison.
   const full = runBlock(release.slice(release.indexOf('  reproducibility:')), '      - shell: bash');
-  const start = full.indexOf('for root in root-a root-b; do');
-  const end = full.indexOf('\n  mkdir "$root.oci"', start); assert(start >= 0 && end > start);
-  const loop = full.slice(start, end) + '\ndone\n';
+  assert(full.includes('\nbash root-a/scripts/release-rebuild.sh root-b\n'));
+  const rebuild = readFileSync(new URL('./release-rebuild.sh', import.meta.url), 'utf8');
+  const start = rebuild.indexOf('context=()\n');
+  const end = rebuild.indexOf('\nmkdir "$root.oci"', start); assert(start >= 0 && end > start);
+  const loop = 'for root in root-a root-b; do\n' + rebuild.slice(start, end) + '\ndone\n';
   cpSync(f.source, join(f.work, 'root-a'), { recursive: true, verbatimSymlinks: true });
   cpSync(f.source, join(f.work, 'root-b'), { recursive: true, verbatimSymlinks: true });
   const result = transport.run(loop, f.work); assert.equal(result.status, 0, result.stderr);

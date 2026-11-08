@@ -14,14 +14,24 @@ structure{
   name: Feature,
   type_parameters: [],
   parameters: [],
-  fields: [{name: kappa, type: Nat}, {name: key, type: Nat}, {name: interface, type: Nat}, {name: executable, type: Bool}]
+  fields: [
+    {name: kappa, type: Nat},
+    {name: key, type: Nat},
+    {name: interface, type: Nat},
+    {name: executable, type: Bool}
+  ]
 }
 
 structure{
   name: Release,
   type_parameters: [],
   parameters: [],
-  fields: [{name: version, type: Version}, {name: labels, type: (List String)}, {name: base, type: Nat}, {name: features, type: (List Feature)}]
+  fields: [
+    {name: version, type: Version},
+    {name: labels, type: (List String)},
+    {name: base, type: Nat},
+    {name: features, type: (List Feature)}
+  ]
 }
 
 structure{
@@ -41,7 +51,11 @@ structure{
   name: Pin,
   type_parameters: [],
   parameters: [],
-  fields: [{name: component, type: Nat}, {name: label, type: String}, {name: version, type: Version}]
+  fields: [
+    {name: component, type: Nat},
+    {name: label, type: String},
+    {name: version, type: Version}
+  ]
 }
 
 inductive{
@@ -73,7 +87,11 @@ structure{
   name: Project,
   type_parameters: [],
   parameters: [],
-  fields: [{name: name, type: String}, {name: owns, type: (List Nat)}, {name: pins, type: (List Pin)}]
+  fields: [
+    {name: name, type: String},
+    {name: owns, type: (List Nat)},
+    {name: pins, type: (List Pin)}
+  ]
 }
 
 definition{
@@ -146,7 +164,12 @@ definition{
 
 definition{
   name: route,
-  parameters: [imports : (List String), accepted : (List String), obligations : (List String), receipts : (List String)],
+  parameters: [
+    imports : (List String),
+    accepted : (List String),
+    obligations : (List String),
+    receipts : (List String)
+  ],
   result: String,
   body: (if (resolves imports accepted) then (match (unreceipted obligations receipts)
     | List.nil => "proved"
@@ -202,9 +225,7 @@ definition{
   parameters: [left : (List Nat), right : (List Nat)],
   result: Bool,
   body: (match left
-    | List.nil => (match right
-      | List.nil => true
-      | List.cons r rs => false)
+    | List.nil => (match right | List.nil => true | List.cons r rs => false)
     | List.cons l ls => (match right
       | List.nil => false
       | List.cons r rs => (if (l =? r) then (sameNats ls rs) else false))),
@@ -351,9 +372,21 @@ definition{
   name: follows,
   parameters: [current : Release, earlier : (List Release)],
   result: Bool,
-  body: (match earlier
-    | List.nil => (sameVersion (project current version) (firstVersion))
-    | List.cons first others => (((project current base) <? (prim length earlier : Nat)) && ((0 <? (changeLevel (project (releaseAt (project current base) earlier) features) (project current features))) && (sameVersion (project current version) (next (highest earlier (noVersion)) (changeLevel (project (releaseAt (project current base) earlier) features) (project current features)))))))
+  body: match{
+    branches: [
+      {
+        body: (sameVersion (project current version) (firstVersion)),
+        binders: [],
+        constructor: List.nil
+      },
+      {
+        body: (((project current base) <? (prim length earlier : Nat)) && ((0 <? (changeLevel (project (releaseAt (project current base) earlier) features) (project current features))) && (sameVersion (project current version) (next (highest earlier (noVersion)) (changeLevel (project (releaseAt (project current base) earlier) features) (project current features)))))),
+        binders: [first, others],
+        constructor: List.cons
+      }
+    ],
+    scrutinee: earlier
+  }
 }
 
 definition{
@@ -479,10 +512,7 @@ definition{
   name: outcomeIndex,
   parameters: [result : Outcome],
   result: Nat,
-  body: (match result
-    | Outcome.resolved => 0
-    | Outcome.contained => 1
-    | Outcome.merged => 2)
+  body: (match result | Outcome.resolved => 0 | Outcome.contained => 1 | Outcome.merged => 2)
 }
 
 definition{

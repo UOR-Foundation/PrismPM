@@ -212,11 +212,14 @@ export function platformIndex(platforms) {
   return Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests}));
 }
 
-export function verifyReproducibility(image, indexBytes, architecture, revision, first, second) {
+// Each rebuild is an independent build in its own root; the shipped platform
+// manifest is the other. One rebuild establishes reproducibility.
+export function verifyReproducibility(image, indexBytes, architecture, revision, ...rebuilds) {
   assert.match(revision, /^[0-9a-f]{40}$/);
+  assert(rebuilds.length >= 1, 'at least one rebuild');
   const published = publishedPlatform(image, indexBytes, architecture);
   const owners = [];
-  for (const directory of [first, second]) {
+  for (const directory of rebuilds) {
     const {descriptor: rebuilt, verify} = rebuiltManifest(directory, architecture, revision);
     owners.push(verify);
     assert.equal(rebuilt.digest, published.digest, 'rebuilt bytes differ from the shipped platform manifest');
@@ -381,10 +384,10 @@ async function main([command, ...args]) {
     assert.equal(args.length, 1);
     requirePrerequisites(args[0], JSON.parse(process.env.RELEASE_NEEDS));
   } else if (command === 'reproducibility') {
-    assert.equal(args.length, 6);
-    const [reference, index, architecture, revision, first, second] = args;
+    assert.equal(args.length, 5);
+    const [reference, index, architecture, revision, rebuilt] = args;
     const image = readFileSync(reference, 'utf8').trim();
-    const digest = verifyReproducibility(image, readFileSync(index), architecture, revision, first, second);
+    const digest = verifyReproducibility(image, readFileSync(index), architecture, revision, rebuilt);
     process.stdout.write(`${revision} linux/${architecture} ${image} ${digest}\n`);
   } else if (command === 'image-index') {
     assert.equal(args.length, 5);

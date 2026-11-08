@@ -670,7 +670,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      # Two independent OCI exports must fit alongside the BuildKit cache.
+      # Two OCI exports (one on a failed comparison) must fit alongside the BuildKit cache.
       - name: Free runner disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
@@ -717,37 +717,26 @@ jobs:
           identity_file=".shipped-image/$IMAGE-image.txt"
           identity=$(cat "$identity_file")
           docker buildx imagetools inspect --raw "$identity" > shipped-index.json
-          for root in root-a root-b; do
-            context=()
-            if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
-              build=(node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$GITHUB_SHA" "$TARGET")
-            else
-              test "$DOCKERFILE" = sdk/runtime/Dockerfile
-              build=(docker buildx build --file "$root/$DOCKERFILE")
-              context=("$root")
-            fi
-            "${build[@]}" --no-cache --provenance=false --sbom=false \
-              --build-arg SOURCE_DATE_EPOCH=0 \
-              --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
-              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --label "org.opencontainers.image.version=$VERSION" \
-              --platform "$PLATFORM" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
-            mkdir "$root.oci"
-            tar -xf "$root.oci.tar" -C "$root.oci"
-            jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
-          done
-          cmp root-a.digest root-b.digest
-          cmp root-a.oci/index.json root-b.oci/index.json
+          # The shipped build is one root; one independent no-cache rebuild in a
+          # second root on another runner establishes reproducibility. A third
+          # build would establish it again (Factory.Release, eachOnce).
+          bash root-a/scripts/release-rebuild.sh root-b
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
-            root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+            root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      # Only a failed comparison pays for a second rebuild, to locate the layers
+      # that differ; it never changes acceptance.
       - name: Diagnose differing OCI layers without changing acceptance
         if: failure()
-        timeout-minutes: 5
+        timeout-minutes: 240
+        shell: bash
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          PLATFORM: ${{ matrix.platform }}
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.policy.outputs.version }}
         run: |
-          if [ -f root-a.oci/index.json ] && [ -f root-b.oci/index.json ]; then
+          if [ -f root-b.oci/index.json ] && bash root-a/scripts/release-rebuild.sh root-a; then
             python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
           fi
       - name: Retain bounded reproducibility diagnostics
