@@ -720,7 +720,7 @@ test('native release matrix executes the additional exact-image gate and preserv
     const firstNode = job.indexOf(command);
     assert(firstNode > job.indexOf(setupNode), 'pinned Node must precede the first source helper');
   };
-  for (const [text, command] of [[installed, 'bash root-a/scripts/product-sdk-check.sh'], [repro, 'node "$root/scripts/sdk-image-inputs.mjs"']]) {
+  for (const [text, command] of [[installed, 'bash root-a/scripts/product-sdk-check.sh'], [repro, 'bash root-a/scripts/release-rebuild.sh root-b']]) {
     hostPrerequisite(text, command);
     assert.throws(() => hostPrerequisite(text.replace(setupNode, ''), command));
     assert.throws(() => hostPrerequisite(text.replace('node-version: 22.23.2', 'node-version: 20'), command));
