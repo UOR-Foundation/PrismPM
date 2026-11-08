@@ -1,0 +1,174 @@
+// The factory route: κ, receipts and the release workflow checked against
+// factory/src/Factory/Release.lex.tex.
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {dirname, join} from 'node:path';
+import test from 'node:test';
+import {findReceipt, isPlumbing, kappa, plumbing, plumbingTests, routeRecord} from './factory.mjs';
+import {parts as vvParts} from './vv-assemble.mjs';
+
+const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
+const root = new URL('..', import.meta.url).pathname;
+const read = path => readFileSync(join(root, path), 'utf8');
+const strings = body => [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => match[1]);
+const definition = (source, name) => {
+  const start = source.indexOf(`  name: ${name},\n`);
+  assert(start >= 0, `definition ${name}`);
+  return source.slice(start, source.indexOf('\n}\n', start));
+};
+
+function repository(t) {
+  const path = mkdtempSync(join(tmpdir(), 'prismpm-factory-test-'));
+  t.after(() => rmSync(path, {recursive: true, force: true}));
+  const git = (...args) => execFileSync('git', args, {cwd: path, encoding: 'utf8',
+    env: {...process.env, GIT_AUTHOR_NAME: 'unit', GIT_AUTHOR_EMAIL: 'unit@example.invalid', GIT_COMMITTER_NAME: 'unit',
+      GIT_COMMITTER_EMAIL: 'unit@example.invalid', GIT_CONFIG_NOSYSTEM: '1', HOME: path}}).trim();
+  git('init', '-q', '-b', 'release/v0.4');
+  const commit = (files, message) => {
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(join(path, dirname(name)), {recursive: true}); writeFileSync(join(path, name), text);
+    }
+    git('add', '-A'); git('commit', '-q', '-m', message); return git('rev-parse', 'HEAD');
+  };
+  return {path, git, commit};
+}
+
+test('the plumbing is exactly the model\'s, and every listed path is tracked', () => {
+  const model = read('factory/src/Factory/Release.lex.tex');
+  assert.deepEqual(strings(definition(model, 'plumbing')), [...plumbing]);
+  assert.deepEqual([...plumbing].sort(), [...plumbing], 'sorted, so a review sees one list');
+  const tracked = execFileSync('git', ['ls-files'], {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024}).split('\n');
+  for (const entry of plumbing) assert(tracked.some(path => entry.endsWith('/') ? path.startsWith(entry) : path === entry), entry);
+  assert(isPlumbing('factory/src/Factory/Release.lex.tex')); assert(isPlumbing('.github/workflows/release.yml'));
+  assert(!isPlumbing('.github/workflows/vv.yml')); assert(!isPlumbing('scripts/release-phases.mjs.bak'));
+  assert(!isPlumbing('factory')); assert(!isPlumbing('crates/prismpm/src/lib.rs'));
+});
+
+test('every plumbing test runs in the plumbing check, and every test that reads the release workflow is plumbing', () => {
+  const tests = plumbingTests(root);
+  assert(tests.includes('scripts/factory.test.mjs') && tests.includes('scripts/release-phases.test.mjs'));
+  for (const path of tests) assert(isPlumbing(path));
+  const scripts = readdirSync(join(root, 'scripts')).filter(name => name.endsWith('.test.mjs')).map(name => `scripts/${name}`);
+  for (const path of scripts) {
+    const text = read(path);
+    if (/release\.yml|release-gate-evidence|release-phases|sdk-release-evidence|release-native-contract|scripts\/factory\.mjs/.test(text))
+      assert(isPlumbing(path), `${path} pins the release plumbing, so κ must leave it out and the plumbing check must run it`);
+  }
+});
+
+test('κ ignores the plumbing and follows every other byte, mode and path', t => {
+  const {path, commit, git} = repository(t);
+  const first = commit({'src/a.txt': 'a\n', '.github/workflows/release.yml': 'one\n', 'factory/x.lex.tex': 'x\n'}, 'first');
+  const plumbingOnly = commit({'.github/workflows/release.yml': 'two\n', 'factory/y.lex.tex': 'y\n', 'scripts/release-phases.mjs': '//\n'}, 'plumbing');
+  assert.equal(kappa(path, plumbingOnly), kappa(path, first));
+  const source = commit({'src/a.txt': 'b\n'}, 'source');
+  assert.notEqual(kappa(path, source), kappa(path, first));
+  const added = commit({'src/b.txt': 'b\n'}, 'added');
+  assert.notEqual(kappa(path, added), kappa(path, source));
+  git('update-index', '--chmod=+x', 'src/b.txt'); git('commit', '-q', '-m', 'mode');
+  assert.notEqual(kappa(path, git('rev-parse', 'HEAD')), kappa(path, added));
+  git('mv', 'src/b.txt', 'src/c.txt'); git('commit', '-q', '-m', 'rename');
+  const renamed = git('rev-parse', 'HEAD');
+  assert.notEqual(kappa(path, renamed), kappa(path, added));
+  assert.match(kappa(path, renamed), /^[0-9a-f]{64}$/);
+});
+
+const established = () => [{name: 'gate', conclusion: 'success'}, ...vvParts.map(part => ({name: `source-vv (${part})`, conclusion: 'success'}))];
+function client(runs, jobs = {}, artifacts = {}) {
+  return {api(path) {
+    if (path.includes('/workflows/release.yml/runs?')) return {workflow_runs: runs};
+    let match = path.match(/\/runs\/(\d+)\/jobs\?filter=latest&per_page=100$/);
+    if (match) return {jobs: jobs[match[1]] ?? established()};
+    match = path.match(/\/runs\/(\d+)\/artifacts\?name=source-vv$/);
+    if (match) return {artifacts: artifacts[match[1]] ?? [{name: 'source-vv', expired: false}]};
+    throw new Error(`unexpected ${path}`);
+  }};
+}
+const run = (id, sha, extra = {}) => ({id, head_sha: sha, run_attempt: 2, event: 'push', head_branch: 'release/v0.4',
+  path: '.github/workflows/release.yml', repository: {full_name: 'UOR-Foundation/PrismPM'},
+  head_repository: {full_name: 'UOR-Foundation/PrismPM'}, ...extra});
+
+test('a receipt is an ancestor\'s passed gate for the same κ, and nothing else', t => {
+  const {path, commit, git} = repository(t);
+  const proved = commit({'src/a.txt': 'a\n', '.github/workflows/release.yml': 'one\n'}, 'proved');
+  const changedSource = commit({'src/a.txt': 'changed\n'}, 'source');
+  const restored = commit({'src/a.txt': 'a\n'}, 'restored');
+  const current = commit({'.github/workflows/release.yml': 'fixed\n'}, 'plumbing fix');
+  git('checkout', '-q', '-b', 'side', proved); const foreign = commit({'.github/workflows/release.yml': 'side\n'}, 'side');
+  git('checkout', '-q', 'release/v0.4');
+  assert.equal(kappa(path, current), kappa(path, proved));
+  const found = findReceipt(path, current, client([run(7, proved)]));
+  assert.deepEqual(found, {route: 'proved', kappa: kappa(path, current), source_revision: proved, run_id: '7', run_attempt: '2'});
+  // The newest matching ancestor wins: the restored commit has the same κ again.
+  assert.equal(findReceipt(path, current, client([run(9, restored), run(7, proved)])).source_revision, restored);
+  const none = {route: 'establish', kappa: kappa(path, current), source_revision: current, run_id: '', run_attempt: ''};
+  for (const runs of [
+    [], [run(7, changedSource)], [run(7, foreign)], [run(7, current)],
+    [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
+    [run(7, proved, {repository: {full_name: 'fork/PrismPM'}})], [run(7, proved, {head_repository: {full_name: 'fork/PrismPM'}})],
+    [run(7, proved, {path: '.github/workflows/vv.yml'})], [run(7, 'x'.repeat(40))],
+  ]) assert.deepEqual(findReceipt(path, current, client(runs)), none, JSON.stringify(runs[0] ?? {}));
+  const without = name => established().filter(job => job.name !== name);
+  for (const jobs of [[], [{name: 'gate', conclusion: 'failure'}, ...without('gate')], [...established(), {name: 'gate', conclusion: 'success'}],
+    // A run proved by a receipt skipped source-vv; it is never itself a receipt.
+    [{name: 'gate', conclusion: 'success'}, ...vvParts.map(part => ({name: `source-vv (${part})`, conclusion: 'skipped'}))],
+    without('source-vv (gates)')])
+    assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {7: jobs})), none);
+  for (const artifacts of [[], [{name: 'source-vv', expired: true}], [{name: 'source-vv-part-gates', expired: false}]])
+    assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {}, {7: artifacts})), none);
+});
+
+test('the route record binds this commit, its κ and the run that established the evidence', t => {
+  const {path, commit} = repository(t);
+  const proved = commit({'src/a.txt': 'a\n'}, 'proved');
+  const current = commit({'.github/workflows/release.yml': 'fixed\n'}, 'plumbing fix');
+  const evidence = Buffer.from('{"schema":"prismpm/vv-evidence/1"}\n');
+  const record = JSON.parse(routeRecord(path, current, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence));
+  assert.equal(record.schema, 'prismpm/factory-route/1'); assert.equal(record.revision, current);
+  assert.equal(record.kappa, kappa(path, current)); assert.equal(record.route, 'proved');
+  assert.deepEqual(record.plumbing, [...plumbing]);
+  assert.equal(record.receipt.source_revision, proved); assert.equal(record.receipt.source_vv_sha256.length, 64);
+  const established = JSON.parse(routeRecord(path, current, 'established', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence));
+  assert.equal(established.receipt.source_revision, current);
+  assert.throws(() => routeRecord(path, current, 'established', {source_revision: proved, run_id: '9', run_attempt: '1'}, evidence));
+  assert.throws(() => routeRecord(path, current, 'proved', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence));
+  assert.throws(() => routeRecord(path, current, 'proved', {source_revision: proved, run_id: '', run_attempt: '1'}, evidence));
+  assert.throws(() => routeRecord(path, current, 'assumed', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence));
+  const changed = commit({'src/a.txt': 'b\n'}, 'source change');
+  assert.throws(() => routeRecord(path, changed, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence), /different κ/);
+});
+
+test('the release workflow is the model\'s route', () => {
+  const model = read('factory/src/Factory/Release.lex.tex');
+  const route = definition(model, 'route');
+  assert(!route.includes('Stage.installedVv'), 'the route has no installed re-run of source V&V');
+  const workflow = load(read('.github/workflows/release.yml'));
+  const stageJobs = {sourceVv: ['source-vv'], images: ['image-platforms', 'images'], reproducibility: ['reproducibility'],
+    native: ['native'], installedSdk: ['installed-sdk'], publication: ['gate', 'oci-native', 'crates', 'release']};
+  const routed = [...route.matchAll(/Stage\.([a-zA-Z]+)/g)].map(match => match[1]);
+  assert.deepEqual(routed.sort(), Object.keys(stageJobs).sort());
+  const support = ['policy', 'factory', 'devcontainer-image'];
+  assert.deepEqual(Object.keys(workflow.jobs).sort(), [...support, ...Object.values(stageJobs).flat()].sort());
+  // onlyPublicationWaitsForTheSource: no projection stage needs source V&V or the gate.
+  const needs = job => [workflow.jobs[job].needs ?? []].flat();
+  const upstream = job => {const seen = new Set(); const visit = name => {for (const need of needs(name)) if (!seen.has(need)) {seen.add(need); visit(need);}}; visit(job); return seen;};
+  for (const job of [...stageJobs.images, ...stageJobs.reproducibility, ...stageJobs.native, ...stageJobs.installedSdk])
+    assert(!upstream(job).has('source-vv') && !upstream(job).has('gate'), `${job} starts beside source V&V`);
+  for (const job of ['oci-native', 'crates', 'release']) assert(upstream(job).has('gate'), `${job} waits for the gate`);
+  assert(upstream('gate').has('source-vv') && upstream('gate').has('factory'));
+});
+
+test('the factory catalog names only first-party products', () => {
+  const files = execFileSync('git', ['ls-files', 'factory'], {cwd: root, encoding: 'utf8'}).split('\n').filter(Boolean);
+  assert(files.includes('factory/src/Factory/Catalog.lex.tex'));
+  for (const file of files) {
+    const text = read(file).toLowerCase();
+    for (const name of ['afflom', 'casey-allard', 'rule30', 'prism-legal', 'lexlean-r4', 'compression'])
+      assert(!text.includes(name), `${file} names ${name}; downstream work consumes Prism, it is not in the factory`);
+  }
+  const catalog = read('factory/src/Factory/Catalog.lex.tex');
+  assert.deepEqual([...definition(catalog, 'products').matchAll(/Model \{name := "([^"]+)"/g)].map(match => match[1]), ['PrismPM', 'LexLean']);
+});

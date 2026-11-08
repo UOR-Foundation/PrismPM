@@ -7,6 +7,7 @@ import {basename, dirname, join, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {bootstrapNames, canonical, captureBootstrap, hash, readOriginal, validateBootstrapBytes} from './sdk-bootstrap-retention.mjs';
 import {assembleVvEvidence, validateVvPart, vvParts} from './sdk-vv-run.mjs';
+import {isAncestor, kappa} from './factory.mjs';
 
 export function releaseContext(revision, architecture, image, runId, attempt) {
   assert.match(revision, /^[0-9a-f]{40}$/); assert(['amd64', 'arm64'].includes(architecture));
@@ -181,6 +182,21 @@ function sourceAssemble(output, context) {
   const files = new Map(names.map(name => [name, readOriginal(join(output, name), 256 * 1024 * 1024)]));
   writeFileSync(join(output, 'source-vv.json'), assembleSourceEvidence(files, context), {flag: 'wx', mode: 0o644});
 }
+// A factory receipt: the complete retained source evidence of an earlier run
+// for an ancestor with the same κ (scripts/factory.mjs). Every part record is
+// validated against that run's own context, exactly as its gate did.
+export function validateSourceReceipt(files, context) {
+  assert.deepEqual([...files.keys()].sort(), sourceEvidenceNames());
+  assert.deepEqual(files.get('source-vv.json'), assembleSourceEvidence(files, context), 'exact assembled receipt evidence');
+}
+function sourceReceipt(root, output, context) {
+  output = directory(output, false);
+  assert(isAncestor(root, context.source_revision, 'HEAD'), 'a receipt comes from an ancestor');
+  assert.equal(kappa(root, context.source_revision), kappa(root, execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim()),
+    'the receipt is for a different κ');
+  const files = new Map(sourceEvidenceNames().map(name => [name, readOriginal(join(output, name), 256 * 1024 * 1024)]));
+  validateSourceReceipt(files, context);
+}
 export function nativeInvocations(root, image, architecture, uid, gid) {
   for (const id of [uid, gid]) assert(Number.isInteger(id) && id >= 0 && id <= 4294967294);
   const common = ['run', '--rm', '--platform', `linux/${architecture}`, '--network', 'none', '--user', `${uid}:${gid}`,
@@ -227,10 +243,12 @@ async function nativeRun(root, output, context, archive) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [operation, rootPath, output, revision, architecture, image, runId, attempt, selection, ...extra] = process.argv.slice(2);
-  assert.equal(extra.length, 0); assert(['source-run', 'source-assemble', 'native'].includes(operation));
+  assert.equal(extra.length, 0); assert(['source-run', 'source-assemble', 'source-receipt', 'native'].includes(operation));
   const root = realpathSync(rootPath), context = releaseContext(revision, architecture, image === '-' ? null : image, runId, attempt);
-  assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(), revision);
-  if (operation === 'source-run') await sourceRun(root, output, context, selection);
+  // A receipt keeps its own commit; every other operation is for this one.
+  if (operation !== 'source-receipt') assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(), revision);
+  if (operation === 'source-receipt') {assert.equal(selection, '-'); assert.equal(context.image_reference, null); sourceReceipt(root, output, context);}
+  else if (operation === 'source-run') await sourceRun(root, output, context, selection);
   else if (operation === 'source-assemble') {assert.equal(selection, '-'); sourceAssemble(output, context);}
   else await nativeRun(root, output, context, resolve(selection));
 }

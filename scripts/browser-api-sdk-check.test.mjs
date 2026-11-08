@@ -182,7 +182,9 @@ test('installed browser closure includes complete new owning fixtures and actual
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
  assert.match(workflow, /browser-api-sdk-check\.sh/);
- assert.match(workflow, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
+ // Installed V&V is retired from the release route (Factory.Release); the
+ // launcher stays for an explicit installed run outside it.
+ assert.doesNotMatch(workflow, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
  const launcher = sdkSource('scripts/sdk-vv-outer.sh');
  assert.match(launcher, /node root-a\/scripts\/sdk-vv-check\.mjs tests; node root-a\/scripts\/sdk-vv-check\.mjs run "\$1" "\$2" "\$3" "\$4"/);
  assert.match(launcher, /--target registry_qualification_tools/);

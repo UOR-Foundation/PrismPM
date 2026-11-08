@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateConfig } from './sdk-candidate.mjs';
-import { parts as vvParts } from './vv-assemble.mjs';
 import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, verificationArguments } from './sdk-candidate-sbom.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
@@ -303,16 +302,15 @@ export function publicationNotes(revision) {
     'These immutable OCI/native assets passed the workflow prerequisites and are published for verification.\n' +
     'This phase does not publish Cargo packages, versioned discovery aliases, or an accepted SDK/ecosystem release.\n' +
     'Each platform has complete raw SPDX in a separately signed OCI artifact, not an inline SPDX attestation.\n' +
-    'Original native installed-SDK V&V part evidence is retained; independent SDK acceptance remains separate.\n' +
+    'Source V&V evidence is bound to its content identity in factory-route.json; independent SDK acceptance remains separate.\n' +
     'Public Cargo qualification and ecosystem acceptance are separate later phases.\n';
 }
 
 export function assetNames() {
   return [
-    'SHA256SUMS', 'source-vv.tar', 'sdk-metadata-native-join.json',
+    'SHA256SUMS', 'factory-route.json', 'source-vv.tar', 'sdk-metadata-native-join.json',
     ...['amd64', 'arm64'].flatMap(architecture => [
-      ...vvParts.map(part => `sdk-${architecture}-full-sdk-vv-${part}.tar`),
-      `sdk-${architecture}-vv-evidence.json`, `sdk-${architecture}-product-cli.tar`,
+      `sdk-${architecture}-product-cli.tar`,
       `sdk-${architecture}-native-equivalence.tar`,
       `sdk-${architecture}-native-metadata.tar`,
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,

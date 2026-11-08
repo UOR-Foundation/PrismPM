@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+// The release route of the Prism factory (factory/src/Factory/Release.lex.tex).
+//
+// An obligation is established once for each content identity κ of its
+// inputs. κ is the SHA-256 of the source tree without the release plumbing:
+// the workflow and scripts that carry evidence from stage to stage and the
+// tests that pin them. Those paths are not inputs of source V&V; the plumbing
+// check of every release run executes their own tests fresh. When an earlier
+// release run of an ancestor commit with the same κ passed source V&V, its
+// retained evidence is the receipt and the obligation routes to "proved"
+// instead of being established again.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {execFileSync, spawnSync} from 'node:child_process';
+import {readFileSync, writeFileSync} from 'node:fs';
+import {join, resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {parts as vvParts} from './vv-assemble.mjs';
+
+const repository = 'UOR-Foundation/PrismPM';
+const releaseRef = 'refs/heads/release/v0.4';
+
+// Mirrors `plumbing` in factory/src/Factory/Release.lex.tex; factory.test.mjs
+// keeps the two equal. Entries ending in `/` are directory prefixes.
+export const plumbing = Object.freeze([
+  '.github/workflows/release.yml',
+  'factory/',
+  'scripts/browser-api-sdk-check.test.mjs',
+  'scripts/ci-capacity.test.mjs',
+  'scripts/factory.mjs',
+  'scripts/factory.test.mjs',
+  'scripts/library-sdk-check.test.mjs',
+  'scripts/product-sdk-check.test.mjs',
+  'scripts/release-gate-evidence.mjs',
+  'scripts/release-gate-evidence.test.mjs',
+  'scripts/release-native-contract.test.mjs',
+  'scripts/release-phases.md',
+  'scripts/release-phases.mjs',
+  'scripts/release-phases.test.mjs',
+  'scripts/rust-oracle-tools-inputs.test.mjs',
+  'scripts/sdk-candidate-sbom.test.mjs',
+  'scripts/sdk-construction-handoff.test.mjs',
+  'scripts/sdk-image-inputs.test.mjs',
+  'scripts/sdk-release-evidence.mjs',
+  'scripts/sdk-release-evidence.test.mjs',
+  'scripts/sdk-vv-check.test.mjs',
+  'scripts/unpublished-sdk-qualification.test.mjs',
+]);
+
+export const isPlumbing = path => plumbing.some(entry => entry.endsWith('/') ? path.startsWith(entry) : path === entry);
+
+const git = (root, args) => execFileSync('git', args, {cwd: root, maxBuffer: 256 * 1024 * 1024});
+const oid = value => assert.match(value, /^[0-9a-f]{40}$/);
+
+// κ of one commit: every tracked entry (mode, type, object id, path) of its
+// tree in Git's order, without the plumbing.
+export function kappa(root, revision) {
+  oid(revision);
+  const listing = git(root, ['ls-tree', '-r', '-z', '--full-tree', revision]);
+  const hash = createHash('sha256');
+  let entries = 0;
+  for (const row of listing.toString('utf8').split('\0')) {
+    if (row === '') continue;
+    const match = row.match(/^([0-7]{6}) (blob|commit) ([0-9a-f]{40})\t(.+)$/s);
+    assert(match, 'unexpected Git tree entry');
+    if (isPlumbing(match[4])) continue;
+    hash.update(`${match[1]} ${match[2]} ${match[3]}\t${match[4]}\n`);
+    entries += 1;
+  }
+  assert(entries > 0, 'empty source tree');
+  return hash.digest('hex');
+}
+
+// The plumbing's own tests: run fresh by every release, since κ leaves them out.
+export function plumbingTests(root) {
+  const files = git(root, ['ls-files', '-z']).toString('utf8').split('\0');
+  return files.filter(path => path.endsWith('.test.mjs') && isPlumbing(path)).sort();
+}
+
+export const isAncestor = (root, ancestor, revision) =>
+  spawnSync('git', ['merge-base', '--is-ancestor', ancestor, revision], {cwd: root}).status === 0;
+
+// A receipt is the retained source V&V of an earlier run of this workflow on
+// the release branch whose gate passed, for an ancestor with the same κ.
+export function findReceipt(root, revision, client) {
+  const current = kappa(root, revision);
+  const runs = client.api(`repos/${repository}/actions/workflows/release.yml/runs?branch=release/v0.4&per_page=50`).workflow_runs;
+  for (const run of runs) {
+    if (!['push', 'workflow_dispatch'].includes(run.event) || run.head_branch !== 'release/v0.4') continue;
+    if (run.repository?.full_name !== repository || run.head_repository?.full_name !== repository) continue;
+    if (run.path !== '.github/workflows/release.yml' && !String(run.path).startsWith('.github/workflows/release.yml@')) continue;
+    if (run.head_sha === revision) continue;
+    if (!/^[0-9a-f]{40}$/.test(run.head_sha) || !isAncestor(root, run.head_sha, revision)) continue;
+    if (kappa(root, run.head_sha) !== current) continue;
+    // The run must have established the evidence itself: every source part
+    // ran and passed, and its gate passed. A run that was itself proved by a
+    // receipt carries that receipt's evidence, not its own.
+    const jobs = client.api(`repos/${repository}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`).jobs;
+    const passed = name => {const rows = jobs.filter(job => job.name === name); return rows.length === 1 && rows[0].conclusion === 'success';};
+    if (!passed('gate') || !vvParts.every(part => passed(`source-vv (${part})`))) continue;
+    const artifacts = client.api(`repos/${repository}/actions/runs/${run.id}/artifacts?name=source-vv`).artifacts;
+    if (!artifacts.some(artifact => artifact.name === 'source-vv' && !artifact.expired)) continue;
+    return {route: 'proved', kappa: current, source_revision: run.head_sha,
+      run_id: String(run.id), run_attempt: String(run.run_attempt)};
+  }
+  return {route: 'establish', kappa: current, source_revision: revision, run_id: '', run_attempt: ''};
+}
+
+const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
+  ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item) + '\n';
+
+// The route record published with every release: which κ the source V&V
+// evidence is for, and whether this run established it or proved it by an
+// earlier receipt.
+export function routeRecord(root, revision, route, source, sourceVv) {
+  assert(['established', 'proved'].includes(route));
+  oid(revision); oid(source.source_revision);
+  for (const value of [source.run_id, source.run_attempt]) assert.match(value, /^[1-9][0-9]{0,19}$/);
+  if (route === 'established') assert.equal(source.source_revision, revision);
+  else {
+    assert.notEqual(source.source_revision, revision);
+    assert(isAncestor(root, source.source_revision, revision), 'a receipt comes from an ancestor');
+  }
+  const current = kappa(root, revision);
+  assert.equal(kappa(root, source.source_revision), current, 'the receipt is for a different κ');
+  return canonical({schema: 'prismpm/factory-route/1', revision, kappa: current, route,
+    receipt: {source_revision: source.source_revision, run_id: source.run_id, run_attempt: source.run_attempt,
+      source_vv_sha256: createHash('sha256').update(sourceVv).digest('hex')},
+    plumbing: [...plumbing]});
+}
+
+function gh(path) {
+  const result = spawnSync('gh', ['api', path], {encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000});
+  if (result.error) throw result.error;
+  assert.equal(result.status, 0, `GitHub API request failed: ${result.stderr}`);
+  return JSON.parse(result.stdout);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [operation, ...args] = process.argv.slice(2);
+  const root = resolve('.');
+  if (operation === 'kappa' && args.length === 1) process.stdout.write(`${kappa(root, args[0])}\n`);
+  else if (operation === 'tests' && args.length === 0) process.stdout.write(plumbingTests(root).join('\n') + '\n');
+  else if (operation === 'checks' && args.length === 0) {
+    const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...plumbingTests(root)], {stdio: 'inherit'});
+    process.exit(result.status ?? 1);
+  } else if (operation === 'find-receipt' && args.length === 1) {
+    // Receipts are found only for runs of the release line itself or its tag.
+    assert(process.env.GITHUB_REF === releaseRef || process.env.GITHUB_REF === 'refs/tags/v0.4.0', 'release ref required');
+    const found = findReceipt(root, args[0], {api: gh});
+    process.stdout.write(Object.entries(found).map(([key, value]) => `${key.replaceAll('_', '-')}=${value}\n`).join(''));
+  } else if (operation === 'route' && args.length === 6) {
+    const [output, revision, route, sourceRevision, runId, runAttempt] = args;
+    const sourceVv = readFileSync(join(root, 'target/source-vv-evidence/source-vv.json'));
+    writeFileSync(output, routeRecord(root, revision, route,
+      {source_revision: sourceRevision, run_id: runId, run_attempt: runAttempt}, sourceVv), {flag: 'wx', mode: 0o644});
+  } else {
+    console.error('usage: factory.mjs kappa REV | tests | checks | find-receipt REV | route OUT REV ROUTE SOURCE_REV RUN_ID RUN_ATTEMPT');
+    process.exit(64);
+  }
+}
