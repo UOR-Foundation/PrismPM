@@ -691,6 +691,11 @@ jobs:
           RESULT_NAME: ${{ matrix.name }}
         run: |
           set -euo pipefail
+          # The source-mutation tests read LexLean modules through
+          # prismpm-semantic-source with `cargo run --offline`. A fresh runner
+          # has no fetched registry, so build that one tool online first; the
+          # tests then reuse it offline. Its output stays in ignored target/.
+          (cd root-a && cargo build --locked --quiet -p repo-conformance --bin prismpm-semantic-source)
           node root-a/scripts/library-sdk-check.mjs tests
           bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
