@@ -26,12 +26,27 @@ import {
 // and every integrity failure, is final on the first attempt.
 export const TRANSIENT_CURL_STATUS = new Set([6, 7, 18, 28, 35, 52, 55, 56]);
 
+// `--fail` turns every HTTP error into curl status 22, so a 404 and a snapshot
+// mirror's passing 503 look alike. The HTTP status curl writes out tells them
+// apart; these are the ones curl's own --retry treats as transient.
+export const TRANSIENT_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+export function isTransient(error) {
+  if (TRANSIENT_CURL_STATUS.has(error?.status)) return true;
+  const written = String(error?.stdout ?? '');
+  return (
+    error?.status === 22 &&
+    /^[0-9]{3}$/.test(written) &&
+    TRANSIENT_HTTP_STATUS.has(Number(written))
+  );
+}
+
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
 // Run one download at most `attempts` times with doubling backoff, retrying
-// only transient transport failures. Retrying never relaxes verification: the
-// caller checks the digest of whatever the successful attempt produced.
+// only transient failures. Retrying never relaxes verification: the caller
+// checks the digest of whatever the successful attempt produced.
 export function withTransientRetry(
   download,
   { attempts = 4, delay = 2000, sleep = pause } = {},
@@ -44,10 +59,10 @@ export function withTransientRetry(
     try {
       return download();
     } catch (error) {
-      if (attempt >= attempts || !TRANSIENT_CURL_STATUS.has(error?.status))
-        throw error;
+      if (attempt >= attempts || !isTransient(error)) throw error;
+      const http = error.status === 22 ? ` (HTTP ${error.stdout})` : '';
       process.stderr.write(
-        `download failed with curl status ${error.status}; retry ${attempt}/${attempts - 1}\n`,
+        `download failed with curl status ${error.status}${http}; retry ${attempt}/${attempts - 1}\n`,
       );
       sleep(delay * 2 ** (attempt - 1));
     }
@@ -121,11 +136,17 @@ export function installRuntime(destination = RUNTIME, cache = null) {
               '300',
               '--max-filesize',
               '67108864',
+              '--write-out',
+              '%{http_code}',
               authority.url,
               '--output',
               archive,
             ],
-            { timeout: 310000, stdio: 'inherit' },
+            {
+              timeout: 310000,
+              stdio: ['ignore', 'pipe', 'inherit'],
+              encoding: 'utf8',
+            },
           ),
         );
       checkedFile(archive, authority.sha256);
