@@ -3,9 +3,8 @@
  * answer into something a person can act on. A wrong axiom set is fixed and
  * the proof run again without asking, because it is bookkeeping, not intent.
  */
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
@@ -13,6 +12,8 @@ import { names } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
+import { parseRepository } from '../github.mjs';
+import { canBuildOnGitHub, commitApp, gitRoot, originRepository, publishRepository, readyForGitHub, signedInLogin, suggestedRepository } from './github.mjs';
 import { VERSION } from '../version.mjs';
 
 const PROVE_SCRIPT_FULL = [
@@ -37,6 +38,19 @@ export function proveWhere(dir, session, { env = process.env } = {}) {
   if (env.PRISM_CODE_TIER === 'local' || env.PRISM_CODE_TIER === 'hosted') return env.PRISM_CODE_TIER;
   if (resolveDocker().error) return 'hosted';
   return hasImage(imageFor(dir, session)) ? 'local' : 'hosted';
+}
+
+/**
+ * Where the app is built: `local` in the SDK image when Docker and the image
+ * are on this machine, else `github` on the repository's own Actions when a
+ * GitHub token is there, else `local`, which downloads the image first.
+ * `remote` names one; `PRISM_CODE_TIER=local` chooses local.
+ */
+export function buildWhere(dir, session, { env = process.env, remote = null, docker = resolveDocker, image = hasImage, github = canBuildOnGitHub } = {}) {
+  if (remote === 'github' || remote === 'local') return remote;
+  if (env.PRISM_CODE_TIER === 'local') return 'local';
+  if (!docker().error && image(imageFor(dir, session))) return 'local';
+  return github({ env }) ? 'github' : 'local';
 }
 
 /**
@@ -225,7 +239,7 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
  * committed app instead, and this machine verifies what comes back, so no
  * Docker and no SDK image are needed here.
  */
-export async function build(dir, session, { log = () => {}, overwrite = false, remote = null } = {}) {
+export async function build(dir, session, { log = () => {}, overwrite = false, remote = null, root = null, repository = null, env = process.env } = {}) {
   const proved = session.status.proved && session.status.proved.modelSha === session.status.modelSha && existsSync(modelPath(dir, session.spec)) && session.status.lastSpec === JSON.stringify(session.spec);
   if (!proved) {
     const p = await prove(dir, session, { log, overwrite });
@@ -233,10 +247,14 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
   }
-  if (remote === 'github') return buildRemote(dir, session, { log });
+  const where = buildWhere(dir, session, { env, remote: repository && !remote ? 'github' : remote });
+  if (where === 'github') return buildRemote(dir, session, { log, root: root ?? defaultRoot(dir), repository });
   // A build needs the image, and a hosted proof did not: pull it now if it is missing, saying so, and pin the app to it.
   const ready = await prepare(dir, session, log, { pull: true });
-  if (!ready.ok) return { ok: false, stage: 'build', message: ready.message };
+  if (!ready.ok) {
+    const hint = resolveDocker().error ? ' Or sign in to GitHub (gh auth login) and build again: the app then builds on GitHub Actions and this machine needs no Docker.' : '';
+    return { ok: false, stage: 'build', message: `${ready.message}${hint}` };
+  }
   const started = Date.now();
   log('Building the app: Lean export, Rust, WebAssembly, the holo and its independent acceptance run. The first build takes ten minutes or more...');
   const run = await runInImage(dir, BUILD_SCRIPT, { socket: true, onLine: (l) => /^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l) && log(l) });
@@ -256,32 +274,70 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
   return built(dir, session, holo, seconds, { where: 'local' });
 }
 
-/** The app was built on GitHub Actions and verified here. The commit must hold the app folder as it is now. */
-async function buildRemote(dir, session, { log }) {
+/** The folder an app's repository starts at: the folder holding `prism/`, or the app folder itself. */
+const defaultRoot = (dir) => (basename(dir) === 'prism' && !existsSync(join(dir, '..', 'prism.toml')) ? dirname(dir) : dir);
+
+/**
+ * Build on GitHub Actions and verify here. With no repository yet, ask for
+ * one: creating a public repository is the user's call, so the result names
+ * the suggested repository and the agent calls again with `repository` once
+ * the user approves. Then add what the workflow needs, commit Prism's own
+ * paths and nothing else, create or connect the repository, and build that
+ * commit. `steps` is injectable for tests.
+ */
+export async function buildRemote(dir, session, { log = () => {}, root, repository = null, steps = {} } = {}) {
+  const s = { gitRoot, originRepository, signedInLogin, readyForGitHub, commitApp, publishRepository, remoteBuild: null, ...steps };
   const started = Date.now();
-  const top = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', windowsHide: true });
-  if (top.error || top.status !== 0) {
-    return { ok: false, stage: 'build', message: `${dir} is not inside a git repository. A remote build needs the app committed to a GitHub repository that carries the template's build workflow.` };
+  const top = s.gitRoot(dir);
+  const base = top ?? resolve(root ?? defaultRoot(dir));
+  const origin = top ? s.originRepository(top) : null;
+  const named = repository ? parseRepository(repository) : null;
+  if (repository && !named) return { ok: false, stage: 'build', message: `repository must be owner/name, not ${JSON.stringify(repository)}.` };
+  if (!origin && !named) {
+    const suggested = suggestedRepository(s.signedInLogin(), session.spec);
+    return {
+      ok: false,
+      stage: 'build',
+      needs: 'repository',
+      suggested,
+      message: `The app builds on GitHub Actions, so it needs a GitHub repository, and there is none yet. Ask the user to approve creating the public repository ${suggested} (or another name they choose), then call prism_build with repository set to it. Only Prism's files are committed: the app folder, the build workflow and the SDK lock.`,
+    };
   }
-  const root = resolve(String(top.stdout).trim());
-  log('Building on GitHub Actions: the repository\'s build.yml runs prismpm verify in the SDK image, and this machine checks what comes back. The commit must hold the app folder as it is now.');
+  if (origin && named && origin.full.toLowerCase() !== named.full.toLowerCase()) {
+    return { ok: false, stage: 'build', message: `This folder's origin is ${origin.full}, not ${named.full}. Call prism_build without repository to build in ${origin.full}.` };
+  }
+  try {
+    const written = await s.readyForGitHub({ root: base, dir, session, log });
+    const app = relative(base, dir).split(sep).join('/') || '.';
+    const paths = [...new Set([app, ...written])];
+    const { committed, sha } = s.commitApp({ root: base, paths, message: `prism: ${session.spec.name}` });
+    if (committed) log(`Committed ${paths.join(', ')} as ${sha.slice(0, 12)}.`);
+    if (!origin) {
+      log(`Putting the app on GitHub as ${named.full}...`);
+      const published = s.publishRepository({ root: base, repository: named.full });
+      session.status.repository = { full: published.repository, created: published.created };
+    }
+  } catch (error) {
+    return { ok: false, stage: 'build', message: `Could not get the app ready to build on GitHub: ${error.message}` };
+  }
+  log("Building on GitHub Actions: the repository's build.yml runs prismpm verify in the SDK image, and this machine checks what comes back.");
   let result;
   try {
-    const { remoteBuild } = await import('../remote-github.mjs');
-    result = await remoteBuild({ cwd: root, version: VERSION, log });
+    const remoteBuild = s.remoteBuild ?? (await import('../remote-github.mjs')).remoteBuild;
+    // Prism's paths are committed; anything else the user has not committed stays out of the build.
+    result = await remoteBuild({ cwd: base, allowDirty: true, version: VERSION, log });
   } catch (error) {
     if (!(error instanceof PrismError)) throw error;
-    const hint = error.code === 'remote.dirty' ? ' Commit the app folder, then build again.' : '';
-    return { ok: false, stage: 'build', message: `The remote build was refused: ${error.code}: ${error.message}${hint}` };
+    return { ok: false, stage: 'build', message: `The remote build was refused: ${error.code}: ${error.message}` };
   }
   const seconds = Math.round((Date.now() - started) / 1000);
   if (result.exitCode !== 0) {
     return { ok: false, stage: 'build', seconds, message: `The build came back from ${result.run.url} but did not pass here: verdict ${result.verdict.level ?? 'none'}, ${result.vectors.passed} of ${result.vectors.total} vectors. What came back is at ${result.staging}.` };
   }
   if (!resolve(result.holo).startsWith(resolve(dir))) {
-    return { ok: false, stage: 'build', seconds, message: `The repository's build.yml built ${result.project}, not ${relative(root, dir) || '.'}; the workflow and the app folder disagree.` };
+    return { ok: false, stage: 'build', seconds, message: `The repository's build.yml built ${result.project}, not ${relative(base, dir) || '.'}; the workflow and the app folder disagree.` };
   }
-  return built(dir, session, result.holo, seconds, { where: 'github', run: result.run.url, fingerprint: result.fingerprint, signer: result.signature.identity ?? `a workflow of ${result.repository}`, checkedBy: result.signature.via });
+  return built(dir, session, result.holo, seconds, { where: 'github', repository: result.repository, run: result.run.url, fingerprint: result.fingerprint, signer: result.signature.identity ?? `a workflow of ${result.repository}`, checkedBy: result.signature.via });
 }
 
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
@@ -302,7 +358,7 @@ async function built(dir, session, holo, seconds, proof) {
     seconds,
     holo,
     where: proof.where,
-    ...(proof.where === 'github' ? { run: proof.run, fingerprint: proof.fingerprint } : {}),
+    ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: acceptance.failed.length === 0 ? `Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.` : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {

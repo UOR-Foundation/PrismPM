@@ -27,12 +27,14 @@ npx prism-code@latest setup
 
 Spell it `prism-code@latest`. `npx` prefers a `prism-code` installed in any folder above the one you run it in, so a project with an older `prism-code` would otherwise run that version, which may have no `setup`.
 
-One run gets this machine ready for the build box on uor.foundation. It does four things:
+One run gets this machine ready for the build box on uor.foundation, with no Docker. It does six things:
 
-1. It adds the UOR MCP server, `lexlean` at `https://mcp.uor.foundation/`, to every agent it finds, and prints one line per agent.
-2. It installs the Prism skills, so the agent knows how to build a Prism app.
-3. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
-4. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
+1. It checks Node and the GitHub sign-in. Signed in, your app builds on GitHub Actions and this machine only verifies it; `--local` also readies Docker and the SDK image for local builds.
+2. It adds two MCP servers to every agent it finds, and prints one line per agent: `lexlean` at `https://mcp.uor.foundation/`, which checks and proves LexLean, and `prism`, the local guided build.
+3. It installs the Prism skill, so the agent knows how to build a Prism app.
+4. It registers a `holo://` link handler for this OS, so the website's Build button can open your agent.
+5. It remembers your preferred agent. `--agent <id>` sets it. Otherwise it is the first terminal agent found.
+6. It prints what to do next: sign in to GitHub if that is missing, restart the agent if it changed, then the first sentence to ask it.
 
 There is one skill, `prism`. It covers building a new app from one sentence, the commands, and the MCP server. It ships inside this package (`skill/SKILL.md`, the repository's `skills/prism/SKILL.md` byte for byte), so it always matches the installed CLI and needs no network. Setup writes it to `~/.claude/skills/prism/` when Claude Code is found. It writes to the shared `~/.agents/skills/prism/`, which Codex, Cursor and VS Code read, when any of those is found. A `.prism-code.json` beside the `SKILL.md` marks it as setup's, so a later run updates it. A skill folder setup did not write is `left alone`. Setup removes the `prism-sdk` skill an earlier setup installed, and only where its marker is. Claude Desktop, claude.ai and ChatGPT take skills only through their own settings.
 
@@ -54,14 +56,25 @@ Before setup changes an existing JSON file, it copies the file to `<file>.prism-
 
 ```
 $ npx prism-code@latest setup --dry-run
-prism-code setup --dry-run: the UOR MCP server lexlean at https://mcp.uor.foundation/
+prism-code setup --dry-run: this machine
+  node            ok                  node 22.21.0
+  endings         skipped             no project here
+  github          ok                  signed in (gh auth token): apps build on GitHub Actions, no Docker needed
+prism-code setup --dry-run: your agents
+  the server lexlean, remote at https://mcp.uor.foundation/: checks and proves LexLean models
   claude-code     would configure     C:\Users\you\.claude.json
       set mcpServers.lexlean = {"type":"http","url":"https://mcp.uor.foundation/"} in C:\Users\you\.claude.json (backup C:\Users\you\.claude.json.prism-backup)
   codex           not found
   cursor          would configure     C:\Users\you\.cursor\mcp.json
   ...
+  the server prism, local (prism-code mcp): asks for the spec, proves and builds the app
+  claude-code     would configure     C:\Users\you\.claude.json
+  ...
   holo://         would register      HKCU\Software\Classes\holo -> "C:\Program Files\nodejs\node.exe" "C:\Users\you\.prism\handler\handler.mjs" "%1"
   preferred agent claude-code
+next
+  1. Restart Claude Code, so it loads the new servers.
+  2. Ask Claude Code: "build me a Prism app that tells whether a year is a leap year"
 ```
 
 The handler is a copy of five files of this package in `$PRISM_HOME/handler` (default `~/.prism/handler`), so it keeps working after npx clears its cache. It runs with the `node` that ran setup, so run setup again after you move Node.
@@ -681,11 +694,12 @@ native `prismpm` binary ships in this release.
 npx prism-code@latest setup --machine-only
 ```
 
-Before the agents, `setup` gets the machine ready for the build, one row each.
+Before the agents, `setup` gets the machine ready for the build, one row each. A plain `setup` plans `node`, `endings` and `github` only, because the guided build proves on the hosted verifier and builds on GitHub Actions. `docker`, `image` and `cache` are planned with `--local`, which `--pull`, `--image` and `--machine-only` imply.
 
 | Row | What it checks | What it does |
 | --- | --- | --- |
 | `node` | 22 or later | nothing; an older Node fails the row |
+| `github` | outside a repository, a GitHub sign-in (`GITHUB_TOKEN`, `GH_TOKEN` or `gh`); inside one, a github.com origin, the token and `.github/workflows/build.yml` | nothing; a missing piece is `manual` and named |
 | `docker` | `docker` or `podman` on the PATH; on Windows without Docker Desktop, the first WSL distribution whose `docker version` answers | records the program in `$PRISM_HOME/config.json`, so every later `check`, `build` and `verify` spawns it, and mounts the project under `/mnt/<drive>/...` when the daemon lives in WSL |
 | `image` | the SDK image `prismpm.lock` pins, or `--image <ref>` | with `--pull` or `--image`, `docker pull` with its progress when the image is not here; otherwise `deferred`: nothing is pulled, `build --check` and `verify --lean` run hosted, and the first `build`, `verify`, `axioms` or `conformance` pulls it (about 5.5 GB) and says so first |
 | `cache` | a volume named by the image digest | creates it; later runs mount it at `/tmp` in place of the 2 GB in-memory tmpfs, so the SDK's 1.2 GB Cargo home is on disk instead of in memory beside the build. A full verify of the chess example took 814 s with the tmpfs and 284 s with the volume |

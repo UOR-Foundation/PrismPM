@@ -1,7 +1,7 @@
 // The journey's proof on the hosted verifier: no Docker, no image. A stand-in server answers; nothing leaves the machine.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostedClient } from '../src/hosted.mjs';
@@ -9,7 +9,8 @@ import { compile } from '../src/journey/session.mjs';
 import { names } from '../src/journey/render.mjs';
 import { spawnSync } from 'node:child_process';
 import { appDir, readSession, rememberModel, writeApp } from '../src/journey/project.mjs';
-import { build, fromHosted, isWarning, prove, proveWhere } from '../src/journey/engine.mjs';
+import { build, buildRemote, buildWhere, fromHosted, isWarning, prove, proveWhere } from '../src/journey/engine.mjs';
+import { fetchPinned, readyForGitHub } from '../src/journey/github.mjs';
 
 const ANSWERS = {
   purpose: 'Payment approval: decide whether a payment request is approved.',
@@ -123,19 +124,96 @@ function provedApp() {
   return { dir, session };
 }
 
-test('prism_build with remote github: outside a git repository, and in one with no GitHub origin, it says what is missing and builds nothing', async () => {
-  const outside = provedApp();
-  const r1 = await build(outside.dir, outside.session, { remote: 'github' });
-  assert.equal(r1.ok, false);
-  assert.equal(r1.stage, 'build');
-  assert.match(r1.message, /not inside a git repository/);
-  assert.equal(outside.session.status.built, undefined);
+test('the build goes where it can: the local image when it is here, else GitHub when signed in, else local; remote and PRISM_CODE_TIER choose', () => {
+  const { dir, session } = provedApp();
+  const where = (opts) => buildWhere(dir, session, { env: {}, docker: () => ({}), image: () => false, github: () => false, ...opts });
+  assert.equal(where({ image: () => true }), 'local', 'Docker and the image are here');
+  assert.equal(where({ github: () => true }), 'github', 'no image, signed in to GitHub');
+  assert.equal(where({ docker: () => ({ error: 'no docker' }), github: () => true }), 'github', 'no Docker, signed in');
+  assert.equal(where({}), 'local', 'neither: local, which downloads the image');
+  assert.equal(where({ remote: 'local', github: () => true }), 'local');
+  assert.equal(where({ remote: 'github', image: () => true }), 'github');
+  assert.equal(where({ env: { PRISM_CODE_TIER: 'local' }, github: () => true }), 'local');
+});
 
+/** Stand-ins for every step of a GitHub build that would touch GitHub; `calls` records them. */
+function gitHubSteps(overrides = {}) {
+  const calls = [];
+  return {
+    calls,
+    steps: {
+      signedInLogin: () => 'octo',
+      readyForGitHub: async ({ root }) => {
+        calls.push('ready');
+        mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
+        writeFileSync(join(root, '.github', 'workflows', 'build.yml'), 'name: build\n');
+        writeFileSync(join(root, 'prismpm.lock'), '{}\n');
+        return ['prismpm.lock', '.github/workflows/build.yml'];
+      },
+      publishRepository: ({ repository }) => {
+        calls.push(`publish ${repository}`);
+        return { repository, created: true };
+      },
+      remoteBuild: async ({ allowDirty }) => {
+        calls.push(`build allowDirty=${allowDirty}`);
+        return { exitCode: 1, run: { url: 'https://github.com/octo/prism-payment-approval/actions/runs/1' }, verdict: { level: 'P0' }, vectors: { passed: 0, total: 3 }, staging: 'staged' };
+      },
+      ...overrides,
+    },
+  };
+}
+
+test('a GitHub build with no repository asks for one, suggests a name, and commits and creates nothing', async () => {
+  const { dir, session } = provedApp();
+  const { calls, steps } = gitHubSteps();
+  const r = await buildRemote(dir, session, { root: join(dir, '..'), steps });
+  assert.equal(r.ok, false);
+  assert.equal(r.needs, 'repository');
+  assert.equal(r.suggested, 'octo/prism-payment-approval');
+  assert.match(r.message, /Ask the user to approve creating the public repository octo\/prism-payment-approval/);
+  assert.deepEqual(calls, []);
+  assert.equal(existsSync(join(dir, '..', '.git')), false, 'no repository is made before the user says yes');
+  assert.equal(session.status.built, undefined);
+});
+
+test('a GitHub build with an approved repository commits only Prism\'s paths, creates the repository and builds that commit', async () => {
   const { dir, session } = provedApp();
   const root = join(dir, '..');
-  assert.equal(spawnSync('git', ['-C', root, 'init', '-q'], { encoding: 'utf8', windowsHide: true }).status, 0);
-  const r2 = await build(dir, session, { remote: 'github' });
-  assert.equal(r2.ok, false);
-  assert.match(r2.message, /The remote build was refused: remote\.repository: no git remote named origin/);
-  assert.equal(session.status.built, undefined);
+  writeFileSync(join(root, 'notes.txt'), 'the user\'s own file\n');
+  const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
+  const saved = Object.fromEntries(Object.keys(identity).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, identity);
+  try {
+    const { calls, steps } = gitHubSteps();
+    const r = await buildRemote(dir, session, { root, repository: 'octo/prism-payment-approval', steps });
+    assert.deepEqual(calls, ['ready', 'publish octo/prism-payment-approval', 'build allowDirty=true']);
+    assert.equal(r.ok, false, 'the stand-in build does not pass');
+    assert.match(r.message, /did not pass here: verdict P0, 0 of 3 vectors/);
+    const files = spawnSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' }).stdout.trim().split('\n');
+    assert.ok(files.includes('.github/workflows/build.yml') && files.includes('prismpm.lock'));
+    assert.ok(files.some((f) => f.startsWith('prism/src/')), 'the app folder is committed');
+    assert.ok(!files.includes('notes.txt'), 'a file Prism did not write stays out');
+    assert.deepEqual(session.status.repository, { full: 'octo/prism-payment-approval', created: true });
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+});
+
+test('a GitHub build refuses a repository that is not the origin, and a name that is not owner/name', async () => {
+  const { dir, session } = provedApp();
+  const root = join(dir, '..');
+  const { calls, steps } = gitHubSteps({ gitRoot: () => root, originRepository: () => ({ owner: 'acme', repo: 'app', full: 'acme/app' }) });
+  const other = await buildRemote(dir, session, { root, repository: 'octo/prism-payment-approval', steps });
+  assert.match(other.message, /origin is acme\/app, not octo\/prism-payment-approval/);
+  const bad = await buildRemote(dir, session, { root, repository: 'not a name', steps });
+  assert.match(bad.message, /repository must be owner\/name/);
+  assert.deepEqual(calls, []);
+});
+
+test('a pinned template file is refused when its bytes do not have the pinned digest', async () => {
+  const fetch = async () => new Response('tampered');
+  await assert.rejects(fetchPinned('prismpm.lock', { fetch }), /has SHA-256 [0-9a-f]{64}, not the pinned 3773d329/);
+  await assert.rejects(fetchPinned('README.md', { fetch }), /not a pinned template file/);
+  const { dir, session } = provedApp();
+  await assert.rejects(readyForGitHub({ root: join(dir, '..'), dir, session, fetch }), /not the pinned/);
 });

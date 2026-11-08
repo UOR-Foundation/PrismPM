@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MCP_URL } from '../src/agents.mjs';
 import { parseToml } from '../src/toml.mjs';
-import { HANDLER_FILES, LSREGISTER, OPEN_COMMAND_KEY, REGISTRY_KEY, RETIRED_SKILLS, SKILL_FILE, agentPaths, applySetup, bundledSkills, formatSetup, planSetup } from '../src/setup.mjs';
+import { FIRST_SENTENCE, HANDLER_FILES, LSREGISTER, OPEN_COMMAND_KEY, REGISTRY_KEY, RETIRED_SKILLS, SKILL_FILE, agentPaths, applySetup, bundledSkills, formatNext, formatSetup, nextSteps, planSetup } from '../src/setup.mjs';
 import { createHash } from 'node:crypto';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
@@ -259,7 +259,7 @@ test('a command that fails marks its row failed and the rest still run', () => {
 test('--dry-run prints every step under its agent and writes nothing', () => {
   const home = fixtureHome({ '.cursor/mcp.json': '{}', '.codex': null });
   const text = formatSetup(planSetup({}, context('linux', home)), { dryRun: true });
-  assert.match(text, /^prism-code setup --dry-run: the UOR MCP server lexlean at https:\/\/mcp\.uor\.foundation\/\n/);
+  assert.match(text, /^prism-code setup --dry-run: your agents\n {2}the server lexlean, remote at https:\/\/mcp\.uor\.foundation\/: checks and proves LexLean models\n/);
   assert.match(text, /\n {2}claude-code {5}not found\n/);
   assert.match(text, /\n {2}codex {11}would configure {5}.*config\.toml\n {6}append to .*config\.toml:\n {8}\[mcp_servers\.lexlean\]\n {8}url = "https:\/\/mcp\.uor\.foundation\/"\n/);
   assert.match(text, /\n {2}cursor {10}would configure {5}.*mcp\.json\n {6}set mcpServers\.lexlean = \{"url":"https:\/\/mcp\.uor\.foundation\/"\} in .*\(backup .*mcp\.json\.prism-backup\)\n/);
@@ -352,4 +352,21 @@ test('a skill folder prism-code did not write is left alone, and no skills is no
   assert.deepEqual(planSetup({ skills: { error: 'skill/SKILL.md: ENOENT' } }, context('linux', home)).skills, { status: 'unreadable', detail: 'not read: skill/SKILL.md: ENOENT', steps: [] });
   assert.equal(planSetup({ skills: fetched }, context('linux', fixtureHome())).skills.status, 'not-found');
   assert.equal(planSetup({}, context('linux', home)).skills, undefined, 'without fetched skills there is no row');
+});
+
+test('setup ends with what to do next: sign in when needed, restart the agent it changed, then the first sentence', () => {
+  const plan = (status, journey = 'already') => ({
+    agents: [{ agent: 'claude-code', status }, { agent: 'codex', status: 'not-found' }],
+    journey: [{ agent: 'claude-code', status: journey }],
+    preferred: { agent: 'claude-code', steps: [] },
+  });
+  const ask = `Ask Claude Code: "${FIRST_SENTENCE}"`;
+  assert.deepEqual(nextSteps(plan('already')), [ask], 'nothing changed: no restart');
+  assert.deepEqual(nextSteps(plan('already', 'configure')), ['Restart Claude Code, so it loads the new servers.', ask]);
+  const signedOut = { id: 'github', status: 'manual', detail: 'not signed in: run gh auth login, so apps build on GitHub Actions without Docker' };
+  assert.equal(nextSteps(plan('configure'), { github: signedOut })[0], 'Run gh auth login, so your app builds on GitHub Actions and this machine needs no Docker.');
+  const missing = { agents: [{ agent: 'claude-code', status: 'not-found' }], journey: [], preferred: { agent: null, steps: [] } };
+  assert.match(nextSteps(missing)[0], /^Install an agent, such as Claude Code \(https:/);
+  assert.equal(formatNext(['one', 'two']), 'next\n  1. one\n  2. two\n');
+  assert.equal(formatNext([]), '');
 });

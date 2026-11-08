@@ -3,6 +3,11 @@
  * here before any model is written. Like the agent half, it plans first and
  * applies after, so `--dry-run` prints every command and changes nothing.
  *
+ * A plain `setup` plans node, endings and github only: the journey proves on
+ * the hosted verifier and builds on GitHub Actions, so a first run needs no
+ * Docker. The local rows (docker, image, cache) are planned with `local`,
+ * which `--local`, `--pull`, `--image` and `--machine-only` set.
+ *
  *   node      22 or later.
  *   docker    the program that reaches a daemon: `docker` on the PATH, or
  *             `wsl.exe -d <distro> -- docker` on Windows without Docker
@@ -18,8 +23,9 @@
  *             in memory beside the build, and is kept for the next run.
  *   endings   `.gitattributes` with `* text eol=lf` in a project, because
  *             LexLean refuses a file with CRLF and Git on Windows writes it.
- *   github    what `build --remote github` needs: a github.com origin, a token
- *             (GITHUB_TOKEN, GH_TOKEN or gh) and the build workflow. Read only.
+ *   github    whether builds can run on GitHub Actions: a token (GITHUB_TOKEN,
+ *             GH_TOKEN or gh) and, inside a repository, a github.com origin and
+ *             the build workflow. Read only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
@@ -151,7 +157,13 @@ function planEndings(context) {
  */
 function planGitHub(context) {
   const origin = originOf(context.cwd, context.run);
-  if (origin === null) return { id: 'github', status: 'not-found', detail: 'no git remote named origin here; build --remote github builds in one' };
+  if (origin === null) {
+    // Outside a repository, what matters is the sign-in: prism_build creates the repository itself.
+    const token = tokenSource(context.env, context.run);
+    return token
+      ? { id: 'github', status: 'already', detail: `signed in (${token}): apps build on GitHub Actions, no Docker needed` }
+      : { id: 'github', status: 'manual', detail: 'not signed in: run gh auth login, so apps build on GitHub Actions without Docker' };
+  }
   if (!origin.repo) return { id: 'github', status: 'manual', detail: `origin is ${origin.url}, not a github.com repository, which build --remote github needs` };
   const token = tokenSource(context.env, context.run);
   const workflow = context.exists(join(context.cwd, ...BUILD_WORKFLOW.split('/')));
@@ -167,9 +179,11 @@ function planGitHub(context) {
  * Everything the machine half would do. `image` overrides the lockfile. A
  * missing image is pulled only when `pull` is true (`--pull`, or `--image`
  * naming one); otherwise it is deferred to the first command that needs it.
+ * Without `local`, Docker, the image and the cache are not looked at.
  */
-export function planMachine({ image, pull = false } = {}, context) {
+export function planMachine({ image, pull = false, local = true } = {}, context) {
   const node = planNode(context);
+  if (!local) return { rows: [node, planEndings(context), planGitHub(context)] };
   const docker = planDocker(context);
   const resolved = docker.resolved?.kind === 'missing' ? null : docker.resolved;
   const imageRow = planImage({ image, pull }, context, resolved);
