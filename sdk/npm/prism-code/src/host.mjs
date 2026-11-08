@@ -13,9 +13,11 @@
  *            daemon only sees the distribution's filesystem.
  *   missing  nothing answered.
  *
- * `resolveDocker` probes once, and `setup` writes the answer to
+ * `resolveDocker` probes once, and `setup --local` writes the answer to
  * `$PRISM_HOME/config.json` so every later command spawns the right program
- * without probing. `PRISM_DOCKER` overrides both: a command line such as
+ * without probing. When no setup recorded it, the first command that runs the
+ * image records it instead, with the cache volume on, so a local build keeps
+ * the SDK's caches on disk whether or not setup was told `--local`. `PRISM_DOCKER` overrides both: a command line such as
  * `wsl.exe -d Ubuntu -- docker`, with `PRISM_DOCKER_MOUNT=wsl` when host
  * paths need the `/mnt/<drive>` spelling.
  *
@@ -23,7 +25,7 @@
  * `find` and a `run` and never touch this machine.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { prismHome, which } from './agents.mjs';
@@ -99,7 +101,9 @@ export function readHostConfig(configDir) {
     const config = JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf8'));
     const docker = config?.docker;
     if (!docker || typeof docker.command !== 'string' || !Array.isArray(docker.args) || !MOUNT_STYLES.includes(docker.mount)) return null;
-    return { command: docker.command, args: docker.args.map(String), mount: docker.mount, cache: config.cache === true };
+    // The cache is on unless a config turns it off: Docker creates the volume on first mount, so a
+    // record without `cache` (Docker found before any image was there) still keeps the caches on disk.
+    return { command: docker.command, args: docker.args.map(String), mount: docker.mount, cache: config.cache !== false };
   } catch {
     return null;
   }
@@ -115,14 +119,42 @@ export function hostConfigEntry(resolved) {
  * config `setup` wrote, else a fresh resolution. Throws `docker.missing` when
  * there is none, with the reason.
  */
-export function hostDocker({ configDir, env = process.env, platform = process.platform, run = spawnSync, find, probe = true } = {}) {
+export function hostDocker({ configDir, env = process.env, platform = process.platform, run = spawnSync, find, probe = true, record = true } = {}) {
   const saved = env.PRISM_DOCKER ? null : readHostConfig(configDir);
   if (saved) return { ...saved, kind: saved.mount === 'wsl' ? 'wsl' : 'native', source: 'config' };
   // A dry run prints a command line; it assumes `docker` rather than probing the machine.
   if (!probe) return { kind: 'native', command: 'docker', args: [], mount: 'native', cache: false, source: 'default' };
   const resolved = resolveDocker({ platform, env, find, run });
   if (resolved.kind === 'missing') fail('docker.missing', resolved.reason);
+  // Record what was found, as `setup --local` would: later runs then need no probe, and the cache
+  // volume (Docker creates it on first mount) holds the SDK's 1.2 GB Cargo home on disk instead of
+  // the 2 GB tmpfs. PRISM_DOCKER is an override for one environment and is never recorded.
+  if (record && !env.PRISM_DOCKER && configDir && recordHostConfig(configDir, resolved)) return { ...resolved, cache: true, source: 'recorded' };
   return { ...resolved, cache: false };
+}
+
+/**
+ * Merge the Docker resolution and `cache: true` into `config.json`, keeping every other key. Best
+ * effort: a config that cannot be written leaves the run on the tmpfs, and returns false.
+ */
+export function recordHostConfig(configDir, resolved) {
+  const path = join(configDir, 'config.json');
+  let current = {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) current = parsed;
+  } catch {
+    // A missing or unreadable config holds only what setup writes.
+  }
+  try {
+    mkdirSync(configDir, { recursive: true });
+    const temporary = `${path}.prism-${process.pid}`;
+    writeFileSync(temporary, `${JSON.stringify({ ...current, docker: hostConfigEntry(resolved), cache: true }, null, 2)}\n`);
+    renameSync(temporary, path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

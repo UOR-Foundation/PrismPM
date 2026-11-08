@@ -20,7 +20,8 @@ Experimental APIs remain experimental; repository `SPEC.md` is normative.
 ## Set up this machine (experimental)
 
 ```sh
-npx prism-code@latest setup --machine-only # Node, Docker (also inside WSL), the image cache, LF endings; --pull also gets the SDK image
+npx prism-code@latest setup         # agents, skill and GitHub sign-in; no Docker needed, ends with what to do next
+npx prism-code@latest setup --local # also Docker (also inside WSL) and the image cache; --pull also gets the SDK image
 npx prism-code build --check        # T0: the model is well formed, seconds; hosted until the image is here
 npx prism-code verify --lean        # T1: every proof and its exact axioms, about a minute; hosted until the image is here
 npx prism-code axioms --write       # set every declaration's axiom policy in one pass

@@ -5,7 +5,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatSteps, hostContext, openLink } from './open.mjs';
-import { applySetup, bundledSkills, formatSetup, hostSetupContext, planSetup } from './setup.mjs';
+import { applySetup, bundledSkills, formatNext, formatSetup, hostSetupContext, nextSteps, planSetup } from './setup.mjs';
 import { applyMachine, formatMachine, hostMachineContext, machineFailed, machineReport, planMachine } from './setup-machine.mjs';
 
 const HANDLER = join(dirname(fileURLToPath(import.meta.url)), 'handler.mjs');
@@ -27,19 +27,22 @@ function options(argv, { values = [], flags = [] }) {
 }
 
 /**
- * `setup [--agent <id>] [--pull] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
+ * `setup [--agent <id>] [--local] [--pull] [--image <ref>] [--no-pull] [--agents-only] [--machine-only] [--json] [--dry-run]`.
  * The machine half runs first and is applied first, so the agent half's write of
- * `config.json` sees the Docker record. @returns {Promise<number>} the exit code
+ * `config.json` sees the Docker record. Docker, the image and the cache are
+ * looked at only with `--local`, or a flag that implies it: `--pull`,
+ * `--image` or `--machine-only`. @returns {Promise<number>} the exit code
  */
 export async function runSetup(argv, usage, context = hostSetupContext(), machineContext = hostMachineContext({ env: context.env, platform: context.platform, configDir: context.configDir })) {
-  const { problem, positional, named } = options(argv, { values: ['agent', 'image'], flags: ['dry-run', 'pull', 'no-pull', 'agents-only', 'machine-only', 'json'] });
+  const { problem, positional, named } = options(argv, { values: ['agent', 'image'], flags: ['dry-run', 'local', 'pull', 'no-pull', 'agents-only', 'machine-only', 'json'] });
   if (problem) return usage(problem);
   if (positional.length > 0) return usage('setup takes no arguments');
   if (named.pull && named['no-pull']) return usage('--pull and --no-pull name opposite things; give one');
   const dryRun = named['dry-run'] === true;
   // The image is pulled only when asked: `--pull`, or `--image` naming one. `--no-pull` is the default and is kept so older scripts still run.
   const pull = named['no-pull'] ? false : Boolean(named.pull || named.image);
-  const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull }, machineContext);
+  const local = Boolean(named.local || named.pull || named.image || named['machine-only']);
+  const machine = named['agents-only'] ? null : planMachine({ image: named.image, pull, local }, machineContext);
   if (machine && !dryRun) applyMachine(machine);
   const agentsHalf = !named['machine-only'];
   // The skill ships in the package, so there is nothing to fetch.
@@ -48,6 +51,8 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
   if (!dryRun && agentsHalf) applySetup(plan);
   const rows = [...plan.agents, ...(plan.journey ?? []), plan.handler, ...(plan.skills ? [plan.skills] : [])];
   const failed = (machine ? machineFailed(machine) : false) || rows.some((row) => row.status === 'failed');
+  const github = machine?.rows.find((row) => row.id === 'github') ?? null;
+  const next = agentsHalf ? nextSteps(plan, { github }) : [];
   if (named.json) {
     const row = ({ agent, status, detail }) => ({ agent, status, detail: detail ?? null });
     const report = {
@@ -59,6 +64,7 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
       handler: { status: plan.handler.status, detail: plan.handler.detail ?? null },
       skills: plan.skills ? { status: plan.skills.status, detail: plan.skills.detail ?? null } : null,
       preferredAgent: plan.preferred.agent,
+      next,
       failed,
     };
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -66,6 +72,7 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
   }
   if (machine) process.stdout.write(formatMachine(machine, { dryRun }));
   if (agentsHalf) process.stdout.write(formatSetup(plan, { dryRun }));
+  process.stdout.write(formatNext(next));
   return failed ? 1 : 0;
 }
 

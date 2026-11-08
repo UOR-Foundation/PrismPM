@@ -25,8 +25,7 @@ export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. Wh
 Ask the user each question prism_start or prism_answer returns, one at a time, in your own words, and pass their answer to prism_answer. Use the example to show the format. When the user answers in plain language, rewrite it into the format yourself and say what you wrote.
 When a result has an issue, explain it in one or two sentences and ask the user how to resolve it.
 Never edit files under prism/ by hand. Change the app only through prism_answer or prism_spec.
-prism_prove and prism_build take minutes. When they return state "running", tell the user what is happening and call the same tool again.
-Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
+prism_prove and prism_build take minutes. When they return state "running", tell the user what is happening and call the same tool again.Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
 const GREETING = 'Prism turns a short spec into an app whose rules are proved by Lean, not just tested. I will ask six short questions, then prove and build it.';
 
@@ -58,8 +57,17 @@ const TOOLS = [
   },
   {
     name: 'prism_build',
-    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. The build needs the SDK image; when it is not on this machine it is downloaded first (about 5.5 GB). The first build takes ten minutes or more. With remote: "github", the repository\'s own GitHub Actions builds the committed app instead and this machine verifies what comes back, so no Docker or image is needed here; the app folder must be committed first. Returns state running while it works; call again to keep waiting.',
-    inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' }, remote: { type: 'string', enum: ['github'], description: 'Build on the repository\'s GitHub Actions (needs its build.yml, a token and the app committed) instead of in a local SDK image.' } }, additionalProperties: false },
+    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. Where it builds is chosen for the user: in the SDK image when it is on this machine, else on GitHub Actions when the user is signed in to GitHub (no Docker here; this machine verifies what comes back), else in the SDK image after downloading it (about 5.5 GB). A GitHub build of an app with no repository returns needs "repository" and a suggested name: ask the user to approve creating that public repository, then call again with repository set. Prism then commits only its own files (the app folder, the build workflow, the SDK lock), creates the repository and builds. A GitHub build takes five to fifteen minutes. Returns state running while it works; call again to keep waiting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' },
+        overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' },
+        remote: { type: 'string', enum: ['github', 'local'], description: 'Where to build, when the user asks for one: github (the repository\'s Actions) or local (the SDK image). Omit to let Prism choose.' },
+        repository: { type: 'string', description: 'owner/name of the GitHub repository to create for the app, only after the user approved it.' },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'prism_try',
@@ -155,7 +163,7 @@ export function createServer({ cwd = process.cwd(), send }) {
         s.spec = validateSpec(s.spec ?? session.spec);
         s.status.job = { kind, pid: process.pid, started: Date.now() };
         save(s);
-        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite, remote: args.remote ?? null }) : await prove(dir, s, { log, overwrite: args.overwrite });
+        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite, remote: args.remote ?? null, root: cwd, repository: args.repository ?? null }) : await prove(dir, s, { log, overwrite: args.overwrite });
         if (kind === 'prove' || result.ok) s.status.lastSpec = JSON.stringify(s.spec);
         if (kind === 'build' && result.ok) s.status.lastBuild = { modelSha: s.status.modelSha, holo: result.holo, result };
         delete s.status.job;

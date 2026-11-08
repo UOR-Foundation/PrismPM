@@ -63,7 +63,7 @@ export function scaffold(dir) {
     written.push('.gitattributes');
   }
   if (!existsSync(join(dir, '.gitignore'))) {
-    write(dir, '.gitignore', '.prism/\n.lexlean/\n.lake/\n');
+    write(dir, '.gitignore', '.prism/\n.lexlean/\n.lake/\n.prism-last.log\n');
     written.push('.gitignore');
   }
   return written;
