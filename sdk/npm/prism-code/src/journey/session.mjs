@@ -138,29 +138,6 @@ export function summary(spec) {
   return [...purpose, ...properties, ...shown, ...tail].join('\n');
 }
 
-/**
- * The whole spec as plain text for an approval form, in the order a person
- * judges it: what it is for, what is proved, how it decides, what goes in and
- * out, the examples, and what it leaves out. Nothing is collapsed: the user
- * approves every rule. A native form shows text only, so numbered parts and
- * line breaks carry the structure.
- */
-export function approvalText(spec) {
-  const sentence = (text) => `${text[0].toUpperCase()}${text.slice(1)}`.replace(/[.]?$/, '.');
-  const why = (text) => (text ? `\n    ${sentence(text)}` : '');
-  const accepts = (f) => (f.kind === 'choice' ? f.values.join(' | ') : `whole number${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''}`);
-  const parts = [
-    ['1. Purpose', [sentence(spec.purpose)]],
-    ['2. Guarantees, proved by Lean for every request', spec.properties.length ? spec.properties.map((p, i) => `G${i + 1}  ${p.kind === 'never' ? 'Never' : 'Always'} ${p.then} when ${describeConditions(p.when)}.${why(p.why)}`) : ['None yet: nothing about the rules will be proved, only tested.']],
-    ['3. Rules, in order; the first match decides', [...spec.rules.map((r, i) => `R${i + 1}  When ${describeConditions(r.when)}: ${r.then}.${why(r.why)}`), `Otherwise: ${spec.otherwise}.${why(spec.otherwiseWhy)}`]],
-    ['4. Request, one line, fields in this order', spec.fields.map((f) => `${f.name}: ${accepts(f)}${f.means ? ` (${f.means})` : ''}`)],
-    ['5. Answers', [...spec.outcomes.map((o) => `${o}${spec.meanings?.[o] ? `: ${spec.meanings[o]}` : ''}`), `${INVALID}: the request is malformed`]],
-    ['6. Examples, tested against the built app', spec.examples.length ? spec.examples.map((e) => `${e.request}  ->  ${e.response}`) : ['None.']],
-    ...(spec.limits ? [['7. Out of scope', spec.limits.map((l) => `- ${sentence(l)}`)]] : []),
-  ];
-  return [`Approve the ${spec.title} spec?`, ...parts.map(([head, lines]) => `${head}\n${lines.join('\n')}`), 'Approve and build: Lean proves each guarantee, then Prism builds the app.'].join('\n\n');
-}
-
 /** Answers that reproduce a whole spec, so a spec written as data joins the same flow. */
 export function answersFromSpec(input) {
   const spec = validateSpec(input);
