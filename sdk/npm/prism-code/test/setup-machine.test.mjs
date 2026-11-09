@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GITATTRIBUTES_LINE, applyMachine, applyMachineStep, formatMachine, planMachine } from '../src/setup-machine.mjs';
 import { readHostConfig } from '../src/host.mjs';
+import { telemetryNotice } from '../src/gaps.mjs';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
@@ -207,6 +208,7 @@ process.exit(1);
   assert.equal(plain.status, 0, plain.stderr);
   assert.doesNotMatch(plain.stdout, /\n {2}(docker|image|cache) /, 'a plain setup does not look at Docker');
   assert.match(plain.stdout, /\n {2}github {10}/);
+  assert.ok(plain.stdout.endsWith(`\n${telemetryNotice(env)}\n`), 'setup ends with the one line on gap telemetry');
   const local = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--local'], { cwd, env, encoding: 'utf8' });
   assert.equal(local.status, 0, local.stderr);
   assert.match(local.stdout, /image {11}deferred {12}/, 'without --pull the image waits for its first use');
@@ -231,6 +233,7 @@ process.exit(1);
   assert.deepEqual(report.machine.map((row) => row.id), ['node', 'endings', 'github']);
   assert.ok(Array.isArray(report.agents));
   assert.ok(Array.isArray(report.next));
+  assert.equal(report.telemetry, telemetryNotice(env));
   const localJson = JSON.parse(spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--local', '--json'], { cwd, env, encoding: 'utf8' }).stdout);
   assert.deepEqual(localJson.machine.map((row) => row.id), ['node', 'docker', 'image', 'cache', 'endings', 'github']);
 
