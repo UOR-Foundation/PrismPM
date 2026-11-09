@@ -1121,7 +1121,11 @@ fn the_host_is_told_when_each_served_request_begins_and_ends() {
             b"hello",
         ))
         .unwrap();
-    assert!(status(&refused).starts_with("HTTP/1.1 403"), "{}", text(&refused));
+    assert!(
+        status(&refused).starts_with("HTTP/1.1 403"),
+        "{}",
+        text(&refused)
+    );
     let refusal = body(&refused).lines().next().unwrap_or_default().to_owned();
     let expected = vec![
         "begin hello".to_owned(),
