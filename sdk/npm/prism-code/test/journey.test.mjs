@@ -307,7 +307,14 @@ test('a client that shows forms approves the drafted spec in one, and its answer
   await approving.call('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 't', version: '0' } });
   const approved = await approving.tool('prism_spec', { spec: paymentSpec() });
   assert.equal(approving.forms.length, 1);
-  assert.match(approving.forms[0].message, /^Approve the Payment approval spec\?\n\nPayment approval: /);
+  const message = approving.forms[0].message;
+  assert.match(message, /^Approve the Payment approval spec\?\n\n1\. Purpose\n/);
+  const heads = message.split('\n').filter((l) => /^\d\. /.test(l)).map((l) => l.slice(0, 2));
+  assert.deepEqual(heads, ['1.', '2.', '3.', '4.', '5.', '6.'], 'every part, in the order a person judges it');
+  for (const [i, r] of paymentSpec().rules.entries()) assert.match(message, new RegExp(`\\nR${i + 1}  When .+: ${r.then}\\.`), 'every rule is shown, none collapsed');
+  assert.match(message, /\nOtherwise: \w+\./);
+  assert.match(message, /\nG1  Never approved when /);
+  assert.match(message, /\ninvalid: the request is malformed\n/);
   assert.deepEqual(approving.forms[0].requestedSchema.properties.decision.enum, ['approve', 'change']);
   assert.equal(approved.approval, 'approved');
   assert.equal(approved.step, 'ready', 'approval is the review step answered yes');

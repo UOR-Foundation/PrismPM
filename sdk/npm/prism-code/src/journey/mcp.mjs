@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { SpecError, validateSpec } from './spec.mjs';
-import { answersFromSpec, nextTurn, STEPS } from './session.mjs';
+import { answersFromSpec, approvalText, nextTurn, STEPS } from './session.mjs';
 import { appDir, modelPath, readSession, writeSession, writeSpecDocument } from './project.mjs';
 import { build, prove, tryRequest } from './engine.mjs';
 
@@ -174,11 +174,11 @@ export function createServer({ cwd = process.cwd(), send }) {
   async function approve(t) {
     if (!canElicit || t.step !== 'review' || t.issue) return t;
     const session = load();
-    const title = session.spec?.title ?? 'this app';
+    if (!session.spec) return t;
     let result;
     try {
       result = await ask('elicitation/create', {
-        message: `Approve the ${title} spec?\n\n${t.summary}\n\nApprove and build: Lean proves each guarantee for every possible request, then Prism builds the app.`,
+        message: approvalText(session.spec),
         requestedSchema: {
           type: 'object',
           properties: {
