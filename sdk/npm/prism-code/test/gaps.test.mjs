@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GAPS_META_KEY, GAPS_SCHEMA, BATCH_LINES, fingerprint, gapLedger, propertyShape, telemetryNotice, telemetryOn } from '../src/gaps.mjs';
+import { GAPS_META_KEY, GAPS_SCHEMA, BATCH_LINES, MODEL_STEPS, fingerprint, gapLedger, propertyShape, telemetryNotice, telemetryOn } from '../src/gaps.mjs';
 import { REFUSALS } from '../src/journey/spec.mjs';
-import { compile, roundTrip } from '../src/journey/session.mjs';
+import { ROUND_TRIP_PARTS, STEPS, compile, roundTrip } from '../src/journey/session.mjs';
 import { names } from '../src/journey/render.mjs';
 import { appDir, readSession, writeApp } from '../src/journey/project.mjs';
 import { prove } from '../src/journey/engine.mjs';
@@ -126,6 +126,18 @@ test('a property shape keeps the kind and the kinds of comparison, never a field
   const p = { kind: 'always', when: [{ field: 'amount', op: '<=', value: { field: 'limit' } }, { field: 'role', op: 'is', value: 'manager' }, { field: 'amount', op: '>', value: 987654 }] };
   assert.equal(propertyShape(p), 'always:choice-is+number-gt-const+number-le-field');
   assert.equal(propertyShape({ kind: 'never', when: [{ field: 'x', op: 'is not', value: 'y' }] }), 'never:choice-is-not');
+});
+
+// The gateway that receives the gaps (UOR-Foundation/lexlean-mcp, OB-16) keeps a gap only when it
+// fits its grammar, and drops it silently otherwise. A rule or part named here that does not fit
+// would never be counted, so the vocabulary is held to that grammar here.
+test('every construct prism-code can emit fits the gateway\'s grammar', () => {
+  const word = /^[a-z]+(?:-[a-z]+)*$/;
+  const rule = (r) => r.split('.').length === 2 && r.split('.').every((w) => word.test(w) && w.length <= 24);
+  const GATEWAY_PARTS = ['name', 'title', 'purpose', 'fields', 'outcomes', 'rules', 'otherwise', 'properties', 'examples', 'review'];
+  for (const r of REFUSALS) assert.ok(rule(r), `refusal rule ${r}`);
+  for (const p of new Set([...ROUND_TRIP_PARTS, ...STEPS])) assert.ok(GATEWAY_PARTS.includes(p), `round-trip part ${p}`);
+  assert.deepEqual([...MODEL_STEPS].sort(), ['build', 'check', 'format', 'lock', 'prelock', 'run', 'verify']);
 });
 
 test('detection (a): an answer the spec refuses records the rule that refused it, once per answer', async () => {
