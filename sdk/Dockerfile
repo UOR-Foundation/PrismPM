@@ -300,8 +300,10 @@ RUN set -eu; \
 
 RUN chmod -R a+rX,a-w /opt/prismpm/share
 
-# Keep the offline dependency content, not Cargo's access-time/GC database.
+# Keep the offline dependency content, not Cargo's access-time/GC database or
+# the live crates.io listing and validators its sparse-index cache recorded.
 RUN /usr/bin/python3 -I -B scripts/normalize-cargo-git.py /usr/local/cargo \
+    && /usr/bin/python3 -I -B scripts/normalize-cargo-index.py /usr/local/cargo \
     && mkdir -p /opt/prismpm/cargo-home \
     && cp -a /usr/local/cargo/registry /opt/prismpm/cargo-home/ \
     && if [ -d /usr/local/cargo/git ]; then cp -a /usr/local/cargo/git /opt/prismpm/cargo-home/; fi \

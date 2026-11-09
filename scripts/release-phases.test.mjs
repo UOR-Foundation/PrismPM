@@ -22,6 +22,13 @@ test('canonical Cargo Git caches retain every object and real locked offline sub
     {timeout: 120000});
 });
 
+test('Cargo sparse-index caches keep exactly the held crates under one fixed index version', () => {
+  execFileSync('python3', ['-I', '-B', new URL('./normalize-cargo-index_test.py', import.meta.url).pathname],
+    {timeout: 120000});
+  const dockerfile = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  assert.match(dockerfile, /scripts\/normalize-cargo-git\.py \/usr\/local\/cargo \\\n    && \/usr\/bin\/python3 -I -B scripts\/normalize-cargo-index\.py \/usr\/local\/cargo \\\n    && mkdir -p \/opt\/prismpm\/cargo-home/);
+});
+
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
@@ -32,7 +39,11 @@ test('OCI mismatch diagnostics execute bounded real archive fixtures and remain 
   assert.match(compare.run, /"\$GITHUB_SHA" \\\n +root-b\.oci > /);
   const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
   assert.equal(diagnostic.if, 'failure()');
-  assert.match(diagnostic.run, /bash root-a\/scripts\/release-rebuild\.sh root-a; then/);
+  // Diagnosis compares the rebuild with the shipped manifest copied by digest;
+  // a failure never pays for another build.
+  assert(!diagnostic.run.includes('release-rebuild.sh'));
+  assert.match(diagnostic.run, /\n"\$tools\/oras" copy --to-oci-layout "\$\{identity%@\*\}@\$platform" shipped\.oci:shipped\n/);
+  assert.match(diagnostic.run, /oci-repro-diagnostics\.py shipped\.oci root-b\.oci > /);
   assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
   const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
   assert.equal(retained.if, 'failure()');
