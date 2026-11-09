@@ -203,7 +203,11 @@ function confinedShell(script){
  for(const invocation of creates)assert(invocation.includes('--platform "linux/$architecture"'));
  assert(creates[0].includes('--entrypoint /usr/bin/true'));const [acquire,build,receiver]=creates.slice(1);
  for(const invocation of [acquire,build,receiver])for(const token of ['--user 1000:1000','--read-only','--cap-drop ALL','--security-opt no-new-privileges'])assert(invocation.includes(token),token);
- assert(acquire.includes('target=/var/run/docker.sock'));assert(acquire.includes('--env DOCKER_CONFIG=/tmp/prismpm-docker-config'));assert(acquire.includes('product-sdk-check.mjs acquire'));
+ assert(acquire.includes('target=/var/run/docker.sock'));assert(acquire.includes('--env DOCKER_CONFIG=/tmp/prismpm-docker-config'));
+ // Candidate qualification mounts this checkout's check over the image's copy in
+ // every phase; an ordinary run mounts nothing.
+ for(const invocation of [acquire,build,receiver])assert(invocation.includes('"${harness_mount[@]}"'));
+ assert(script.includes('harness_mount=()\nif test -n "${PRISMPM_QUALIFY_SOURCE:-}"; then'));assert(acquire.includes('product-sdk-check.mjs acquire'));
  for(const [invocation,phase] of [[build,'build'],[receiver,'receive']]){
   assert(invocation.includes('--network none'));assert(!invocation.includes('/var/run/docker.sock'));assert(!invocation.includes('type=bind'));assert(!invocation.includes('--entrypoint'));
   assert(invocation.includes('product-sdk-check.mjs '+phase));

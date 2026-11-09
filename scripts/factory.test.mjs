@@ -7,7 +7,7 @@ import {mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import test from 'node:test';
-import {findReceipt, isPlumbing, kappa, plumbing, plumbingTests, routeRecord} from './factory.mjs';
+import {findCandidate, findReceipt, imageJobs, isPlumbing, kappa, plumbing, plumbingTests, routeRecord} from './factory.mjs';
 import {parts as vvParts} from './vv-assemble.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
@@ -106,11 +106,16 @@ test('a receipt is an ancestor\'s passed gate for the same κ, and nothing else'
   assert.equal(findReceipt(path, current, client([run(9, restored), run(7, proved)])).source_revision, restored);
   const none = {route: 'establish', kappa: kappa(path, current), source_revision: current, run_id: '', run_attempt: ''};
   for (const runs of [
-    [], [run(7, changedSource)], [run(7, foreign)], [run(7, current)],
+    [], [run(7, changedSource)], [run(7, foreign)],
     [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
     [run(7, proved, {repository: {full_name: 'fork/PrismPM'}})], [run(7, proved, {head_repository: {full_name: 'fork/PrismPM'}})],
     [run(7, proved, {path: '.github/workflows/vv.yml'})], [run(7, 'x'.repeat(40))],
   ]) assert.deepEqual(findReceipt(path, current, client(runs)), none, JSON.stringify(runs[0] ?? {}));
+  // Another run of this very commit (the rehearsal, for the tag run) is a
+  // receipt; this run itself never is.
+  assert.deepEqual(findReceipt(path, current, client([run(7, current)]), '8'),
+    {route: 'proved', kappa: kappa(path, current), source_revision: current, run_id: '7', run_attempt: '2'});
+  assert.deepEqual(findReceipt(path, current, client([run(7, current)]), '7'), none);
   const without = name => established().filter(job => job.name !== name);
   for (const jobs of [[], [{name: 'gate', conclusion: 'failure'}, ...without('gate')], [...established(), {name: 'gate', conclusion: 'success'}],
     // A run proved by a receipt skipped source-vv; it is never itself a receipt.
@@ -119,6 +124,40 @@ test('a receipt is an ancestor\'s passed gate for the same κ, and nothing else'
     assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {7: jobs})), none);
   for (const artifacts of [[], [{name: 'source-vv', expired: true}], [{name: 'source-vv-part-gates', expired: false}]])
     assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {}, {7: artifacts})), none);
+});
+
+const built = () => [...Array.from({length: imageJobs}, (_, index) => ({name: `images (image-${index})`, conclusion: 'success'})),
+  {name: 'image-platforms (ubuntu-24.04, amd64)', conclusion: 'success'}, {name: 'image-platforms (ubuntu-24.04-arm, arm64)', conclusion: 'success'},
+  {name: 'installed-sdk (ubuntu-24.04, amd64)', conclusion: 'failure'}];
+function candidates(runs, jobs = {}, artifacts = {}) {
+  return {api(path) {
+    if (path.includes('/workflows/release.yml/runs?')) return {workflow_runs: runs};
+    let match = path.match(/\/runs\/(\d+)\/jobs\?filter=latest&per_page=100$/);
+    if (match) return {jobs: jobs[match[1]] ?? built()};
+    match = path.match(/\/runs\/(\d+)\/artifacts\?name=sdk-image$/);
+    if (match) return {artifacts: artifacts[match[1]] ?? [{name: 'sdk-image', expired: false}]};
+    throw new Error(`unexpected ${path}`);
+  }};
+}
+
+test('a qualification candidate is the newest release-line ancestor whose images were all built and signed', t => {
+  const {path, commit, git} = repository(t);
+  const older = commit({'src/a.txt': 'a\n'}, 'older');
+  const newer = commit({'src/a.txt': 'b\n'}, 'newer');
+  const proposal = commit({'scripts/product-sdk-check.sh': 'fixed\n'}, 'check fix');
+  git('checkout', '-q', '-b', 'side', older); const foreign = commit({'src/a.txt': 'side\n'}, 'side');
+  git('checkout', '-q', 'release/v0.4');
+  // A later failure elsewhere in the run does not disqualify its images.
+  assert.deepEqual(findCandidate(path, proposal, candidates([run(9, newer), run(7, older)])), {run_id: '9', revision: newer});
+  assert.deepEqual(findCandidate(path, proposal, candidates([run(9, newer), run(7, older)], {9: built().slice(1)})), {run_id: '7', revision: older});
+  const failed = built(); failed[0] = {...failed[0], conclusion: 'failure'};
+  const platform = built(); platform[imageJobs] = {...platform[imageJobs], conclusion: 'cancelled'};
+  for (const [runs, jobs, artifacts] of [
+    [[run(9, foreign)], {}, {}], [[run(9, 'x'.repeat(40))], {}, {}], [[run(9, newer, {event: 'pull_request'})], {}, {}],
+    [[run(9, newer, {head_branch: 'main'})], {}, {}], [[run(9, newer, {head_repository: {full_name: 'fork/PrismPM'}})], {}, {}],
+    [[run(9, newer, {path: '.github/workflows/vv.yml'})], {}, {}], [[run(9, newer)], {9: failed}, {}], [[run(9, newer)], {9: platform}, {}],
+    [[run(9, newer)], {}, {9: [{name: 'sdk-image', expired: true}]}], [[run(9, newer)], {}, {9: []}], [[], {}, {}],
+  ]) assert.throws(() => findCandidate(path, proposal, candidates(runs, jobs, artifacts)), /no release-line run/);
 });
 
 test('the route record binds this commit, its κ and the run that established the evidence', t => {
@@ -134,7 +173,7 @@ test('the route record binds this commit, its κ and the run that established th
   const established = JSON.parse(routeRecord(path, current, 'established', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence));
   assert.equal(established.receipt.source_revision, current);
   assert.throws(() => routeRecord(path, current, 'established', {source_revision: proved, run_id: '9', run_attempt: '1'}, evidence));
-  assert.throws(() => routeRecord(path, current, 'proved', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence));
+  assert.equal(JSON.parse(routeRecord(path, current, 'proved', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence)).route, 'proved');
   assert.throws(() => routeRecord(path, current, 'proved', {source_revision: proved, run_id: '', run_attempt: '1'}, evidence));
   assert.throws(() => routeRecord(path, current, 'assumed', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence));
   const changed = commit({'src/a.txt': 'b\n'}, 'source change');
