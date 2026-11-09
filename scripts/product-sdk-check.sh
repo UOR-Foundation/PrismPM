@@ -94,10 +94,14 @@ test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" =
 docker container cp "$container:/tmp/prismpm-product-cli/acquisition.json" "$evidence/acquisition.json"
 docker container rm "$container" >/dev/null
 container=''
-# The build has no socket, external network, host source or host dependency cache.
-container=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL --platform "linux/$architecture" \
+# The build has no external network, host source or host dependency cache.
+# `prismpm build` validates each modeled projection with its locked external
+# oracle, which PrismPM runs only in a network-denied sandbox through the
+# Docker socket (PP5403 without it), so the socket is the build's one host input.
+container=$(docker container create --user 1000:1000 --group-add "$socket_gid" --read-only --network none --cap-drop ALL --platform "linux/$architecture" \
   --security-opt no-new-privileges --mount "type=volume,source=$project_volume,target=/tmp" \
-  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true --env CARGO_BUILD_JOBS=2 "${harness_mount[@]}" \
+  --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true --env CARGO_BUILD_JOBS=2 --env DOCKER_CONFIG=/tmp/prismpm-docker-config "${harness_mount[@]}" \
   --workdir /opt/prismpm/share/conformance-root "$image" node scripts/product-sdk-check.mjs build)
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 docker container start --attach "$container" > "$evidence/build.stdout.json" 2> "$evidence/build.stderr.txt"
