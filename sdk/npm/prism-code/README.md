@@ -81,11 +81,21 @@ agent asks about a part only when it cannot infer it:
 | Part | Says | Becomes |
 | --- | --- | --- |
 | purpose | what the app decides, in one sentence | the app's name and description |
-| fields | what goes into one request | a line of space-separated fields, each a number or a choice |
-| outcomes | what the answer can be | the answers, plus `invalid` for a malformed request |
-| rules | `when ... then ...`, in order, then `otherwise` | the decision the guest runs |
-| properties | what must `never` or `always` happen | one theorem each, proved by Lean |
+| fields | what goes into one request, and what each field means | a line of space-separated fields, each a number or a choice |
+| outcomes | what the answer can be, and what each answer means | the answers, plus `invalid` for a malformed request |
+| rules | `when ... then ...`, in order, then `otherwise`, each with its reason | the decision the guest runs |
+| properties | what must `never` or `always` happen, each with the harm it prevents | one theorem each, proved by Lean |
 | examples | real requests and their answers | acceptance vectors |
+
+Beside these, `limits` lists what the app does not decide. Reasons, meanings
+and limits are for people: no proof depends on them, and they are kept with
+what they describe, so a reason is dropped when its rule changes.
+
+Prism writes the spec as `prism/SPEC.md` in the [OpenSpec](https://openspec.dev)
+format: a `## Purpose`, then a `### Requirement:` with SHALL and a
+`#### Scenario:` with WHEN and THEN for every guarantee and rule, each marked
+proved by Lean or tested. The app's repository carries the same file at
+`openspec/specs/<name>/spec.md`.
 
 The draft is checked as a whole. A property the rules break comes back
 with the request that breaks it, and an example the rules contradict comes back

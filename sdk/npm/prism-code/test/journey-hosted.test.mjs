@@ -264,6 +264,7 @@ test('a new app becomes a template instance: created from the template, written 
   assert.match(readFileSync(join(clone, 'model/ids.toml'), 'utf8'), /^# the register\n\nspec = "template\/1"\n\n\[\[id\]\]\nid = "PA-01"/);
   assert.ok(existsSync(join(clone, 'features/suites/payment_approval.feature')) && existsSync(join(clone, 'crates/conformance/tests/payment_approval.rs')));
   assert.equal(existsSync(join(clone, 'crates/conformance/tests/contract.rs')), false);
+  assert.match(readFileSync(join(clone, 'openspec/specs/payment-approval/spec.md'), 'utf8'), /^# payment-approval Specification\n[\s\S]*\n## Purpose\n[\s\S]*\n## Requirements\n/, 'the spec is where OpenSpec looks for it');
   const app = JSON.parse(readFileSync(join(clone, 'site/app.json'), 'utf8'));
   assert.equal(app.repository, 'https://github.com/octo/prism-payment-approval');
   assert.equal(app.attestations.proof.id, 'a'.repeat(64));

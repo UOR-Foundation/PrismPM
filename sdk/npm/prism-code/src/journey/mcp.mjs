@@ -22,8 +22,8 @@ const { version } = require('../../package.json');
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. For Prism, a verified app, or /prism, call prism_start.
-From the user's one-line request, draft the whole spec yourself and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they can decide.
-Show the checked draft for approval in one message, properties first as plain sentences: Lean proves them, so the user must agree they are right. If you can show interactive UI in the chat, make it one editable form with an approve button.
+From the user's one-line request, draft the whole spec, with a reason for every rule and property, and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they can decide.
+Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can show interactive UI in the chat, make it one editable form with an approve button.
 On approval, answer the review step with yes, then call prism_build.
 Never edit files under prism/ by hand.
 prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
@@ -46,6 +46,8 @@ const CONDITIONS = {
   },
 };
 
+const WHY = { type: 'string', description: 'Why, in a few words, such as "it enforces INV-001".' };
+
 /** The prism/spec/1 shape, so an agent can draft a whole spec from one sentence. */
 const SPEC_INPUT = {
   type: 'object',
@@ -67,14 +69,18 @@ const SPEC_INPUT = {
           values: { type: 'array', items: { type: 'string' }, description: 'For a choice: two to 32 lower-case words.' },
           min: { type: 'integer', minimum: 0 },
           max: { type: 'integer', minimum: 0 },
+          means: { type: 'string', description: 'What the field is, with its unit, such as "yearly income, in whole dollars".' },
         },
         required: ['name', 'kind'],
       },
     },
     outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Lower-case words; invalid is reserved.' },
-    rules: { type: 'array', minItems: 1, maxItems: 24, description: 'In order; the first that matches decides.', items: { type: 'object', properties: { when: CONDITIONS, then: { type: 'string' } }, required: ['when', 'then'] } },
+    meanings: { type: 'object', additionalProperties: { type: 'string' }, description: 'What each answer means, such as {"review": "a person must decide"}.' },
+    rules: { type: 'array', minItems: 1, maxItems: 24, description: 'In order; the first that matches decides.', items: { type: 'object', properties: { when: CONDITIONS, then: { type: 'string' }, why: WHY }, required: ['when', 'then'] } },
     otherwise: { type: 'string', description: 'The answer when no rule matches.' },
-    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' } }, required: ['kind', 'when', 'then'] } },
+    otherwiseWhy: WHY,
+    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' }, why: { type: 'string', description: 'The harm it prevents, such as "poor credit history predicts default". Ask the user when you cannot tell.' } }, required: ['kind', 'when', 'then'] } },
+    limits: { type: 'array', items: { type: 'string' }, description: 'What the app does not decide, and choices the rules make silently, such as "fair credit is treated as good".' },
     examples: { type: 'array', description: 'Requests and their expected answers; each becomes an acceptance vector.', items: { type: 'object', properties: { request: { type: 'string' }, response: { type: 'string' } }, required: ['request', 'response'] } },
   },
   required: ['purpose', 'fields', 'outcomes', 'rules', 'otherwise'],
