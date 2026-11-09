@@ -141,6 +141,12 @@ impl Server {
         }
     }
 
+    /// The process id of the serving program.
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
+
     /// Send `request` over one connection and read the answer until the server closes it.
     ///
     /// # Errors
