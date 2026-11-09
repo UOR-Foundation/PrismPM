@@ -116,7 +116,7 @@ test('the model names every rule and property, states each property over decodab
   assert.match(model, /recursive_argument: fuel/);
   const theorems = proofDeclarations(spec).filter((d) => d.kind === 'theorem');
   assert.deepEqual(theorems.map((t) => t.name), ['inv001Holds', 'inv002Holds']);
-  const unfold = /definitions: \[([^\]]*)\]/.exec(theorems[0].proof)[1].split(', ');
+  const unfold = theorems[0].unfold;
   assert.deepEqual(unfold, [...unfold].sort(), 'linear_arithmetic needs its definitions sorted');
   assert.ok(['PaymentApproval::judge', 'PaymentApproval::rule1', 'PaymentApproval::roleClerk'].every((d) => unfold.includes(d)));
   const breaks = proofDeclarations(spec).find((d) => d.name === 'breaksInv001');

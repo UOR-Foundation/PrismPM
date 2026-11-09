@@ -243,20 +243,62 @@ export function proofDeclarations(spec, n = names(spec)) {
       kind: 'theorem',
       parameters: [`request : ${q('Request')}`],
       statement: `((${n.properties[p.id].breaks} request) = false)`,
-      proof: `linear_arithmetic{definitions: [${unfold.join(', ')}]}`,
+      unfold,
       axioms: QP,
     });
   }
   return out;
 }
 
-function declarationText(d) {
-  const axioms = d.axioms && d.axioms !== '[]' ? `,\n  axioms: ${d.axioms}` : '';
-  if (d.kind === 'structure') return `structure{\n  name: ${d.name},\n  type_parameters: [],\n  parameters: [],\n  fields: [${d.fields.join(', ')}]\n}`;
-  if (d.kind === 'theorem') return `theorem{\n  name: ${d.name},\n  parameters: [${d.parameters.join(', ')}],\n  statement: ${d.statement},\n  proof: ${d.proof}${axioms}\n}`;
-  const recursive = d.recursive ? `,\n  recursive_argument: ${d.recursive}` : '';
-  return `definition{\n  name: ${d.name},\n  parameters: [${d.parameters.join(', ')}],\n  result: ${d.result},\n  body: ${d.body}${axioms}${recursive}\n}`;
+/**
+ * The canonical layout `lexlean fmt` gives a declaration, so the generated model
+ * passes `lexlean fmt --check` as written (a template instance's gate runs it).
+ * A record `kind{...}` or a list `[...]` stays on one line when that line,
+ * indentation and trailing comma included, fits in WIDTH columns; otherwise it
+ * breaks to one entry per line, two columns deeper, and its entries are laid
+ * out the same way. A term is never broken, however long.
+ */
+export const WIDTH = 100;
+
+const list = (items) => ({ list: items });
+const record = (head, fields) => ({ record: head, fields });
+
+/** A value on one line, or null when it cannot be (a term with a line break in it). */
+function flat(value) {
+  if (typeof value === 'string') return value.includes('\n') ? null : value;
+  if (value.list) {
+    const items = value.list.map(flat);
+    return items.includes(null) ? null : `[${items.join(', ')}]`;
+  }
+  const fields = value.fields.map(([key, v]) => {
+    const f = flat(v);
+    return f === null ? null : `${key}: ${f}`;
+  });
+  return fields.includes(null) ? null : `${value.record}{${fields.join(', ')}}`;
 }
+
+/** The lines of `value` written after `lead` at `indent` columns, followed by `tail` (a comma, or nothing). */
+function layout(lead, value, indent, tail) {
+  const pad = ' '.repeat(indent);
+  const one = flat(value);
+  if (one !== null && indent + lead.length + one.length + tail.length <= WIDTH) return [`${pad}${lead}${one}${tail}`];
+  if (typeof value === 'string') return [`${pad}${lead}${value}${tail}`];
+  if (value.list) {
+    if (value.list.length === 0) return [`${pad}${lead}[]${tail}`];
+    return [`${pad}${lead}[`, ...value.list.flatMap((item, i) => layout('', item, indent + 2, i < value.list.length - 1 ? ',' : '')), `${pad}]${tail}`];
+  }
+  return [`${pad}${lead}${value.record}{`, ...value.fields.flatMap(([key, v], i) => layout(`${key}: `, v, indent + 2, i < value.fields.length - 1 ? ',' : '')), `${pad}}${tail}`];
+}
+
+function declarationValue(d) {
+  const axioms = d.axioms && d.axioms !== '[]' ? [['axioms', list(d.axioms.slice(1, -1).split(', '))]] : [];
+  if (d.kind === 'structure') return record('structure', [['name', d.name], ['type_parameters', list([])], ['parameters', list([])], ['fields', list(d.fields)]]);
+  if (d.kind === 'theorem') return record('theorem', [['name', d.name], ['parameters', list(d.parameters)], ['statement', d.statement], ['proof', record('linear_arithmetic', [['definitions', list(d.unfold)]])], ...axioms]);
+  const recursive = d.recursive ? [['recursive_argument', d.recursive]] : [];
+  return record('definition', [['name', d.name], ['parameters', list(d.parameters)], ['result', d.result], ['body', d.body], ...axioms, ...recursive]);
+}
+
+export const declarationText = (d) => layout('', declarationValue(d), 0, '').join('\n');
 
 const moduleText = (name, imports, decls) =>
   [
