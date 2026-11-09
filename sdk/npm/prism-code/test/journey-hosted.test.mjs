@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hostedClient } from '../src/hosted.mjs';
 import { compile } from '../src/journey/session.mjs';
 import { names } from '../src/journey/render.mjs';
@@ -176,27 +177,117 @@ test('a GitHub build with no repository asks for one, suggests a name, and commi
   assert.equal(session.status.built, undefined);
 });
 
-test('a GitHub build with an approved repository commits only Prism\'s paths, creates the repository and builds that commit', async () => {
-  const { dir, session } = provedApp();
-  const root = join(dir, '..');
-  writeFileSync(join(root, 'notes.txt'), 'the user\'s own file\n');
-  const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
+const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
+async function withIdentity(body) {
   const saved = Object.fromEntries(Object.keys(identity).map((k) => [k, process.env[k]]));
   Object.assign(process.env, identity);
   try {
-    const { calls, steps } = gitHubSteps();
-    const r = await buildRemote(dir, session, { root, repository: 'octo/prism-payment-approval', steps });
-    assert.deepEqual(calls, ['ready', 'publish octo/prism-payment-approval', 'build allowDirty=true']);
+    return await body();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+}
+
+test('a GitHub build in an existing repository commits only Prism\'s paths and builds that commit', async () => {
+  const { dir, session } = provedApp();
+  const root = join(dir, '..');
+  writeFileSync(join(root, 'notes.txt'), 'the user\'s own file\n');
+  assert.equal(spawnSync('git', ['-C', root, 'init', '-q', '-b', 'main'], { encoding: 'utf8' }).status, 0);
+  await withIdentity(async () => {
+    const { calls, steps } = gitHubSteps({ gitRoot: () => root, originRepository: () => ({ owner: 'acme', repo: 'app', full: 'acme/app' }) });
+    const r = await buildRemote(dir, session, { root, steps });
+    assert.deepEqual(calls, ['ready', 'build allowDirty=true'], 'an existing repository is never created');
     assert.equal(r.ok, false, 'the stand-in build does not pass');
     assert.match(r.message, /did not pass here: verdict P0, 0 of 3 vectors/);
     const files = spawnSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' }).stdout.trim().split('\n');
     assert.ok(files.includes('.github/workflows/build.yml') && files.includes('prismpm.lock'));
     assert.ok(files.some((f) => f.startsWith('prism/src/')), 'the app folder is committed');
     assert.ok(!files.includes('notes.txt'), 'a file Prism did not write stays out');
-    assert.deepEqual(session.status.repository, { full: 'octo/prism-payment-approval', created: true });
-  } finally {
-    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
-  }
+  });
+});
+
+/** A small stand-in for a template clone: the files writeTemplateApp reads and replaces. */
+function templateSkeleton(into) {
+  const w = (path, text) => {
+    mkdirSync(dirname(join(into, path)), { recursive: true });
+    writeFileSync(join(into, path), text);
+  };
+  const zero = '0'.repeat(64);
+  w('app/lexlean.lock', `spec = "lexlean/lock/2"\nproject_config_sha256 = "${zero}"\n\n[[workspace_file]]\npath = "lake-manifest.json"\nsha256 = "${zero}"\n\n[[workspace_file]]\npath = "lakefile.toml"\nsha256 = "${zero}"\n\n[[workspace_file]]\npath = "lean-toolchain"\nsha256 = "${zero}"\n`);
+  w('app/lean-toolchain', 'leanprover/lean4:v4.32.1\n');
+  w('app/src/Contract.lex.tex', 'the example\n');
+  w('crates/conformance/tests/contract.rs', '// the example\n');
+  w('features/suites/contract.feature', 'Feature: contract\n');
+  w('model/ids.toml', '# the register\n\nspec = "template/1"\n\n[[id]]\nid = "TC-01"\nlevel = "build"\nsuite = "contract"\nstatement = "the example"\n');
+  w('CONFORMANCE.md', '# CONFORMANCE\n\nThe levels.\n\n## contract\n\n| ID | Level | Statement |\n| --- | --- | --- |\n| `TC-01` | `build` | the example |\n\n## Cited authorities\n\nNever re-derived.\n');
+  w('site/app.json', '{"name": "Template contract", "trusted": [{"name": "SDK image"}]}\n');
+}
+
+test('a new app becomes a template instance: created from the template, written into app/, pushed, and live once its gate and page pass', async () => {
+  const { dir, session } = provedApp();
+  session.status.proved.attestation = 'a'.repeat(64);
+  const root = join(dir, '..');
+  const calls = [];
+  const holo = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
+  const steps = {
+    createFromTemplate: async ({ repository, into }) => {
+      calls.push(`create ${repository}`);
+      templateSkeleton(into);
+      return { repository, clone: into };
+    },
+    pushClone: ({ clone }) => {
+      calls.push(`push ${basename(clone)}`);
+      return 'c'.repeat(40);
+    },
+    waitForWorkflows: async ({ workflows }) => {
+      calls.push(`wait ${workflows.join(' ')}`);
+      return Object.fromEntries(workflows.map((w) => [w, { conclusion: 'success', html_url: `https://github.com/octo/prism-payment-approval/actions/${w}` }]));
+    },
+    fetchLive: async ({ live, into }) => {
+      calls.push(`fetch ${live}`);
+      mkdirSync(dirname(into), { recursive: true });
+      writeFileSync(into, readFileSync(holo));
+    },
+    client: {},
+  };
+  const r = await buildRemote(dir, session, { root, repository: 'octo/prism-payment-approval', steps });
+  assert.deepEqual(calls, ['create octo/prism-payment-approval', 'push prism-payment-approval', 'wait pages.yml bootstrap.yml', 'fetch https://octo.github.io/prism-payment-approval/']);
+  assert.equal(r.ok, true, r.message);
+  assert.equal(r.live, 'https://octo.github.io/prism-payment-approval/');
+  assert.match(r.message, /^Live at https:\/\/octo\.github\.io\/prism-payment-approval\/\. Built and verified/);
+  const clone = join(root, 'prism-payment-approval');
+  assert.deepEqual(session.status.repository, { full: 'octo/prism-payment-approval', created: true, template: true, clone, live: r.live });
+  assert.equal(existsSync(join(clone, 'app/src/Contract.lex.tex')), false, 'the template\'s example is replaced');
+  assert.ok(existsSync(join(clone, 'app/src/PaymentApproval.lex.tex')) && existsSync(join(clone, 'app/src/PaymentApprovalProofs.lex.tex')));
+  assert.match(readFileSync(join(clone, 'app/lexlean.toml'), 'utf8'), /^entrypoints = \["src\/PaymentApproval\.lex\.tex", "src\/PaymentApprovalProofs\.lex\.tex"\]$/m, 'the proofs are an entrypoint, so the gate checks the theorems');
+  assert.doesNotMatch(readFileSync(join(clone, 'app/lexlean.lock'), 'utf8'), /0{64}/, 'every digest the lock binds is recomputed');
+  assert.match(readFileSync(join(clone, 'model/ids.toml'), 'utf8'), /^# the register\n\nspec = "template\/1"\n\n\[\[id\]\]\nid = "PA-01"/);
+  assert.ok(existsSync(join(clone, 'features/suites/payment_approval.feature')) && existsSync(join(clone, 'crates/conformance/tests/payment_approval.rs')));
+  assert.equal(existsSync(join(clone, 'crates/conformance/tests/contract.rs')), false);
+  const app = JSON.parse(readFileSync(join(clone, 'site/app.json'), 'utf8'));
+  assert.equal(app.repository, 'https://github.com/octo/prism-payment-approval');
+  assert.equal(app.attestations.proof.id, 'a'.repeat(64));
+  assert.deepEqual(app.trusted, [{ name: 'SDK image' }], 'what the template says it trusts is kept');
+
+  calls.length = 0;
+  const again = await buildRemote(dir, session, { root, steps });
+  assert.deepEqual(calls, ['push prism-payment-approval', 'wait pages.yml bootstrap.yml', 'fetch https://octo.github.io/prism-payment-approval/'], 'a rebuild uses the clone it made, and creates nothing');
+  assert.equal(again.ok, true);
+});
+
+test('a template instance whose gate fails says which run failed, and nothing is live', async () => {
+  const { dir, session } = provedApp();
+  const root = join(dir, '..');
+  const steps = {
+    createFromTemplate: async ({ repository, into }) => (templateSkeleton(into), { repository, clone: into }),
+    pushClone: () => 'd'.repeat(40),
+    waitForWorkflows: async () => ({ 'pages.yml': { conclusion: 'success', html_url: 'p' }, 'bootstrap.yml': { conclusion: 'failure', html_url: 'https://github.com/octo/x/actions/runs/9' } }),
+    fetchLive: async () => assert.fail('nothing is fetched from a failed commit'),
+    client: {},
+  };
+  const r = await buildRemote(dir, session, { root, repository: 'octo/prism-payment-approval', steps });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /bootstrap\.yml ended failure: https:\/\/github\.com\/octo\/x\/actions\/runs\/9/);
 });
 
 test('a GitHub build refuses a repository that is not the origin, and a name that is not owner/name', async () => {

@@ -3,7 +3,8 @@
  * answer into something a person can act on. A wrong axiom set is fixed and
  * the proof run again without asking, because it is bookkeeping, not intent.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
@@ -13,7 +14,8 @@ import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSes
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
-import { canBuildOnGitHub, commitApp, gitRoot, originRepository, publishRepository, readyForGitHub, signedInLogin, suggestedRepository } from './github.mjs';
+import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
+import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
 
 const PROVE_SCRIPT_FULL = [
@@ -293,6 +295,11 @@ export async function buildRemote(dir, session, { log = () => {}, root, reposito
   const origin = top ? s.originRepository(top) : null;
   const named = repository ? parseRepository(repository) : null;
   if (repository && !named) return { ok: false, stage: 'build', message: `repository must be owner/name, not ${JSON.stringify(repository)}.` };
+  // An app this journey made from the template builds in its own clone, again and again.
+  const made = session.status.repository;
+  if (made?.clone && existsSync(made.clone) && (!named || named.full.toLowerCase() === made.full.toLowerCase())) return buildFromTemplate(dir, session, { log, repository: made.full, clone: made.clone, steps });
+  // A new app becomes an instance of the template: its frame, page, gate and Pages URL.
+  if (!origin && named) return buildFromTemplate(dir, session, { log, repository: named.full, clone: join(base, named.repo), create: true, steps });
   if (!origin && !named) {
     const suggested = suggestedRepository(s.signedInLogin(), session.spec);
     return {
@@ -300,7 +307,7 @@ export async function buildRemote(dir, session, { log = () => {}, root, reposito
       stage: 'build',
       needs: 'repository',
       suggested,
-      message: `The app builds on GitHub Actions, so it needs a GitHub repository, and there is none yet. Ask the user to approve creating the public repository ${suggested} (or another name they choose), then call prism_build with repository set to it. Only Prism's files are committed: the app folder, the build workflow and the SDK lock.`,
+      message: `The app builds on GitHub Actions, so it needs a GitHub repository, and there is none yet. Ask the user to approve creating the public repository ${suggested} (or another name they choose) from the UOR-Foundation/template, then call prism_build with repository set to it. It gets the template's frame, page and gate, and a live URL on GitHub Pages.`,
     };
   }
   if (origin && named && origin.full.toLowerCase() !== named.full.toLowerCase()) {
@@ -340,6 +347,83 @@ export async function buildRemote(dir, session, { log = () => {}, root, reposito
   return built(dir, session, result.holo, seconds, { where: 'github', repository: result.repository, run: result.run.url, fingerprint: result.fingerprint, signer: result.signature.identity ?? `a workflow of ${result.repository}`, checkedBy: result.signature.via });
 }
 
+/** Write the app into a template clone: `app/` from the journey's project, and every file the gate and the page read. */
+export function writeTemplateApp(clone, dir, session) {
+  const spec = session.spec;
+  const n = names(spec);
+  const read = (path) => readFileSync(join(clone, path), 'utf8');
+  const write = (path, text) => {
+    mkdirSync(dirname(join(clone, path)), { recursive: true });
+    writeFileSync(join(clone, path), text);
+  };
+  for (const path of TEMPLATE_EXAMPLE) rmSync(join(clone, path), { force: true });
+  for (const entry of readdirSync(join(clone, 'app', 'src'))) if (entry.endsWith('.lex.tex')) rmSync(join(clone, 'app', 'src', entry));
+  const sources = [`src/${n.module}.lex.tex`, ...(existsSync(join(dir, 'src', `${n.proofs}.lex.tex`)) ? [`src/${n.proofs}.lex.tex`] : [])];
+  for (const path of [...sources, 'lakefile.toml', 'lake-manifest.json', 'prismpm.toml']) write(`app/${path}`, readFileSync(join(dir, path)));
+  // Both modules are entrypoints, so prismpm verify has the Lean kernel check every property's theorem in the gate.
+  write('app/lexlean.toml', readFileSync(join(dir, 'lexlean.toml'), 'utf8').replace(/^entrypoints = \[[^\]]*\]$/m, `entrypoints = [${sources.map((p) => JSON.stringify(p)).join(', ')}]`));
+  const files = Object.fromEntries(['lexlean.toml', 'lake-manifest.json', 'lakefile.toml', 'lean-toolchain'].map((p) => [p, readFileSync(join(clone, 'app', p))]));
+  write('app/lexlean.lock', lexleanLockText(read('app/lexlean.lock'), files));
+  write('model/ids.toml', idsToml(spec, read('model/ids.toml')));
+  write(`features/suites/${suiteOf(spec)}.feature`, featureText(spec));
+  write(`crates/conformance/tests/${suiteOf(spec)}.rs`, rustTestText(spec));
+  write('CONFORMANCE.md', conformanceText(spec, read('CONFORMANCE.md')));
+  write('site/app.json', appJson(spec, read('site/app.json'), { repository: session.status.repository.full, attestation: session.status.proved?.attestation ?? null }));
+}
+
+/**
+ * Build a template instance: create it from UOR-Foundation/template when
+ * `create`, write the app into its clone, push, and wait for its gate
+ * (`bootstrap`) and its page (`pages`). Pages builds and verifies the holo in
+ * the SDK image and signs its provenance; this machine then fetches the live
+ * holo and replays its acceptance vectors.
+ */
+async function buildFromTemplate(dir, session, { log, repository, clone, create = false, steps = {} }) {
+  const s = { createFromTemplate, pushClone, waitForWorkflows, fetchLive, client: null, ...steps };
+  const started = Date.now();
+  const live = liveUrl(repository);
+  let sha;
+  try {
+    if (create) {
+      log(`Creating ${repository} from ${TEMPLATE_REPOSITORY}, with GitHub Pages...`);
+      await s.createFromTemplate({ repository, into: clone });
+      session.status.repository = { full: repository, created: true, template: true, clone, live };
+      writeSession(dir, session);
+    }
+    writeTemplateApp(clone, dir, session);
+    sha = s.pushClone({ clone, message: `${session.spec.title}: the app, its claims and its page, from prism-code` });
+    if (sha) log(`Pushed ${sha.slice(0, 12)} to ${repository}.`);
+    else {
+      const head = spawnSync('git', ['-C', clone, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true });
+      sha = String(head.stdout).trim();
+      log(`Nothing changed since ${sha.slice(0, 12)}; checking its runs.`);
+    }
+  } catch (error) {
+    return { ok: false, stage: 'build', message: `Could not get the app onto GitHub: ${error.message}` };
+  }
+  log('Waiting for the gate (bootstrap) and the page (pages): the SDK builds and verifies the holo, and Lean checks every theorem. About ten minutes.');
+  let runs;
+  try {
+    const client = s.client ?? (await import('../remote-github.mjs')).gitHubClient({ token: (await import('../remote-github.mjs')).tokenOf().token, version: VERSION });
+    runs = await s.waitForWorkflows({ repository, sha, workflows: ['pages.yml', 'bootstrap.yml'], log, client });
+  } catch (error) {
+    return { ok: false, stage: 'build', message: `Could not follow the runs on GitHub: ${error.message}` };
+  }
+  const seconds = Math.round((Date.now() - started) / 1000);
+  const failed = Object.entries(runs).filter(([, r]) => r.conclusion !== 'success');
+  if (failed.length) {
+    return { ok: false, stage: 'build', seconds, repository: `https://github.com/${repository}`, message: `${failed.map(([w, r]) => `${w} ended ${r.conclusion}: ${r.html_url}`).join('; ')}. The log there says why; nothing is live from this commit.` };
+  }
+  let holo;
+  try {
+    holo = join(dir, '.prism', 'live', sha, `${session.spec.title}.holo`);
+    await s.fetchLive({ live, into: holo });
+  } catch (error) {
+    return { ok: false, stage: 'build', seconds, repository: `https://github.com/${repository}`, message: `The gate and the page passed, but ${error.message}.` };
+  }
+  return built(dir, session, holo, seconds, { where: 'github', repository, live, run: runs['pages.yml'].html_url, gate: runs['bootstrap.yml'].html_url, fingerprint: null, signer: `the pages workflow of ${repository}` });
+}
+
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
 async function built(dir, session, holo, seconds, proof) {
   const app = await fromFile(holo);
@@ -351,16 +435,24 @@ async function built(dir, session, holo, seconds, proof) {
   writeSpecDocument(dir, session);
   const rel = relative(process.cwd(), holo) || holo;
   const policy = relative(process.cwd(), join(dir, 'run-policy.json')) || join(dir, 'run-policy.json');
-  const where = proof.where === 'github' ? ` on GitHub Actions (${proof.run}), provenance signed by ${proof.signer} and checked here` : '';
+  const where = proof.live
+    ? ` on GitHub Actions, where the gate (${proof.gate}) and the page (${proof.run}) passed; the live holo was fetched and checked here`
+    : proof.where === 'github'
+      ? ` on GitHub Actions (${proof.run}), provenance signed by ${proof.signer} and checked here`
+      : '';
+  const ok = acceptance.failed.length === 0;
   return {
-    ok: acceptance.failed.length === 0,
+    ok,
     stage: 'build',
     seconds,
     holo,
     where: proof.where,
-    ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint } : {}),
+    ...(proof.live ? { live: proof.live } : {}),
+    ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
-    message: acceptance.failed.length === 0 ? `Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.` : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
+    message: ok
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.`
+      : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,

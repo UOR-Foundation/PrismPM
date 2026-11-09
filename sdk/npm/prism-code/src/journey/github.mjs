@@ -153,3 +153,99 @@ export function publishRepository({ root, repository, run = spawnSync }) {
   if (!ok(create)) throw new Error(`gh repo create ${repo.full} failed: ${said(create)}`);
   return { repository: repo.full, created: true };
 }
+
+// ---------------------------------------------------------------------------
+// A new app as an instance of the template: its frame, page, gate and Pages URL.
+// ---------------------------------------------------------------------------
+
+/** git with `gh` as the credential helper for this one command, so a push needs no global setup. */
+const gitWithGh = (cwd, args, run) => run('git', ['-C', cwd, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { encoding: 'utf8', windowsHide: true, timeout: 180000 });
+
+/**
+ * Create `repository` from the template, public, with Pages built by its
+ * workflow, and clone it to `into`. GitHub fills a repository from a template
+ * a moment after creating it, so the first commit is waited for.
+ */
+export async function createFromTemplate({ repository, into, run = spawnSync, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  const repo = parseRepository(repository);
+  if (!repo) throw new Error(`${JSON.stringify(repository)} is not owner/name`);
+  if (existsSync(into)) throw new Error(`${into} exists already; move it, or name another repository`);
+  const create = run('gh', ['repo', 'create', repo.full, '--template', TEMPLATE_REPOSITORY, '--public'], { encoding: 'utf8', windowsHide: true, timeout: 120000 });
+  if (create.error?.code === 'ENOENT') throw new Error('gh is not on the PATH; install the GitHub CLI (https://cli.github.com) and run gh auth login');
+  if (!ok(create)) throw new Error(`gh repo create ${repo.full} --template ${TEMPLATE_REPOSITORY} failed: ${said(create)}`);
+  let filled = false;
+  for (let i = 0; i < 30 && !filled; i++) {
+    const head = run('gh', ['api', `repos/${repo.full}/commits?per_page=1`, '--jq', '.[0].sha'], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+    filled = ok(head) && /^[0-9a-f]{40}$/.test(String(head.stdout).trim());
+    if (!filled) await sleep(2000);
+  }
+  if (!filled) throw new Error(`${repo.full} was created but GitHub has not filled it from the template after a minute; build again shortly`);
+  const pages = run('gh', ['api', '-X', 'POST', `repos/${repo.full}/pages`, '-f', 'build_type=workflow'], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  if (!ok(pages) && !/already|409/i.test(said(pages))) throw new Error(`could not turn on Pages for ${repo.full}: ${said(pages)}`);
+  const clone = run('git', ['-c', 'core.autocrlf=false', 'clone', '--quiet', `https://github.com/${repo.full}.git`, into], { encoding: 'utf8', windowsHide: true, timeout: 300000 });
+  if (!ok(clone)) throw new Error(`git clone ${repo.full} failed: ${said(clone)}`);
+  return { repository: repo.full, clone: into };
+}
+
+/** Commit everything in the clone and push it to main. Returns the commit, or null when nothing changed. */
+export function pushClone({ clone, message, run = spawnSync }) {
+  const add = git(clone, ['add', '-A'], run);
+  if (!ok(add)) throw new Error(`git add failed: ${said(add)}`);
+  const staged = git(clone, ['diff', '--cached', '--quiet'], run);
+  if (staged.status === 0) return null;
+  const commit = git(clone, ['commit', '--quiet', '-m', message], run);
+  if (!ok(commit)) {
+    const hint = /user\.(name|email)|identity/i.test(said(commit)) ? ' Set your name and email with git config --global user.name and user.email, then build again.' : '';
+    throw new Error(`git commit failed: ${said(commit)}.${hint}`);
+  }
+  const push = gitWithGh(clone, ['push', '--quiet', 'origin', 'HEAD:main'], run);
+  if (!ok(push)) throw new Error(`git push failed: ${said(push)}`);
+  const head = git(clone, ['rev-parse', 'HEAD'], run);
+  return String(head.stdout).trim();
+}
+
+/**
+ * Wait for the named workflows' runs on `sha` to end, through the GitHub API.
+ * Resolves to `{ [workflow]: run }`; a run that does not start within three
+ * minutes is an error.
+ */
+export async function waitForWorkflows({ repository, sha, workflows, log = () => {}, client, now = Date.now }) {
+  const found = {};
+  const begin = now();
+  while (Object.keys(found).length < workflows.length) {
+    if (now() - begin > 180000) throw new Error(`no run of ${workflows.filter((w) => !found[w]).join(', ')} started for ${sha.slice(0, 12)} within three minutes`);
+    const listed = await client.json(`/repos/${repository}/actions/runs?head_sha=${sha}&per_page=50`);
+    for (const w of workflows) {
+      const run = (listed?.workflow_runs ?? []).filter((r) => r.head_sha === sha && String(r.path ?? '').endsWith(`/${w}`)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      if (run && !found[w]) {
+        found[w] = run;
+        log(`${w}: ${run.html_url}`);
+      }
+    }
+    if (Object.keys(found).length < workflows.length) await client.sleep(5000);
+  }
+  const { waitForRun } = await import('../remote-github.mjs');
+  const ended = {};
+  for (const w of workflows) ended[w] = await waitForRun(client, { full: repository }, found[w], { timeoutMs: 45 * 60 * 1000, now, onProgress: (p) => p.seconds % 120 < 10 && log(`  ${w} ${p.status}, ${p.seconds} s`) });
+  return ended;
+}
+
+/** Download the live page's holo once Pages serves it, retrying while the deploy settles. */
+export async function fetchLive({ live, into, fetch = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), attempts = 36 }) {
+  const url = new URL('app.holo', live).href;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (response.ok) {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        mkdirSync(dirname(into), { recursive: true });
+        writeFileSync(into, bytes);
+        return { url, bytes: bytes.length };
+      }
+    } catch {
+      // The deploy may not have reached the edge yet.
+    }
+    await sleep(5000);
+  }
+  throw new Error(`${url} did not answer after three minutes; the page may still be deploying`);
+}
