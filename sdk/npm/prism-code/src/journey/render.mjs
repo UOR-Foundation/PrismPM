@@ -74,9 +74,16 @@ const condition = (spec, n, c, q = (x) => x) => {
 
 const conjunction = (terms) => terms.reduce((acc, t) => (acc ? `(${acc} && ${t})` : t), '');
 
-/** The bounds a decoded request satisfies, as conditions, so a property is stated over exactly the requests that decode. */
+/**
+ * The bounds a decoded request satisfies, as conditions, so a property is
+ * stated over exactly the requests that decode. A choice is stored as its
+ * code, 0 up to one less than the number of choices, and the decoder yields
+ * no other code; without that bound an `always` property fails on codes no
+ * request can carry, where no rule that names a choice matches.
+ */
 const bounds = (spec) =>
   spec.fields.flatMap((f) => [
+    ...(f.kind === 'choice' ? [{ field: f.name, op: '<', value: f.values.length }] : []),
     ...(f.min !== undefined && f.min > 0 ? [{ field: f.name, op: '>=', value: f.min }] : []),
     ...(f.max !== undefined ? [{ field: f.name, op: '<=', value: f.max }] : []),
   ]);

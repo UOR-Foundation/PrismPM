@@ -166,6 +166,14 @@ test('a spec written as data joins the same flow and comes back the same', () =>
   assert.deepEqual(strip(again), strip(spec));
 });
 
+test('a property is stated only over choice codes a request can carry', () => {
+  // role is clerk|manager, codes 0 and 1: every "breaks" test requires role < 2, or an
+  // `always` property would fail on a code the decoder never yields.
+  const spec = { ...paymentSpec(), properties: [{ kind: 'always', when: [{ field: 'amount', op: '>=', value: 1 }], then: 'approved' }] };
+  const breaks = proofDeclarations(validateSpec(spec)).find((d) => d.kind === 'definition');
+  assert.match(breaks.body, /\(\(project request \w+\) <\? 2\)/);
+});
+
 test('SPEC.md is an OpenSpec spec that says what is proved and what is tested', () => {
   const doc = renderSpecDocument(paymentSpec(), { properties: { 'INV-001': 'proved', 'INV-002': 'failing' } });
   assert.match(doc, /^# payment-approval Specification\n/);
