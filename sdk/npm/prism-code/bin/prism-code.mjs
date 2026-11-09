@@ -170,16 +170,16 @@ Usage:
                                                     the axiom set Lean observes for every definition and theorem, in one
                                                     pass, beside the set the source declares; --write sets each axioms
                                                     member to the observed set and formats the project (experimental)
-  prism-code setup [--agent <id>] [--pull] [--image <ref>] [--agents-only] [--machine-only] [--json] [--dry-run]
-                                                    get this machine ready: find Docker (also inside WSL), note the SDK
-                                                    image the lockfile pins (pulled only with --pull or --image; else the
-                                                    first build, verify or axioms pulls it), create its cache volume, keep sources LF;
+  prism-code setup [--agent <id>] [--local] [--pull] [--image <ref>] [--agents-only] [--machine-only] [--json] [--dry-run]
+                                                    get this machine ready, no Docker needed: check Node and the GitHub
+                                                    sign-in, keep sources LF (--local also finds Docker, also inside WSL,
+                                                    notes the SDK image the lockfile pins and creates its cache volume);
                                                     then add the UOR MCP server (lexlean, https://mcp.uor.foundation/)
                                                     to every agent found here: Claude Code, Codex, Cursor, VS Code; say
                                                     how for Claude Desktop; add the local Prism server (prism, the mcp
                                                     verb below) beside it, Claude Desktop included; install the Prism
-                                                    skills; register the holo:// handler; remember the agent. Run it as
-                                                    npx prism-code@latest setup
+                                                    skill; register the holo:// handler; remember the agent; print the
+                                                    next steps. Run it as npx prism-code@latest setup
   prism-code mcp [--project <dir>]                  the Prism MCP server on stdio (experimental): six spec questions, each
                                                     answer checked as it arrives; then the LexLean model written for you,
                                                     every property proved by Lean, and the holo built in the SDK image
@@ -261,12 +261,16 @@ Options for export:   --out <dir>                  a new directory name in the p
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 Options for setup:    --agent <id>                 configure only this agent and make it the preferred one: claude-code,
                                                    codex, cursor, vscode, claude-desktop, claude, chatgpt
+                      --local                      also ready local builds: Docker (also inside WSL), the image, its cache;
+                                                   without it setup needs no Docker, and apps build on GitHub Actions
                       --image <ref>                the SDK image to pull and cache, NAME@sha256:DIGEST; default the one
-                                                   ./prismpm.lock pins
-                      --pull                       pull the image now; without it the first build, verify or axioms does
+                                                   ./prismpm.lock pins; implies --local
+                      --pull                       pull the image now, implies --local; without it the first build, verify
+                                                   or axioms does
                       --no-pull                    the default: report a missing image instead of pulling it
-                      --agents-only                skip the machine half: Docker, the image, the cache, line endings
-                      --machine-only               only the machine half; configure no agent and register no handler
+                      --agents-only                skip the machine half: Node, line endings, GitHub and the local rows
+                      --machine-only               only the machine half, local rows included; configure no agent and
+                                                   register no handler
                       --json                       print the report as JSON
                       --dry-run                    print what it would write and run; change nothing
 Options for open:     --dry-run                    print the files and commands; open nothing

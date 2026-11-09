@@ -3,7 +3,7 @@
 // this machine: every probe goes through a stand-in `find` and `run`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hostConfigEntry, hostDocker, hostDockerArguments, parseDistributions, readHostConfig, resolveDocker, splitCommandLine } from '../src/host.mjs';
@@ -103,6 +103,31 @@ test('the config setup wrote is read back, and a dry run assumes docker without 
   assert.equal(readHostConfig(dir), null, 'a record that does not fit is no record');
   const dry = hostDocker({ configDir: dir, env: {}, probe: false, run: () => assert.fail('no probe') });
   assert.deepEqual([dry.command, dry.args, dry.mount, dry.cache], ['docker', [], 'native', false]);
+});
+
+test('with no record, the first run records the Docker it found with the cache on, keeping other keys; PRISM_DOCKER is never recorded', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'prism-host-'));
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ preferredAgent: 'codex' }));
+  const native = { find: (n) => (n === 'docker' ? '/usr/bin/docker' : null), run: runner({ '/usr/bin/docker version': '29.1.3\n' }).run };
+  const first = hostDocker({ configDir: dir, env: {}, platform: 'linux', ...native });
+  assert.equal(first.cache, true, 'a local build keeps the SDK caches on the volume without setup --local');
+  assert.equal(first.source, 'recorded');
+  const config = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'));
+  assert.equal(config.preferredAgent, 'codex');
+  assert.equal(config.cache, true);
+  assert.equal(config.docker.command, '/usr/bin/docker');
+  const second = hostDocker({ configDir: dir, env: {}, platform: 'linux', run: () => assert.fail('the record answers; no probe runs') });
+  assert.deepEqual([second.source, second.cache], ['config', true]);
+
+  const other = mkdtempSync(join(tmpdir(), 'prism-host-'));
+  const overridden = hostDocker({ configDir: other, env: { PRISM_DOCKER: 'docker' }, platform: 'linux', find: () => null, run: runner({ 'docker version': '1\n' }).run });
+  assert.equal(overridden.cache, false);
+  assert.equal(existsSync(join(other, 'config.json')), false, 'an override is for one environment');
+
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ docker: config.docker }));
+  assert.equal(readHostConfig(dir).cache, true, 'a record without cache keeps the caches on disk');
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ docker: config.docker, cache: false }));
+  assert.equal(readHostConfig(dir).cache, false, 'cache: false turns it off');
 });
 
 test('a cache volume replaces the tmpfs at /tmp, another program replaces prismpm, and WSL paths mount under /mnt', () => {

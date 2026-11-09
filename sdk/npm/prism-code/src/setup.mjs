@@ -464,17 +464,17 @@ function formatStep(step) {
   }
 }
 
-/** One line per agent, then the handler and the preferred agent; with `dryRun`, every step under its row. */
+/** One line per agent for each server, then the handler, the skills and the preferred agent; with `dryRun`, every step under its row. */
 export function formatSetup(plan, { dryRun = false } = {}) {
   const tense = dryRun ? 0 : 1;
-  const lines = [`prism-code setup${dryRun ? ' --dry-run' : ''}: the UOR MCP server ${MCP_NAME} at ${MCP_URL}`];
+  const lines = [`prism-code setup${dryRun ? ' --dry-run' : ''}: your agents`, `  the server ${MCP_NAME}, remote at ${MCP_URL}: checks and proves LexLean models`];
   const row = (name, words, status, detail, steps) => {
     lines.push(`  ${name.padEnd(16)}${(words[status] ?? [status, status])[tense].padEnd(20)}${detail ?? ''}`.trimEnd());
     if (dryRun) for (const step of steps ?? []) lines.push(`      ${formatStep(step)}`);
   };
   for (const a of plan.agents) row(a.agent, WORDS, a.status, a.detail, a.steps);
   if (plan.journey?.length) {
-    lines.push(`  the Prism server ${JOURNEY_NAME}, local on stdio (prism-code mcp):`);
+    lines.push(`  the server ${JOURNEY_NAME}, local (prism-code mcp): asks for the spec, proves and builds the app`);
     for (const a of plan.journey) row(a.agent, WORDS, a.status, a.detail, a.steps);
   }
   row('holo://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);
@@ -483,4 +483,35 @@ export function formatSetup(plan, { dryRun = false } = {}) {
   lines.push(`  ${'preferred agent'.padEnd(16)}${preferred}`);
   if (dryRun) for (const step of plan.preferred.steps) lines.push(`      ${formatStep(step)}`);
   return `${lines.join('\n')}\n`;
+}
+
+/** The sentence a new user tries first; the same one the skill and the website use. */
+export const FIRST_SENTENCE = 'build me a Prism app that tells whether a year is a leap year';
+
+/**
+ * What to do after setup, numbered: sign in to GitHub when that is missing,
+ * restart the agent when a server was added to it, then the first sentence.
+ * `github` is the machine half's github row, or null when it did not run.
+ */
+export function nextSteps(plan, { github = null } = {}) {
+  const agent = plan.preferred?.agent ?? null;
+  const row = plan.agents.find((a) => a.agent === agent);
+  if (agent === null || !row || row.status === 'not-found') {
+    if (agent === null && plan.agents.some((a) => a.status !== 'not-found')) return [];
+    return [`Install an agent, such as Claude Code (${AGENTS['claude-code'].install}), then run npx prism-code@latest setup again.`];
+  }
+  const label = AGENTS[agent]?.label ?? agent;
+  const steps = [];
+  if (github?.status === 'manual' && /not signed in/.test(github.detail ?? '')) steps.push('Run gh auth login, so your app builds on GitHub Actions and this machine needs no Docker.');
+  const changed = [...plan.agents, ...(plan.journey ?? [])].some((r) => r.agent === agent && r.status === 'configure');
+  if (changed) steps.push(`Restart ${label}, so it loads the new servers.`);
+  steps.push(`Ask ${label}: "${FIRST_SENTENCE}"`);
+  return steps;
+}
+
+/** The numbered next steps, as printed after the rows. */
+export function formatNext(steps) {
+  if (steps.length === 0) return '';
+  const lines = steps.map((step, i) => `  ${i + 1}. ${step}`);
+  return ['next', ...lines, ''].join('\n');
 }
