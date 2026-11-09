@@ -1,6 +1,6 @@
-//! HO-36, HO-37 and HO-38: the serving effect of a server application, its
+//! HO-36, HO-37, HO-38 and HO-43: the serving effect of a server application, its
 //! RFC 9112 framing over a loopback socket, and the core built through the
-//! production API.
+//! production API, and the per-request methods the served driver calls.
 
 use std::path::Path;
 use std::process::Command;
@@ -98,5 +98,15 @@ pub(super) fn verify_build(root: &Path) {
             "a_core_that_is_not_a_production_root_is_refused",
             "the_example_holds_the_foundation_modules_it_imports_byte_for_byte",
         ],
+    );
+}
+
+/// HO-43: the served driver tells the host when each request begins and ends.
+pub(super) fn verify_request_hooks(root: &Path) {
+    let library = run(root, "HO-43", &["--lib", "server_host::serving_tests"]);
+    require(
+        "HO-43",
+        &library,
+        &["the_host_is_told_when_each_served_request_begins_and_ends"],
     );
 }

@@ -281,3 +281,11 @@ Feature: holo
     Then the acceptance document is the one derived from the model and the released files
     And the released program is rebuilt under the recorded build bound and answers every acceptance and served vector as modeled
     And a tampered core package, a tampered host package, a tampered consumer workspace, recorded bounds that differ from the model and a release without the acceptance evidence are each refused with PP6101
+
+  @HO-43 @build
+  Scenario: The served driver tells the host when each request begins and ends
+    Given a served application whose binding overrides request_begin and request_end
+    When it answers a request the core answers and a request the adapter refuses
+    Then the binding sees request_begin then request_end once for each, in order
+    And request_begin carries the request body and request_end the request body and the answer body
+    And a binding that overrides neither compiles and serves unchanged

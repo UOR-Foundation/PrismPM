@@ -548,6 +548,7 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-40" => server_verification::verify_exercise(root),
         "HO-41" => server_verification::verify_build_bound(root),
         "HO-42" => server_verification::verify_release_replay(root),
+        "HO-43" => server_serving::verify_request_hooks(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
