@@ -173,6 +173,20 @@ definition{
 }
 
 definition{
+  name: buildRoute,
+  parameters: [identity : String, receipts : (List String)],
+  result: String,
+  body: (if (Factory.Registry::memberString identity receipts) then "proved" else "establish")
+}
+
+definition{
+  name: routedBuilds,
+  parameters: [buildRouted : String],
+  result: Nat,
+  body: (if (prim equal buildRouted "proved" : Bool) then 0 else (builds (route)))
+}
+
+definition{
   name: plumbing,
   parameters: [],
   result: (List String),
@@ -239,6 +253,21 @@ theorem{
   name: aChangedObligationIsRoutedLikeAnyOther,
   parameters: [],
   statement: ((prim equal (Factory.Registry::route (cons "k1" (nil String)) (cons "k1" (nil String)) (obligations) (obligations)) "proved" : Bool) = true),
+  proof: decide{},
+  axioms: []
+}
+theorem{
+  name: aBuildReceiptRebuildsNoImage,
+  parameters: [],
+  statement: (((routedBuilds (buildRoute "b1" (cons "b0" (cons "b1" (nil String))))) =? 0) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: aNewBuildIdentityBuildsAndRebuildsEachImageOnce,
+  parameters: [],
+  statement: (((routedBuilds (buildRoute "b2" (cons "b0" (cons "b1" (nil String))))) =? 2) = true),
   proof: decide{},
   axioms: []
 }

@@ -54,8 +54,11 @@ const revision = 'a'.repeat(40);
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/release/v0.4',
   event: 'workflow_dispatch', version: '0.4.0', publishCrates: false, rehearsal: false, revision});
-const prerequisites = names => Object.fromEntries(names.map(name => [name, {result: 'success'}]));
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
+const buildStages = ['images', 'native', 'reproducibility', 'installed-sdk'];
+const prerequisites = (names, route = 'establish') => Object.fromEntries(names.map(name => [name,
+  name === 'factory' ? {result: 'success', outputs: {'build-route': route}}
+    : {result: route === 'proved' && buildStages.includes(name) ? 'skipped' : 'success'}]));
+const ociNeeds = ['gate', 'factory', ...buildStages];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
 const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/release/v0.4',
   GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false', REHEARSAL: 'false',
@@ -65,10 +68,15 @@ const publicationTag = `sdk-oci-${revision}-123456789-1`;
 function validateWorkflow(value) {
   assert.deepEqual(value.on.push, {branches: ['release/v0.4'], tags: ['v0.4.0']});
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
-  assert.equal(value.jobs['oci-native'].if, undefined, 'normal success gating must not be bypassed');
+  // Publication runs on its build stages' success, or on their skip when the
+  // factory routed the build to a receipt; nothing else (scripts/factory.mjs).
+  const stageResults = result => buildStages.map(name => `needs.${name}.result == '${result}'`).join(' && ');
+  assert.equal(value.jobs['oci-native'].if.replaceAll(/\s+/g, ' '), "${{ !cancelled() && needs.gate.result == 'success' && needs.factory.result == 'success'"
+    + ` && ((needs.factory.outputs.build-route == 'establish' && ${stageResults('success')})`
+    + ` || (needs.factory.outputs.build-route == 'proved' && ${stageResults('skipped')})) }}`);
   assert.deepEqual(value.jobs.release.needs, [...ociNeeds, 'oci-native', 'crates']);
-  assert.equal(value.jobs.release.if, "${{ needs.gate.outputs.rehearsal != 'true' }}");
-  assert.equal(value.jobs.crates.if, "${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}");
+  assert.equal(value.jobs.release.if.replaceAll(/\s+/g, ' '), "${{ !cancelled() && needs.oci-native.result == 'success' && needs.crates.result == 'success' && needs.gate.outputs.rehearsal != 'true' }}");
+  assert.equal(value.jobs.crates.if.replaceAll(/\s+/g, ' '), "${{ !cancelled() && needs.oci-native.result == 'success' && needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}");
   assert.deepEqual(value.on.workflow_dispatch.inputs.rehearsal, {description: 'Run every check but publish no release assets, discovery tags or crates. Images are still pushed by digest and signed.',
     required: true, default: true, type: 'boolean'});
   for (const name of ['oci-native']) {
@@ -190,19 +198,22 @@ function validateWorkflow(value) {
   assert.match(gate.steps.find(step => step.id === 'source').run, /node scripts\/factory\.mjs route factory-route\/factory-route\.json/);
   assert(gate.steps.some(step => step.with?.name === 'factory-route' && step.with['if-no-files-found'] === 'error'));
   // Image stages establish projection obligations only and start beside source V&V.
-  assert.deepEqual(value.jobs.reproducibility.needs, ['policy', 'images']);
+  // They run exactly when the factory routes the build to be established;
+  // a build receipt proves them instead (scripts/factory.mjs).
+  const established = "${{ needs.factory.outputs.build-route == 'establish' }}";
+  assert.deepEqual(value.jobs.reproducibility.needs, ['policy', 'factory', 'images']);
+  for (const job of ['image-platforms', 'images', 'reproducibility', 'native', 'installed-sdk']) assert.equal(value.jobs[job].if, established, job);
   assert.equal(value.jobs['installed-vv'], undefined, 'installed V&V would verify the source a second time, on a projection');
   const installed = value.jobs['installed-sdk'];
-  assert.deepEqual(installed.needs, ['policy', 'images']); assert.deepEqual(value.jobs.native.needs, ['policy', 'images']);
-  assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined); assert.equal(installed['runs-on'], '${{ matrix.os }}');
+  assert.deepEqual(installed.needs, ['policy', 'factory', 'images']); assert.deepEqual(value.jobs.native.needs, ['policy', 'factory', 'images']); assert.equal(installed['continue-on-error'], undefined); assert.equal(installed['runs-on'], '${{ matrix.os }}');
   assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
   const product = installed.steps.find(step => step.run?.includes('product-sdk-check.sh'));
   assert(product); assert.equal(product.if, undefined); assert.equal(product['continue-on-error'], undefined);
   const platformJob = value.jobs['image-platforms'];
-  assert.deepEqual(platformJob.needs, 'policy');
+  assert.deepEqual(platformJob.needs, ['policy', 'factory']);
   assert.equal(platformJob['runs-on'], '${{ matrix.os }}');
   assert.deepEqual(platformJob.strategy.matrix.include, [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}]);
-  assert.deepEqual(value.jobs.images.needs, ['policy', 'image-platforms']);
+  assert.deepEqual(value.jobs.images.needs, ['policy', 'factory', 'image-platforms']);
   for (const job of Object.values(value.jobs))
     assert.ok(!job.steps.some(step => step.uses?.startsWith('docker/setup-qemu-action')), 'every platform is built natively');
   const builds = platformJob.steps.find(step => step.id === 'build');
@@ -554,6 +565,18 @@ test('publication rejects missing, skipped, failed, cancelled or extraneous prer
       }
     }
     assert.throws(() => requirePrerequisites(phase, {...prerequisites(names), unrelated: {result: 'success'}}));
+    // A build receipt: the build stages are skipped, never run, and every
+    // other prerequisite still succeeded.
+    requirePrerequisites(phase, prerequisites(names, 'proved'));
+    for (const name of names.filter(name => name !== 'factory')) {
+      for (const result of ['success', 'failure', 'cancelled', 'skipped', '', undefined]) {
+        const expected = buildStages.includes(name) ? 'skipped' : 'success';
+        if (result === expected) continue;
+        assert.throws(() => requirePrerequisites(phase, {...prerequisites(names, 'proved'), [name]: {result}}), `${phase} ${name} ${result}`);
+      }
+    }
+    for (const route of ['', undefined, 'assumed'])
+      assert.throws(() => requirePrerequisites(phase, {...prerequisites(names), factory: {result: 'success', outputs: {'build-route': route}}}));
   }
   assert.throws(() => requirePrerequisites('unknown', {}));
 });

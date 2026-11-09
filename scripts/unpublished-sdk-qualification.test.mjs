@@ -135,7 +135,7 @@ test('both native prerequisites must succeed before either original installed ow
  const text=source(workflowPath);verify(text);
  const unordered=text.replace('    needs: [input-policy, unpublished-prerequisites]\n','');assert.notEqual(unordered,text);assert.throws(()=>verify(unordered));
  const release=source('.github/workflows/release.yml');
- assert.match(release,/needs: \[gate, images, native, reproducibility, installed-sdk\]/,'original release still requires both complete owner families');
+ assert.match(release,/needs: \[gate, factory, images, native, reproducibility, installed-sdk\]/,'original release still requires both complete owner families');
 });
 test('the existing real admission shell excludes unpublished qualification from every original publication, construction and integrity mode',()=>{
  const w=load(source(workflowPath)),script=w.jobs['input-policy'].steps[0].run,qualified=JSON.stringify(selection);

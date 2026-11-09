@@ -86,6 +86,11 @@ jobs:
       source-revision: ${{ steps.route.outputs.source-revision }}
       run-id: ${{ steps.route.outputs.run-id }}
       run-attempt: ${{ steps.route.outputs.run-attempt }}
+      build-route: ${{ steps.route.outputs.build-route }}
+      build-identity: ${{ steps.route.outputs.build-identity }}
+      build-revision: ${{ steps.route.outputs.build-revision }}
+      build-run-id: ${{ steps.route.outputs.build-run-id }}
+      build-run-attempt: ${{ steps.route.outputs.build-run-attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -264,8 +269,18 @@ jobs:
           SOURCE_REVISION: ${{ needs.factory.outputs.source-revision }}
           SOURCE_RUN_ID: ${{ needs.factory.outputs.run-id }}
           SOURCE_RUN_ATTEMPT: ${{ needs.factory.outputs.run-attempt }}
+          BUILD_ROUTE: ${{ needs.factory.outputs.build-route }}
+          BUILD_REVISION: ${{ needs.factory.outputs.build-revision }}
+          BUILD_RUN_ID: ${{ needs.factory.outputs.build-run-id }}
+          BUILD_RUN_ATTEMPT: ${{ needs.factory.outputs.build-run-attempt }}
         run: |
           set -euo pipefail
+          if [ "$BUILD_ROUTE" = establish ]; then
+            build="established $GITHUB_SHA $GITHUB_RUN_ID $GITHUB_RUN_ATTEMPT"
+          else
+            test "$BUILD_ROUTE" = proved
+            build="proved $BUILD_REVISION $BUILD_RUN_ID $BUILD_RUN_ATTEMPT"
+          fi
           if [ "$ROUTE" = establish ]; then
             route=established revision=$GITHUB_SHA run_id=$GITHUB_RUN_ID run_attempt=$GITHUB_RUN_ATTEMPT
           else
@@ -273,7 +288,8 @@ jobs:
             route=proved revision=$SOURCE_REVISION run_id=$SOURCE_RUN_ID run_attempt=$SOURCE_RUN_ATTEMPT
           fi
           mkdir factory-route
-          node scripts/factory.mjs route factory-route/factory-route.json "$GITHUB_SHA" "$route" "$revision" "$run_id" "$run_attempt"
+          # shellcheck disable=SC2086 # $build is four words, each validated by factory.mjs.
+          node scripts/factory.mjs route factory-route/factory-route.json "$GITHUB_SHA" "$route" "$revision" "$run_id" "$run_attempt" $build
           printf 'revision=%s\nrun-id=%s\nrun-attempt=%s\n' "$revision" "$run_id" "$run_attempt" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -295,7 +311,8 @@ jobs:
   # Image stages establish projection obligations only, so they start beside
   # source V&V; only publication waits for the gate (Factory.Release).
   image-platforms:
-    needs: policy
+    needs: [policy, factory]
+    if: ${{ needs.factory.outputs.build-route == 'establish' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -373,7 +390,8 @@ jobs:
           retention-days: 30
 
   images:
-    needs: [policy, image-platforms]
+    needs: [policy, factory, image-platforms]
+    if: ${{ needs.factory.outputs.build-route == 'establish' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -602,7 +620,8 @@ jobs:
           retention-days: 30
 
   reproducibility:
-    needs: [policy, images]
+    needs: [policy, factory, images]
+    if: ${{ needs.factory.outputs.build-route == 'establish' }}
     timeout-minutes: 360
     strategy:
       fail-fast: false
@@ -812,7 +831,8 @@ jobs:
   # thePriorRouteVerifiedTheSourceTwice). The image is bound to the source by
   # reproducibility, native equivalence and the installed product build below.
   installed-sdk:
-    needs: [policy, images]
+    needs: [policy, factory, images]
+    if: ${{ needs.factory.outputs.build-route == 'establish' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -862,7 +882,8 @@ jobs:
           retention-days: 30
 
   native:
-    needs: [policy, images]
+    needs: [policy, factory, images]
+    if: ${{ needs.factory.outputs.build-route == 'establish' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -948,13 +969,20 @@ jobs:
 
   oci-native:
     name: publish source-addressed OCI/native verification assets
-    needs: [gate, images, native, reproducibility, installed-sdk]
+    needs: [gate, factory, images, native, reproducibility, installed-sdk]
+    if: >-
+      ${{ !cancelled() && needs.gate.result == 'success' && needs.factory.result == 'success'
+      && ((needs.factory.outputs.build-route == 'establish' && needs.images.result == 'success'
+      && needs.native.result == 'success' && needs.reproducibility.result == 'success' && needs.installed-sdk.result == 'success')
+      || (needs.factory.outputs.build-route == 'proved' && needs.images.result == 'skipped'
+      && needs.native.result == 'skipped' && needs.reproducibility.result == 'skipped' && needs.installed-sdk.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: write
       id-token: write
       attestations: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -975,21 +1003,33 @@ jobs:
           pattern: native-*
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-image'
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-supply-chain'
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: reproducibility-*
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: factory-route
@@ -998,26 +1038,44 @@ jobs:
         with:
           name: product-cli-sdk-amd64
           path: .sdk-gate-evidence/product-cli-sdk-amd64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: product-cli-sdk-arm64
           path: .sdk-gate-evidence/product-cli-sdk-arm64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: browser-sdk-sdk-amd64
           path: release
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: browser-sdk-sdk-arm64
           path: release
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: library-sdk-sdk-amd64
           path: .sdk-gate-evidence/library-sdk-sdk-amd64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: library-sdk-sdk-arm64
           path: .sdk-gate-evidence/library-sdk-sdk-arm64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: source-vv
@@ -1026,23 +1084,34 @@ jobs:
         with:
           name: sdk-equivalence-amd64
           path: .sdk-gate-evidence/native-equivalence-sdk-amd64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: sdk-equivalence-arm64
           path: .sdk-gate-evidence/native-equivalence-sdk-arm64
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - name: Preserve complete native SDK gate evidence without changing acceptance scope
         shell: bash
         env:
           SOURCE_REVISION: ${{ needs.gate.outputs.source-revision }}
           SOURCE_RUN_ID: ${{ needs.gate.outputs.source-run-id }}
           SOURCE_RUN_ATTEMPT: ${{ needs.gate.outputs.source-run-attempt }}
+          # Build evidence is packed with the run that established it: this
+          # one, or the build receipt's (release/factory-route.json says which).
+          BUILD_REVISION: ${{ needs.factory.outputs.build-route == 'proved' && needs.factory.outputs.build-revision || github.sha }}
+          BUILD_RUN_ID: ${{ needs.factory.outputs.build-route == 'proved' && needs.factory.outputs.build-run-id || github.run_id }}
+          BUILD_RUN_ATTEMPT: ${{ needs.factory.outputs.build-route == 'proved' && needs.factory.outputs.build-run-attempt || github.run_attempt }}
         run: |
           set -euo pipefail
           image=$(cat release/sdk-image.txt)
           node scripts/library-sdk-metadata-evidence.mjs join \
             .sdk-gate-evidence/library-sdk-sdk-amd64/root-a/target/library-sdk-evidence/linux-amd64 \
             .sdk-gate-evidence/library-sdk-sdk-arm64/root-a/target/library-sdk-evidence/linux-arm64 \
-            . "$image" "$GITHUB_SHA" > release/sdk-metadata-native-join.json
+            . "$image" "$BUILD_REVISION" > release/sdk-metadata-native-join.json
           cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
           # Source evidence is packed with the run that established it: this
@@ -1052,13 +1121,13 @@ jobs:
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
-              "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
+              "release/sdk-$architecture-native-metadata.tar" . "$image" "$BUILD_REVISION" "$architecture"
             node scripts/sdk-release-evidence.mjs product-cli \
               ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \
-              "$image" "$GITHUB_SHA" "$architecture"
+              "$image" "$BUILD_REVISION" "$architecture"
             node scripts/sdk-release-evidence.mjs native-equivalence \
               ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \
-              "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+              "$image" "$BUILD_REVISION" "$architecture" "$BUILD_RUN_ID" "$BUILD_RUN_ATTEMPT"
           done
       - shell: bash
         run: |
@@ -1098,8 +1167,10 @@ jobs:
   # uploaded. docs/release/crates-io-publication.md states the order and the
   # pre-release version scheme (#214).
   crates:
-    if: ${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}
-    needs: [gate, images, native, reproducibility, installed-sdk, oci-native]
+    if: >-
+      ${{ !cancelled() && needs.oci-native.result == 'success'
+      && needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}
+    needs: [gate, factory, images, native, reproducibility, installed-sdk, oci-native]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment: crates.io
@@ -1107,6 +1178,7 @@ jobs:
       HAS_CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
       TRUSTED_PUBLISHING: ${{ vars.CRATES_IO_TRUSTED_PUBLISHING == 'true' }}
     permissions:
+      actions: read
       contents: read
       id-token: write
       packages: read
@@ -1124,6 +1196,9 @@ jobs:
         with:
           name: sdk-image
           path: .release-sdk
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
@@ -1258,11 +1333,14 @@ jobs:
             '
 
   release:
-    if: ${{ needs.gate.outputs.rehearsal != 'true' }}
-    needs: [gate, images, native, reproducibility, installed-sdk, oci-native, crates]
+    if: >-
+      ${{ !cancelled() && needs.oci-native.result == 'success' && needs.crates.result == 'success'
+      && needs.gate.outputs.rehearsal != 'true' }}
+    needs: [gate, factory, images, native, reproducibility, installed-sdk, oci-native, crates]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
+      actions: read
       contents: write
       id-token: write
       attestations: write
@@ -1286,16 +1364,25 @@ jobs:
           pattern: native-*
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-image'
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: '*-supply-chain'
           path: release
           merge-multiple: true
+          # A token selects the build receipt's run; without one, this run.
+          run-id: ${{ needs.factory.outputs.build-run-id || github.run_id }}
+          github-token: ${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
