@@ -104,7 +104,7 @@ const TOOLS = [
   },
   {
     name: 'prism_spec',
-    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call with a spec you drafted from the user\'s request. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval. When the client can show forms (MCP elicitation), Prism asks the user to approve in one itself, and the result says approval: approved, changes or closed, so do not ask again.',
+    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call with a spec you drafted from the user\'s request. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
     inputSchema: { type: 'object', properties: { spec: SPEC_INPUT }, additionalProperties: false },
   },
   {
@@ -154,53 +154,6 @@ const alive = (pid) => {
 export function createServer({ cwd = process.cwd(), send }) {
   const dir = appDir(cwd);
   const jobs = new Map();
-  // Requests this server sends the client, by id, until the client answers.
-  const asked = new Map();
-  let askedCount = 0;
-  let canElicit = false;
-
-  const ask = (method, params) =>
-    new Promise((resolve, reject) => {
-      const id = `prism-${++askedCount}`;
-      asked.set(id, { resolve, reject });
-      send({ jsonrpc: '2.0', id, method, params });
-    });
-
-  /**
-   * A checked draft at review, approved in the client's own form when it can
-   * show one (MCP elicitation): one click, and the answer comes straight back
-   * here instead of through the chat. Without that, the agent asks instead.
-   */
-  async function approve(t) {
-    if (!canElicit || t.step !== 'review' || t.issue) return t;
-    const session = load();
-    const title = session.spec?.title ?? 'this app';
-    let result;
-    try {
-      result = await ask('elicitation/create', {
-        message: `Approve the ${title} spec?\n\n${t.summary}\n\nApprove and build: Lean proves each guarantee for every possible request, then Prism builds the app.`,
-        requestedSchema: {
-          type: 'object',
-          properties: {
-            decision: { type: 'string', title: 'Decision', enum: ['approve', 'change'], enumNames: ['Approve and build', 'Change something'] },
-            changes: { type: 'string', title: 'What to change', description: 'Only when you change something: a name, a rule, a guarantee, anything.' },
-          },
-          required: ['decision'],
-        },
-      });
-    } catch {
-      return { ...t, approval: 'unavailable', next: 'The client could not show the approval form. Show the draft to the user for approval yourself.' };
-    }
-    if (result?.action === 'accept' && result.content?.decision === 'approve') {
-      const s = load();
-      s.answers.review = 'yes';
-      return { ...turn(s), approval: 'approved', next: 'The user approved the spec in the form. Call prism_build now; do not ask again.' };
-    }
-    if (result?.action === 'accept') {
-      return { ...t, approval: 'changes', changes: String(result.content?.changes ?? '').trim(), next: 'The user asked for changes in the form. Apply them and pass the whole spec to prism_spec again; it asks for approval again.' };
-    }
-    return { ...t, approval: result?.action === 'decline' ? 'declined' : 'closed', next: 'The user closed the approval form without approving. Ask what they want to change.' };
-  }
 
   const load = () => readSession(dir);
   const save = (session) => writeSession(dir, session);
@@ -292,15 +245,14 @@ export function createServer({ cwd = process.cwd(), send }) {
       if (step === 'ready') return { message: 'The spec is complete. Call prism_build to prove and build it, or pass step to change an answer.' };
       session.answers[step] = args.answer;
       if (step !== 'review') delete session.answers.review;
-      const t = turn(session);
-      return step === 'review' ? t : approve(t);
+      return turn(session);
     },
     prism_spec(args) {
       const session = load();
       if (!args.spec) return { spec: session.spec ?? nextTurn(session.answers).spec ?? null, step: session.step };
       session.answers = { ...answersFromSpec(args.spec), review: undefined };
       delete session.answers.review;
-      return approve(turn(session));
+      return turn(session);
     },
     prism_prove: (args, progress) => longTool('prove', args, progress),
     prism_build: (args, progress) => longTool('build', args, progress),
@@ -333,17 +285,9 @@ export function createServer({ cwd = process.cwd(), send }) {
   async function handle(message) {
     const { id, method, params = {} } = message;
     const isRequest = id !== undefined && id !== null;
-    if (!method && isRequest && asked.has(id)) {
-      const waiting = asked.get(id);
-      asked.delete(id);
-      if (message.error) waiting.reject(new Error(message.error.message ?? 'the client refused'));
-      else waiting.resolve(message.result);
-      return undefined;
-    }
     try {
       switch (method) {
         case 'initialize': {
-          canElicit = Boolean(params.capabilities?.elicitation);
           const requested = params.protocolVersion;
           return reply(id, {
             protocolVersion: PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],

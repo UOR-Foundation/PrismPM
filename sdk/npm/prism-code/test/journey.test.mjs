@@ -279,59 +279,6 @@ function mcp(cwd) {
   };
 }
 
-/** A client that can show forms: it answers each elicitation with what `answer` returns. */
-function formClient(cwd, answer) {
-  const sent = [];
-  const forms = [];
-  let id = 0;
-  const server = createServer({
-    cwd,
-    send: (m) => {
-      sent.push(m);
-      if (m.method === 'elicitation/create') {
-        forms.push(m.params);
-        setImmediate(() => server.handle({ jsonrpc: '2.0', id: m.id, ...answer(m.params) }));
-      }
-    },
-  });
-  const call = async (method, params) => {
-    const n = ++id;
-    await server.handle({ jsonrpc: '2.0', id: n, method, params });
-    return sent.find((m) => m.id === n);
-  };
-  return { forms, call, tool: async (name, args = {}) => (await call('tools/call', { name, arguments: args })).result.structuredContent };
-}
-
-test('a client that shows forms approves the drafted spec in one, and its answer comes straight back', async () => {
-  const approving = formClient(scratch(), () => ({ result: { action: 'accept', content: { decision: 'approve' } } }));
-  await approving.call('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 't', version: '0' } });
-  const approved = await approving.tool('prism_spec', { spec: paymentSpec() });
-  assert.equal(approving.forms.length, 1);
-  assert.match(approving.forms[0].message, /^Approve the Payment approval spec\?\n\nPayment approval: /);
-  assert.deepEqual(approving.forms[0].requestedSchema.properties.decision.enum, ['approve', 'change']);
-  assert.equal(approved.approval, 'approved');
-  assert.equal(approved.step, 'ready', 'approval is the review step answered yes');
-
-  const changing = formClient(scratch(), () => ({ result: { action: 'accept', content: { decision: 'change', changes: 'rename it to Spend check' } } }));
-  await changing.call('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 't', version: '0' } });
-  const changed = await changing.tool('prism_spec', { spec: paymentSpec() });
-  assert.deepEqual([changed.approval, changed.step, changed.changes], ['changes', 'review', 'rename it to Spend check']);
-
-  const closing = formClient(scratch(), () => ({ result: { action: 'cancel' } }));
-  await closing.call('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 't', version: '0' } });
-  assert.equal((await closing.tool('prism_spec', { spec: paymentSpec() })).approval, 'closed');
-
-  const failing = formClient(scratch(), () => ({ error: { code: -32601, message: 'no forms here' } }));
-  await failing.call('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 't', version: '0' } });
-  assert.equal((await failing.tool('prism_spec', { spec: paymentSpec() })).approval, 'unavailable');
-
-  const plain = formClient(scratch(), () => assert.fail('a client without forms is never asked'));
-  await plain.call('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } });
-  const unasked = await plain.tool('prism_spec', { spec: paymentSpec() });
-  assert.equal(unasked.step, 'review');
-  assert.equal(unasked.approval, undefined);
-});
-
 test('the MCP server greets, asks, records answers and refuses to build an unfinished spec', async () => {
   const root = scratch();
   const s = mcp(root);
