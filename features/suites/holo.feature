@@ -283,7 +283,7 @@ Feature: holo
     And a tampered core package, a tampered host package, a tampered consumer workspace, recorded bounds that differ from the model and a release without the acceptance evidence are each refused with PP6101
 
   @HO-43 @build
-  Scenario: The served driver tells the host when each request begins and ends
+  Scenario: The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request, in order: request_begin before the core runs with the request body, request_end after the answer is written with the request body and the answer body, including a request the adapter or the core refuses; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged.
     Given a served application whose binding overrides request_begin and request_end
     When it answers a request the core answers and a request the adapter refuses
     Then the binding sees request_begin then request_end once for each, in order

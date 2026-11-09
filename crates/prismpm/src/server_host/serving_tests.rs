@@ -1110,16 +1110,14 @@ fn the_host_is_told_when_each_served_request_begins_and_ends() {
     let server = server();
     let log = std::env::temp_dir().join(format!("prism-hooks-{}.log", server.id()));
     let answered = server
-        .exchange(&post("/mcp", &[], "Content-Length: 5
-", b"hello"))
+        .exchange(&post("/mcp", &[], "Content-Length: 5\r\n", b"hello"))
         .unwrap();
     assert_eq!(status(&answered), "HTTP/1.1 200 OK", "{}", text(&answered));
     let refused = server
         .exchange(&post(
             "/mcp",
             &[("Origin", "http://evil.example")],
-            "Content-Length: 5
-",
+            "Content-Length: 5\r\n",
             b"hello",
         ))
         .unwrap();
