@@ -22,6 +22,13 @@ test('canonical Cargo Git caches retain every object and real locked offline sub
     {timeout: 120000});
 });
 
+test('Cargo sparse-index caches keep exactly the held crates under one fixed index version', () => {
+  execFileSync('python3', ['-I', '-B', new URL('./normalize-cargo-index_test.py', import.meta.url).pathname],
+    {timeout: 120000});
+  const dockerfile = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  assert.match(dockerfile, /scripts\/normalize-cargo-git\.py \/usr\/local\/cargo \\\n    && \/usr\/bin\/python3 -I -B scripts\/normalize-cargo-index\.py \/usr\/local\/cargo \\\n    && mkdir -p \/opt\/prismpm\/cargo-home/);
+});
+
 test('OCI mismatch diagnostics execute bounded real archive fixtures and remain failure-only', () => {
   execFileSync('python3', ['-B', new URL('./oci-repro-diagnostics_test.py', import.meta.url).pathname]);
   const steps = workflow().jobs.reproducibility.steps;
