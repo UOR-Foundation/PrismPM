@@ -9,6 +9,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HOSTED_PROFILE, HOSTED_RECORD_SCHEMA, formatDiagnostics, hostedCheck, hostedClient, hostedProject, hostedVerify, moduleOf, readLexleanToml, writeHostedRecord } from '../src/hosted.mjs';
 
+// Gap telemetry (src/gaps.mjs) keeps its ledger under PRISM_HOME: keep what these tests record out of the developer's own.
+process.env.PRISM_HOME = mkdtempSync(join(tmpdir(), 'prism-home-'));
+
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const template = fileURLToPath(new URL('../templates/text-request', import.meta.url));
 const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';

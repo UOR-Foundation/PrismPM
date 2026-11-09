@@ -6,15 +6,21 @@
  * and building take minutes, longer than some agents wait for one tool call,
  * so both run as jobs: a call waits up to `wait` seconds, and a later call
  * of the same tool picks the job up where it is.
+ *
+ * It notices, without asking anyone, what the user needed that Prism could
+ * not do: a refused answer or spec, and a spec that does not survive its own
+ * answers. They are recorded as fingerprints in the gap ledger (../gaps.mjs),
+ * as the engine records a proof that fails for Prism's or Lean's reasons.
  */
 import { createInterface } from 'node:readline';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { SpecError, validateSpec } from './spec.mjs';
-import { answersFromSpec, nextTurn, STEPS } from './session.mjs';
+import { answersFromSpec, nextTurn, roundTrip, STEPS } from './session.mjs';
 import { appDir, modelPath, readSession, writeSession, writeSpecDocument } from './project.mjs';
 import { build, prove, tryRequest } from './engine.mjs';
+import { gapLedger } from '../gaps.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../../package.json');
@@ -151,20 +157,34 @@ const alive = (pid) => {
   }
 };
 
-export function createServer({ cwd = process.cwd(), send }) {
+export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) {
   const dir = appDir(cwd);
   const jobs = new Map();
 
   const load = () => readSession(dir);
   const save = (session) => writeSession(dir, session);
 
-  function turn(session) {
+  /** A spec that does not come back from its own answers is a Prism bug: record which part. */
+  function checkRoundTrip(spec) {
+    let found = null;
+    try {
+      found = roundTrip(spec);
+    } catch {
+      // A spec the check cannot take was refused, and that refusal is recorded where it happened.
+    }
+    if (found) gaps.record({ kind: 'roundtrip', construct: found.refusal ? `${found.part}:${found.refusal}` : found.part });
+  }
+
+  /** The next turn. `answered` is true when it follows the user's answer, whose refusal is then recorded. */
+  function turn(session, { answered = false } = {}) {
     const t = nextTurn(session.answers);
     session.step = t.step;
     if (t.spec) session.spec = t.spec;
     save(session);
     if (session.spec) writeSpecDocument(dir, session);
-    const { spec, ...rest } = t;
+    if (answered && t.refusal) gaps.record({ kind: 'refusal', construct: t.refusal });
+    if (answered && t.step === 'ready') checkRoundTrip(t.spec);
+    const { spec, refusal, ...rest } = t;
     return rest;
   }
 
@@ -220,7 +240,7 @@ export function createServer({ cwd = process.cwd(), send }) {
         s.spec = validateSpec(s.spec ?? session.spec);
         s.status.job = { kind, pid: process.pid, started: Date.now() };
         save(s);
-        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite, remote: args.remote ?? null, root: cwd, repository: args.repository ?? null }) : await prove(dir, s, { log, overwrite: args.overwrite });
+        const result = kind === 'build' ? await build(dir, s, { log, overwrite: args.overwrite, remote: args.remote ?? null, root: cwd, repository: args.repository ?? null, gaps }) : await prove(dir, s, { log, overwrite: args.overwrite, gaps });
         if (kind === 'prove' || result.ok) s.status.lastSpec = JSON.stringify(s.spec);
         if (kind === 'build' && result.ok) s.status.lastBuild = { modelSha: s.status.modelSha, holo: result.holo, result };
         delete s.status.job;
@@ -245,12 +265,19 @@ export function createServer({ cwd = process.cwd(), send }) {
       if (step === 'ready') return { message: 'The spec is complete. Call prism_build to prove and build it, or pass step to change an answer.' };
       session.answers[step] = args.answer;
       if (step !== 'review') delete session.answers.review;
-      return turn(session);
+      return turn(session, { answered: true });
     },
     prism_spec(args) {
       const session = load();
       if (!args.spec) return { spec: session.spec ?? nextTurn(session.answers).spec ?? null, step: session.step };
-      session.answers = { ...answersFromSpec(args.spec), review: undefined };
+      try {
+        session.answers = { ...answersFromSpec(args.spec), review: undefined };
+      } catch (error) {
+        if (error instanceof SpecError) gaps.record({ kind: 'refusal', construct: error.rule });
+        throw error;
+      }
+      // The spec was valid, so a refusal of its answers is Prism's, recorded by the round trip.
+      checkRoundTrip(args.spec);
       delete session.answers.review;
       return turn(session);
     },

@@ -401,6 +401,10 @@ path = "sdk/npm/prism-code/src/export.mjs"
 module = "images"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/gaps.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/generate/"
 module = "client"
 

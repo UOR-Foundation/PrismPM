@@ -13,6 +13,9 @@ import { appDir, readSession, rememberModel, writeApp } from '../src/journey/pro
 import { build, buildRemote, buildWhere, fromHosted, isWarning, prove, proveWhere } from '../src/journey/engine.mjs';
 import { fetchPinned, readyForGitHub } from '../src/journey/github.mjs';
 
+// Gap telemetry (src/gaps.mjs) keeps its ledger under PRISM_HOME: keep what these tests record out of the developer's own.
+process.env.PRISM_HOME = mkdtempSync(join(tmpdir(), 'prism-home-'));
+
 const ANSWERS = {
   purpose: 'Payment approval: decide whether a payment request is approved.',
   fields: 'role: clerk|manager, amount: number at least 1, limit: number',

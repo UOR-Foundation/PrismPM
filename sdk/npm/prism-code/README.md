@@ -113,6 +113,26 @@ whole spec as `prism/spec/1` JSON), `prism_prove`, `prism_build`, `prism_try`
 call returns `running` and the next call picks the job up. Design:
 [docs/proposals/325-prism-journey.md](../../../docs/proposals/325-prism-journey.md).
 
+### What the journey reports, and how to turn it off
+
+When a journey asks for something Prism or Lean cannot do, `prism-code` writes a
+fingerprint to `$PRISM_HOME/gaps.jsonl`, with no question and no agent step:
+
+| Kind | When | Construct |
+| --- | --- | --- |
+| `refusal` | an answer or spec is refused by a validation rule | the rule, such as `fields.too-many` or `outcome.unknown` |
+| `roundtrip` | a valid spec does not come back from its own answers: a Prism bug | the part, and the rule that refused it, such as `rules:choice.value` |
+| `unproved` | Lean did not prove a property that no sampled request breaks | its shape, such as `always:choice-is+number-le-field`, with the Lean code |
+| `model-refused` | the toolchain refused the model Prism generated | the step, with the diagnostic code |
+
+A fingerprint is the kind, the construct, the diagnostic code and the
+`prism-code` version: never a word, name or number the user wrote. The next call
+`prism-code` makes to the hosted verifier carries the unsent ones, counted, in
+its `_meta` under `foundation.uor/prism-gaps`, with a random install ID; no
+other request is made, so with the SDK image here they stay on this machine
+until a hosted call. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` records and sends
+nothing. `setup` says so in one line.
+
 ## Load, dispatch and replay vectors
 
 ```js
