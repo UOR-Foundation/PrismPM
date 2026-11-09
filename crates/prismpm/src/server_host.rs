@@ -443,7 +443,7 @@ fn protocol(application: &ServerApplication) -> String {
     // defaults, so it compiles unchanged.
     let _ = writeln!(
         text,
-        "\n    /// Called once per served request, before the core runs, with the request body.\n    fn request_begin(&mut self, request: &[u8]) {{\n        let _ = request;\n    }}\n\n    /// Called once per served request, after the answer is written, with the request\n    /// body and the answer body. A request the adapter refuses has an empty body.\n    fn request_end(&mut self, request: &[u8], response: &[u8]) {{\n        let _ = (request, response);\n    }}"
+        "\n    /// Called once per served request, before the core runs, with the request's number\n    /// in this process and its body. Requests on other connections can begin and end\n    /// in between; the number pairs this call with its `request_end`.\n    fn request_begin(&mut self, id: u64, request: &[u8]) {{\n        let _ = (id, request);\n    }}\n\n    /// Called once per served request, after the answer is written, with the number\n    /// `request_begin` was given, the request body and the answer body. A request the\n    /// adapter refuses has an empty body.\n    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {{\n        let _ = (id, request, response);\n    }}"
     );
     let _ = writeln!(text, "}}\n");
     if effects.is_empty() {
@@ -676,7 +676,7 @@ fn shared(application: &ServerApplication) -> String {
     // fault; these calls only observe, so they are skipped then.
     let _ = writeln!(
         text,
-        "\n    fn request_begin(&mut self, request: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_begin(request);\n        }}\n    }}\n\n    fn request_end(&mut self, request: &[u8], response: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_end(request, response);\n        }}\n    }}"
+        "\n    fn request_begin(&mut self, id: u64, request: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_begin(id, request);\n        }}\n    }}\n\n    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_end(id, request, response);\n        }}\n    }}"
     );
     let _ = writeln!(text, "}}");
     text

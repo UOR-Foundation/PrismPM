@@ -27,7 +27,7 @@ use crate::shared::Shared;
 use crate::surface;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -646,21 +646,31 @@ pub fn serve_one<S: Source, W: Write, H: Host>(
     host: &mut H,
     root: Root,
 ) {
-    let (body, answer) = match read_request(input, output) {
+    let (id, body, answer) = match read_request(input, output) {
         Err(Abort::Silent) => return,
         Err(Abort::Refuse(refusal)) => {
-            host.request_begin(&[]);
-            (Vec::new(), refusal_bytes(refusal))
+            let id = next_request();
+            host.request_begin(id, &[]);
+            (id, Vec::new(), refusal_bytes(refusal))
         }
         Ok(request) => {
-            host.request_begin(&request.body);
+            let id = next_request();
+            host.request_begin(id, &request.body);
             let answer = answer(&request, peer, host, root).unwrap_or_else(refusal_bytes);
-            (request.body, answer)
+            (id, request.body, answer)
         }
     };
     // A client that has left cannot be told anything; the write is best effort.
     let _ = output.write_all(&answer).and_then(|()| output.flush());
-    host.request_end(&body, message_body(&answer));
+    host.request_end(id, &body, message_body(&answer));
+}
+
+/// The number of the next answered request of this process. Connections are
+/// served on threads that share one host, so the begin and end of two requests
+/// can interleave; the number lets the host pair each end with its begin.
+fn next_request() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 /// The body of a response message: what follows the blank line that ends its fields.

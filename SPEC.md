@@ -3565,9 +3565,12 @@ trait with one method per effect and two per-request methods, `request_begin`
 and `request_end`, whose defaults do nothing. They are not effects: the core
 never requests them, and the effect table, codecs and vectors do not name them.
 The served driver calls `request_begin` once per answered request before the
-core runs, with the request body, and `request_end` after the answer is written,
-with the request body and the answer body; a request the adapter refuses is
-answered too, with an empty request body (HO-43). `{cargo_name}-host` holds the `Failure`
+core runs, with the request's number in the process and its body, and
+`request_end` after the answer is written, with the same number, the request
+body and the answer body. Connections are served on threads that share one
+host, so the calls of two requests can interleave; the number pairs each end
+with its begin. A request the adapter refuses is answered too, with an empty
+request body (HO-43). `{cargo_name}-host` holds the `Failure`
 vocabulary, the replay driver, the scripted host and the program, and depends on
 the API package, on the core and on the binding at its declared workspace path;
 the binding depends on the API package. The workspace root owns the release

@@ -143,14 +143,14 @@ impl Host for Native {
         Ok(secret_statekey::Completed { key: b"k3y".to_vec() })
     }
 
-    fn request_begin(&mut self, request: &[u8]) {
-        record(&format!("begin {}", String::from_utf8_lossy(request)));
+    fn request_begin(&mut self, id: u64, request: &[u8]) {
+        record(&format!("begin {id} {}", String::from_utf8_lossy(request)));
     }
 
-    fn request_end(&mut self, request: &[u8], response: &[u8]) {
+    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {
         let response = String::from_utf8_lossy(response);
         record(&format!(
-            "end {} -> {}",
+            "end {id} {} -> {}",
             String::from_utf8_lossy(request),
             response.lines().next().unwrap_or_default()
         ));
@@ -1127,11 +1127,13 @@ fn the_host_is_told_when_each_served_request_begins_and_ends() {
         text(&refused)
     );
     let refusal = body(&refused).lines().next().unwrap_or_default().to_owned();
+    // This process answers only these two requests, numbered 0 and 1, and each end
+    // carries the number its begin did.
     let expected = vec![
-        "begin hello".to_owned(),
-        "end hello -> method=POST".to_owned(),
-        "begin ".to_owned(),
-        format!("end  -> {refusal}"),
+        "begin 0 hello".to_owned(),
+        "end 0 hello -> method=POST".to_owned(),
+        "begin 1 ".to_owned(),
+        format!("end 1  -> {refusal}"),
     ];
     // request_end runs after the answer is written, so the record can trail the
     // response by a moment.
