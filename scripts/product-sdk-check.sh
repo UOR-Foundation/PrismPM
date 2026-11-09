@@ -66,12 +66,14 @@ project_volume=$(docker volume create)
 receiver_volume=$(docker volume create)
 [[ $project_volume =~ ^[0-9a-f]{64}$ && $receiver_volume =~ ^[0-9a-f]{64}$ ]] || exit 1
 socket_gid=$(stat -c '%g' /var/run/docker.sock)
+# The root filesystem is read-only, so the Docker CLI and Buildx state used by
+# `fetch --locked` (image advisory acquisition) lives on the project volume.
 [[ $socket_gid =~ ^[0-9]+$ ]] || exit 1
 container=$(docker container create --user 1000:1000 --group-add "$socket_gid" --read-only --cap-drop ALL --platform "linux/$architecture" \
   "${qualification_trust[@]}" \
   --security-opt no-new-privileges --mount "type=volume,source=$project_volume,target=/tmp" \
   --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
-  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_BUILD_JOBS=2 \
+  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_BUILD_JOBS=2 --env DOCKER_CONFIG=/tmp/prismpm-docker-config \
   --workdir /opt/prismpm/share/conformance-root "$image" node scripts/product-sdk-check.mjs acquire)
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 docker container cp "$sdk_work/inputs" "$container:/tmp/prismpm-product-input"

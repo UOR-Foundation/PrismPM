@@ -203,7 +203,7 @@ function confinedShell(script){
  for(const invocation of creates)assert(invocation.includes('--platform "linux/$architecture"'));
  assert(creates[0].includes('--entrypoint /usr/bin/true'));const [acquire,build,receiver]=creates.slice(1);
  for(const invocation of [acquire,build,receiver])for(const token of ['--user 1000:1000','--read-only','--cap-drop ALL','--security-opt no-new-privileges'])assert(invocation.includes(token),token);
- assert(acquire.includes('target=/var/run/docker.sock'));assert(acquire.includes('product-sdk-check.mjs acquire'));
+ assert(acquire.includes('target=/var/run/docker.sock'));assert(acquire.includes('--env DOCKER_CONFIG=/tmp/prismpm-docker-config'));assert(acquire.includes('product-sdk-check.mjs acquire'));
  for(const [invocation,phase] of [[build,'build'],[receiver,'receive']]){
   assert(invocation.includes('--network none'));assert(!invocation.includes('/var/run/docker.sock'));assert(!invocation.includes('type=bind'));assert(!invocation.includes('--entrypoint'));
   assert(invocation.includes('product-sdk-check.mjs '+phase));
@@ -249,7 +249,7 @@ test('native release gate remains downstream of published images and mandatory o
 
 test('actual owning CLI boundary test rejects a removed exit-status guard',t=>{
  const root=temporary(t),source=readFileSync(new URL('./product-sdk-check.mjs',import.meta.url),'utf8');
- const line=" assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\\n'+(child.stderr??'').slice(-4000));";
+ const line=" assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\\n'+(child.stderr??'').slice(-4000)+'\\n'+(child.stdout??'').slice(-4000));";
  assert.equal(source.split(line).length,2);
  const module=source.replace(line,'').replace("'./library-sdk-check.mjs'",JSON.stringify(new URL('./library-sdk-check.mjs',import.meta.url).href))
   .replace("'./browser-api-sdk-check.mjs'",JSON.stringify(new URL('./browser-api-sdk-check.mjs',import.meta.url).href))

@@ -87,7 +87,7 @@ export async function command(program,args,{cwd,env=process.env,timeout=1800000,
  assert(Number.isSafeInteger(timeout)&&timeout>0&&timeout<=1800000);assert(Number.isSafeInteger(maximum)&&maximum>0&&maximum<=64*1024*1024);
  const child=await launch(program,args,{cwd,env,encoding:'utf8',timeout,maxBuffer:maximum,killSignal:'SIGKILL'});
  assert.equal(child.error,undefined,'command execution failed');assert.equal(child.signal,null,'command terminated');
- assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\n'+(child.stderr??'').slice(-4000));
+ assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\n'+(child.stderr??'').slice(-4000)+'\n'+(child.stdout??'').slice(-4000));
  return child;
 }
 export async function cli(project,args,expected,launch=launchProcess){
