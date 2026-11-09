@@ -69,12 +69,16 @@ parameter exits 2. [Details and a check per OS][guide-setup].
 Beside `lexlean`, `setup` adds the local server `prism` to the same agents,
 Claude Desktop included: `prism-code mcp` on stdio.
 
-## Build a verified app by answering six questions (experimental)
+## Build a verified app from one sentence (experimental)
 
-With the `prism` server connected, ask the agent for a Prism app, or call
-its `prism_start` tool. It asks six questions, one at a time:
+With the `prism` server connected, ask the agent for a Prism app in one
+sentence, such as "build me a Prism app for loan approval". The agent drafts
+the whole spec, passes it to `prism_spec` to be checked, and shows it to you
+once for approval, properties first: Lean proves them, so they must be the ones
+you mean. Nothing is built until you approve. The spec has six parts, and the
+agent asks about a part only when it cannot infer it:
 
-| Step | Asks | Becomes |
+| Part | Says | Becomes |
 | --- | --- | --- |
 | purpose | what the app decides, in one sentence | the app's name and description |
 | fields | what goes into one request | a line of space-separated fields, each a number or a choice |
@@ -83,7 +87,7 @@ its `prism_start` tool. It asks six questions, one at a time:
 | properties | what must `never` or `always` happen | one theorem each, proved by Lean |
 | examples | real requests and their answers | acceptance vectors |
 
-Each answer is checked as it arrives. A property the rules break comes back
+The draft is checked as a whole. A property the rules break comes back
 with the request that breaks it, and an example the rules contradict comes back
 with the rule that decides it. `prism_build` then writes the LexLean model in
 `prism/`, has Lean prove every property (hosted, sending `prism/src/` to be stored

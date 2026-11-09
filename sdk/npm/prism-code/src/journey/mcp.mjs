@@ -21,19 +21,69 @@ const { version } = require('../../package.json');
 
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. For Prism, a verified app, or /prism, call prism_start and follow what it returns.
-Ask each question prism_start or prism_answer returns, one at a time, and pass the answer to prism_answer. If you can show interactive UI in the chat, ask with a form: the question, the progress, a free-text box with the example as placeholder, and a send button. Otherwise ask in plain text with the example. Rewrite plain-language answers into that format and say what you wrote.
-When a result has an issue, explain it briefly and ask the user how to resolve it.
-Never edit files under prism/ by hand. Change the app only through prism_answer or prism_spec.
+export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. For Prism, a verified app, or /prism, call prism_start.
+From the user's one-line request, draft the whole spec yourself and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they can decide.
+Show the checked draft for approval in one message, properties first as plain sentences: Lean proves them, so the user must agree they are right. If you can show interactive UI in the chat, make it one editable form with an approve button.
+On approval, answer the review step with yes, then call prism_build.
+Never edit files under prism/ by hand.
 prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
 Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
-const GREETING = 'Prism turns a short spec into an app whose rules are proved by Lean, not just tested. I will ask six short questions, then prove and build it.';
+const GREETING = 'Prism turns one sentence into an app whose rules are proved by Lean, not just tested. I will draft the spec for your approval, then prove and build it.';
+
+const CONDITIONS = {
+  type: 'array',
+  minItems: 1,
+  description: 'All must hold. A choice field compares with is or is not and one of its choices; a number field compares with a whole number or another number field, as {"field": "income"}.',
+  items: {
+    type: 'object',
+    properties: {
+      field: { type: 'string' },
+      op: { type: 'string', enum: ['is', 'is not', '<', '<=', '>', '>=', '=', '!='] },
+      value: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }, { type: 'object', properties: { field: { type: 'string' } }, required: ['field'] }] },
+    },
+    required: ['field', 'op', 'value'],
+  },
+};
+
+/** The prism/spec/1 shape, so an agent can draft a whole spec from one sentence. */
+const SPEC_INPUT = {
+  type: 'object',
+  description: 'A whole prism/spec/1 spec. Omit to read.',
+  properties: {
+    name: { type: 'string', description: 'Lower case and hyphens, such as loan-approval.' },
+    title: { type: 'string' },
+    purpose: { type: 'string', description: 'What the app decides, in one sentence.' },
+    fields: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 8,
+      description: 'One request is these values in order, separated by spaces.',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'A lower-case word.' },
+          kind: { type: 'string', enum: ['number', 'choice'] },
+          values: { type: 'array', items: { type: 'string' }, description: 'For a choice: two to 32 lower-case words.' },
+          min: { type: 'integer', minimum: 0 },
+          max: { type: 'integer', minimum: 0 },
+        },
+        required: ['name', 'kind'],
+      },
+    },
+    outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Lower-case words; invalid is reserved.' },
+    rules: { type: 'array', minItems: 1, maxItems: 24, description: 'In order; the first that matches decides.', items: { type: 'object', properties: { when: CONDITIONS, then: { type: 'string' } }, required: ['when', 'then'] } },
+    otherwise: { type: 'string', description: 'The answer when no rule matches.' },
+    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' } }, required: ['kind', 'when', 'then'] } },
+    examples: { type: 'array', description: 'Requests and their expected answers; each becomes an acceptance vector.', items: { type: 'object', properties: { request: { type: 'string' }, response: { type: 'string' } }, required: ['request', 'response'] } },
+  },
+  required: ['purpose', 'fields', 'outcomes', 'rules', 'otherwise'],
+};
 
 const TOOLS = [
   {
     name: 'prism_start',
-    description: 'Start or resume the Prism session in this project. Returns a short greeting and the next question to ask the user. Call it first, and whenever you lose track.',
+    description: 'Start or resume the Prism session in this project. Returns a short greeting, and the next question for when you cannot draft the whole spec with prism_spec. Call it first, and whenever you lose track.',
     inputSchema: { type: 'object', properties: { restart: { type: 'boolean', description: 'Discard the answers so far and start over.' } }, additionalProperties: false },
   },
   {
@@ -48,8 +98,8 @@ const TOOLS = [
   },
   {
     name: 'prism_spec',
-    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call when the user already gave everything. A replaced spec is checked exactly as answers are.',
-    inputSchema: { type: 'object', properties: { spec: { type: 'object', description: 'A whole prism/spec/1 spec. Omit to read.' } }, additionalProperties: false },
+    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call with a spec you drafted from the user\'s request. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
+    inputSchema: { type: 'object', properties: { spec: SPEC_INPUT }, additionalProperties: false },
   },
   {
     name: 'prism_prove',
@@ -263,7 +313,7 @@ export function createServer({ cwd = process.cwd(), send }) {
           return reply(id, { prompts: PROMPTS });
         case 'prompts/get':
           if (params.name !== 'prism') return error(id, -32602, `Unknown prompt: ${params.name}`);
-          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: ask me its questions one at a time, each as a small form with a free-text box when you can show interactive UI in the chat.' } }] });
+          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: draft the whole spec from what I want, and show it to me for approval before you build.' } }] });
         case 'resources/list':
           return reply(id, {
             resources: [

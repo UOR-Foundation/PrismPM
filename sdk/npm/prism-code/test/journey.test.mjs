@@ -246,8 +246,10 @@ test('the MCP server greets, asks, records answers and refuses to build an unfin
   assert.ok(INSTRUCTIONS.split(/\s+/).length < 150);
   const tools = (await s.call('tools/list')).result.tools.map((t) => t.name);
   assert.deepEqual(tools, ['prism_start', 'prism_answer', 'prism_spec', 'prism_prove', 'prism_build', 'prism_try', 'prism_status']);
+  const specInput = (await s.call('tools/list')).result.tools.find((t) => t.name === 'prism_spec').inputSchema.properties.spec;
+  assert.deepEqual(specInput.required, ['purpose', 'fields', 'outcomes', 'rules', 'otherwise']);
   const start = await s.tool('prism_start');
-  assert.match(start.structuredContent.greeting, /six short questions/);
+  assert.match(start.structuredContent.greeting, /draft the spec for your approval/);
   assert.equal(start.structuredContent.step, 'purpose');
   const blocked = await s.tool('prism_build');
   assert.equal(blocked.isError, true);
@@ -275,6 +277,8 @@ test('a whole spec given as data is checked like answers', async () => {
   assert.match(r.structuredContent.issue, /does not hold/);
   const ok = await s.tool('prism_spec', { spec: paymentSpec() });
   assert.equal(ok.structuredContent.step, 'review');
+  assert.equal((await s.tool('prism_build')).structuredContent.state, 'blocked', 'a drafted spec is not built before the user approves it');
+  assert.equal((await s.tool('prism_answer', { answer: 'yes' })).structuredContent.step, 'ready');
 });
 
 test('mcp serves over stdio', () => {
