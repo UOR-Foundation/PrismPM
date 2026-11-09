@@ -740,21 +740,27 @@ jobs:
           node root-a/scripts/release-phases.mjs reproducibility \
             "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
             root-b.oci > "${{ matrix.name }}-reproducibility.txt"
-      # Only a failed comparison pays for a second rebuild, to locate the layers
-      # that differ; it never changes acceptance.
+      # A failed comparison is diagnosed against the shipped bytes themselves:
+      # the shipped platform manifest is copied by digest (no further build)
+      # and compared layer by layer with the rebuild. It never changes acceptance.
       - name: Diagnose differing OCI layers without changing acceptance
         if: failure()
-        timeout-minutes: 240
+        timeout-minutes: 60
         shell: bash
         env:
-          DOCKERFILE: ${{ matrix.dockerfile }}
           PLATFORM: ${{ matrix.platform }}
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.policy.outputs.version }}
+          IMAGE: ${{ matrix.image }}
         run: |
-          if [ -f root-b.oci/index.json ] && bash root-a/scripts/release-rebuild.sh root-a; then
-            python3 -I -B root-a/scripts/oci-repro-diagnostics.py root-a.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
-          fi
+          set -euo pipefail
+          test -f root-b.oci/index.json
+          tools="$RUNNER_TEMP/release-tools"
+          bash root-a/scripts/sdk-candidate.sh install-oras "$tools"
+          identity=$(cat ".shipped-image/$IMAGE-image.txt")
+          platform=$(jq -er --arg arch "${PLATFORM#linux/}" \
+            '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch)] | if length == 1 then .[0].digest else error("one shipped platform manifest") end' \
+            shipped-index.json)
+          "$tools/oras" copy --to-oci-layout "${identity%@*}@$platform" shipped.oci:shipped
+          python3 -I -B root-a/scripts/oci-repro-diagnostics.py shipped.oci root-b.oci > reproducibility-diagnostics.json 2> reproducibility-diagnostics.log
       - name: Retain bounded reproducibility diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

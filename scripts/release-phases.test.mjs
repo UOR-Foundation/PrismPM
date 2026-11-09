@@ -32,7 +32,11 @@ test('OCI mismatch diagnostics execute bounded real archive fixtures and remain 
   assert.match(compare.run, /"\$GITHUB_SHA" \\\n +root-b\.oci > /);
   const diagnostic = steps.find(step => step.run?.includes('oci-repro-diagnostics.py'));
   assert.equal(diagnostic.if, 'failure()');
-  assert.match(diagnostic.run, /bash root-a\/scripts\/release-rebuild\.sh root-a; then/);
+  // Diagnosis compares the rebuild with the shipped manifest copied by digest;
+  // a failure never pays for another build.
+  assert(!diagnostic.run.includes('release-rebuild.sh'));
+  assert.match(diagnostic.run, /\n"\$tools\/oras" copy --to-oci-layout "\$\{identity%@\*\}@\$platform" shipped\.oci:shipped\n/);
+  assert.match(diagnostic.run, /oci-repro-diagnostics\.py shipped\.oci root-b\.oci > /);
   assert(steps.indexOf(diagnostic) > steps.indexOf(compare));
   const retained = steps.find(step => step.with?.name === 'reproducibility-diagnostics-${{ matrix.name }}');
   assert.equal(retained.if, 'failure()');
