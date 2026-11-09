@@ -103,6 +103,21 @@ test('a property the rules break has a counterexample; one they keep has none', 
   assert.deepEqual(unreachableRules(shadowed), ['REQ-002']);
 });
 
+test('a rule is called unreachable only when every combination was tried', () => {
+  // Seven fields: the sample stops long before the first field reaches `married`, yet
+  // REQ-001 decides every married request. Claiming it never decides would be false.
+  const word = (name) => ({ name, kind: 'choice', values: Array.from({ length: 8 }, (_, i) => `${name}${i}`) });
+  const spec = validateSpec({
+    purpose: 'decide by status first',
+    fields: [{ name: 'status', kind: 'choice', values: ['single', 'head', 'married'] }, ...['a', 'b', 'c', 'd', 'e', 'f'].map(word)],
+    outcomes: ['joint', 'alone'],
+    rules: [{ when: [{ field: 'status', op: 'is', value: 'married' }], then: 'joint' }],
+    otherwise: 'alone',
+  });
+  assert.deepEqual(unreachableRules(spec), []);
+  assert.doesNotMatch((nextTurn(answersFromSpec(spec)).notes ?? []).join(' '), /never decides/, 'no note says REQ-001 never decides');
+});
+
 test('the model names every rule and property, states each property over decodable requests, and unfolds exactly what it needs', () => {
   const spec = paymentSpec();
   const n = names(spec);
