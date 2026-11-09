@@ -9,7 +9,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
-import { names } from './render.mjs';
+import { names, renderSpecDocument } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
@@ -383,6 +383,8 @@ export function writeTemplateApp(clone, dir, session) {
   write(`features/suites/${suiteOf(spec)}.feature`, featureText(spec));
   write(`crates/conformance/tests/${suiteOf(spec)}.rs`, rustTestText(spec));
   write('CONFORMANCE.md', conformanceText(spec, read('CONFORMANCE.md')));
+  // The spec a reader opens first, where OpenSpec's tools look for it.
+  write(`openspec/specs/${spec.name}/spec.md`, renderSpecDocument(spec, session.status));
   write('site/app.json', appJson(spec, read('site/app.json'), { repository: session.status.repository.full, attestation: session.status.proved?.attestation ?? null }));
 }
 

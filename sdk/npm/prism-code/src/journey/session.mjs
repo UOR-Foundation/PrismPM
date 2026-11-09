@@ -125,15 +125,17 @@ export function describeConditionPlain(c) {
  */
 export function summary(spec) {
   if (!spec?.fields) return '';
-  const head = [
-    `${spec.title}: ${spec.purpose}`,
-    `Request: ${spec.fields.map((f) => (f.kind === 'choice' ? `${f.name} (${f.values.join('|')})` : `${f.name} (number${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''})`)).join(', ')}`,
-    `Answers: ${spec.outcomes.join(', ')}, or invalid`,
+  const because = (why) => (why ? `, because ${why}` : '');
+  const purpose = [`${spec.title}: ${spec.purpose}`];
+  const properties = spec.properties.map((p) => `${p.id}: ${p.kind} ${p.then} when ${describeConditions(p.when)}${because(p.why)} (to be proved)`);
+  const rules = [...spec.rules.map((r) => `${r.id}: when ${describeConditions(r.when)}, ${r.then}${because(r.why)}`), `Otherwise: ${spec.otherwise}${because(spec.otherwiseWhy)}`];
+  const tail = [
+    `Request: ${spec.fields.map((f) => `${f.name} (${f.kind === 'choice' ? f.values.join('|') : `number${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''}`}${f.means ? `; ${f.means}` : ''})`).join(', ')}`,
+    `Answers: ${spec.outcomes.map((o) => (spec.meanings?.[o] ? `${o} (${spec.meanings[o]})` : o)).join(', ')}, or invalid`,
+    ...(spec.limits ? [`Out of scope: ${spec.limits.map((l) => l.replace(/[.]$/, '')).join('; ')}`] : []),
   ];
-  const rules = [...spec.rules.map((r) => `${r.id}: when ${describeConditions(r.when)}, ${r.then}`), `Otherwise: ${spec.otherwise}`];
-  const properties = spec.properties.map((p) => `${p.id}: ${p.kind} ${p.then} when ${describeConditions(p.when)} (to be proved)`);
-  const shown = head.length + rules.length + properties.length <= 16 ? rules : [`${spec.rules.length} rules, then otherwise ${spec.otherwise} (all in SPEC.md)`];
-  return [...head, ...shown, ...properties].join('\n');
+  const shown = purpose.length + properties.length + rules.length + tail.length <= 16 ? rules : [`${spec.rules.length} rules, then otherwise ${spec.otherwise} (all in SPEC.md)`];
+  return [...purpose, ...properties, ...shown, ...tail].join('\n');
 }
 
 /** Answers that reproduce a whole spec, so a spec written as data joins the same flow. */
@@ -148,6 +150,42 @@ export function answersFromSpec(input) {
     properties: spec.properties.length ? spec.properties.map((p) => `${p.kind} when ${p.when.map(describeConditionPlain).join(' and ')} then ${p.then}`).join('\n') : 'skip',
     examples: spec.examples.length ? spec.examples.map((e) => `${e.request} -> ${e.response}`).join('\n') : 'none',
     ...(input.name ? { name: input.name } : {}),
+    ...aboutOf(spec),
+  };
+}
+
+const ruleLine = (r) => `when ${r.when.map(describeConditionPlain).join(' and ')} then ${r.then}`;
+const propertyLine = (p) => `${p.kind} ${ruleLine(p)}`;
+
+/**
+ * What the six answers cannot hold: each reason, meaning and limit, keyed by
+ * what it describes. A rule's reason is keyed by the rule itself, so it stays
+ * with that rule through any revision and is dropped when the rule changes.
+ */
+function aboutOf(spec) {
+  const about = {
+    fields: Object.fromEntries(spec.fields.filter((f) => f.means).map((f) => [f.name, f.means])),
+    meanings: spec.meanings ?? {},
+    rules: Object.fromEntries(spec.rules.filter((r) => r.why).map((r) => [ruleLine(r), r.why])),
+    properties: Object.fromEntries(spec.properties.filter((p) => p.why).map((p) => [propertyLine(p), p.why])),
+    ...(spec.otherwiseWhy ? { otherwise: spec.otherwiseWhy } : {}),
+    ...(spec.limits ? { limits: spec.limits } : {}),
+  };
+  const empty = ['fields', 'meanings', 'rules', 'properties'].every((k) => Object.keys(about[k]).length === 0) && !about.otherwise && !about.limits;
+  return empty ? {} : { about };
+}
+
+/** The spec with what `about` says of it; what no longer matches is left out. */
+function withAbout(spec, about) {
+  if (!about || !spec?.fields) return spec;
+  return {
+    ...spec,
+    fields: spec.fields.map((f) => (about.fields?.[f.name] ? { ...f, means: about.fields[f.name] } : f)),
+    ...(spec.outcomes && about.meanings ? { meanings: Object.fromEntries(Object.entries(about.meanings).filter(([o]) => spec.outcomes.includes(o))) } : {}),
+    ...(spec.rules ? { rules: spec.rules.map((r) => (about.rules?.[ruleLine(r)] ? { ...r, why: about.rules[ruleLine(r)] } : r)) } : {}),
+    ...(spec.properties ? { properties: spec.properties.map((p) => (about.properties?.[propertyLine(p)] ? { ...p, why: about.properties[propertyLine(p)] } : p)) } : {}),
+    ...(about.otherwise ? { otherwiseWhy: about.otherwise } : {}),
+    ...(about.limits ? { limits: about.limits } : {}),
   };
 }
 
@@ -248,15 +286,18 @@ const part = (spec, key) => {
  */
 export function roundTrip(input) {
   const spec = validateSpec(input);
-  const back = compile({ ...answersFromSpec(spec), review: 'yes' });
+  const answers = { ...answersFromSpec(spec), review: 'yes' };
+  const back = compile(answers);
   if (back.refusal) return { part: back.step, refusal: back.refusal };
-  for (const key of ROUND_TRIP_PARTS) if (key in back.spec && part(back.spec, key) !== part(spec, key)) return { part: key, refusal: null };
+  const about = withAbout(back.spec, answers.about);
+  for (const key of ROUND_TRIP_PARTS) if (key in back.spec && part(about, key) !== part(spec, key)) return { part: key, refusal: null };
   return null;
 }
 
 /** What the agent shows next: the question, any issue, notes, and progress. */
 export function nextTurn(answers) {
-  const { spec, step, issue, refusal, notes } = compile(answers);
+  const { spec: bare, step, issue, refusal, notes } = compile(answers);
+  const spec = withAbout(bare, answers.about);
   const done = STEPS.indexOf(step) === -1 ? STEPS.length : STEPS.indexOf(step);
   const full = (() => {
     try {
@@ -265,6 +306,10 @@ export function nextTurn(answers) {
       return null;
     }
   })();
+  if (full && step === 'review') {
+    const unexplained = full.properties.filter((p) => !p.why).map((p) => p.id);
+    if (unexplained.length) notes.push(`${unexplained.join(', ')} ${unexplained.length === 1 ? 'has' : 'have'} no reason. Lean proves ${unexplained.length === 1 ? 'it' : 'them'}, so say why each matters, or ask the user.`);
+  }
   return {
     step,
     ...(issue ? { issue } : {}),

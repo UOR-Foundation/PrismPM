@@ -11,6 +11,22 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 ### Features Added
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
 
+## [0.7.0] - 2026-11-09
+
+### Features Added
+- The guided journey starts from one sentence (experimental). The agent drafts the whole spec, passes it to `prism_spec` to be checked (every example against the rules, every property for a counterexample), and shows it once for approval, properties first; `prism_build` waits for that approval. The six questions remain for what the agent cannot infer. `prism_spec` now declares the `prism/spec/1` shape as its input schema, so any agent can draft a spec without reading the source.
+- A spec can say why: a reason (`why`) for each rule and property and for the fallback (`otherwiseWhy`), what each field (`means`) and answer (`meanings`) means, and what the app does not decide (`limits`). They are optional and no proof depends on them. Each is kept with what it describes, so a rule's reason survives a revision and is dropped when that rule changes. The review lists guarantees first, then rules, request and answers, and notes a property with no reason.
+- `prism/SPEC.md` is an [OpenSpec](https://openspec.dev) spec: `## Purpose`, then a `### Requirement:` with SHALL and a `#### Scenario:` with WHEN and THEN for every guarantee and rule, each marked proved by Lean or tested. A scenario uses the user's own example when one fits, else a request the rules decide. A template instance carries it at `openspec/specs/<name>/spec.md`.
+- The prism skill and the server's instructions ask an agent that can show UI in the chat for one editable approval form: the app name first, with the ID and repository name it gives, then the spec's parts, and an approve button that sends the reply.
+
+### Breaking Changes
+- `prism/SPEC.md` has a new layout (the OpenSpec one above); a reader of the old headings (`## Request`, `## Rules`, `## Properties`) finds them gone.
+- A property is now stated only over the choice codes a request can carry, so the proofs module of an app with a choice field changes, and a rebuild of such an app has a new fingerprint.
+- The server's greeting and instructions describe the one-sentence flow, not six questions.
+
+### Bugs Fixed
+- An `always` property over an app with a choice field could not be proved: the generated theorem also covered choice codes no request can carry, where no rule naming a choice matches. Each property's test now bounds every choice field, as SPEC.md already claimed (every property holds for every request that decodes).
+
 ## [0.6.0] - 2026-11-09
 
 ### Features Added
