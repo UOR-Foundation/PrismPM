@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatSteps, hostContext, openLink } from './open.mjs';
 import { applySetup, bundledSkills, formatNext, formatSetup, hostSetupContext, nextSteps, planSetup } from './setup.mjs';
+import { telemetryNotice } from './gaps.mjs';
 import { applyMachine, formatMachine, hostMachineContext, machineFailed, machineReport, planMachine } from './setup-machine.mjs';
 
 const HANDLER = join(dirname(fileURLToPath(import.meta.url)), 'handler.mjs');
@@ -65,6 +66,7 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
       skills: plan.skills ? { status: plan.skills.status, detail: plan.skills.detail ?? null } : null,
       preferredAgent: plan.preferred.agent,
       next,
+      telemetry: telemetryNotice(),
       failed,
     };
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -73,6 +75,8 @@ export async function runSetup(argv, usage, context = hostSetupContext(), machin
   if (machine) process.stdout.write(formatMachine(machine, { dryRun }));
   if (agentsHalf) process.stdout.write(formatSetup(plan, { dryRun }));
   process.stdout.write(formatNext(next));
+  process.stdout.write(`${telemetryNotice()}
+`);
   return failed ? 1 : 0;
 }
 

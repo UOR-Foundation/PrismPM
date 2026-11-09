@@ -15,7 +15,7 @@ assert.equal(result.status, 0, result.stderr);
 const [pack] = JSON.parse(result.stdout);
 const { files } = pack;
 
-test('all required distributed files fit the 1444 KiB package budget', () => {
+test('all required distributed files fit the 1460 KiB package budget', () => {
   checkPackage(pack);
 });
 
@@ -25,7 +25,7 @@ test('one byte over budget is refused, and the exact boundary is accepted', () =
     files: files.map((file, i) => i === 0 ? { ...file, size: file.size + unpackedSize - pack.unpackedSize } : file),
   });
   checkPackage(atSize(PACKAGE_LIMIT));
-  assert.throws(() => checkPackage(atSize(PACKAGE_LIMIT + 1)), /cap is 1478656/);
+  assert.throws(() => checkPackage(atSize(PACKAGE_LIMIT + 1)), /cap is 1495040/);
 });
 
 test('a smaller package cannot pass by omitting a required file or changing its inventory', () => {

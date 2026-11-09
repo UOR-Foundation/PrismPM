@@ -42,6 +42,7 @@
   "src/errors-namespace.mjs",
   "src/errors.mjs",
   "src/export.mjs",
+  "src/gaps.mjs",
   "src/generate/core-wasm.wit",
   "src/generate/index.mjs",
   "src/generate/js.mjs",

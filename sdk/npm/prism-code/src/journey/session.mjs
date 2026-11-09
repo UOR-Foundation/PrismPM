@@ -176,7 +176,7 @@ export function compile(answers) {
           break;
         case 'outcomes':
           spec.outcomes = parseOutcomes(raw);
-          if (spec.outcomes.includes(INVALID)) throw new SpecError('`invalid` is the answer to a malformed request; pick another word.', 'outcomes');
+          if (spec.outcomes.includes(INVALID)) throw new SpecError('`invalid` is the answer to a malformed request; pick another word.', 'outcomes', 'outcomes.reserved');
           break;
         case 'rules': {
           Object.assign(spec, parseRules(raw, spec.fields, spec.outcomes));
@@ -223,15 +223,40 @@ export function compile(answers) {
       }
     } catch (error) {
       if (!(error instanceof SpecError)) throw error;
-      return { spec, step, issue: error.message, notes };
+      return { spec, step, issue: error.message, refusal: error.rule, notes };
     }
   }
   return { spec, step: 'ready', issue: null, notes };
 }
 
+/** The parts of a spec a round trip must give back; ids and the sentences describing rules are derived. */
+export const ROUND_TRIP_PARTS = Object.freeze(['name', 'title', 'purpose', 'fields', 'outcomes', 'rules', 'otherwise', 'properties', 'examples']);
+const part = (spec, key) => {
+  const value = spec[key];
+  if (key === 'rules') return JSON.stringify(value?.map((r) => ({ when: r.when, then: r.then })));
+  if (key === 'properties') return JSON.stringify(value?.map((p) => ({ kind: p.kind, when: p.when, then: p.then })));
+  return JSON.stringify(value);
+};
+
+/**
+ * Prism's own check that a spec survives its answers: `answersFromSpec`, then
+ * `compile`, gives back the same spec. Null when it does; else the part that
+ * came back different, with the rule that refused it when one did. A
+ * difference is a Prism bug, never the user's: the spec was valid. A property
+ * or example the rules break stops `compile` early, so only the parts it read
+ * are compared.
+ */
+export function roundTrip(input) {
+  const spec = validateSpec(input);
+  const back = compile({ ...answersFromSpec(spec), review: 'yes' });
+  if (back.refusal) return { part: back.step, refusal: back.refusal };
+  for (const key of ROUND_TRIP_PARTS) if (key in back.spec && part(back.spec, key) !== part(spec, key)) return { part: key, refusal: null };
+  return null;
+}
+
 /** What the agent shows next: the question, any issue, notes, and progress. */
 export function nextTurn(answers) {
-  const { spec, step, issue, notes } = compile(answers);
+  const { spec, step, issue, refusal, notes } = compile(answers);
   const done = STEPS.indexOf(step) === -1 ? STEPS.length : STEPS.indexOf(step);
   const full = (() => {
     try {
@@ -248,6 +273,7 @@ export function nextTurn(answers) {
     ...(step === 'fields' || step === 'outcomes' ? { inferred: `The app is called ${spec.name}.` } : {}),
     progress: `${Math.min(done, 6)} of 6 answered`,
     spec: full,
+    refusal: refusal ?? null,
   };
 }
 

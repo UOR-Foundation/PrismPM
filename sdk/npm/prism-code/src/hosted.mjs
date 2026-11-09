@@ -19,11 +19,16 @@
  *
  * Drafts on the server are unlisted, not private: nothing lists or searches
  * them, but `lexlean_draft_read` serves a draft to anyone who has its ID.
+ *
+ * A tool call carries the gaps recorded since the last one (gaps.mjs) in its
+ * `_meta`, and they are marked sent once the server answered: fingerprints,
+ * never the user's text, and nothing when telemetry is off.
  */
 import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MCP_URL } from './agents.mjs';
 import { fail } from './errors.mjs';
+import { GAPS_META_KEY, gapLedger } from './gaps.mjs';
 import { parseToml } from './toml.mjs';
 
 export const HOSTED_PROFILE = 'prism-app';
@@ -120,10 +125,11 @@ function answerOf(text) {
 
 /**
  * A client of the server's stateless MCP transport. `fetch` and `sleep` are
- * injectable for tests. A 502, 503, 504 or a lost connection is tried again
- * after `retryMs`, `retries` times.
+ * injectable for tests, and so is `gaps`, the ledger whose pending gaps ride
+ * on the next call. A 502, 503, 504 or a lost connection is tried again after
+ * `retryMs`, `retries` times.
  */
-export function hostedClient({ url = hostedUrl(), fetch = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), retries = 2, retryMs = 10000, version = '0.0.0' } = {}) {
+export function hostedClient({ url = hostedUrl(), fetch = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), retries = 2, retryMs = 10000, version = '0.0.0', gaps = gapLedger() } = {}) {
   let id = 0;
   const meta = (tasks) => ({
     'io.modelcontextprotocol/protocolVersion': HOSTED_PROTOCOL,
@@ -165,7 +171,12 @@ export function hostedClient({ url = hostedUrl(), fetch = globalThis.fetch, slee
   }
   return {
     url,
-    call: (tool, args, { tasks = false } = {}) => rpc('tools/call', tool, { name: tool, arguments: args, _meta: meta(tasks) }),
+    async call(tool, args, { tasks = false } = {}) {
+      const batch = gaps?.pending() ?? null;
+      const result = await rpc('tools/call', tool, { name: tool, arguments: args, _meta: { ...meta(tasks), ...(batch?.meta ? { [GAPS_META_KEY]: batch.meta } : {}) } });
+      batch?.commit();
+      return result;
+    },
     task: (taskId) => rpc('tasks/get', taskId, { taskId, _meta: meta(true) }),
     sleep,
   };

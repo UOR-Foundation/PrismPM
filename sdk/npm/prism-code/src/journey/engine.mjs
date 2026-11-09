@@ -17,6 +17,7 @@ import { parseRepository } from '../github.mjs';
 import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
+import { gapLedger, propertyShape } from '../gaps.mjs';
 
 const PROVE_SCRIPT_FULL = [
   'echo "@@step prelock"; lexlean lock 2>&1; code=$?; echo "@@exit prelock $code"; [ $code -eq 0 ] || exit $code',
@@ -82,12 +83,13 @@ const tail = (text, n = 25) => String(text).split(/\r?\n/).filter((l) => !l.star
 
 /**
  * Lean proves every property. Returns `{ ok, properties, message, diagnostics }`,
- * with each property `proved`, `failing` or `unknown`.
+ * with each property `proved`, `failing` or `unknown`. `gaps` is the ledger a
+ * failure that is Prism's or Lean's, not the user's, is recorded in (gaps.mjs).
  */
-export async function prove(dir, session, { log = () => {}, overwrite = false, where = null, client = null } = {}) {
+export async function prove(dir, session, { log = () => {}, overwrite = false, where = null, client = null, gaps = gapLedger() } = {}) {
   const first = writeApp(dir, session, { overwrite });
   if (first.edited) return { ok: false, edited: true, message: `${relative(dir, first.path)} was edited by hand since Prism wrote it. Call the same tool again with overwrite: true to replace it from the spec, or change the spec to match.` };
-  if ((where ?? proveWhere(dir, session)) === 'hosted') return proveHosted(dir, session, { log, client });
+  if ((where ?? proveWhere(dir, session)) === 'hosted') return proveHosted(dir, session, { log, client, gaps });
   const ready = await prepare(dir, session, log);
   if (!ready.ok) return { ok: false, message: ready.message };
   overwrite = true;
@@ -111,7 +113,7 @@ export async function prove(dir, session, { log = () => {}, overwrite = false, w
     }
     const seconds = Math.round((Date.now() - started) / 1000);
     if (run.code === 0) return provedResult(dir, session, seconds, { where: 'local' });
-    return explainFailure(dir, session, { run, diagnostics, failed, seconds });
+    return explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps });
   }
   return { ok: false, message: 'The axiom sets did not settle after several rounds. This is a Prism bug; the last output is in prism/.prism-last.log.' };
 }
@@ -152,9 +154,9 @@ export function fromHosted(d) {
  * only when each of them comes back verified. Axiom sets are corrected and
  * proved again as in the image.
  */
-async function proveHosted(dir, session, { log, client }) {
+async function proveHosted(dir, session, { log, client, gaps }) {
   const hosted = await import('../hosted.mjs');
-  client ??= hosted.hostedClient({ version: VERSION });
+  client ??= hosted.hostedClient({ version: VERSION, gaps });
   const started = Date.now();
   for (let round = 1; round <= MAX_AXIOM_ROUNDS; round++) {
     writeApp(dir, session, { overwrite: true });
@@ -189,12 +191,17 @@ async function proveHosted(dir, session, { log, client }) {
       continue;
     }
     const output = diagnostics.map((d) => `${d.severity}[${d.code}]: ${d.message}${d.span ? `\n  --> ${d.span.file}:${d.span.line}:${d.span.column}` : ''}`).join('\n');
-    return explainFailure(dir, session, { run: { code: 1, output }, diagnostics, failed: { step: 'verify', code: 1 }, seconds });
+    return explainFailure(dir, session, { run: { code: 1, output }, diagnostics, failed: { step: 'verify', code: 1 }, seconds, gaps });
   }
   return { ok: false, message: 'The axiom sets did not settle after several rounds. This is a Prism bug; the last output is in prism/.prism-last.log.' };
 }
 
-function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
+/**
+ * Say why a proof failed. Two failures are not the user's and are recorded as
+ * gaps: a property Lean did not prove that no sampled request breaks, and a
+ * generated model the toolchain refused.
+ */
+function explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps = null }) {
   const spec = session.spec;
   const n = names(spec);
   writeFileSync(join(dir, '.prism-last.log'), run.output);
@@ -219,6 +226,7 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
   if (failing.length && other.length === 0) {
     const explained = failing.map((p) => {
       const found = counterexample(spec, p);
+      if (found.request === null) gaps?.record({ kind: 'unproved', construct: propertyShape(p), code: codeOf(diagnostics, p, byTheorem, source) });
       return found.request !== null
         ? `${p.id} is false. The request \`${found.request}\` meets "${describeConditions(p.when)}" and the rules answer ${found.outcome} (${found.rule ?? 'otherwise'}).`
         : `Lean could not prove ${p.id} ("${p.kind} ${p.then} when ${describeConditions(p.when)}"), and none of ${found.checked} sampled requests breaks it. It may hold only for requests the sampling missed, such as very large numbers. Restate it more narrowly, or drop it and keep it as a tested example.`;
@@ -226,6 +234,7 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
     return { ok: false, seconds, properties: spec.properties.map((p) => ({ id: p.id, status: session.status.properties[p.id] })), message: explained.join('\n'), next: 'Change a rule or restate the property (prism_answer with step rules or properties), then prove again.' };
   }
   const step = failed?.step ?? 'run';
+  gaps?.record({ kind: 'model-refused', construct: step, code: (other.length ? other : diagnostics)[0]?.code ?? null });
   return {
     ok: false,
     seconds,
@@ -235,16 +244,22 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds }) {
   };
 }
 
+/** The code of the diagnostic that refused property `p`. */
+function codeOf(diagnostics, p, byTheorem, source) {
+  const d = diagnostics.find((x) => !isWarning(x) && x.span && /\.lex\.tex$/.test(x.span.file) && byTheorem[declarationAt(source(x.span.file), x.span.line)] === p);
+  return d?.code ?? null;
+}
+
 /**
  * Prove, then build the holo and replay its acceptance vectors through the
  * guest. `remote: 'github'` has the repository's own GitHub Actions build the
  * committed app instead, and this machine verifies what comes back, so no
  * Docker and no SDK image are needed here.
  */
-export async function build(dir, session, { log = () => {}, overwrite = false, remote = null, root = null, repository = null, env = process.env } = {}) {
+export async function build(dir, session, { log = () => {}, overwrite = false, remote = null, root = null, repository = null, env = process.env, gaps = gapLedger() } = {}) {
   const proved = session.status.proved && session.status.proved.modelSha === session.status.modelSha && existsSync(modelPath(dir, session.spec)) && session.status.lastSpec === JSON.stringify(session.spec);
   if (!proved) {
-    const p = await prove(dir, session, { log, overwrite });
+    const p = await prove(dir, session, { log, overwrite, gaps });
     session.status.lastSpec = JSON.stringify(session.spec);
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };

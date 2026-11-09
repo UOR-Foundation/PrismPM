@@ -31,6 +31,9 @@ import { axiomViolations, declarationAt, parseDiagnostics, steps } from '../src/
 import { appDir, modelPath, readSession, scaffold, writeApp } from '../src/journey/project.mjs';
 import { createServer, INSTRUCTIONS } from '../src/journey/mcp.mjs';
 
+// Gap telemetry (src/gaps.mjs) keeps its ledger under PRISM_HOME: keep what these tests record out of the developer's own.
+process.env.PRISM_HOME = mkdtempSync(join(tmpdir(), 'prism-home-'));
+
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const scratch = () => mkdtempSync(join(tmpdir(), 'prism-journey-'));
 const enc = (s) => new TextEncoder().encode(s);
