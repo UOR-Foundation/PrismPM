@@ -474,7 +474,7 @@ export function formatSetup(plan, { dryRun = false } = {}) {
   };
   for (const a of plan.agents) row(a.agent, WORDS, a.status, a.detail, a.steps);
   if (plan.journey?.length) {
-    lines.push(`  the server ${JOURNEY_NAME}, local (prism-code mcp): asks for the spec, proves and builds the app`);
+    lines.push(`  the server ${JOURNEY_NAME}, local (prism-code mcp): checks the spec the agent drafts, proves and builds the app`);
     for (const a of plan.journey) row(a.agent, WORDS, a.status, a.detail, a.steps);
   }
   row('holo://', HANDLER_WORDS, plan.handler.status, plan.handler.detail, plan.handler.steps);

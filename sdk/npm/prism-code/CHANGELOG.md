@@ -6,6 +6,16 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [0.7.1] - 2026-11-09
+
+### Breaking Changes
+None.
+
+### Bugs Fixed
+- The review no longer says a rule "never decides anything" when it does. The check samples requests like an odometer, last field fastest, and stops at a limit, so in a spec with many fields the first field barely moves and its later choices are never reached; a seven-field filing spec had nine such rules flagged. A rule is now called unreachable only when every combination was tried.
+- The approval form is an editable card, not a multiple-choice question. The instructions said "one editable form with an approve button", and an agent read its own question dialog as that form, which shows the spec as fixed text. The instructions and the skill now ask for an editable card, the app name first and a text box per part, and never a multiple-choice question.
+- setup describes the prism server as checking the spec the agent drafts, not asking for it.
+
 ## [0.7.0] - 2026-11-09
 
 ### Features Added
