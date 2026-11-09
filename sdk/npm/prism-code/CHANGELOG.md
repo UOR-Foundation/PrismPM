@@ -6,6 +6,14 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [0.7.2] - 2026-11-09
+
+### Breaking Changes
+None.
+
+### Bugs Fixed
+- The approval card starts with an editable App name field. The instructions said "app name" without saying it is an input, and an agent showed it in the card's header, where it cannot be changed. The instructions and the skill now ask for an App name field, with the ID and repository name it gives shown under it.
+
 ## [0.7.1] - 2026-11-09
 
 ### Breaking Changes
