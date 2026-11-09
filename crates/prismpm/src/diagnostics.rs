@@ -42,7 +42,6 @@ enum Rule {
     ServerApplication,
     ServedApplication,
     ServerCore,
-    ServerBuild,
     FeatureCall,
     FeatureAcceptance,
     FeatureStep,
@@ -52,6 +51,7 @@ enum Rule {
     ControlEvidence,
     ThreatCategory,
     ThreatModelDeclaration,
+    ServerEffects,
 }
 
 impl Rule {
@@ -68,7 +68,6 @@ impl Rule {
                 json!({"component": "Probe::component"}),
                 json!({"component": "Probe::unknown"}),
             ),
-            Self::ServerBuild => (Self::TextApplication.specimens().0, server_specimen()),
             Self::ServerApplication => {
                 let valid = server_specimen();
                 let mut invalid = valid.clone();
@@ -78,6 +77,15 @@ impl Rule {
             Self::ServerCore => (
                 json!({"root": "Probe.Probe.run", "effects": ["allocation", "overflow"]}),
                 json!({"root": "Probe.Probe.run", "effects": ["allocation", "recursion"]}),
+            ),
+            Self::ServerEffects => (
+                json!({"effects": [
+                    {"name": "store.get", "role": "core", "steps": 1, "served": 0},
+                    {"name": "tool.calls", "role": "frame", "steps": 0, "served": 2}
+                ]}),
+                json!({"effects": [
+                    {"name": "store.get", "role": "core", "steps": 0, "served": 0}
+                ]}),
             ),
             Self::ServedApplication => {
                 let valid = served_specimen();
@@ -173,7 +181,7 @@ impl Rule {
                 validate_server_specimen(value).is_ok()
             }
             Self::ServerCore => validate_server_core(value).is_ok(),
-            Self::ServerBuild => validate_server_build(value).is_ok(),
+            Self::ServerEffects => validate_server_effects(value).is_ok(),
             Self::FeatureCall
             | Self::FeatureAcceptance
             | Self::FeatureStep
@@ -318,13 +326,9 @@ probes!(
         "invalid-threat-model-declaration",
         ThreatModelDeclaration
     ),
-    (
-        "PP2023",
-        "server-application-verification-unavailable",
-        ServerBuild
-    ),
     ("PP2024", "invalid-serving-declaration", ServedApplication),
     ("PP2025", "server-core-build-refused", ServerCore),
+    ("PP2026", "server-effect-not-exercised", ServerEffects),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -523,6 +527,7 @@ fn server_specimen() -> Value {
         "core":{"root":"ServerContract.Probe.dispatch","package":"server_contract_core","version":"0.1.0"},
         "bindings":[{"path":"bindings/server-contract-binding","crate_name":"server-contract-binding","host":"server_contract_binding::Native"}],
         "serving":[],
+        "verify_build_timeout_seconds":1800,
         "request_maximum":8,
         "response_maximum":8,
         "host":{
@@ -584,10 +589,33 @@ fn validate_server_core(value: &Value) -> Result<(), PrismError> {
     crate::server_build::admit_effects(root, &effects)
 }
 
-fn validate_server_build(value: &Value) -> Result<(), PrismError> {
-    let declaration = serde_json::from_value(value.clone())
-        .map_err(|_| PrismError::new("PP2013", "invalid server build specimen"))?;
-    crate::holo::server_application::require_build(&declaration)
+fn validate_server_effects(value: &Value) -> Result<(), PrismError> {
+    use crate::server_host::acceptance::{require_exercised, Exercise, Role};
+    let specimen = || PrismError::new("PP2026", "invalid server effects specimen");
+    let rows = value["effects"]
+        .as_array()
+        .ok_or_else(specimen)?
+        .iter()
+        .map(|row| {
+            let count = |key: &str| {
+                row[key]
+                    .as_u64()
+                    .and_then(|count| usize::try_from(count).ok())
+            };
+            Some(Exercise {
+                name: row["name"].as_str()?.to_owned(),
+                role: match row["role"].as_str()? {
+                    "core" => Role::Core,
+                    "frame" => Role::Frame,
+                    _ => return None,
+                },
+                steps: count("steps")?,
+                served: count("served")?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(specimen)?;
+    require_exercised(&rows)
 }
 
 fn validate_browser_runtime(value: &Value) -> Result<(), PrismError> {
@@ -609,8 +637,8 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     if matches!(spec.rule, Rule::ServerCore) {
         return validate_server_core(value);
     }
-    if matches!(spec.rule, Rule::ServerBuild) {
-        return validate_server_build(value);
+    if matches!(spec.rule, Rule::ServerEffects) {
+        return validate_server_effects(value);
     }
     if matches!(
         spec.rule,

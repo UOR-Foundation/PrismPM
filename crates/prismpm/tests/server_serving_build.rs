@@ -31,7 +31,7 @@ fn example() -> PathBuf {
 }
 
 /// What `prismpm build` and cargo leave in an example directory.
-const GENERATED: [&str; 8] = [
+const GENERATED: [&str; 7] = [
     ".lexlean",
     ".prism",
     "target",
@@ -39,7 +39,6 @@ const GENERATED: [&str; 8] = [
     "echo_server_core",
     "echo-server-host-api",
     "echo-server-host",
-    "Cargo.lock",
 ];
 
 fn copy(from: &Path, to: &Path) {
@@ -145,6 +144,14 @@ fn the_example_server_serves_its_vectors_end_to_end() {
     .expect("the program answers every vector as modeled");
     assert_eq!(record["status"], "verified");
     assert_eq!(record["served"], 2);
+    // The core requests one effect for each vector, and the frame needs the other.
+    assert_eq!(
+        record["effects"],
+        serde_json::json!([
+            {"name": "tool.calls", "role": "frame", "served": 2, "steps": 0},
+            {"name": "echo.stamp", "role": "core", "served": 0, "steps": 2}
+        ])
+    );
     assert!(record["transports"]
         .as_array()
         .unwrap()

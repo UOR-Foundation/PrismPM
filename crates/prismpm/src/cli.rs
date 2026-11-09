@@ -214,6 +214,11 @@ pub enum Commands {
         #[arg(long)]
         url: String,
     },
+    /// Rebuild and re-accept the server application of a release from its files alone.
+    ReplayAcceptance {
+        /// Registry-qualified immutable reference of a locally acquired release.
+        reference: String,
+    },
     /// Replay the complete release signature closure from stored OCI evidence.
     VerifyRelease {
         /// Registry-qualified immutable reference.
@@ -1019,6 +1024,13 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             Ok((
                 result,
                 format!("browser publication bytes match: {url} (integrity only)"),
+            ))
+        }
+        Commands::ReplayAcceptance { reference } => {
+            let result = crate::server_release::replay_release(&controller.root, reference)?;
+            Ok((
+                result,
+                format!("released server application accepted: {reference}"),
             ))
         }
         Commands::VerifyRelease { reference } => {

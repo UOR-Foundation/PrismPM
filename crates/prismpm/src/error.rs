@@ -8,7 +8,7 @@ pub struct DiagnosticCode(String);
 
 impl DiagnosticCode {
     const REGISTERED: [&'static str; 126] = [
-        "PP2019", "PP2020", "PP2021", "PP2022", "PP2023", "PP2024", "PP2025", "PP2010", "PP2011",
+        "PP2019", "PP2020", "PP2021", "PP2022", "PP2024", "PP2025", "PP2026", "PP2010", "PP2011",
         "PP2012", "PP2013", "PP2014", "PP2015", "PP2016", "PP2017", "PP2018", "PP1001", "PP1002",
         "PP1003", "PP2001", "PP2002", "PP2003", "PP2004", "PP2005", "PP2006", "PP2007", "PP2008",
         "PP2009", "PP3001", "PP3002", "PP3003", "PP3004", "PP3005", "PP3006", "PP3007", "PP3008",

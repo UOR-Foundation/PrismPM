@@ -421,7 +421,7 @@ fn refused(application: &ServerApplication) -> String {
     error.message
 }
 
-fn built() -> &'static Built {
+pub(super) fn built() -> &'static Built {
     static BUILT: OnceLock<Built> = OnceLock::new();
     BUILT.get_or_init(|| build_with(&served_model(), CORE, BINDING))
 }
