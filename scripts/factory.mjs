@@ -143,11 +143,17 @@ export function buildIdentity(root, revision) {
   oid(revision);
   const jobs = workflowJobs(git(root, ['show', `${revision}:.github/workflows/release.yml`]).toString('utf8'));
   const hash = createHash('sha256').update(`kappa ${kappa(root, revision)}\n`).update(`header ${jobs.header}\n`);
+  // The identity is total over every revision: an older release line that
+  // lacks a build job or a build plumbing file has a different identity (it
+  // can never be a receipt for this one) rather than an error.
   for (const name of Object.keys(buildJobs)) {
-    assert(typeof jobs[name] === 'string', `release workflow lacks ${name}`);
-    hash.update(`job ${name}\n${jobs[name]}`);
+    hash.update(typeof jobs[name] === 'string' ? `job ${name}\n${jobs[name]}` : `absent job ${name}\n`);
   }
-  for (const path of buildPlumbing) hash.update(`blob ${path} ${git(root, ['rev-parse', `${revision}:${path}`]).toString('utf8').trim()}\n`);
+  for (const path of buildPlumbing) {
+    const entry = git(root, ['ls-tree', '-z', revision, '--', path]).toString('utf8');
+    const blob = /^100(?:644|755) blob ([0-9a-f]{40})\t/.exec(entry);
+    hash.update(blob ? `blob ${path} ${blob[1]}\n` : `absent blob ${path}\n`);
+  }
   return hash.digest('hex');
 }
 

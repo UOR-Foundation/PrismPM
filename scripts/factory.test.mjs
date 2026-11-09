@@ -221,7 +221,10 @@ test('a build receipt is another run\'s passed build for the same build identity
   const rebuildFix = commit({'scripts/release-rebuild.sh': 'changed\n'}, 'rebuild plumbing fix');
   const source = commit({'src/a.txt': 'b\n'}, 'source');
   git('checkout', '-q', '-b', 'side', proved); const foreign = commit({'src/z.txt': 'z\n'}, 'side');
-  git('checkout', '-q', 'release/v0.4');
+  // A release line older than the build route: no build jobs, no build plumbing.
+  git('checkout', '-q', '--orphan', 'legacy'); git('rm', '-rqf', '.');
+  const legacy = commit({'src/a.txt': 'a\n', '.github/workflows/release.yml': 'name: legacy\njobs:\n  publish:\n    runs-on: x\n'}, 'legacy');
+  git('checkout', '-q', '-f', 'release/v0.4');
   // The workflow is split into its header and each job exactly as written.
   assert.deepEqual(Object.keys(workflowJobs(readFileSync(join(path, '.github/workflows/release.yml'), 'utf8'))),
     ['header', 'policy', 'factory', 'gate', ...Object.keys(buildJobs), 'oci-native']);
@@ -236,7 +239,10 @@ test('a build receipt is another run\'s passed build for the same build identity
   const none = revision => ({build_route: 'establish', build_identity: buildIdentity(path, revision), build_revision: revision, build_run_id: '', build_run_attempt: ''});
   assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(7, gateFix)]), '7'), none(gateFix));
   for (const revision of [imageFix, rebuildFix, source]) assert.deepEqual(findBuildReceipt(path, revision, builds([run(7, proved)]), '8'), none(revision));
-  for (const runs of [[run(7, foreign)], [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
+  // Such a run is a different identity, never an error that stops the search.
+  assert.notEqual(buildIdentity(path, legacy), buildIdentity(path, proved));
+  assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(6, legacy), run(7, proved)]), '8'), expected);
+  for (const runs of [[run(7, legacy)], [run(7, foreign)], [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
     [run(7, proved, {head_repository: {full_name: 'fork/PrismPM'}})], [run(7, proved, {path: '.github/workflows/vv.yml'})]])
     assert.deepEqual(findBuildReceipt(path, gateFix, builds(runs), '8'), none(gateFix));
   for (const name of Object.keys(buildJobs)) {
