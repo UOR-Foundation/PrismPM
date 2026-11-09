@@ -439,6 +439,12 @@ level = "build"
 statement = "A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101."
 
 [[id]]
+id = "HO-43"
+suite = "holo"
+level = "build"
+statement = "The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request: request_begin before the core runs with the request's number in the process and its body, request_end after the answer is written with the same number, the request body and the answer body, including a request the adapter or the core refuses; the number pairs each end with its begin when requests on other connections interleave; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

@@ -115,7 +115,8 @@ pub fn dispatch(frame: Vec<u8>) -> Vec<u8> {
 "#;
 
 /// The consumer's binding: the tool call counter counts the requests it is told
-/// are counted, and the secret reference of the state key is a fixed key.
+/// are counted, the secret reference of the state key is a fixed key, and the
+/// per-request calls are recorded in a file of the serving process (HO-43).
 const BINDING: &str = r#"
 use echo_core_host_api::protocol::{secret_statekey, tool_calls, Host, HostError};
 
@@ -140,6 +141,28 @@ impl Host for Native {
         _request: secret_statekey::Request,
     ) -> Result<secret_statekey::Completed, HostError<secret_statekey::Failure>> {
         Ok(secret_statekey::Completed { key: b"k3y".to_vec() })
+    }
+
+    fn request_begin(&mut self, id: u64, request: &[u8]) {
+        record(&format!("begin {id} {}", String::from_utf8_lossy(request)));
+    }
+
+    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {
+        let response = String::from_utf8_lossy(response);
+        record(&format!(
+            "end {id} {} -> {}",
+            String::from_utf8_lossy(request),
+            response.lines().next().unwrap_or_default()
+        ));
+    }
+}
+
+/// Append one line to this process's record of the per-request calls.
+fn record(line: &str) {
+    use std::io::Write;
+    let path = std::env::temp_dir().join(format!("prism-hooks-{}.log", std::process::id()));
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
     }
 }
 "#;
@@ -1080,4 +1103,53 @@ fn every_served_vector_is_answered_over_a_real_socket() {
     assert_eq!(code(&output), 0);
     assert!(String::from_utf8_lossy(&output.stdout)
         .contains(&format!("{} serve", program_name(&application))));
+}
+
+#[test]
+fn the_host_is_told_when_each_served_request_begins_and_ends() {
+    let server = server();
+    let log = std::env::temp_dir().join(format!("prism-hooks-{}.log", server.id()));
+    let answered = server
+        .exchange(&post("/mcp", &[], "Content-Length: 5\r\n", b"hello"))
+        .unwrap();
+    assert_eq!(status(&answered), "HTTP/1.1 200 OK", "{}", text(&answered));
+    let refused = server
+        .exchange(&post(
+            "/mcp",
+            &[("Origin", "http://evil.example")],
+            "Content-Length: 5\r\n",
+            b"hello",
+        ))
+        .unwrap();
+    assert!(
+        status(&refused).starts_with("HTTP/1.1 403"),
+        "{}",
+        text(&refused)
+    );
+    let refusal = body(&refused).lines().next().unwrap_or_default().to_owned();
+    // This process answers only these two requests, numbered 0 and 1, and each end
+    // carries the number its begin did.
+    let expected = vec![
+        "begin 0 hello".to_owned(),
+        "end 0 hello -> method=POST".to_owned(),
+        "begin 1 ".to_owned(),
+        format!("end 1  -> {refusal}"),
+    ];
+    // request_end runs after the answer is written, so the record can trail the
+    // response by a moment.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut seen = Vec::new();
+    while std::time::Instant::now() < deadline {
+        seen = std::fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        if seen.len() >= expected.len() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let _ = std::fs::remove_file(&log);
+    assert_eq!(seen, expected);
 }

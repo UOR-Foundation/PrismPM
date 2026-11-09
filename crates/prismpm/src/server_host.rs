@@ -429,7 +429,7 @@ fn protocol(application: &ServerApplication) -> String {
     let _ = writeln!(text, "        _ => Err(Refusal::Undeclared),\n    }}\n}}\n");
     let _ = writeln!(
         text,
-        "/// The host binding: one method per declared effect, and no other.\npub trait Host {{"
+        "/// The host binding: one method per declared effect, and two per-request methods\n/// the served driver calls, which do nothing unless a binding overrides them.\npub trait Host {{"
     );
     for effect in effects {
         let name = snake(&effect.name);
@@ -438,6 +438,13 @@ fn protocol(application: &ServerApplication) -> String {
             "    fn {name}(&mut self, request: {name}::Request) -> Result<{name}::Completed, HostError<{name}::Failure>>;"
         );
     }
+    // Not effects: the core never asks for them, so the effect table, the codecs
+    // and the vectors do not change. A binding that observes nothing keeps the
+    // defaults, so it compiles unchanged.
+    let _ = writeln!(
+        text,
+        "\n    /// Called once per served request, before the core runs, with the request's number\n    /// in this process and its body. Requests on other connections can begin and end\n    /// in between; the number pairs this call with its `request_end`.\n    fn request_begin(&mut self, id: u64, request: &[u8]) {{\n        let _ = (id, request);\n    }}\n\n    /// Called once per served request, after the answer is written, with the number\n    /// `request_begin` was given, the request body and the answer body. A request the\n    /// adapter refuses has an empty body.\n    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {{\n        let _ = (id, request, response);\n    }}"
+    );
     let _ = writeln!(text, "}}\n");
     if effects.is_empty() {
         let _ = writeln!(
@@ -649,7 +656,8 @@ pub fn replay(script: &[u8], request: &[u8]) -> Result<Vec<u8>, Failure> {
 }
 
 /// The shared host: one binding behind a lock, which every connection thread
-/// uses for the effects it performs. Rendered with one method per declared effect.
+/// uses for the effects it performs. Rendered with one method per declared effect,
+/// and the two per-request methods forwarded to the binding.
 fn shared(application: &ServerApplication) -> String {
     let effects = &application.host.effects;
     let mut text = String::from(
@@ -663,6 +671,13 @@ fn shared(application: &ServerApplication) -> String {
             "    fn {name}(&mut self, request: protocol::{name}::Request) -> Result<protocol::{name}::Completed, HostError<protocol::{name}::Failure>> {{\n        match self.0.lock() {{\n            Ok(mut host) => host.{name}(request),\n            Err(_) => Err(HostError::Fault),\n        }}\n    }}"
         );
     }
+    // Shared must forward the per-request calls, or the shared host would keep
+    // the defaults and see nothing. A poisoned lock already makes every effect a
+    // fault; these calls only observe, so they are skipped then.
+    let _ = writeln!(
+        text,
+        "\n    fn request_begin(&mut self, id: u64, request: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_begin(id, request);\n        }}\n    }}\n\n    fn request_end(&mut self, id: u64, request: &[u8], response: &[u8]) {{\n        if let Ok(mut host) = self.0.lock() {{\n            host.request_end(id, request, response);\n        }}\n    }}"
+    );
     let _ = writeln!(text, "}}");
     text
 }

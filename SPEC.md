@@ -3561,7 +3561,16 @@ two Cargo packages as members of the consumer's workspace, a fixed template
 composed with code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
 primitives, the closed `Request` sum with one variant per declared effect, the
 typed request, result and failure of each effect with its codec, and the `Host`
-trait with one method per effect. `{cargo_name}-host` holds the `Failure`
+trait with one method per effect and two per-request methods, `request_begin`
+and `request_end`, whose defaults do nothing. They are not effects: the core
+never requests them, and the effect table, codecs and vectors do not name them.
+The served driver calls `request_begin` once per answered request before the
+core runs, with the request's number in the process and its body, and
+`request_end` after the answer is written, with the same number, the request
+body and the answer body. Connections are served on threads that share one
+host, so the calls of two requests can interleave; the number pairs each end
+with its begin. A request the adapter refuses is answered too, with an empty
+request body (HO-43). `{cargo_name}-host` holds the `Failure`
 vocabulary, the replay driver, the scripted host and the program, and depends on
 the API package, on the core and on the binding at its declared workspace path;
 the binding depends on the API package. The workspace root owns the release
@@ -4350,6 +4359,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-40` | `holo` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2026. | §3 |
 | `HO-41` | `holo` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. | §3 |
 | `HO-42` | `holo` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. | §3 |
+| `HO-43` | `holo` | The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request: request_begin before the core runs with the request's number in the process and its body, request_end after the answer is written with the same number, the request body and the answer body, including a request the adapter or the core refuses; the number pairs each end with its begin when requests on other connections interleave; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
