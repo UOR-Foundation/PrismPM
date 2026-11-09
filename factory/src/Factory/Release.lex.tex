@@ -173,10 +173,24 @@ definition{
 }
 
 definition{
+  name: buildRoute,
+  parameters: [identity : String, receipts : (List String)],
+  result: String,
+  body: (if (Factory.Registry::memberString identity receipts) then "proved" else "establish")
+}
+
+definition{
+  name: routedBuilds,
+  parameters: [buildRouted : String],
+  result: Nat,
+  body: (if (prim equal buildRouted "proved" : Bool) then 0 else (builds (route)))
+}
+
+definition{
   name: plumbing,
   parameters: [],
   result: (List String),
-  body: (cons ".github/workflows/release.yml" (cons "factory/" (cons "scripts/browser-api-sdk-check.test.mjs" (cons "scripts/ci-capacity.test.mjs" (cons "scripts/factory.mjs" (cons "scripts/factory.test.mjs" (cons "scripts/library-sdk-check.test.mjs" (cons "scripts/product-sdk-check.test.mjs" (cons "scripts/release-gate-evidence.mjs" (cons "scripts/release-gate-evidence.test.mjs" (cons "scripts/release-native-contract.test.mjs" (cons "scripts/release-phases.md" (cons "scripts/release-phases.mjs" (cons "scripts/release-phases.test.mjs" (cons "scripts/release-rebuild.sh" (cons "scripts/rust-oracle-tools-inputs.test.mjs" (cons "scripts/sdk-candidate-sbom.test.mjs" (cons "scripts/sdk-construction-handoff.test.mjs" (cons "scripts/sdk-image-inputs.test.mjs" (cons "scripts/sdk-release-evidence.mjs" (cons "scripts/sdk-release-evidence.test.mjs" (cons "scripts/sdk-vv-check.test.mjs" (cons "scripts/unpublished-sdk-qualification.test.mjs" (nil String))))))))))))))))))))))))
+  body: (cons ".github/workflows/release-qualify.yml" (cons ".github/workflows/release.yml" (cons "factory/" (cons "scripts/browser-api-sdk-check.test.mjs" (cons "scripts/ci-capacity.test.mjs" (cons "scripts/factory.mjs" (cons "scripts/factory.test.mjs" (cons "scripts/library-sdk-check.test.mjs" (cons "scripts/product-sdk-check.test.mjs" (cons "scripts/release-gate-evidence.mjs" (cons "scripts/release-gate-evidence.test.mjs" (cons "scripts/release-native-contract.test.mjs" (cons "scripts/release-phases.md" (cons "scripts/release-phases.mjs" (cons "scripts/release-phases.test.mjs" (cons "scripts/release-rebuild.sh" (cons "scripts/rust-oracle-tools-inputs.test.mjs" (cons "scripts/sdk-candidate-sbom.test.mjs" (cons "scripts/sdk-construction-handoff.test.mjs" (cons "scripts/sdk-image-inputs.test.mjs" (cons "scripts/sdk-release-evidence.mjs" (cons "scripts/sdk-release-evidence.test.mjs" (cons "scripts/sdk-vv-check.test.mjs" (cons "scripts/unpublished-sdk-qualification.test.mjs" (nil String)))))))))))))))))))))))))
 }
 
 theorem{
@@ -239,6 +253,21 @@ theorem{
   name: aChangedObligationIsRoutedLikeAnyOther,
   parameters: [],
   statement: ((prim equal (Factory.Registry::route (cons "k1" (nil String)) (cons "k1" (nil String)) (obligations) (obligations)) "proved" : Bool) = true),
+  proof: decide{},
+  axioms: []
+}
+theorem{
+  name: aBuildReceiptRebuildsNoImage,
+  parameters: [],
+  statement: (((routedBuilds (buildRoute "b1" (cons "b0" (cons "b1" (nil String))))) =? 0) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: aNewBuildIdentityBuildsAndRebuildsEachImageOnce,
+  parameters: [],
+  statement: (((routedBuilds (buildRoute "b2" (cons "b0" (cons "b1" (nil String))))) =? 2) = true),
   proof: decide{},
   axioms: []
 }

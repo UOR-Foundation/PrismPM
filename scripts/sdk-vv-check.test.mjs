@@ -711,9 +711,12 @@ test('native release matrix executes the additional exact-image gate and preserv
   // Installed V&V re-ran the source parts on a projection; it is retired from
   // the release route (Factory.Release). The product build stays mandatory.
   assert(!/^  installed-vv:$/m.test(source));
-  assert.match(installed, /^    needs: \[policy, images\]$/m);
+  // A build receipt (Factory.Release buildRoute) skips the whole build stage;
+  // otherwise the product build runs unconditionally and cannot be softened.
+  assert.match(installed, /^    needs: \[policy, factory, images\]$/m);
   assert(!installed.includes('sdk-release-evidence.mjs assemble-installed'));
-  assert(!/^    (?:if|continue-on-error):/m.test(installed));
+  assert.deepEqual(installed.match(/^    if:.*$/gm), ["    if: ${{ needs.factory.outputs.build-route == 'establish' }}"]);
+  assert(!/^\s*continue-on-error:/m.test(installed));
   const setupNode = '      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38\n        with:\n          node-version: 22.23.2\n';
   const hostPrerequisite = (job, command) => {
     assert.equal(job.split(setupNode).length, 2, 'exactly one pinned host Node setup required');

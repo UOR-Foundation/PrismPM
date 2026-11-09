@@ -13,7 +13,8 @@ import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, v
 const repository = 'UOR-Foundation/PrismPM';
 const imageNames = ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles'];
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
+const buildStages = ['images', 'native', 'reproducibility', 'installed-sdk'];
+const ociNeeds = ['gate', 'factory', ...buildStages];
 
 export function publicationPolicy(value) {
   assert.deepEqual(Object.keys(value).sort(), ['event', 'publishCrates', 'ref', 'rehearsal', 'repository', 'revision', 'version']);
@@ -66,7 +67,14 @@ export function requirePrerequisites(phase, needs) {
   assert.ok(['oci-native', 'release'].includes(phase));
   const expected = phase === 'oci-native' ? ociNeeds : [...ociNeeds, 'oci-native', 'crates'];
   assert.deepEqual(Object.keys(needs).sort(), [...expected].sort());
-  for (const name of expected) assert.equal(needs[name]?.result, 'success', `${name} did not succeed`);
+  // A build receipt (scripts/factory.mjs) proves the build stages: they are
+  // skipped exactly when the factory routed the build to its receipt.
+  const route = needs.factory?.outputs?.['build-route'];
+  assert.ok(['establish', 'proved'].includes(route), 'factory build route');
+  for (const name of expected) {
+    const result = route === 'proved' && buildStages.includes(name) ? 'skipped' : 'success';
+    assert.equal(needs[name]?.result, result, `${name} did not ${result === 'success' ? 'succeed' : 'route to its build receipt'}`);
+  }
 }
 
 const metadataLimit = 16 * 1024 ** 2;

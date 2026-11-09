@@ -76,19 +76,23 @@ function validateWorkflow(workflow) {
   const steps = workflow.jobs['oci-native'].steps;
   const pack = steps.find(step => step.run?.includes('scripts/sdk-release-evidence.mjs'));
   assert(pack && pack.if === undefined && pack['continue-on-error'] === undefined);
-  const download = (name, path) => {
+  // Build evidence comes from the run that established the build: this one,
+  // or the build receipt's (scripts/factory.mjs).
+  const fromBuild = {'run-id': '${{ needs.factory.outputs.build-run-id || github.run_id }}',
+    'github-token': "${{ needs.factory.outputs.build-route == 'proved' && github.token || '' }}"};
+  const download = (name, path, build = true) => {
     const matching = steps.filter(step => step.with?.name === name);
     assert.equal(matching.length, 1, 'missing or duplicate gate download ' + name);
     const step = matching[0];
     assert.equal(step.uses, 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093');
-    assert.deepEqual(step.with, {name, path});
+    assert.deepEqual(step.with, build ? {name, path, ...fromBuild} : {name, path});
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
     assert(steps.indexOf(step) < steps.indexOf(pack), 'evidence must arrive before capture');
   };
   // Installed V&V is retired (Factory.Release): no installed part evidence is
   // downloaded or published, and the route record is.
   assert(!steps.some(step => step.with?.pattern === 'full-sdk-vv-sdk-*' || step.with?.pattern === 'installed-vv-evidence-*'));
-  download('factory-route', 'release');
+  download('factory-route', 'release', false);
   assert(assetNames().includes('factory-route.json'));
   for (const arch of ['amd64', 'arm64']) {
     download(`product-cli-sdk-${arch}`, `.sdk-gate-evidence/product-cli-sdk-${arch}`);
@@ -106,7 +110,7 @@ function validateWorkflow(workflow) {
     'node scripts/library-sdk-metadata-evidence.mjs join \\',
     '  .sdk-gate-evidence/library-sdk-sdk-amd64/root-a/target/library-sdk-evidence/linux-amd64 \\',
     '  .sdk-gate-evidence/library-sdk-sdk-arm64/root-a/target/library-sdk-evidence/linux-arm64 \\',
-    '  . "$image" "$GITHUB_SHA" > release/sdk-metadata-native-join.json',
+    '  . "$image" "$BUILD_REVISION" > release/sdk-metadata-native-join.json',
     'cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/',
     'cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/',
     '# Source evidence is packed with the run that established it: this',
@@ -116,21 +120,23 @@ function validateWorkflow(workflow) {
     'for architecture in amd64 arm64; do',
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
-    '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
+    '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$BUILD_REVISION" "$architecture"',
     '  node scripts/sdk-release-evidence.mjs product-cli \\',
     '    ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \\',
-    '    "$image" "$GITHUB_SHA" "$architecture"',
+    '    "$image" "$BUILD_REVISION" "$architecture"',
     '  node scripts/sdk-release-evidence.mjs native-equivalence \\',
     '    ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \\',
-    '    "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    '    "$image" "$BUILD_REVISION" "$architecture" "$BUILD_RUN_ID" "$BUILD_RUN_ATTEMPT"',
     'done', '',
   ].join('\n'));
-  download('source-vv', '.sdk-gate-evidence/source-vv');
+  download('source-vv', '.sdk-gate-evidence/source-vv', false);
+  const build = (key, own) => `\${{ needs.factory.outputs.build-route == 'proved' && needs.factory.outputs.build-${key} || github.${own} }}`;
   assert.deepEqual(pack.env, {SOURCE_REVISION: '${{ needs.gate.outputs.source-revision }}',
-    SOURCE_RUN_ID: '${{ needs.gate.outputs.source-run-id }}', SOURCE_RUN_ATTEMPT: '${{ needs.gate.outputs.source-run-attempt }}'});
+    SOURCE_RUN_ID: '${{ needs.gate.outputs.source-run-id }}', SOURCE_RUN_ATTEMPT: '${{ needs.gate.outputs.source-run-attempt }}',
+    BUILD_REVISION: build('revision', 'sha'), BUILD_RUN_ID: build('run-id', 'run_id'), BUILD_RUN_ATTEMPT: build('run-attempt', 'run_attempt')});
   for (const arch of ['amd64', 'arm64']) download(`sdk-equivalence-${arch}`, `.sdk-gate-evidence/native-equivalence-sdk-${arch}`);
   assert(steps.indexOf(pack) < steps.findIndex(step => step.run?.includes('checksums=$(mktemp)')));
-  assert.deepEqual(workflow.jobs['oci-native'].needs, ['gate', 'images', 'native', 'reproducibility', 'installed-sdk']);
+  assert.deepEqual(workflow.jobs['oci-native'].needs, ['gate', 'factory', 'images', 'native', 'reproducibility', 'installed-sdk']);
   assert(workflow.jobs.release.needs.includes('crates'));
 }
 
@@ -171,7 +177,10 @@ test('OCI publication retains both native gate closures without granting SDK acc
     value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with.path = '${{ matrix.name }}-library-sdk.log';},
     value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with.path = 'root-a/target/library-sdk-evidence/';},
     value => {value.jobs.reproducibility.steps.find(step => step.with?.name === 'library-sdk-${{ matrix.name }}').with['if-no-files-found'] = 'ignore';},
-    value => {pack(value).run = pack(value).run.replace('"$GITHUB_SHA"', '"stale"');},
+    value => {pack(value).run = pack(value).run.replace('"$BUILD_REVISION"', '"stale"');},
+    value => {pack(value).run = pack(value).run.replace('"$BUILD_REVISION"', '"$GITHUB_SHA"');},
+    value => {pack(value).env.BUILD_RUN_ID = '${{ github.run_id }}';},
+    value => {delete steps(value).find(step => step.with?.name === 'product-cli-sdk-arm64').with['run-id'];},
     value => {pack(value).run = pack(value).run.replace('"$SOURCE_REVISION"', '"$GITHUB_SHA"');},
     value => {pack(value).env.SOURCE_RUN_ID = '${{ github.run_id }}';},
     value => {steps(value).push({uses: 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093', with: {pattern: 'full-sdk-vv-sdk-*', 'merge-multiple': true, path: '.sdk-gate-evidence/full-sdk-vv'}});},
