@@ -11,6 +11,16 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 ### Features Added
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
 
+## [0.7.1] - 2026-11-09
+
+### Breaking Changes
+None.
+
+### Bugs Fixed
+- The review no longer says a rule "never decides anything" when it does. The check samples requests like an odometer, last field fastest, and stops at a limit, so in a spec with many fields the first field barely moves and its later choices are never reached; a seven-field filing spec had nine such rules flagged. A rule is now called unreachable only when every combination was tried.
+- The approval form is an editable card, not a multiple-choice question. The instructions said "one editable form with an approve button", and an agent read its own question dialog as that form, which shows the spec as fixed text. The instructions and the skill now ask for an editable card, the app name first and a text box per part, and never a multiple-choice question.
+- setup describes the prism server as checking the spec the agent drafts, not asking for it.
+
 ## [0.7.0] - 2026-11-09
 
 ### Features Added

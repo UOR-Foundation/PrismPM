@@ -414,10 +414,18 @@ export function counterexample(spec, property) {
 
 /** Rules no sampled request reaches, because an earlier rule always wins or the conditions contradict. */
 export function unreachableRules(spec) {
+  // The sample is an odometer over each field's candidates, last field fastest, cut
+  // off at a limit: past it the first fields barely move, so a rule on their later
+  // values is never reached though it decides plenty. A rule is called unreachable
+  // only when every combination was tried; otherwise nothing is claimed.
+  const total = candidates(spec).reduce((n, list) => n * list.length, 1);
   const hit = new Set();
+  let tried = 0;
   for (const request of sampleRequests(spec)) {
+    tried++;
     const { rule } = judge(spec, request);
     if (rule) hit.add(rule);
   }
+  if (tried < total) return [];
   return spec.rules.filter((r) => !hit.has(r.id)).map((r) => r.id);
 }

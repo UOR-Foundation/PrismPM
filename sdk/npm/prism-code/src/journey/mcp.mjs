@@ -27,9 +27,9 @@ const { version } = require('../../package.json');
 
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism, a verified app, or /prism, call prism_start.
+export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism or /prism, call prism_start.
 From the user's one-line request, draft the whole spec, with a reason for every rule and property, and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they know.
-Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can show interactive UI in the chat, make it one editable form whose approve button sends the reply in one click.
+Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML in the chat, draw one editable card (app name, a text box per part, an approve button), never a multiple-choice question.
 On approval, answer the review with yes, then call prism_build.
 Never edit files under prism/ by hand.
 prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
