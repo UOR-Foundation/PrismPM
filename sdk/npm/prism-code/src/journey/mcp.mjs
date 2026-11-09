@@ -29,8 +29,8 @@ export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism or /prism, call prism_start.
 From the user's one-line request, draft the whole spec, with a reason for every rule and property, and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they know.
-Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML in the chat, draw one editable card (app name, a text box per part, an approve button), never a multiple-choice question.
-On approval, answer the review with yes, then call prism_build.
+Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML in the chat, draw one editable card (an App name field, a text box per part, approve button), never a multiple-choice question.
+On approval, answer the review yes, then call prism_build.
 Never edit files under prism/ by hand.
 prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
 Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
