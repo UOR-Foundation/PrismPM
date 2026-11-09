@@ -21,18 +21,75 @@ const { version } = require('../../package.json');
 
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. When the user asks for Prism, a verified app, or types /prism, call prism_start and follow what it returns.
-Ask the user each question prism_start or prism_answer returns, one at a time, in your own words, and pass their answer to prism_answer. Use the example to show the format. When the user answers in plain language, rewrite it into the format yourself and say what you wrote.
-When a result has an issue, explain it in one or two sentences and ask the user how to resolve it.
-Never edit files under prism/ by hand. Change the app only through prism_answer or prism_spec.
-prism_prove and prism_build take minutes. When they return state "running", tell the user what is happening and call the same tool again.Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
+export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism, a verified app, or /prism, call prism_start.
+From the user's one-line request, draft the whole spec, with a reason for every rule and property, and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they know.
+Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can show interactive UI in the chat, make it one editable form whose approve button sends the reply in one click.
+On approval, answer the review with yes, then call prism_build.
+Never edit files under prism/ by hand.
+prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
+Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
-const GREETING = 'Prism turns a short spec into an app whose rules are proved by Lean, not just tested. I will ask six short questions, then prove and build it.';
+const GREETING = 'Prism turns one sentence into an app whose rules are proved by Lean, not just tested. I will draft the spec for your approval, then prove and build it.';
+
+const CONDITIONS = {
+  type: 'array',
+  minItems: 1,
+  description: 'All must hold. A choice field compares with is or is not and one of its choices; a number field compares with a whole number or another number field, as {"field": "income"}.',
+  items: {
+    type: 'object',
+    properties: {
+      field: { type: 'string' },
+      op: { type: 'string', enum: ['is', 'is not', '<', '<=', '>', '>=', '=', '!='] },
+      value: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }, { type: 'object', properties: { field: { type: 'string' } }, required: ['field'] }] },
+    },
+    required: ['field', 'op', 'value'],
+  },
+};
+
+const WHY = { type: 'string', description: 'Why, in a few words, such as "it enforces INV-001".' };
+
+/** The prism/spec/1 shape, so an agent can draft a whole spec from one sentence. */
+const SPEC_INPUT = {
+  type: 'object',
+  description: 'A whole prism/spec/1 spec. Omit to read.',
+  properties: {
+    name: { type: 'string', description: 'Lower case and hyphens, such as loan-approval.' },
+    title: { type: 'string' },
+    purpose: { type: 'string', description: 'What the app decides, in one sentence.' },
+    fields: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 8,
+      description: 'One request is these values in order, separated by spaces.',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'A lower-case word.' },
+          kind: { type: 'string', enum: ['number', 'choice'] },
+          values: { type: 'array', items: { type: 'string' }, description: 'For a choice: two to 32 lower-case words.' },
+          min: { type: 'integer', minimum: 0 },
+          max: { type: 'integer', minimum: 0 },
+          means: { type: 'string', description: 'What the field is, with its unit, such as "yearly income, in whole dollars".' },
+        },
+        required: ['name', 'kind'],
+      },
+    },
+    outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Lower-case words; invalid is reserved.' },
+    meanings: { type: 'object', additionalProperties: { type: 'string' }, description: 'What each answer means, such as {"review": "a person must decide"}.' },
+    rules: { type: 'array', minItems: 1, maxItems: 24, description: 'In order; the first that matches decides.', items: { type: 'object', properties: { when: CONDITIONS, then: { type: 'string' }, why: WHY }, required: ['when', 'then'] } },
+    otherwise: { type: 'string', description: 'The answer when no rule matches.' },
+    otherwiseWhy: WHY,
+    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' }, why: { type: 'string', description: 'The harm it prevents, such as "poor credit history predicts default". Ask the user when you cannot tell.' } }, required: ['kind', 'when', 'then'] } },
+    limits: { type: 'array', items: { type: 'string' }, description: 'What the app does not decide, and choices the rules make silently, such as "fair credit is treated as good".' },
+    examples: { type: 'array', description: 'Requests and their expected answers; each becomes an acceptance vector.', items: { type: 'object', properties: { request: { type: 'string' }, response: { type: 'string' } }, required: ['request', 'response'] } },
+  },
+  required: ['purpose', 'fields', 'outcomes', 'rules', 'otherwise'],
+};
 
 const TOOLS = [
   {
     name: 'prism_start',
-    description: 'Start or resume the Prism session in this project. Returns a short greeting and the next question to ask the user. Call it first, and whenever you lose track.',
+    description: 'Start or resume the Prism session in this project. Returns a short greeting, and the next question for when you cannot draft the whole spec with prism_spec. Call it first, and whenever you lose track.',
     inputSchema: { type: 'object', properties: { restart: { type: 'boolean', description: 'Discard the answers so far and start over.' } }, additionalProperties: false },
   },
   {
@@ -47,8 +104,8 @@ const TOOLS = [
   },
   {
     name: 'prism_spec',
-    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call when the user already gave everything. A replaced spec is checked exactly as answers are.',
-    inputSchema: { type: 'object', properties: { spec: { type: 'object', description: 'A whole prism/spec/1 spec. Omit to read.' } }, additionalProperties: false },
+    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call with a spec you drafted from the user\'s request. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
+    inputSchema: { type: 'object', properties: { spec: SPEC_INPUT }, additionalProperties: false },
   },
   {
     name: 'prism_prove',
@@ -262,7 +319,7 @@ export function createServer({ cwd = process.cwd(), send }) {
           return reply(id, { prompts: PROMPTS });
         case 'prompts/get':
           if (params.name !== 'prism') return error(id, -32602, `Unknown prompt: ${params.name}`);
-          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: ask me its questions one at a time.' } }] });
+          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: draft the whole spec from what I want, and show it to me for approval before you build.' } }] });
         case 'resources/list':
           return reply(id, {
             resources: [

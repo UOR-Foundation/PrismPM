@@ -174,6 +174,13 @@ export function parseExamples(text) {
   return out;
 }
 
+/**
+ * Prose a person reads but no proof depends on: a reason, a meaning or a
+ * limit. One line, at most 240 characters; empty when there is nothing.
+ */
+const prose = (text) => String(text ?? '').replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+const withWhy = (item, why) => (prose(why) ? { ...item, why: prose(why) } : item);
+
 /** Validate a whole spec; return it normalized. Throws `SpecError` naming the first problem. */
 export function validateSpec(input) {
   const spec = structuredClone(input ?? {});
@@ -185,6 +192,9 @@ export function validateSpec(input) {
   spec.purpose = String(spec.purpose ?? '').replace(/["\\\p{Cc}]/gu, '').trim();
   if (!spec.purpose) refuse('Say in one sentence what the app decides.', 'purpose');
   spec.actors = (spec.actors ?? []).map(String);
+  if (spec.limits !== undefined && !Array.isArray(spec.limits)) refuse('`limits` is a list of what the app does not decide.', 'limits');
+  spec.limits = (spec.limits ?? []).map(prose).filter(Boolean);
+  if (spec.limits.length === 0) delete spec.limits;
 
   const fields = spec.fields ?? [];
   if (!Array.isArray(fields) || fields.length === 0) refuse('Name at least one field.', 'fields');
@@ -203,6 +213,8 @@ export function validateSpec(input) {
       for (const b of ['min', 'max']) if (f[b] !== undefined && !(Number.isSafeInteger(f[b]) && f[b] >= 0)) refuse(`\`${b}\` of \`${f.name}\` must be a whole number.`, 'fields');
       if (f.min !== undefined && f.max !== undefined && f.min > f.max) refuse(`\`${f.name}\` has min above max.`, 'fields');
     } else refuse(`Field \`${f.name}\` must be a \`number\` or a \`choice\`.`, 'fields');
+    if (f.means !== undefined) f.means = prose(f.means) || undefined;
+    if (f.means === undefined) delete f.means;
   }
 
   const outcomes = spec.outcomes ?? [];
@@ -211,6 +223,12 @@ export function validateSpec(input) {
   for (const o of outcomes) {
     if (!WORD.test(o)) refuse(`Answer \`${o}\` must be a lower-case word.`, 'outcomes');
     if (o === INVALID) refuse('`invalid` is reserved for malformed requests; pick another word.', 'outcomes');
+  }
+  if (spec.meanings !== undefined) {
+    if (typeof spec.meanings !== 'object' || Array.isArray(spec.meanings)) refuse('`meanings` maps each answer to what it means.', 'outcomes');
+    for (const key of Object.keys(spec.meanings)) if (!outcomes.includes(key)) refuse(`\`meanings\` names \`${key}\`, which is not an answer.`, 'outcomes');
+    spec.meanings = Object.fromEntries(outcomes.filter((o) => prose(spec.meanings[o])).map((o) => [o, prose(spec.meanings[o])]));
+    if (Object.keys(spec.meanings).length === 0) delete spec.meanings;
   }
 
   const checkConds = (conds, where) => {
@@ -233,14 +251,16 @@ export function validateSpec(input) {
   spec.rules = spec.rules.map((r, i) => {
     checkConds(r.when, 'rule');
     if (!outcomes.includes(r.then)) refuse(`Rule ${i + 1} answers \`${r.then}\`, which is not an answer.`, 'rules');
-    return { id: r.id ?? `REQ-${String(i + 1).padStart(3, '0')}`, when: r.when, then: r.then, says: r.says ?? describeRule(r) };
+    return withWhy({ id: r.id ?? `REQ-${String(i + 1).padStart(3, '0')}`, when: r.when, then: r.then, says: r.says ?? describeRule(r) }, r.why);
   });
   if (!outcomes.includes(spec.otherwise)) refuse('Say which answer applies when no rule matches.', 'rules');
+  if (spec.otherwiseWhy !== undefined) spec.otherwiseWhy = prose(spec.otherwiseWhy) || undefined;
+  if (spec.otherwiseWhy === undefined) delete spec.otherwiseWhy;
   spec.properties = (spec.properties ?? []).map((p, i) => {
     if (!['never', 'always'].includes(p.kind)) refuse('A property is `never` or `always`.', 'properties');
     checkConds(p.when, 'property');
     if (!outcomes.includes(p.then)) refuse(`Property ${i + 1} names \`${p.then}\`, which is not an answer.`, 'properties');
-    return { id: p.id ?? `INV-${String(i + 1).padStart(3, '0')}`, kind: p.kind, when: p.when, then: p.then, says: p.says ?? describeProperty(p) };
+    return withWhy({ id: p.id ?? `INV-${String(i + 1).padStart(3, '0')}`, kind: p.kind, when: p.when, then: p.then, says: p.says ?? describeProperty(p) }, p.why);
   });
   spec.examples = (spec.examples ?? []).map((e) => ({ request: String(e.request), response: String(e.response) }));
   for (const e of spec.examples) if (e.response !== INVALID && !outcomes.includes(e.response)) refuse(`Example \`${e.request}\` answers \`${e.response}\`, which is not an answer.`, 'examples');

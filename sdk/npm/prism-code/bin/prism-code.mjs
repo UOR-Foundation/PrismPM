@@ -180,8 +180,8 @@ Usage:
                                                     verb below) beside it, Claude Desktop included; install the Prism
                                                     skill; register the holo:// handler; remember the agent; print the
                                                     next steps. Run it as npx prism-code@latest setup
-  prism-code mcp [--project <dir>]                  the Prism MCP server on stdio (experimental): six spec questions, each
-                                                    answer checked as it arrives; then the LexLean model written for you,
+  prism-code mcp [--project <dir>]                  the Prism MCP server on stdio (experimental): the agent drafts the spec
+                                                    from one sentence, checked and approved once; then the LexLean model,
                                                     every property proved by Lean, and the holo built in the SDK image
   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
                                                     hand the sentence to the agent: a terminal running claude or codex

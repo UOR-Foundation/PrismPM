@@ -166,11 +166,61 @@ test('a spec written as data joins the same flow and comes back the same', () =>
   assert.deepEqual(strip(again), strip(spec));
 });
 
-test('SPEC.md says what is proved and what is tested', () => {
+test('a property is stated only over choice codes a request can carry', () => {
+  // role is clerk|manager, codes 0 and 1: every "breaks" test requires role < 2, or an
+  // `always` property would fail on a code the decoder never yields.
+  const spec = { ...paymentSpec(), properties: [{ kind: 'always', when: [{ field: 'amount', op: '>=', value: 1 }], then: 'approved' }] };
+  const breaks = proofDeclarations(validateSpec(spec)).find((d) => d.kind === 'definition');
+  assert.match(breaks.body, /\(\(project request \w+\) <\? 2\)/);
+});
+
+test('SPEC.md is an OpenSpec spec that says what is proved and what is tested', () => {
   const doc = renderSpecDocument(paymentSpec(), { properties: { 'INV-001': 'proved', 'INV-002': 'failing' } });
-  assert.match(doc, /\*\*INV-001\*\* It never answers `approved` when role is clerk and amount is above limit\. proved by Lean/);
-  assert.match(doc, /\*\*INV-002\*\*.*not proved/);
+  assert.match(doc, /^# payment-approval Specification\n/);
+  assert.match(doc, /\n## Purpose\n\nPayment approval: .*\.\n\n## Requirements\n/);
+  assert.match(doc, /### Requirement: Never approved when role is clerk and amount is above limit\n\nThe app SHALL NOT answer `approved` when role is clerk and amount is above limit\.\n\nVerified: proved by Lean for every request \(INV-001/);
+  assert.match(doc, /Verified: not proved: see the counterexample \(INV-002/);
+  assert.match(doc, /#### Scenario: INV-001 holds\n\n- \*\*WHEN\*\* the request is `clerk \d+ \d+`.*\n- \*\*THEN\*\* the answer SHALL NOT be `approved`\n- \*\*AND\*\* the app answers `refused`/);
+  assert.match(doc, /### Requirement: REQ-002 .*\n\nThe app SHALL answer `\w+` when .* and no earlier rule matches\./);
   assert.match(doc, /tested, not proved/);
+  // Every requirement has a scenario, as OpenSpec requires.
+  const requirements = doc.split('\n### Requirement:').slice(1);
+  assert.ok(requirements.length >= spec3(paymentSpec()));
+  for (const r of requirements) assert.match(r, /\n#### Scenario: .+\n\n- \*\*WHEN\*\* .+\n- \*\*THEN\*\* .+SHALL/);
+});
+
+/** A spec's requirements at least: one per property and rule, the fallback, and the request. */
+const spec3 = (s) => s.properties.length + s.rules.length + 2;
+
+test('reasons, meanings and limits survive the answers and reach the review and SPEC.md', () => {
+  const base = paymentSpec();
+  const spec = {
+    ...base,
+    fields: base.fields.map((f) => (f.name === 'limit' ? { ...f, means: 'the most a clerk may approve, in dollars' } : f)),
+    meanings: { approved: 'pay it now' },
+    rules: base.rules.map((r, i) => (i === 0 ? { ...r, why: 'a manager answers for any amount' } : r)),
+    properties: base.properties.map((p, i) => (i === 0 ? { ...p, why: 'a clerk must not exceed their limit' } : p)),
+    otherwiseWhy: 'anything unexpected is refused',
+    limits: ['Fraud checks'],
+  };
+  const answers = answersFromSpec(spec);
+  const review = nextTurn(answers);
+  assert.equal(review.step, 'review');
+  assert.match(review.summary, /INV-001: never approved when .*, because a clerk must not exceed their limit \(to be proved\)/);
+  assert.match(review.summary, /REQ-001: .*, because a manager answers for any amount/);
+  assert.match(review.summary, /limit \(number[^)]*; the most a clerk may approve, in dollars\)/);
+  assert.match(review.summary, /approved \(pay it now\)/);
+  assert.match(review.summary, /Out of scope: Fraud checks/);
+  assert.ok(review.summary.indexOf('INV-001') < review.summary.indexOf('REQ-001'), 'guarantees come before rules');
+  if (base.properties.length > 1) assert.match(review.notes.join(' '), /INV-002 has no reason/);
+  const ready = nextTurn({ ...answers, review: 'yes' }).spec;
+  const doc = renderSpecDocument(ready);
+  assert.match(doc, /SHALL NOT answer `approved` when .*, because a clerk must not exceed their limit\./);
+  assert.match(doc, /\| `limit` \| [^|]+ \| the most a clerk may approve, in dollars \|/);
+  assert.match(doc, /\n## Out of scope\n\n- Fraud checks\n/);
+  // A rule that changes loses its reason instead of keeping one that no longer fits.
+  const revised = nextTurn({ ...answers, rules: answers.rules.replace(/^when [^\n]*/, (line) => line.replace(/then \w+$/, 'then refused')) });
+  assert.ok(!(revised.spec ?? {}).rules?.[0]?.why);
 });
 
 test('diagnostics, axiom violations and step markers are read from the SDK output', () => {
@@ -246,8 +296,10 @@ test('the MCP server greets, asks, records answers and refuses to build an unfin
   assert.ok(INSTRUCTIONS.split(/\s+/).length < 150);
   const tools = (await s.call('tools/list')).result.tools.map((t) => t.name);
   assert.deepEqual(tools, ['prism_start', 'prism_answer', 'prism_spec', 'prism_prove', 'prism_build', 'prism_try', 'prism_status']);
+  const specInput = (await s.call('tools/list')).result.tools.find((t) => t.name === 'prism_spec').inputSchema.properties.spec;
+  assert.deepEqual(specInput.required, ['purpose', 'fields', 'outcomes', 'rules', 'otherwise']);
   const start = await s.tool('prism_start');
-  assert.match(start.structuredContent.greeting, /six short questions/);
+  assert.match(start.structuredContent.greeting, /draft the spec for your approval/);
   assert.equal(start.structuredContent.step, 'purpose');
   const blocked = await s.tool('prism_build');
   assert.equal(blocked.isError, true);
@@ -264,7 +316,7 @@ test('the MCP server greets, asks, records answers and refuses to build an unfin
   assert.match(changed.structuredContent.issue, /REQ-002/);
   assert.equal((await s.call('tools/call', { name: 'nope', arguments: {} })).error.code, -32602);
   assert.equal((await s.call('no/such')).error.code, -32601);
-  assert.match((await s.call('resources/read', { uri: 'prism://spec' })).result.contents[0].text, /# Payment approval/);
+  assert.match((await s.call('resources/read', { uri: 'prism://spec' })).result.contents[0].text, /# payment-approval Specification/);
   assert.match((await s.call('prompts/get', { name: 'prism' })).result.messages[0].content.text, /prism_start/);
 });
 
@@ -275,6 +327,8 @@ test('a whole spec given as data is checked like answers', async () => {
   assert.match(r.structuredContent.issue, /does not hold/);
   const ok = await s.tool('prism_spec', { spec: paymentSpec() });
   assert.equal(ok.structuredContent.step, 'review');
+  assert.equal((await s.tool('prism_build')).structuredContent.state, 'blocked', 'a drafted spec is not built before the user approves it');
+  assert.equal((await s.tool('prism_answer', { answer: 'yes' })).structuredContent.step, 'ready');
 });
 
 test('mcp serves over stdio', () => {
