@@ -21,11 +21,12 @@ const { version } = require('../../package.json');
 
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. When the user asks for Prism, a verified app, or types /prism, call prism_start and follow what it returns.
-Ask the user each question prism_start or prism_answer returns, one at a time, in your own words, and pass their answer to prism_answer. Use the example to show the format. When the user answers in plain language, rewrite it into the format yourself and say what you wrote.
-When a result has an issue, explain it in one or two sentences and ask the user how to resolve it.
+export const INSTRUCTIONS = `Prism builds formally verified apps from a spec. For Prism, a verified app, or /prism, call prism_start and follow what it returns.
+Ask each question prism_start or prism_answer returns, one at a time, and pass the answer to prism_answer. If you can show interactive UI in the chat, ask with a form: the question, the progress, a free-text box with the example as placeholder, and a send button. Otherwise ask in plain text with the example. Rewrite plain-language answers into that format and say what you wrote.
+When a result has an issue, explain it briefly and ask the user how to resolve it.
 Never edit files under prism/ by hand. Change the app only through prism_answer or prism_spec.
-prism_prove and prism_build take minutes. When they return state "running", tell the user what is happening and call the same tool again.Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
+prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
+Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
 const GREETING = 'Prism turns a short spec into an app whose rules are proved by Lean, not just tested. I will ask six short questions, then prove and build it.';
 
@@ -262,7 +263,7 @@ export function createServer({ cwd = process.cwd(), send }) {
           return reply(id, { prompts: PROMPTS });
         case 'prompts/get':
           if (params.name !== 'prism') return error(id, -32602, `Unknown prompt: ${params.name}`);
-          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: ask me its questions one at a time.' } }] });
+          return reply(id, { description: PROMPTS[0].description, messages: [{ role: 'user', content: { type: 'text', text: 'Call the prism_start tool and follow what it returns: ask me its questions one at a time, each as a small form with a free-text box when you can show interactive UI in the chat.' } }] });
         case 'resources/list':
           return reply(id, {
             resources: [
