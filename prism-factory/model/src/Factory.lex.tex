@@ -176,10 +176,58 @@ definition{
 }
 
 definition{
-  name: workflow,
-  parameters: [revision : Bytes],
+  name: marker,
+  parameters: [fragment : String],
   result: Bytes,
-  body: (Factory.Workflow::render revision),
+  body: (Factory.Engine::line (cons (Factory.Engine::text "#fragment") (cons (Factory.Engine::text fragment) (nil Bytes)))),
+  executable: true
+}
+
+definition{
+  name: fragmentLines,
+  parameters: [names : (List String)],
+  result: Bytes,
+  body: (prim list_fold (fun (sofar : Bytes) (fragment : String) => (let marked : Bytes := (prim append sofar (marker fragment) : Bytes); (if (prim equal fragment "policy" : Bool) then (Factory.Workflow::render marked (Factory.Workflow::factoryJob)) else marked))) 0x names : Bytes),
+  executable: true
+}
+
+definition{
+  name: needsLine,
+  parameters: [names : (List String)],
+  result: Bytes,
+  body: (prim append (prim append (Factory.Engine::text "    needs: [") (LexLeanStd.Text::joinWith (prim list_fold (fun (sofar : (List Bytes)) (fragment : String) => (prim append sofar (cons (Factory.Engine::text fragment) (nil Bytes)) : (List Bytes))) (nil Bytes) names : (List Bytes)) 0x2c20) : Bytes) (Factory.Engine::text "]\n") : Bytes),
+  executable: true
+}
+
+definition{
+  name: resultOf,
+  parameters: [job : String],
+  result: Bytes,
+  body: (prim append (prim append (Factory.Engine::text "${{ needs.") (Factory.Engine::text job) : Bytes) (Factory.Engine::text ".result }}") : Bytes),
+  executable: true
+}
+
+definition{
+  name: resultLines,
+  parameters: [table : (List (String * (List String)))],
+  result: Bytes,
+  body: (prim list_fold (fun (sofar : Bytes) (entry : (String * (List String))) => (prim append sofar (prim append (Factory.Engine::text "            ") (Factory.Engine::line (cons (Factory.Engine::text (first entry)) (prim list_fold (fun (pieces : (List Bytes)) (job : String) => (prim append pieces (cons (resultOf job) (nil Bytes)) : (List Bytes))) (nil Bytes) (second entry) : (List Bytes)))) : Bytes) : Bytes)) 0x table : Bytes),
+  executable: true
+}
+
+definition{
+  name: releaseWorkflow,
+  parameters: [],
+  result: Bytes,
+  body: (let head : Bytes := (prim append (Factory.Workflow::render 0x (Factory.Workflow::releaseHead)) (marker "header") : Bytes); (let body : Bytes := (prim append head (fragmentLines (Factory.PrismPM::fragments)) : Bytes); (let receipts : Bytes := (prim append (Factory.Workflow::render body (Factory.Workflow::receiptsHead)) (needsLine (cons "factory" (Factory.PrismPM::fragments))) : Bytes); (Factory.Workflow::render (prim append (Factory.Workflow::render receipts (Factory.Workflow::receiptsBody)) (resultLines (Factory.PrismPM::jobs)) : Bytes) (Factory.Workflow::receiptsTail))))),
+  executable: true
+}
+
+definition{
+  name: workflow,
+  parameters: [selector : Bytes],
+  result: Bytes,
+  body: (if (prim equal selector (Factory.Engine::text "release") : Bool) then (releaseWorkflow) else (Factory.Workflow::render 0x (Factory.Workflow::factoryLines))),
   executable: true,
   production: {effects: [allocation, overflow, recursion], targets: [rust-std]}
 }

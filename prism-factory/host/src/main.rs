@@ -11,16 +11,27 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
+mod actions;
+
 const USAGE: &str = "usage: prism-factory <command> [options]
 
 commands:
-  request   print the plan request for a revision (tree, receipts, weights)
-  plan      print the certified plan for a revision
-  run       run every obligation the plan routes to `observe` on this host
-  workflow  print the generated GitHub workflow, or --check/--write a file
+  request           print the plan request for a revision (tree, contexts, receipts, weights)
+  plan              print the certified plan for a revision
+  run               run every obligation the plan routes to `observe` on this host
+  workflow          print a generated GitHub workflow (`--name factory|release`), or --check/--write it
+  plan-request      print the certified plan for a request on stdin (as `request` prints it)
+  reweigh           print the next weights for `weight` and `outcome` lines on stdin
+  actions-route     write the routes of a release run to $GITHUB_OUTPUT (the Actions adapter)
+  actions-receipts  record receipts for what a release run established ($FACTORY_PLAN, $FACTORY_RESULTS)
+  route-record      write the published route record: OUT REV ROUTE SOURCE_REV RUN_ID RUN_ATTEMPT
+                    BUILD_ROUTE BUILD_REV BUILD_RUN_ID BUILD_RUN_ATTEMPT
 
 options:
   --rev REV          the revision to plan (default HEAD)
+  --context KEY=VAL  a context input (`@KEY`) only the obligations that declare it read (repeatable)
+  --name NAME        workflow: `factory` (default) or `release`
+  --jobs DIR         workflow: the job fragments of `release` (default prism-factory/jobs)
   --receipts DIR     the receipt store (default target/factory/receipts)
   --only NAME        run only these obligations (repeatable)
   --rounds N         at most N plan/run rounds (default 32)
@@ -28,8 +39,12 @@ options:
   --check FILE       workflow: fail if FILE differs from the projection
   --write FILE       workflow: write the projection to FILE";
 
-struct Options {
+pub(crate) struct Options {
     revision: String,
+    contexts: BTreeMap<String, String>,
+    name: String,
+    jobs: PathBuf,
+    arguments: Vec<String>,
     receipts: PathBuf,
     only: Vec<String>,
     rounds: usize,
@@ -41,6 +56,10 @@ struct Options {
 fn options(arguments: &[String]) -> Result<Options, String> {
     let mut parsed = Options {
         revision: "HEAD".into(),
+        contexts: BTreeMap::new(),
+        name: "factory".into(),
+        jobs: PathBuf::from("prism-factory/jobs"),
+        arguments: Vec::new(),
         receipts: PathBuf::from("target/factory/receipts"),
         only: Vec::new(),
         rounds: 32,
@@ -53,19 +72,31 @@ fn options(arguments: &[String]) -> Result<Options, String> {
         let mut value = || items.next().cloned().ok_or(format!("{flag} needs a value"));
         match flag.as_str() {
             "--rev" => parsed.revision = value()?,
+            "--context" => {
+                let pair = value()?;
+                let (key, val) = pair.split_once('=').ok_or("--context needs KEY=VALUE")?;
+                let plain = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_graphic());
+                if !plain(key) || !plain(val) || key.contains('/') {
+                    return Err(format!("--context {pair}: key and value must be non-empty printable words"));
+                }
+                parsed.contexts.insert(key.into(), val.into());
+            }
+            "--name" => parsed.name = value()?,
+            "--jobs" => parsed.jobs = PathBuf::from(value()?),
             "--receipts" => parsed.receipts = PathBuf::from(value()?),
             "--only" => parsed.only.push(value()?),
             "--rounds" => parsed.rounds = value()?.parse().map_err(|_| "--rounds needs a number")?,
             "--work" => parsed.work = PathBuf::from(value()?),
             "--check" => parsed.check = Some(PathBuf::from(value()?)),
             "--write" => parsed.write = Some(PathBuf::from(value()?)),
+            other if !other.starts_with("--") => parsed.arguments.push(other.into()),
             other => return Err(format!("unknown option {other}")),
         }
     }
     Ok(parsed)
 }
 
-fn git(arguments: &[&str]) -> Result<Vec<u8>, String> {
+pub(crate) fn git(arguments: &[&str]) -> Result<Vec<u8>, String> {
     let out = Command::new("git")
         .args(arguments)
         .stderr(Stdio::inherit())
@@ -78,12 +109,12 @@ fn git(arguments: &[&str]) -> Result<Vec<u8>, String> {
 }
 
 /// One tracked entry: its path, and `mode:object` as its content address.
-struct Entry {
+pub(crate) struct Entry {
     path: String,
     object: String,
 }
 
-fn tree(revision: &str) -> Result<Vec<Entry>, String> {
+pub(crate) fn tree(revision: &str) -> Result<Vec<Entry>, String> {
     let listing = git(&["ls-tree", "-r", "-z", "--full-tree", revision])?;
     let mut entries = Vec::new();
     for row in listing.split(|byte| *byte == 0).filter(|row| !row.is_empty()) {
@@ -105,6 +136,10 @@ fn receipt_lines(store: &Path) -> Result<String, String> {
         names.sort();
         for path in names.iter().filter(|path| path.extension().is_some_and(|ext| ext == "receipt")) {
             let text = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+            // A receipt whose retained evidence has expired proves nothing.
+            if actions::expired(&text) {
+                continue;
+            }
             if let Some(first) = text.lines().next().filter(|line| line.starts_with("receipt ")) {
                 out.push_str(first);
                 out.push('\n');
@@ -120,25 +155,31 @@ fn receipt_lines(store: &Path) -> Result<String, String> {
     Ok(out)
 }
 
-fn request(options: &Options) -> Result<(String, Vec<Entry>), String> {
+pub(crate) fn request(options: &Options) -> Result<(String, Vec<Entry>), String> {
     let entries = tree(&options.revision)?;
     let mut text = String::new();
     for entry in &entries {
         text.push_str(&format!("tree {} {}\n", entry.object, entry.path));
     }
+    // A context is not a file: it enters only the obligations that declare
+    // `@key` (the model never lets a plain prefix, even "", reach it).
+    for (key, value) in &options.contexts {
+        text.push_str(&format!("tree context:{value} @{key}\n"));
+    }
     text.push_str(&receipt_lines(&options.receipts)?);
     Ok((text, entries))
 }
 
-fn plan_text(request: &str) -> Result<String, String> {
+pub(crate) fn plan_text(request: &str) -> Result<String, String> {
     let out = prism_factory_host::plan(request.as_bytes()).map_err(|_| "the plan root overflowed")?;
     String::from_utf8(out).map_err(|_| "the plan is not UTF-8".into())
 }
 
 /// The plan, read back into what the host needs to act on it.
 #[derive(Default)]
-struct Plan {
-    routes: BTreeMap<String, (String, String)>,
+pub(crate) struct Plan {
+    pub(crate) routes: BTreeMap<String, (String, String)>,
+    pub(crate) order: Vec<String>,
     environment: BTreeMap<String, String>,
     run: BTreeMap<String, String>,
     files: BTreeMap<String, Vec<String>>,
@@ -146,7 +187,7 @@ struct Plan {
     releasable: bool,
 }
 
-fn read_plan(text: &str) -> Plan {
+pub(crate) fn read_plan(text: &str) -> Plan {
     let mut plan = Plan::default();
     for line in text.lines() {
         let mut parts = line.splitn(3, ' ');
@@ -155,6 +196,7 @@ fn read_plan(text: &str) -> Plan {
             "obligation" => {
                 let (route, kappa) = rest.split_once(' ').unwrap_or((rest, ""));
                 plan.routes.insert(owner.into(), (route.into(), kappa.into()));
+                plan.order.push(owner.into());
             }
             "environment" => {
                 plan.environment.insert(owner.into(), rest.into());
@@ -228,7 +270,7 @@ fn record(store: &Path, name: &str, kappa: &str, passed: bool, revision: &str) -
     fs::write(store.join(format!("{kappa}-{verdict}.receipt")), body).map_err(|error| error.to_string())
 }
 
-fn reweigh(store: &Path, outcomes: &[(String, bool)]) -> Result<(), String> {
+pub(crate) fn reweigh(store: &Path, outcomes: &[(String, bool)]) -> Result<(), String> {
     let mut request = fs::read_to_string(store.join("weights")).unwrap_or_default();
     for (name, passed) in outcomes {
         request.push_str(&format!("outcome {name} {}\n", if *passed { "pass" } else { "fail" }));
@@ -294,9 +336,13 @@ fn run(options: &Options) -> Result<bool, String> {
     Err(format!("no fixed point within {} rounds", options.rounds))
 }
 
-fn clone(options: &Options) -> Options {
+pub(crate) fn clone(options: &Options) -> Options {
     Options {
         revision: options.revision.clone(),
+        contexts: options.contexts.clone(),
+        name: options.name.clone(),
+        jobs: options.jobs.clone(),
+        arguments: options.arguments.clone(),
         receipts: options.receipts.clone(),
         only: options.only.clone(),
         rounds: options.rounds,
@@ -329,20 +375,24 @@ fn main() -> ExitCode {
             true
         }),
         "run" => run(&options),
-        "workflow" => {
-            let projection = prism_factory_host::workflow();
-            match (&options.check, &options.write) {
-                (Some(path), _) => match fs::read(path) {
-                    Ok(bytes) if bytes == projection => Ok(true),
-                    Ok(_) => Err(format!("{} differs from the factory's workflow projection; run `prism-factory workflow --write {}`", path.display(), path.display())),
-                    Err(error) => Err(format!("{}: {error}", path.display())),
-                },
-                (None, Some(path)) => fs::write(path, &projection).map(|_| true).map_err(|error| error.to_string()),
-                (None, None) => {
-                    std::io::stdout().write_all(&projection).map(|_| true).map_err(|error| error.to_string())
-                }
-            }
+        "workflow" => actions::workflow(&options),
+        "actions-route" => actions::route(&options),
+        "plan-request" => {
+            let mut text = String::new();
+            std::io::stdin().read_to_string(&mut text).map_err(|error| error.to_string()).and_then(|_| plan_text(&text)).map(|plan| {
+                print!("{plan}");
+                true
+            })
         }
+        "reweigh" => {
+            let mut request = Vec::new();
+            std::io::stdin().read_to_end(&mut request).map_err(|error| error.to_string()).and_then(|_| {
+                let next = prism_factory_host::reweigh(&request).map_err(|_| "the reweigh root overflowed".to_string())?;
+                std::io::stdout().write_all(&next).map(|_| true).map_err(|error| error.to_string())
+            })
+        }
+        "actions-receipts" => actions::receipts(&options),
+        "route-record" => actions::route_record(&options),
         _ => Err(format!("unknown command {command}")),
     };
     match result {

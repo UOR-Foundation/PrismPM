@@ -139,15 +139,16 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs.rehearsal, '${{ needs.policy.outputs.rehearsal }}');
   assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert(value.jobs.policy.steps.some(step => step.run === 'node --test scripts/release-native-contract.test.mjs'));
-  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'factory', 'devcontainer-image'],
-    'cheap release contracts, the factory route and the one construction-cache writer precede source verification');
-  assert.equal(value.jobs['source-vv'].if, "${{ needs.factory.outputs.route == 'establish' }}",
-    'source V&V runs exactly when no receipt exists for this κ');
+  assert.deepEqual(value.jobs['source-vv'].needs, ['policy', 'factory', 'devcontainer-image', 'vv-sdk'],
+    'cheap release contracts, the factory route, the one construction-cache writer and the one V&V SDK image precede source verification');
+  assert.equal(value.jobs['source-vv'].if, "${{ !cancelled() && needs.factory.outputs.route == 'establish' && needs.devcontainer-image.result == 'success' "
+    + "&& (needs.vv-sdk.result == 'success' || (needs.factory.outputs.vv-sdk == 'proved' && needs.vv-sdk.result == 'skipped')) }}",
+    'source V&V runs exactly when no receipt exists for its identity, on a V&V SDK image this run built or a receipt proved');
   const factory = value.jobs.factory;
   assert.equal(factory.needs, 'policy');
-  assert.deepEqual(factory.permissions, {contents: 'read', actions: 'read'});
-  assert.equal(factory.steps.find(step => step.uses?.startsWith('actions/checkout')).with['fetch-depth'], 0, 'κ of ancestors needs history');
-  assert.match(factory.steps.find(step => step.id === 'route').run, /node scripts\/factory\.mjs find-receipt "\$GITHUB_SHA"/);
+  assert.deepEqual(factory.permissions, {contents: 'read'});
+  assert.equal(factory.steps.find(step => step.uses?.startsWith('actions/checkout')).with['fetch-depth'], 0, 'identities of ancestors need history');
+  assert.equal(factory.steps.find(step => step.id === 'route').run, 'bash prism-factory/factory.sh actions-route', 'the certified factory core decides every route');
   const image = value.jobs['devcontainer-image'];
   assert.deepEqual(image.needs, ['policy', 'factory']);
   assert(!('strategy' in image) && !('if' in image), 'exactly one unconditional construction-cache writer');
@@ -176,7 +177,7 @@ function validateWorkflow(value) {
   assert.equal(sourceBuild.cacheFrom, '${{ steps.cache.outputs.cache-from }}');
   assert.equal(sourceBuild.cacheTo, undefined, 'source shards consume the construction cache without concurrent writers');
   const sourceGate = value.jobs['source-vv'].steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
+  assert.equal(sourceGate, "set -euo pipefail\nexport PRISMPM_TEST_SDK_IMAGE='${{ steps.sdk.outputs.image }}'\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
@@ -195,7 +196,7 @@ function validateWorkflow(value) {
   assert.equal(receipt.if, "${{ needs.factory.outputs.route == 'proved' }}");
   const receiptDownload = gate.steps.find(step => step.with?.['run-id']);
   assert.equal(receiptDownload.with.name, 'source-vv'); assert.equal(receiptDownload.with['run-id'], '${{ needs.factory.outputs.run-id }}');
-  assert.match(gate.steps.find(step => step.id === 'source').run, /node scripts\/factory\.mjs route factory-route\/factory-route\.json/);
+  assert.match(gate.steps.find(step => step.id === 'source').run, /bash prism-factory\/factory\.sh route-record factory-route\/factory-route\.json/);
   assert(gate.steps.some(step => step.with?.name === 'factory-route' && step.with['if-no-files-found'] === 'error'));
   // Image stages establish projection obligations only and start beside source V&V.
   // They run exactly when the factory routes the build to be established;

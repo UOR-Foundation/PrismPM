@@ -1,0 +1,40 @@
+name: PrismPM OCI/native and Cargo publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact SemVer without a leading v
+        required: true
+        default: 0.4.0
+        type: string
+      publish-crates:
+        description: Publish the already packaged crates through crates.io trusted publishing
+        required: true
+        default: false
+        type: boolean
+      rehearsal:
+        description: Run every check but publish no release assets, discovery tags or crates. Images are still pushed by digest and signed.
+        required: true
+        default: true
+        type: boolean
+  push:
+    # Every release-branch update qualifies its exact merge commit. Branch
+    # pushes are always rehearsals; only the release tag can publish by push.
+    branches:
+      - release/v0.4
+    tags:
+      - v0.4.0
+
+# Never cancel a release in flight: partial publication is worse than queueing.
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  SDK_REPOSITORY: ghcr.io/uor-foundation/prismpm-sdk
+  RUNTIME_REPOSITORY: ghcr.io/uor-foundation/prismpm-runtime
+
+jobs:

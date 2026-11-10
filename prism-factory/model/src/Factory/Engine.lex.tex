@@ -262,14 +262,43 @@ definition{
 }
 
 definition{
+  name: signed,
+  parameters: [input : String, sign : Bytes],
+  result: Bool,
+  body: (LexLeanStd.Text::startsWith (text input) sign),
+  executable: true
+}
+
+definition{
+  name: unsigned,
+  parameters: [input : String],
+  result: Bytes,
+  body: (let raw : Bytes := (text input); (LexLeanStd.Text::sliceOr raw 1 (prim subtract (prim length raw : Nat) 1 : Nat))),
+  executable: true
+}
+
+definition{
+  name: reaches,
+  parameters: [input : String, path : Bytes],
+  result: Nat,
+  body: (let prefix : Bytes := (if (signed input 0x21) then (unsigned input) else (text input)); (if (LexLeanStd.Text::startsWith path prefix) then (if (LexLeanStd.Text::startsWith path 0x40) then (if (LexLeanStd.Text::startsWith prefix 0x40) then ((prim length prefix : Nat) + 1) else 0) else ((prim length prefix : Nat) + 1)) else 0)),
+  executable: true
+}
+
+definition{
+  name: longest,
+  parameters: [inputs : (List String), path : Bytes, exclusion : Bool],
+  result: Nat,
+  body: (prim list_fold (fun [exclusion, path] (sofar : Nat) (input : String) => (if (prim equal (signed input 0x21) exclusion : Bool) then (let reach : Nat := (reaches input path); (if (sofar <? reach) then reach else sofar)) else sofar)) 0 inputs : Nat),
+  executable: true
+}
+
+definition{
   name: covered,
   parameters: [inputs : (List String), path : Bytes],
   result: Bool,
-  body: (match inputs
-    | List.nil => false
-    | List.cons head tail => (if (LexLeanStd.Text::startsWith path (text head)) then true else (covered tail path))),
-  executable: true,
-  recursive_argument: inputs
+  body: ((longest inputs path true) <? (longest inputs path false)),
+  executable: true
 }
 
 definition{
@@ -444,6 +473,16 @@ definition{
   parameters: [wanted : String, values : (List String)],
   result: Bool,
   body: (prim list_fold (fun [wanted] (sofar : Bool) (value : String) => (sofar || (prim equal value wanted : Bool))) false values : Bool),
+  executable: true
+}
+
+definition{
+  name: nonEmpty,
+  parameters: [values : (List String)],
+  result: Bool,
+  body: (match values
+    | List.nil => false
+    | List.cons head tail => true),
   executable: true
 }
 

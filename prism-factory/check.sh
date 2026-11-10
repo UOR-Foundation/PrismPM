@@ -3,7 +3,8 @@
 #  1. The certified bundle replays without the source, Lean or the network.
 #  2. When the pinned Lean is present, the model is verified through the kernel
 #     and re-exported, and the export must equal the committed bundle.
-#  3. The host's tests pass and the committed workflow equals the projection.
+#  3. The host's tests pass and both committed workflows equal their projection:
+#     factory.yml, and release.yml with its job fragments (prism-factory/jobs/).
 # It runs in a directory that holds only this obligation's declared inputs.
 set -euo pipefail
 lexlean_target=${CARGO_TARGET_DIR:-$PWD/target}/lexlean
@@ -19,4 +20,5 @@ else
 fi
 cargo test --quiet --release --locked --offline --manifest-path prism-factory/host/Cargo.toml
 cargo build --quiet --release --locked --offline --manifest-path prism-factory/host/Cargo.toml
-prism-factory/host/target/release/prism-factory workflow --check .github/workflows/factory.yml
+prism-factory/host/target/release/prism-factory workflow --name factory --check .github/workflows/factory.yml
+prism-factory/host/target/release/prism-factory workflow --name release --check .github/workflows/release.yml

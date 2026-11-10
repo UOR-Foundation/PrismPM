@@ -24,9 +24,11 @@ pub fn reweigh(request: &[u8]) -> Result<Vec<u8>, Overflow> {
         .map_err(|_| Overflow)
 }
 
-/// The generated GitHub workflow projection.
-pub fn workflow() -> Vec<u8> {
-    factory_workflow::run(factory_workflow::Bytes::lit(b"")).octets().to_vec()
+/// A generated GitHub workflow projection: `b"release"` for the release
+/// skeleton (job fragments are placed by the host), anything else for the
+/// pull-request workflow.
+pub fn workflow(selector: &[u8]) -> Vec<u8> {
+    factory_workflow::run(factory_workflow::Bytes::lit(selector)).octets().to_vec()
 }
 
 /// The WebAssembly ABI for the page: the caller writes a request into memory
@@ -81,6 +83,6 @@ mod wasm {
 
     #[no_mangle]
     pub extern "C" fn factory_workflow() -> u64 {
-        give(super::workflow())
+        give(super::workflow(b""))
     }
 }
