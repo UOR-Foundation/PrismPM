@@ -1,0 +1,142 @@
+\begin{lexlean}{Factory.PrismPM}
+\useglossary{lexlean.std.nat@1.2.0}
+\importmodule{Factory.Engine}
+\title{Natural number addition}
+\begin{semanticmodule}
+definition{
+  name: whole,
+  parameters: [],
+  result: (List String),
+  body: (cons "" (nil String)),
+  executable: true
+}
+
+definition{
+  name: obligation,
+  parameters: [name : String, kind : Factory.Engine::Kind, environment : String, run : String, inputs : (List String), needs : (List String)],
+  result: Factory.Engine::Obligation,
+  body: (record Factory.Engine::Obligation {name := name, kind := kind, environment := environment, run := run, inputs := inputs, needs := needs}),
+  executable: true
+}
+
+definition{
+  name: sourceGraph,
+  parameters: [],
+  result: (List Factory.Engine::Obligation),
+  body: (cons (obligation "source-vv-dk-3" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/dk-3" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-ho-oc" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/ho-oc" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-dk-2" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/dk-2" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-gates" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/gates" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-st-sy" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/st-sy" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-dk-0-1" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/dk-0-1" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-conformance" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/conformance" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (cons (obligation "source-vv-source" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/source-vv/source" (whole) (cons "cargo-fetch" (cons "devcontainer-image" (nil String)))) (nil Factory.Engine::Obligation))))))))),
+  executable: true
+}
+
+definition{
+  name: sourceNames,
+  parameters: [],
+  result: (List String),
+  body: (cons "source-vv-dk-3" (cons "source-vv-ho-oc" (cons "source-vv-dk-2" (cons "source-vv-gates" (cons "source-vv-st-sy" (cons "source-vv-dk-0-1" (cons "source-vv-conformance" (cons "source-vv-source" (nil String))))))))),
+  executable: true
+}
+
+definition{
+  name: setup,
+  parameters: [],
+  result: (List Factory.Engine::Obligation),
+  body: (cons (obligation "cargo-fetch" (ctor Factory.Engine::Kind.fetch) "host" "cargo fetch --locked" (cons "Cargo.lock" (cons "Cargo.toml" (cons "crates/" (cons "stdlib/" (cons "vendor/" (cons "xtask/" (nil String))))))) (nil String)) (cons (obligation "factory-model" (ctor Factory.Engine::Kind.hermetic) "host" "bash prism-factory/check.sh" (cons ".github/workflows/factory.yml" (cons "prism-factory/" (cons "vendor/lexlean/" (nil String)))) (nil String)) (cons (obligation "devcontainer-image" (ctor Factory.Engine::Kind.fetch) "actions" "release.yml/devcontainer-image" (cons ".devcontainer/" (cons "lean-toolchain" (cons "rust-toolchain.toml" (cons "tools.lock" (nil String))))) (nil String)) (nil Factory.Engine::Obligation)))),
+  executable: true
+}
+
+definition{
+  name: build,
+  parameters: [],
+  result: (List Factory.Engine::Obligation),
+  body: (cons (obligation "gate" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/gate" (whole) (sourceNames)) (cons (obligation "sdk-image-amd64" (ctor Factory.Engine::Kind.fetch) "actions" "release.yml/image-platforms/amd64" (whole) (nil String)) (cons (obligation "sdk-image-arm64" (ctor Factory.Engine::Kind.fetch) "actions" "release.yml/image-platforms/arm64" (whole) (nil String)) (cons (obligation "images" (ctor Factory.Engine::Kind.fetch) "actions" "release.yml/images" (whole) (cons "sdk-image-amd64" (cons "sdk-image-arm64" (nil String)))) (cons (obligation "reproducibility" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/reproducibility" (whole) (cons "images" (nil String))) (cons (obligation "library-closure" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/reproducibility/library-sdk-check" (whole) (cons "images" (nil String))) (cons (obligation "browser-closure" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/reproducibility/browser-api-sdk-check" (whole) (cons "images" (nil String))) (cons (obligation "installed-sdk" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/installed-sdk" (whole) (cons "images" (nil String))) (cons (obligation "native" (ctor Factory.Engine::Kind.hermetic) "actions" "release.yml/native" (whole) (cons "images" (nil String))) (nil Factory.Engine::Obligation)))))))))),
+  executable: true
+}
+
+definition{
+  name: publication,
+  parameters: [],
+  result: (List Factory.Engine::Obligation),
+  body: (cons (obligation "release" (ctor Factory.Engine::Kind.fetch) "actions" "release.yml/release" (whole) (cons "factory-model" (cons "gate" (cons "reproducibility" (cons "library-closure" (cons "browser-closure" (cons "installed-sdk" (cons "native" (nil String))))))))) (nil Factory.Engine::Obligation)),
+  executable: true
+}
+
+definition{
+  name: graph,
+  parameters: [],
+  result: (List Factory.Engine::Obligation),
+  body: (prim append (prim append (prim append (setup) (sourceGraph) : (List Factory.Engine::Obligation)) (build) : (List Factory.Engine::Obligation)) (publication) : (List Factory.Engine::Obligation)),
+  executable: true
+}
+
+definition{
+  name: onLegacyAdapter,
+  parameters: [items : (List Factory.Engine::Obligation)],
+  result: Nat,
+  body: (prim list_fold (fun (sofar : Nat) (item : Factory.Engine::Obligation) => (if (prim equal (project item environment) "actions" : Bool) then (sofar + 1) else sofar)) 0 items : Nat),
+  executable: true
+}
+
+definition{
+  name: wholeSource,
+  parameters: [items : (List Factory.Engine::Obligation)],
+  result: Nat,
+  body: (prim list_fold (fun (sofar : Nat) (item : Factory.Engine::Obligation) => (if (Factory.Engine::member "" (project item inputs)) then (sofar + 1) else sofar)) 0 items : Nat),
+  executable: true
+}
+
+theorem{
+  name: every_obligation_has_a_distinct_name,
+  parameters: [],
+  statement: ((Factory.Engine::distinct (Factory.Engine::names (graph))) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: every_need_is_declared_before_it_is_needed,
+  parameters: [],
+  statement: ((Factory.Engine::needsComeFirst (graph)) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: every_obligation_declares_its_inputs_and_its_run,
+  parameters: [],
+  statement: ((Factory.Engine::allDeclared (graph)) = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: no_obligation_is_arbitrary,
+  parameters: [],
+  statement: ((Factory.Engine::noArbitraryObligation (graph) "release") = true),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: the_release_has_twenty_one_obligations,
+  parameters: [],
+  statement: ((prim length (graph) : Nat) = 21),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: nineteen_obligations_still_run_on_the_legacy_adapter,
+  parameters: [],
+  statement: ((onLegacyAdapter (graph)) = 19),
+  proof: decide{},
+  axioms: []
+}
+
+theorem{
+  name: eighteen_obligations_read_the_whole_source,
+  parameters: [],
+  statement: ((wholeSource (graph)) = 18),
+  proof: decide{},
+  axioms: []
+}
+\end{semanticmodule}
+\end{lexlean}
