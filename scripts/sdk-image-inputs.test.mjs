@@ -93,6 +93,16 @@ function imageStages(recipe) {
   return stages;
 }
 
+test('downloaded tool archives install root-owned, never with the archive owner', () => {
+  // GNU tar as root restores the archive's numeric owner (uid 1001 for Node.js
+  // and several release tarballs). Installed compiler custody requires every
+  // member, /usr/local/bin and node included, to be root-owned.
+  const dockerfile = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const extractions = [...dockerfile.matchAll(/tar --extract[^\n]*--directory \/usr\/local[^\n]*/g)].map(match => match[0]);
+  assert.equal(extractions.length, 6);
+  for (const line of extractions) assert(line.startsWith('tar --extract --no-same-owner '), line);
+});
+
 test('read-only helper copies retain searchable SDK ancestors for unprivileged consumers', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const check = text => {
