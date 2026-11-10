@@ -4,8 +4,8 @@ name: Release candidate qualification
 # newest release-line candidate images, before it merges. Without this, the
 # only place such a change ran was a complete release run that first rebuilt
 # every image. The candidate's own checkout supplies every source binding;
-# this pull request supplies only the check (scripts/ and its browser-system
-# fixture, mounted over the image's copies). The merged commit's release run
+# this pull request supplies only the checks (scripts/, the SDK check modules in
+# sdk/ and the browser-system fixture, mounted over the image's copies). The merged commit's release run
 # still checks its own images.
 on:
   pull_request:
@@ -14,7 +14,8 @@ on:
     paths:
       - .github/workflows/release-qualify.yml
       - scripts/product-sdk-check.*
-      - scripts/library-sdk-check.mjs
+      - scripts/library-sdk-*
+      - sdk/exporter-*.mjs
       - scripts/browser-api-sdk-check.mjs
       - tests/browser-system/**
 
@@ -108,5 +109,24 @@ jobs:
         with:
           name: qualified-product-cli-sdk-${{ matrix.arch }}
           path: sdk-${{ matrix.arch }}-product-cli/
+          if-no-files-found: error
+          retention-days: 30
+      # The native-library closure runs in the release's reproducibility stage,
+      # hours after the images; qualify it here against the same candidate.
+      - name: Qualify this check against the candidate's native-library closure
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          CANDIDATE_REVISION: ${{ needs.candidate.outputs.revision }}
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          PRISMPM_QUALIFY_SOURCE="$GITHUB_WORKSPACE/root-c" bash root-a/scripts/library-sdk-check.sh \
+            "$(cat .shipped-image/sdk-image.txt)" "$CANDIDATE_REVISION" > "$RESULT_NAME-library-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: qualified-library-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-library-sdk.log
           if-no-files-found: error
           retention-days: 30
