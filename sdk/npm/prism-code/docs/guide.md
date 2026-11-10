@@ -142,6 +142,15 @@ new TextDecoder().decode(response);   // '1\tok\t42'
 await app.acceptance();    // { total: 22, passed: 22, failed: [] }
 ```
 
+`load` refuses a holo whose bytes do not match its own digests: it rejects
+with a `VerificationError` whose `check` is `holo.integrity` and whose
+`details.failures` names each difference, before the guest compiles. So does
+every CLI verb that opens a holo (`vectors`, `history`, `replay`, `generate`
+and `run`). To examine a damaged holo, pass `{ allowUnverified: true }`; the
+app then opens with `identities.verified` false. `run --allow-unverified` is
+the CLI's equivalent. `prism-code check` and `inspect` read the bytes without
+opening the holo, so they still report what changed.
+
 `load` takes bytes, a `Blob`, a file path or URL ending in `.holo`, or a
 closure directory (path in Node, URL in a browser). `dispatch` runs each
 request on a fresh instance of the guest, the same loop PrismPM's own

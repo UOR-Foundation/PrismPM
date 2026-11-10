@@ -139,7 +139,7 @@ nothing. `setup` says so in one line.
 import { load } from 'prism-code';
 
 const app = await load('node_modules/prism-code/fixtures/Calculator.holo');
-app.identities.verified; // footer, blob labels and manifest checked with BLAKE3
+app.identities.verified; // true: load refuses a holo whose footer, labels or manifest do not match (holo.integrity)
 app.limits;             // { request: 52, response: 27, guestAllocation: 65536 }
 const response = await app.dispatch(new TextEncoder().encode('1\tadd\t20\t22'));
 new TextDecoder().decode(response); // '1\tok\t42'

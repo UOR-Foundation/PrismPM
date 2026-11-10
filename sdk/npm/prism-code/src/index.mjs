@@ -7,7 +7,7 @@
  * `acceptance()` replays the modeled vectors. Nothing here compiles, proves or
  * produces an artifact; those stay in the SDK image.
  */
-import { parseArchive, resolveArchive, asBytes } from './archive.mjs';
+import { parseArchive, resolveArchive, asBytes, assertIntact } from './archive.mjs';
 import { attestationSection, readAttestations } from './attestations.mjs';
 import { decodeHoloview } from './view.mjs';
 import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptance } from './core.mjs';
@@ -199,10 +199,18 @@ function worldWithinGrant(directory, grant) {
  * Open a `.holo` archive from bytes. `options.capabilities` is the capability
  * file the guest runs under and `options.capabilitySet` the set to apply,
  * `default` unless named; without a file the holo is granted nothing.
+ *
+ * A holo whose bytes do not match its own digests (the footer, a content
+ * label, or the manifest's cross-references) is refused with a
+ * `VerificationError` whose `check` is `holo.integrity`, before its guest is
+ * compiled (#583). `options.allowUnverified: true` opens it anyway, with
+ * `identities.verified` false; use it to examine a damaged holo, never to run
+ * one you were sent.
  */
 export async function loadArchive(source, options = {}) {
   const parsed = parseArchive(asBytes(source));
   const resolved = resolveArchive(parsed);
+  assertIntact(parsed, resolved.identities, options);
   // A malformed attestation row fails the load; the bundles decode lazily.
   attestationSection(parsed);
   const { modelDocument, provenance, directory } = resolved;

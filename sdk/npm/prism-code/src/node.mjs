@@ -62,7 +62,7 @@ export async function fromFile(source, options = {}) {
     if (typeof model === 'string') model = JSON.parse(await readFile(toPath(model), 'utf8'));
     return loadClosure(files, (name) => import(pathToFileURL(join(path, name)).href), { model, ...grant });
   }
-  return loadArchive(new Uint8Array(await readFile(path)), grant);
+  return loadArchive(new Uint8Array(await readFile(path)), { ...grant, allowUnverified: options.allowUnverified });
 }
 
 /**

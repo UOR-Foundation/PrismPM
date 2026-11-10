@@ -24,7 +24,7 @@ async function fetchBytes(url) {
 export async function load(source, options = {}) {
   const base = new URL(source, typeof document !== 'undefined' ? document.baseURI : undefined);
   const grant = { capabilities: options.capabilities ?? null, capabilitySet: options.capabilitySet };
-  if (base.pathname.endsWith('.holo')) return loadArchive(await fetchBytes(base), grant);
+  if (base.pathname.endsWith('.holo')) return loadArchive(await fetchBytes(base), { ...grant, allowUnverified: options.allowUnverified });
   const directory = base.href.endsWith('/') ? base : new URL(`${base.href}/`);
   const names = new Set(CLOSURE_FILES);
   let stem = options.stem ?? null;

@@ -222,7 +222,8 @@ async function gate({ root, spec, toolchain, update }) {
   const { grant } = await readManifest(root);
   let app;
   try {
-    app = await fromFile(holo, grant);
+    // This gate reports a holo that does not match its digests in its own words, below.
+    app = await fromFile(holo, { ...grant, allowUnverified: true });
   } catch (error) {
     return failed('holo', `the holo cannot load under the capabilities prism.toml grants: ${error.message}`);
   }

@@ -744,6 +744,12 @@ export interface LoadOptions {
   capabilities?: Capabilities | Uint8Array | string | URL | null;
   /** The set of `capabilities` to apply. Default `default`. */
   capabilitySet?: string;
+  /**
+   * Open a `.holo` whose bytes do not match its own digests. Without it such
+   * a holo is refused with a `VerificationError` (`check` `holo.integrity`),
+   * before its guest compiles (#583). Default false.
+   */
+  allowUnverified?: boolean;
 }
 
 /** The resource kinds a capability set grants. */

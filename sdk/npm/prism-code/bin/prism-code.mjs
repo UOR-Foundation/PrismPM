@@ -376,6 +376,8 @@ async function open(path, options) {
     model: options.model ? resolve(options.model) : null,
     capabilities: options.capabilities ? resolve(options.capabilities) : null,
     capabilitySet: options['capability-set'],
+    // Only run has the flag; every other verb refuses a holo that does not match its digests (#583).
+    allowUnverified: options['allow-unverified'] === true,
   });
 }
 

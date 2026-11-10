@@ -16,7 +16,7 @@
  * Section kinds: 15 application manifest, 8 metadata, 14 extension, 16 content
  * blob. A content blob starts with its 71-byte `blake3:<hex>` label.
  */
-import { fail } from './errors.mjs';
+import { VerificationError, fail } from './errors.mjs';
 import { blake3Hex, kappa } from './blake3.mjs';
 
 export const MAGIC = 'HOLO';
@@ -265,4 +265,25 @@ export function resolveArchive(parsed) {
       consistent,
     },
   };
+}
+
+/**
+ * Refuse a holo whose bytes do not match its own digests: the footer, a
+ * content label, or the manifest's cross-references, which
+ * `identities.verified` sums up (#583). Throws a `VerificationError` whose
+ * `check` is `holo.integrity` and whose `details.failures` names each
+ * difference. `allowUnverified: true` lets the caller open it anyway, to
+ * examine it.
+ */
+export function assertIntact(parsed, identities, { allowUnverified = false } = {}) {
+  if (identities.verified || allowUnverified === true) return;
+  const failures = [];
+  if (!parsed.verification.footer) failures.push(`the footer ${parsed.footer} is not the BLAKE3 of the body, ${parsed.fingerprint}`);
+  for (const m of parsed.verification.labelMismatches) failures.push(`section ${m.section} is labelled ${m.label} but its content hashes to ${m.actual}`);
+  if (!identities.consistent) failures.push('the manifest and the provenance do not name the same code, view and capability blobs');
+  if (failures.length === 0) failures.push('its digests do not match its bytes');
+  throw new VerificationError(`the holo does not verify, so it was changed after it was built: ${failures.join('; ')}. prism-code check names every difference; pass allowUnverified: true to open it anyway`, {
+    check: 'holo.integrity',
+    details: { failures },
+  });
 }

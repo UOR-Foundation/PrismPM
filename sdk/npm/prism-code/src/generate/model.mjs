@@ -9,7 +9,7 @@
  * `inputs.world`); the application comes from the model document.
  */
 import { readFileSync } from 'node:fs';
-import { parseArchive, resolveArchive } from '../archive.mjs';
+import { assertIntact, parseArchive, resolveArchive } from '../archive.mjs';
 import { inspect } from '../inspect.mjs';
 import { blake3Hex } from '../blake3.mjs';
 import { sha256Hex } from '../sha256.mjs';
@@ -139,7 +139,10 @@ function applicationModel(document, digest) {
  * world has no WIT file here.
  */
 export async function codeModel(bytes) {
-  const resolved = resolveArchive(parseArchive(bytes));
+  const parsed = parseArchive(bytes);
+  const resolved = resolveArchive(parsed);
+  // Bindings written from a changed model document would type the wrong requests (#583).
+  assertIntact(parsed, resolved.identities);
   const inspection = await inspect(bytes);
   const { world } = inspection;
   if (!world || world.digest === null) fail('generate.world', `the holo declares no world generate knows (${world?.contract ?? 'none'})`);

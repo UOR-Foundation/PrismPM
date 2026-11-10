@@ -66,7 +66,8 @@ export async function checkAuthoring(holo, { root, reference = null }) {
 
   const bytes = new Uint8Array(readFileSync(resolve(holo)));
   const { grant } = await readManifest(root);
-  const app = await fromFile(resolve(holo), grant);
+  // author.holo.closed records a holo that does not match its digests, so it must open to be judged.
+  const app = await fromFile(resolve(holo), { ...grant, allowUnverified: true });
   const inspected = await inspect(bytes);
   record('author.holo.closed', app.identities.verified, app.identities.verified ? 'the holo matches its own digests and loads under the capabilities prism.toml grants' : 'the holo does not match its own digests');
   const holoModel = inspected.model?.digest?.sha256 ?? null;
