@@ -166,7 +166,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 8
       matrix:
         include:
           - part: dk-3
@@ -401,7 +401,7 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 6
       matrix:
         include:
           - name: sdk
@@ -625,7 +625,7 @@ jobs:
     timeout-minutes: 360
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 12
       matrix:
         include:
           - os: ubuntu-24.04

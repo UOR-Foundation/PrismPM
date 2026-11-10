@@ -451,7 +451,7 @@ function workflowContract(value) {
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
-  assert.equal(value.jobs['source-vv'].strategy['max-parallel'], 4);
+  assert.equal(value.jobs['source-vv'].strategy['max-parallel'], 8);
   for (const [name, job] of Object.entries(value.jobs)) assert(job['timeout-minutes'] > 0 && job['timeout-minutes'] <= 360, `${name} is bounded by one hosted-job limit`);
   const partUpload = value.jobs['source-vv'].steps.find(step => step.with?.name === 'source-vv-part-${{ matrix.part }}');
   assert.equal(partUpload.if, 'always()'); assert.equal(partUpload.with['if-no-files-found'], 'error');
