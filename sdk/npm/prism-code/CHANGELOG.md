@@ -14,7 +14,12 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Features Added
 - `prism_build` and `prism_prove` say where a running job is (#585). A status while running carries `stage` (such as `Stage 4 of 7: exporting the model from Lean twice and comparing the two.`), `stageIndex` and `stageTotal` when known, `stageElapsed` and `quiet`, the seconds since the job last printed a line; `prism_status` shows the same for each job. The build sets `PRISMPM_PROGRESS=1`, which has `prismpm verify` print one `@@stage <n>/<total> <id> <words>` line on stderr as it enters each of its seven stages: build, Lean proof, Lean check, export, native compile, acceptance and publish. An SDK image built before this change ignores the variable, and the status then names the script step, such as `Building and verifying the app in the SDK image...`, instead of the same line for fourteen minutes.
+- A finished `prism_build` carries `assurance`: the level `prism-code check` gives the holo (P0 today) and why (#582).
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
+
+### Bugs Fixed
+- `prism_build` no longer says "Built and verified" for a holo that `prism-code check` rates P0. It says Lean proved every property during the build, and the new `assurance` member says the holo does not carry that proof yet, so someone it is sent to cannot confirm it from the file (#582). Writing the signed statements into the holo is #268.
+- The `provenance.statement` and `proof.statement` reasons of `check` no longer blame issues that are closed (#266, #267). They say what is missing: the build does not write those statements into the holo yet (#268, #582). The verdict goldens, the policy-input fixtures and `@prism-code/verify` carry the same text.
 
 ## [0.7.2] - 2026-11-09
 

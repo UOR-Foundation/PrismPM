@@ -645,12 +645,13 @@ A CI job gates on the exit code and keeps the verdict when it fails:
     path: verdict.json
 ```
 
-Treat exit 2 as a failure: it means nothing was judged. Today every holo is
-`P0`, because no build writes a provenance or proof statement into the holo
-yet, so the default policy fails it; a holo that carries an attestation
-section exits 2 until the format revision that admits it lands with #267's
-wire model change. From `P2` up, the text form also prints what the check
-trusts the signer for.
+Treat exit 2 as a failure: it means nothing was judged. A holo straight from
+a build is `P0`, so the default policy fails it: Lean proves the model during
+the build, but the build does not yet write a provenance or proof statement
+into the holo (#268, #582). A holo that carries signed statements, added with
+`prism-code attest`, reaches `P1` or `P2` when `--key` or a certificate
+identity names its signer. From `P2` up, the text form also prints what the
+check trusts the signer for.
 
 `prism-code check` takes a holo. With no holo it was the 0.2.0 spelling of
 `build --check`; since 0.8.0 it is a usage error (exit 64) that names
