@@ -98,7 +98,7 @@ export function validateQualification(value, binding, authority, nativeInventory
     }
     const temporary = row.build.environment.TMPDIR;
     assert.match(temporary, /^\/tmp\/exporter-relocation-[A-Za-z0-9]+$/);
-    process(row.extraction, ['/usr/bin/tar', '--extract', '--file', roots[0], '--directory', row.root], temporary);
+    process(row.extraction, ['/usr/bin/tar', '--extract', '--file', roots[0], '--directory', row.root, '--same-permissions'], temporary);
     process(row.build, [lake, 'build', 'prod-export'], temporary);
     process(row.module, [lake, 'build', 'Conformance.LexLean11'], temporary);
     process(row.kernel, [lake, 'env', 'leanchecker', 'Conformance.LexLean11'], temporary);

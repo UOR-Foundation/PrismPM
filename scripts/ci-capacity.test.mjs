@@ -371,7 +371,7 @@ function candidateContract(value) {
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
-const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 4, native: 2}};
+const matrixParallelism = {release: {images: 6, reproducibility: 12, 'installed-sdk': 2, 'source-vv': 8, native: 2}};
 function publicationContract(name, value) {
   if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {
