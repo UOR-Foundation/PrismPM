@@ -5,6 +5,8 @@ available_in: "1.0-beta"
 ---
 This guide covers three ways agents and holos meet. An agent can call a holo as a tool, an agent can reach it as a Model Context Protocol server, and an agent can write the model that becomes a holo. In every case the holo is checked before the first call.
 
+What ships today is different: `asTool`, `holo.verify()` and the `@prism-code/mcp` package below are planned for 1.0-beta and are not on npm. Today `npx prism-code@latest setup` adds two MCP servers to your agent: `prism-code mcp`, which drafts a spec from one sentence, proves it with Lean and builds the holo, and the hosted LexLean verifier, whose address `setup --dry-run` prints. To give an agent a built holo as a tool now, wrap `load` and `app.dispatch` in a tool of your own.
+
 ## As a tool with the Vercel AI SDK
 
 `asTool(holo)` returns a tool shaped for the Vercel AI SDK: an `inputSchema` taken from the holo's world and an `execute` that dispatches to a checked instance. The agent sees a typed tool. It cannot see or change the capability set:
