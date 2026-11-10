@@ -476,12 +476,17 @@ async function built(dir, session, holo, seconds, proof) {
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: ok
-      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.`
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built in ${seconds} s${where}: Lean proved every property during the build, and ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.`
       : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
+    // The holo does not carry the proof yet, so check rates it P0 (#582); say so rather than let the agent call the file self-verifying.
+    assurance: {
+      level: 'P0',
+      why: 'The proof was checked on the machine that built this app, but the build does not yet write a signed proof statement into the holo (issue #268). So prism-code check rates the file P0, and someone you send it to cannot confirm the proof from the file alone.',
+    },
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
-      note: 'The run policy accepts P0, the level every holo has until holos carry signed statements. The proofs were checked when it was built.',
+      note: 'The run policy accepts P0, because the holo carries no signed statements yet (issue #268). Lean checked the proofs when it was built, on this machine.',
     },
   };
 }

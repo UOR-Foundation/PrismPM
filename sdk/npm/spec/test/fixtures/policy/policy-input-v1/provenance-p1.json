@@ -32,7 +32,7 @@
       {
         "check": "proof.statement",
         "withholds": "P2",
-        "message": "The holo carries no proof statement (issue #266)."
+        "message": "The holo carries no proof statement; Lean proves the model at build, but the build does not write that proof into the holo yet (issues #268 and #582)."
       },
       {
         "check": "replay.statement",
