@@ -154,8 +154,38 @@ const STEP = (name, command) => `echo "@@step ${name}"; ${command} 2>&1; code=$?
 export const CHECK_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('lexlean-check', 'lexlean check --all'), STEP('prismpm-check', 'prismpm check')].join('; ');
 /** The second tier: Lean proves every theorem and audits every axiom set. About two to four minutes. */
 export const PROVE_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('verify', 'lexlean verify --all')].join('; ');
-/** The third tier: the whole build, the holo and its independent acceptance run. Ten minutes or more when cold. */
-export const BUILD_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('build', 'prismpm verify')].join('; ');
+/**
+ * The third tier: the whole build, the holo and its independent acceptance run. Ten minutes or more when cold.
+ * PRISMPM_PROGRESS has prismpm say each stage it enters (#585); an SDK image older than that ignores it.
+ */
+export const BUILD_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('build', 'PRISMPM_PROGRESS=1 prismpm verify')].join('; ');
+
+/** What each step of the build and prove scripts does, in the words a status shows. */
+const BUILD_STEPS = Object.freeze({
+  prelock: 'locking the model',
+  format: 'formatting the model',
+  lock: 'locking the formatted model',
+  check: 'checking the model',
+  verify: 'Lean proves every property',
+  build: 'building and verifying the app in the SDK image',
+});
+
+/**
+ * A build output line as a stage, or null. `@@step <id>` is a step of
+ * BUILD_SCRIPT starting; `@@stage <n>/<total> <id> <words>` is a stage of
+ * `prismpm verify` starting, from an SDK image that reports them (#585).
+ * Returns `{ id, index, total, text }`, where `text` is the line to show.
+ */
+export function stageOf(line) {
+  const stage = /^@@stage (\d+)\/(\d+) (\S+) (.+)$/.exec(line);
+  if (stage) {
+    const [, index, total, id, words] = stage;
+    return { id, index: Number(index), total: Number(total), text: `Stage ${index} of ${total}: ${words}.` };
+  }
+  const step = /^@@step (\S+)$/.exec(line);
+  if (step && BUILD_STEPS[step[1]]) return { id: step[1], index: null, total: null, text: `${BUILD_STEPS[step[1]][0].toUpperCase()}${BUILD_STEPS[step[1]].slice(1)}...` };
+  return null;
+}
 
 /** The steps a script ran and the exit code of each, from its markers. */
 export function steps(output) {

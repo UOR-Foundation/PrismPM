@@ -11,7 +11,7 @@ import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
-import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, stageOf, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
 import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
@@ -102,7 +102,13 @@ export async function prove(dir, session, { log = () => {}, overwrite = false, w
       return { ok: false, edited: true, message: `${relative(dir, written.path)} was edited by hand since Prism wrote it. Call the same tool again with overwrite: true to replace it from the spec, or change the spec to match.` };
     }
     log(round === 1 ? 'Formatting, locking and checking the model, then asking Lean to prove it...' : `Correcting an axiom set and proving again (round ${round})...`);
-    const run = await runInImage(dir, PROVE_SCRIPT_FULL, { onLine: (l) => /^(error|warning|verified|checked|check passed)/.test(l) && log(l) });
+    const run = await runInImage(dir, PROVE_SCRIPT_FULL, {
+      onLine: (l) => {
+        const stage = stageOf(l);
+        if (stage) log(stage.text, { stage });
+        else if (/^(error|warning|verified|checked|check passed)/.test(l)) log(l);
+      },
+    });
     rememberModel(dir, session);
     const diagnostics = parseDiagnostics(run.output);
     const failed = steps(run.output).find((s) => s.code !== 0);
@@ -274,7 +280,13 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
   }
   const started = Date.now();
   log('Building the app: Lean export, Rust, WebAssembly, the holo and its independent acceptance run. The first build takes ten minutes or more...');
-  const run = await runInImage(dir, BUILD_SCRIPT, { socket: true, onLine: (l) => /^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l) && log(l) });
+  // Each step and each stage prismpm reports becomes its own line, so a status says where the build is (#585).
+  const onLine = (l) => {
+    const stage = stageOf(l);
+    if (stage) log(stage.text, { stage });
+    else if (/^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l)) log(l);
+  };
+  const run = await runInImage(dir, BUILD_SCRIPT, { socket: true, onLine });
   // The build formats the model; remember it as formatted, so the next proof does not take it for a hand edit.
   const wasProved = session.status.proved?.modelSha === session.status.modelSha;
   rememberModel(dir, session);

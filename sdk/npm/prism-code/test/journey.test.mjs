@@ -27,9 +27,9 @@ import {
 import { acceptanceVectors, declarations, names, proofDeclarations, renderModel, renderProofs, renderSpecDocument } from '../src/journey/render.mjs';
 import { answersFromSpec, compile, nextTurn } from '../src/journey/session.mjs';
 import { journeyServer } from '../src/journey/register.mjs';
-import { axiomViolations, declarationAt, parseDiagnostics, steps } from '../src/journey/sdk.mjs';
+import { BUILD_SCRIPT, axiomViolations, declarationAt, parseDiagnostics, stageOf, steps } from '../src/journey/sdk.mjs';
 import { appDir, modelPath, readSession, scaffold, writeApp } from '../src/journey/project.mjs';
-import { createServer, INSTRUCTIONS } from '../src/journey/mcp.mjs';
+import { createServer, INSTRUCTIONS, stageReport } from '../src/journey/mcp.mjs';
 
 // Gap telemetry (src/gaps.mjs) keeps its ledger under PRISM_HOME: keep what these tests record out of the developer's own.
 process.env.PRISM_HOME = mkdtempSync(join(tmpdir(), 'prism-home-'));
@@ -287,6 +287,35 @@ test('agents start the server with this package, or with npx at this version fro
   assert.deepEqual(journeyServer(context('/repo/sdk/npm/prism-code/src')), { command: '/usr/bin/node', args: [join('/repo/sdk/npm/prism-code/src', '..', 'bin', 'prism-code.mjs'), 'mcp'] });
   assert.equal(journeyServer(context('/home/u/.npm/_npx/abc/node_modules/prism-code/src')).command, 'npx');
   assert.deepEqual(journeyServer(context('C:\\npm-cache\\_npx\\abc\\node_modules\\prism-code\\src', 'win32')).args.slice(0, 3), ['/c', 'npx', '-y']);
+});
+
+test('a build names its stage: the script steps, and each stage prismpm verify reports (#585)', () => {
+  assert.match(BUILD_SCRIPT, /PRISMPM_PROGRESS=1 prismpm verify/, 'the build asks prismpm for its stages');
+  assert.deepEqual(stageOf('@@stage 4/7 export exporting the model from Lean twice and comparing the two'), {
+    id: 'export',
+    index: 4,
+    total: 7,
+    text: 'Stage 4 of 7: exporting the model from Lean twice and comparing the two.',
+  });
+  assert.equal(stageOf('@@step build').text, 'Building and verifying the app in the SDK image...');
+  assert.equal(stageOf('@@step format').text, 'Formatting the model...');
+  assert.equal(stageOf('@@step verify').text, 'Lean proves every property...');
+  for (const line of ['@@exit build 0', '@@step unknown', 'verified attestation: abc', '@@stage x/7 build words']) assert.equal(stageOf(line), null, line);
+
+  const t0 = 1_000_000;
+  const job = { lastLine: t0, stage: null };
+  assert.deepEqual(stageReport(job, t0 + 5_000), { quiet: 5 }, 'before any stage, only how long it has been quiet');
+  job.stage = { ...stageOf('@@stage 6/7 acceptance running the acceptance corpus natively, twice'), started: t0 };
+  job.lastLine = t0;
+  assert.deepEqual(stageReport(job, t0 + 90_400), {
+    stage: 'Stage 6 of 7: running the acceptance corpus natively, twice.',
+    stageIndex: 6,
+    stageTotal: 7,
+    stageElapsed: 90,
+    quiet: 90,
+  });
+  job.stage = { ...stageOf('@@step build'), started: t0 };
+  assert.deepEqual(stageReport(job, t0 + 2_000), { stage: 'Building and verifying the app in the SDK image...', stageElapsed: 2, quiet: 2 }, 'an older SDK image reports only the step');
 });
 
 function mcp(cwd) {

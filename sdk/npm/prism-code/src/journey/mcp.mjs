@@ -157,6 +157,19 @@ const alive = (pid) => {
   }
 };
 
+/**
+ * Where a running job is (#585): the stage it is in and for how long, and how
+ * long since it last printed a line. A build whose stage keeps running with
+ * no output is working inside one step, not stopped; `quiet` lets an agent
+ * tell the user that instead of guessing.
+ */
+export function stageReport(job, now = Date.now()) {
+  const quiet = Math.round((now - job.lastLine) / 1000);
+  if (!job.stage) return { quiet };
+  const { text, index, total, started } = job.stage;
+  return { stage: text, ...(index ? { stageIndex: index, stageTotal: total } : {}), stageElapsed: Math.round((now - started) / 1000), quiet };
+}
+
 export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) {
   const dir = appDir(cwd);
   const jobs = new Map();
@@ -189,10 +202,13 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
   }
 
   function startJob(kind, run) {
-    const job = { kind, state: 'running', log: [], started: Date.now(), result: null };
-    const log = (line) => {
+    const job = { kind, state: 'running', log: [], started: Date.now(), lastLine: Date.now(), stage: null, result: null };
+    // `meta.stage` marks a line that starts a stage (#585): the status names it and how long it has run.
+    const log = (line, meta = {}) => {
       job.log.push(line);
       if (job.log.length > 200) job.log.shift();
+      job.lastLine = Date.now();
+      if (meta.stage) job.stage = { ...meta.stage, started: job.lastLine };
       job.onLog?.(line);
     };
     job.promise = run(log)
@@ -209,7 +225,7 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
     await Promise.race([job.promise, timer]);
     job.onLog = null;
     const elapsed = Math.round((Date.now() - job.started) / 1000);
-    if (job.state === 'running') return { state: 'running', elapsed, latest: job.log.slice(-3), next: `Still working after ${elapsed} s. Call ${job.kind === 'build' ? 'prism_build' : 'prism_prove'} again to keep waiting.` };
+    if (job.state === 'running') return { state: 'running', elapsed, ...stageReport(job), latest: job.log.slice(-3), next: `Still working after ${elapsed} s. Call ${job.kind === 'build' ? 'prism_build' : 'prism_prove'} again to keep waiting.` };
     jobs.delete(job.kind);
     return { state: 'done', elapsed, ...job.result };
   }
@@ -300,7 +316,7 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
         proved: session.status.proved ?? null,
         built: session.status.built ?? null,
         holo: session.status.holo ?? null,
-        jobs: [...jobs.values()].map((j) => ({ kind: j.kind, state: j.state, elapsed: Math.round((Date.now() - j.started) / 1000), latest: j.log.slice(-3) })),
+        jobs: [...jobs.values()].map((j) => ({ kind: j.kind, state: j.state, elapsed: Math.round((Date.now() - j.started) / 1000), ...(j.state === 'running' ? stageReport(j) : {}), latest: j.log.slice(-3) })),
       };
     },
   };

@@ -2848,12 +2848,31 @@ fn run_application(
     })
 }
 
+/// How many stages `progress` counts in a verification run.
+const VERIFY_STAGES: usize = 7;
+
+/// Say on stderr which stage a verification run is entering, when
+/// `PRISMPM_PROGRESS` is set, as `@@stage <n>/<total> <id> <words>`. A run
+/// takes minutes and prints nothing else until it ends, so a caller that shows
+/// progress, such as the Prism journey, reads these lines (#585). Without the
+/// variable it prints nothing, so other callers see no change.
+fn progress(index: usize, id: &str, words: &str) {
+    if std::env::var_os("PRISMPM_PROGRESS").is_some() {
+        eprintln!("@@stage {index}/{VERIFY_STAGES} {id} {words}");
+    }
+}
+
 pub(crate) fn run(
     controller: &Controller,
     request: VerifyRequest,
     release: Option<&str>,
 ) -> Result<VerifyResult, PrismError> {
     let mut exporter_owner = crate::exporter::VerifyExporterOwner::default();
+    progress(
+        1,
+        "build",
+        "building the app: the model, Rust, WebAssembly and the holo",
+    );
     let build = controller.build_release_with_owner(
         BuildRequest {
             config_path: request.config_path.clone(),
@@ -2882,6 +2901,7 @@ pub(crate) fn run(
         )
     })?;
     controller.check_model_configuration(request.config_path.as_deref())?;
+    progress(2, "lean", "Lean proves every theorem");
     let lex_verified = lex_engine.verify(LexVerifyRequest {
         selection: Selection::Entrypoints,
     });
@@ -3187,6 +3207,11 @@ pub(crate) fn run(
     let rustc = toolchain.rustc;
     let no_env = BTreeMap::new();
     let mut processes = toolchain.records;
+    progress(
+        3,
+        "lean-check",
+        "Lean builds the model and leanchecker re-checks each module",
+    );
     processes.push(run_native_compilation(
         NativeCompilation::Library,
         &lake,
@@ -3261,6 +3286,11 @@ pub(crate) fn run(
             )?);
             Ok(out)
         };
+    progress(
+        4,
+        "export",
+        "exporting the model from Lean twice and comparing the two",
+    );
     let export_a = export_once("export-a", &mut processes)?;
     let export_b = export_once("export-b", &mut processes)?;
     for name in ["kernel.ir", "roots.json", "coverage.json"] {
@@ -3301,6 +3331,7 @@ pub(crate) fn run(
         &harness_path,
         harness(&model, &corpus, &corpus_sha256).as_bytes(),
     )?;
+    progress(5, "native", "compiling the generated validator with rustc");
     processes.push(run_process(
         "rustfmt",
         &rustfmt,
@@ -3379,6 +3410,11 @@ pub(crate) fn run(
         &replacements,
         "PP5005",
     )?);
+    progress(
+        6,
+        "acceptance",
+        "running the acceptance corpus natively, twice",
+    );
     let first = run_process(
         "generated-validator",
         &executable_path,
@@ -3440,6 +3476,7 @@ pub(crate) fn run(
         "runtime_roots": roots.roots,
         "schema": "prismpm/verification-manifest/2"
     });
+    progress(7, "publish", "writing the verification record");
     let manifest_bytes = encode_value(&manifest)?;
     let attestation_id = content_id(&manifest_bytes);
     let files = vec![
