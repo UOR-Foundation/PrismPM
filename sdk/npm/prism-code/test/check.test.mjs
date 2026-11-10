@@ -280,18 +280,22 @@ test('the committed verdict goldens are what check prints; the Rust CLI holds it
   }
 });
 
-test('check without a holo is the deprecated build --check: it warns and still runs', () => {
+test('check without a holo is a usage error that names build --check, the deprecated spelling removed (#584)', () => {
   const project = mkdtempSync(join(tmpdir(), 'prism-code-lock-'));
   writeFileSync(join(project, 'prismpm.lock'), JSON.stringify({ spec: 'prismpm/sdk-lock/2', sdk_image: IMAGE }));
   const env = { PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) };
-  const old = run(['check', '--verbose'], { cwd: project, env });
-  assert.equal(old.code, 0, old.err);
-  assert.match(old.err, /prism-code check without a holo is deprecated and is removed in 0\.4\.0; use prism-code build --check/);
-  assert.ok(old.out.includes(`${IMAGE} prismpm check --verbose`));
+  const bare = run(['check', '--verbose'], { cwd: project, env });
+  assert.equal(bare.code, 64);
+  assert.match(bare.err, /^check takes a holo: prism-code check <app\.holo>\. To check a project's model, run prism-code build --check\./);
+  assert.equal(bare.out, '', 'nothing is delegated to the SDK image');
+  const typo = run(['check', 'app.hol'], { cwd: project, env });
+  assert.equal(typo.code, 64);
+  assert.match(typo.err, /^check takes a holo, and app\.hol is not a file\./);
+  assert.doesNotMatch(bare.err + typo.err, /deprecated|0\.4\.0/);
   const current = run(['build', '--check', '--verbose'], { cwd: project, env });
   assert.equal(current.code, 0, current.err);
   assert.equal(current.err, '');
-  assert.equal(current.out, old.out);
+  assert.ok(current.out.includes(`${IMAGE} prismpm check --verbose`));
   assert.doesNotMatch(current.out, /--volume \/var\/run\/docker\.sock/, 'check needs no Docker socket');
   assert.ok(run(['build'], { cwd: project, env }).out.includes(`${IMAGE} prismpm build`));
 });

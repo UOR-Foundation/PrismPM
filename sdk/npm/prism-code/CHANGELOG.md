@@ -8,6 +8,9 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+### Breaking Changes
+- `prism-code check` without a holo is a usage error (exit 64) that names `build --check`. It was the 0.2.0 spelling of `build --check`, deprecated with removal promised for 0.4.0, and it still ran through 0.7.2 with a warning that named a version already past (#584). Migration: replace `prism-code check [args]` with `prism-code build --check [args]`. A typo such as `check app.hol` now says the file is not there instead of starting the model check.
+
 ### Features Added
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
 

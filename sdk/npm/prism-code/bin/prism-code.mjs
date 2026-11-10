@@ -51,8 +51,9 @@
  * `push` and `pull` exit 1 when a digest or the holo fails, 2 when the registry
  * gives no answer (#292).
  *
- * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
- * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
+ * `check` takes a holo. Without one it was the 0.2.0 spelling of
+ * `build --check`, deprecated in 0.2.x and removed in 0.8.0 (#584): it is now
+ * a usage error that names `build --check`.
  */
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -225,7 +226,7 @@ Options for check:    --policy <file>              a Rego file (.rego), the name
                       --unstable-author            also prove the holo came from this project's spec
                       --project <dir>              with --unstable-author, the project; default the current directory
                       --reference <holo>           with --unstable-author, compare Core-Wasm, acceptance and the other sections
-                      deprecated: check without a holo runs build --check; removed in 0.4.0
+                      check needs a holo; to check a project's model, run build --check
 Options for push:     --key <private.pem>          sign a statement naming the manifest, per predicate in the holo, for cosign verify-attestation
                       --keyless                    the same with an OIDC token, as attest does; --signing-config for a private instance
                       --no-attestations            push only the holo's manifest; the section stays in the file
@@ -562,7 +563,7 @@ async function commandTransfer(verb, positional, options) {
 
 const CHECK_OPTIONS = ['policy', 'replay', 'json', 'key', 'certificate-identity', 'certificate-identity-regexp', 'certificate-oidc-issuer', 'trusted-root', 'unstable-author', 'project', 'reference'];
 
-/** True when `check` was given a holo, a path ending in `.holo` or a file; otherwise it is the deprecated `build --check`. */
+/** True when `check` was given a holo, a path ending in `.holo` or a file. */
 function namesHolo(positional) {
   const [first] = positional;
   if (first === undefined) return false;
@@ -1182,8 +1183,9 @@ async function main(argv) {
       return commandTransfer(command, positional, options);
     case 'check':
       if (namesHolo(positional)) return commandCheck(positional, options);
-      process.stderr.write('prism-code check without a holo is deprecated and is removed in 0.4.0; use prism-code build --check, which runs the same prismpm check\n');
-      return commandDelegate('check', rest);
+      return usage(positional.length
+        ? `check takes a holo, and ${positional[0]} is not a file. To check a project's model, run prism-code build --check.`
+        : "check takes a holo: prism-code check <app.holo>. To check a project's model, run prism-code build --check.");
     case 'build':
       if (options.remote !== undefined) return commandRemoteBuild(positional, options);
       if (rest.includes('--unstable-author')) {

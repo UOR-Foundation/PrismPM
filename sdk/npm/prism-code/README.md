@@ -411,7 +411,7 @@ plus `--certificate-oidc-issuer` and `--trusted-root`. Without a signer even
 signed holos are P0; changed/wrong guest fails `proof.subject`. P2+ text
 names what it trusts the signer for. Reference builds still lack these
 statements; JS extensions do not imply Rust wire admission. `check` without
-a holo is deprecated `build --check`, removed in 0.4.0.
+a holo is a usage error since 0.8.0; run `build --check` to check a model.
 
 Errors extend `PrismError` with stable `code`; verification adds `check`,
 registered `diagnostic`, `verdict`, `reasons`.
