@@ -73,9 +73,6 @@
     "verify.damage.model-document": "The Rust verdict for a damaged model document fails integrity but does not name holo.documents (#298).",
     "verify.no-verdict.unknown-revision": "The Rust verifier names an unknown layout archive.table, where prism-code names it format.revision (#298).",
     "world.load.refuses-wrong-exports": "The Rust runtime has no load operation yet (#298).",
-    "world.mismatch.changed-kind": "The Rust verifier reaches no verdict on this archive (archive.table: its wire model does not admit the section table), where prism-code reads it and reports the world mismatch (#298).",
-    "world.mismatch.changed-signature": "The Rust verifier reaches no verdict on this archive (archive.table: its wire model does not admit the section table), where prism-code reads it and reports the world mismatch (#298).",
-    "world.mismatch.renamed-export": "The Rust verifier reaches no verdict on this archive (archive.table: its wire model does not admit the section table), where prism-code reads it and reports the world mismatch (#298).",
     "world.reference.loaded": "The Rust runtime has no load operation yet (#298)."
   },
   "notApplicable": {}

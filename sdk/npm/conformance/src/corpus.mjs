@@ -10,7 +10,8 @@
  *
  * Rows of the reference table: 0 manifest, 1 metadata, 2 directory, 3 model
  * extension, 4 guest, 5 view, 6 capability set, 7 model document. A content blob
- * starts with a 71-byte `blake3:<hex>` label.
+ * starts with a 71-byte `blake3:<hex>` label, and the blobs are in label order;
+ * an archive with another guest re-sorts them, so its guest may be another row.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,6 +24,7 @@ export const REFERENCE_PATH = here('../corpus/Calculator.holo');
 export const LOCK_PATH = here('../corpus/archives.lock.json');
 
 const KIND_EXTENSION = 14;
+const KIND_BLOB = 16;
 const LABEL = 71;
 const GUEST = 4;
 const VIEW = 5;
@@ -187,7 +189,19 @@ function withGuest(wasm) {
     provenance.guest_content_kappa = newLabel;
     provenance.application_kappa = `blake3:${hex(blake3(rows[0].body))}`;
   });
-  return assemble(rows);
+  return assemble(canonicalBlobOrder(rows));
+}
+
+/**
+ * The content blobs in the order Holo/1 requires: by label, ascending. A new
+ * guest has a new label, which may sort before or after the other blobs; the
+ * Wire codec (`wireCanonicalRowsValid`) refuses any other order as a table it
+ * cannot read, so without this a world check would test the table instead.
+ */
+function canonicalBlobOrder(rows) {
+  const first = rows.findIndex((row) => row.kind === KIND_BLOB);
+  const blobs = rows.slice(first).sort((a, b) => Buffer.compare(Buffer.from(a.body.subarray(0, LABEL)), Buffer.from(b.body.subarray(0, LABEL))));
+  return [...rows.slice(0, first), ...blobs];
 }
 
 function mutateGuest(edit) {
