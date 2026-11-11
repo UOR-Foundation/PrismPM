@@ -70,6 +70,11 @@
     "load.refuse.undecodable-model": "The Rust runtime has no load operation yet (#298).",
     "load.refuse.undecodable-view": "The Rust runtime has no load operation yet (#298).",
     "load.refuse.unknown-kind": "The Rust runtime has no load operation yet (#298).",
+    "replay.history.divergence": "The Rust runtime has no replay operation yet (#298).",
+    "replay.history.malformed": "The Rust runtime has no replay operation yet (#298).",
+    "replay.history.unchanged": "The Rust runtime has no replay operation yet (#298).",
+    "replay.recorder.round-trip": "The Rust runtime has no replay operation yet (#298).",
+    "replay.statement.written": "The Rust runtime has no replay operation yet (#298).",
     "world.load.refuses-wrong-exports": "The Rust runtime has no load operation yet (#298).",
     "world.reference.loaded": "The Rust runtime has no load operation yet (#298)."
   },
