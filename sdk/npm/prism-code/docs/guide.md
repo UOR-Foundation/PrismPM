@@ -585,8 +585,32 @@ assert!(matches!(
 ));
 ```
 
-A Python writer, and `generate` in the Rust CLI, follow on the same code model
-(#289).
+`--lang python` writes a package from the same code model that imports only
+the standard library (Python 3.9 and later). Name the output directory as you
+will import it:
+
+- `__init__.py`, `identity.py`: the package, and `Identity`, the name and both
+  digests of what the bindings came from.
+- `world.py`: `WORLD`, `EXPORTS`, and the protocol `Guest`, the world's exports
+  and its memory, to implement over any WebAssembly engine; `dispatch(guest,
+  request)` sends one request by the world's protocol.
+- `calculator.py`: `Calculator`, with one method per operation over any
+  `Callable[[bytes], bytes]`, `Operation`, `CalculatorErrorCode` with the
+  guest's codes and their messages, `CalculatorError`, `ResponseError` and
+  `MODEL`.
+
+```python
+from calculator_client import Calculator, CalculatorError, world
+
+calculator = Calculator(lambda request: world.dispatch(fresh_instance(), request))
+calculator.add(20, 22)  # 42
+try:
+    calculator.divide(1, 0)
+except CalculatorError as error:
+    error.code  # 'division-by-zero'
+```
+
+`generate` in the Rust CLI follows on the same code model (#289).
 
 ## Check one in CI (experimental)
 

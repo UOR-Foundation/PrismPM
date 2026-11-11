@@ -12,6 +12,7 @@ import { codeModel } from '../src/generate/model.mjs';
 import { readWorld } from '../src/generate/wit.mjs';
 import { write } from '../src/generate/js.mjs';
 import { write as writeRust } from '../src/generate/rust.mjs';
+import { write as writePython } from '../src/generate/python.mjs';
 import { mutatedGuest, withGuest } from '../../verify/test/helpers.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
@@ -19,6 +20,7 @@ const bin = here('../bin/prism-code.mjs');
 const fixture = here('../fixtures/Calculator.holo');
 const golden = here('./fixtures/generate/calculator-js');
 const goldenRust = here('./fixtures/generate/calculator-rust');
+const goldenPython = here('./fixtures/generate/calculator-python');
 const holo = new Uint8Array(readFileSync(fixture));
 const lock = JSON.parse(readFileSync(here('../../spec/test/fixtures/documents/sdk-lock-v3/calculator.json'), 'utf8'));
 const lf = (text) => text.replace(/\r\n/g, '\n');
@@ -120,9 +122,12 @@ test('the CLI writes, then reports up to date; --lang names the writers that exi
   const rust = run(['generate', fixture, '--out', join(out, 'rust'), '--lang', 'rust']);
   assert.equal(rust.code, 0, rust.err);
   assert.match(rust.out, /^wrote 4 of 4 files to .*rust \(rust, hologram:guest\/core-wasm@1, model blake3:e76544838a98\)$/m);
-  const python = run(['generate', fixture, '--out', out, '--lang', 'python']);
-  assert.equal(python.code, 64);
-  assert.match(python.err, /--lang takes js, rust; python is not written yet \(#289\)/);
+  const python = run(['generate', fixture, '--out', join(out, 'python'), '--lang', 'python']);
+  assert.equal(python.code, 0, python.err);
+  assert.match(python.out, /^wrote 4 of 4 files to .*python \(python, hologram:guest\/core-wasm@1, model blake3:e76544838a98\)$/m);
+  const go = run(['generate', fixture, '--out', out, '--lang', 'go']);
+  assert.equal(go.code, 64);
+  assert.match(go.err, /--lang takes js, rust, python$/m);
 });
 
 test('the generated client answers every acceptance vector as the guest does, through both transports', async () => {
@@ -381,4 +386,69 @@ fn the_world_protocol() {
     const result = spawnSync(tool, args, { cwd: echo, env, encoding: 'utf8' });
     assert.equal(result.status, 0, `echo: ${tool} ${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   }
+});
+
+// The Python writer (#289, part 3).
+
+test('the Calculator Python bindings equal the golden files, and the record names python', async () => {
+  const out = scratch();
+  const result = await generate({ holo, out, language: 'python' });
+  assert.deepEqual(result.files, ['__init__.py', 'identity.py', 'world.py', 'calculator.py']);
+  if (process.env.PRISM_CODE_UPDATE_GOLDEN) {
+    mkdirSync(goldenPython, { recursive: true });
+    for (const name of result.files) writeFileSync(join(goldenPython, name), readFileSync(join(out, name)));
+  }
+  assert.deepEqual(readdirSync(goldenPython).sort(), [...result.files].sort(), 'golden directory lists exactly the generated files');
+  for (const name of result.files) {
+    assert.equal(readFileSync(join(out, name), 'utf8'), lf(readFileSync(join(goldenPython, name), 'utf8')), `${name} differs from test/fixtures/generate/calculator-python; rerun with PRISM_CODE_UPDATE_GOLDEN=1 and review the diff`);
+  }
+  assert.equal(result.record.language, 'python');
+  assert.deepEqual(result.record.world, lock.inputs.world);
+  assert.deepEqual(result.record.model, lock.inputs.model);
+  assert.equal((await generate({ holo, out, language: 'python' })).status, 'unchanged');
+});
+
+test('the Python writer refuses names it cannot bind and models it cannot read', async () => {
+  const model = await codeModel(holo);
+  const named = (file) => ({ ...model, application: { ...model.application, file } });
+  for (const file of ['world', 'identity', '9 lives']) assert.throws(() => writePython(named(file)), (e) => e.code === 'generate.model', file);
+  const ops = model.application.interface;
+  const clash = { ...model, application: { ...model.application, interface: { ...ops, operations: [...ops.operations, { name: 'calculate', label: 'Calculate' }] } } };
+  assert.throws(() => writePython(clash), (e) => e.code === 'generate.model' && /collides/.test(e.message));
+  assert.throws(() => writePython({ ...model, world: { ...model.world, imports: [{ name: 'log' }] } }), (e) => e.code === 'generate.world');
+  // A keyword is bound with a trailing underscore.
+  const keyword = Object.fromEntries(writePython({ ...model, application: { ...model.application, interface: { ...ops, operations: [{ name: 'pass', label: 'Pass' }] } } }));
+  assert.match(keyword['calculator.py'], /def pass_\(self, left: int, right: int\) -> int:/);
+});
+
+const python = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+const noPython = python.status === 0 ? false : 'python3 is not on PATH';
+
+test('the generated package imports nothing outside the standard library and answers every acceptance vector as the guest does', { skip: noPython, timeout: 120_000 }, async () => {
+  const root = scratch();
+  await generate({ holo, out: join(root, 'calculator_client'), language: 'python' });
+  const model = await codeModel(holo);
+  const echo = join(root, 'echo_client');
+  mkdirSync(echo);
+  for (const [name, text] of writePython({ ...model, application: { ...model.application, name: 'Echo', type: 'Echo', file: 'echo', description: null, interface: { kind: 'bytes' } } })) {
+    writeFileSync(join(echo, name), text);
+  }
+  // The real guest answers each typed vector, sent as the client writes it; the Python check replays those answers.
+  const app = await load(holo);
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const cases = [];
+  for (const vector of app.vectors) {
+    const [version, operation, left, right] = decoder.decode(vector.request).split('\t');
+    const [, status, value] = decoder.decode(vector.response).split('\t');
+    if (status === 'error' && !['overflow', 'division-by-zero'].includes(value)) continue;
+    const request = `${version}\t${operation}\t${BigInt(left)}\t${BigInt(right)}`;
+    cases.push({ request, response: decoder.decode(await app.dispatch(encoder.encode(request))), operation, left: String(BigInt(left)), right: String(BigInt(right)), status, value });
+  }
+  assert.equal(cases.length, 15, 'every typed vector is replayed');
+  writeFileSync(join(root, 'cases.json'), JSON.stringify(cases));
+  writeFileSync(join(root, 'identities.json'), JSON.stringify(lock.inputs));
+  const result = spawnSync('python3', ['-I', '-B', here('./fixtures/generate/check-python.py'), root], { cwd: root, encoding: 'utf8', env: { PATH: process.env.PATH } });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(result.stdout.trim(), 'ok 15');
 });
