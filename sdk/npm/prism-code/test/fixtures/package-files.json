@@ -38,6 +38,7 @@
   "src/dev-replay.mjs",
   "src/dev-server.mjs",
   "src/dev.mjs",
+  "src/developer-view.mjs",
   "src/docker.mjs",
   "src/errors-namespace.mjs",
   "src/errors.mjs",
