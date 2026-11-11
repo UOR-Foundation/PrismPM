@@ -18,6 +18,7 @@ mod native_library;
 mod node_suite;
 mod organization_lifecycle;
 mod owner_timing;
+mod rust_runtime;
 mod saved_recovery;
 mod scoped_administration;
 mod server_host;
@@ -724,6 +725,8 @@ pub fn run_at(root: &Path, id: &str) {
             60,
             "120000",
         ),
+        // The Rust runtime against @prism-code/conformance (#298).
+        "DK-42" => rust_runtime::verify(root),
         // The `volumes` module of #440.
         "DK-40" => node_suite::verify_exact(
             root,

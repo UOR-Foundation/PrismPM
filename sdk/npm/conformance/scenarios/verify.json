@@ -81,11 +81,11 @@
     },
     {
       "id": "verify.damage.label",
-      "title": "A forged label fails integrity.",
+      "title": "A forged blob label is a table the Wire codec refuses: no verdict.",
       "op": "verify",
       "archive": "label-flipped",
       "input": { "policy": { "minimum": "P1" } },
-      "expect": { "ok": true, "result": { "passed": false, "reasons": { "$contains": [{ "check": "holo.integrity", "withholds": "P1" }] } } }
+      "expect": { "ok": false, "error": { "code": "verification_failed", "check": "archive.table", "verdict": { "$absent": true } } }
     },
     {
       "id": "verify.damage.model-document",
@@ -103,11 +103,11 @@
     },
     {
       "id": "verify.damage.manifest",
-      "title": "A damaged application manifest fails the document check.",
+      "title": "A damaged application manifest is not the Wire template, which the codec refuses: no verdict.",
       "op": "verify",
       "archive": "manifest-uri",
       "input": { "policy": { "minimum": "P1" } },
-      "expect": { "ok": true, "result": { "passed": false, "reasons": { "$contains": [{ "check": "holo.documents", "withholds": "P1" }] } } }
+      "expect": { "ok": false, "error": { "code": "verification_failed", "check": "archive.table", "verdict": { "$absent": true } } }
     },
     {
       "id": "verify.damage.p0-has-no-requirement",
@@ -160,11 +160,11 @@
       "expect": { "ok": false, "error": { "code": "verification_failed", "check": "archive.table", "verdict": { "$absent": true } } }
     },
     {
-      "id": "verify.no-verdict.unknown-revision",
-      "title": "A layout that matches no known format revision gets no verdict.",
+      "id": "verify.no-verdict.unknown-kind",
+      "title": "A section kind the Wire codec does not put in that row gets no verdict.",
       "op": "verify",
       "archive": "unknown-kind",
-      "expect": { "ok": false, "error": { "code": "verification_failed", "check": "format.revision", "verdict": { "$absent": true } } }
+      "expect": { "ok": false, "error": { "code": "verification_failed", "check": "archive.table", "verdict": { "$absent": true } } }
     },
     {
       "id": "verify.policy.unknown-level",
