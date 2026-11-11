@@ -476,12 +476,12 @@ async function built(dir, session, holo, seconds, proof) {
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: ok
-      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.`
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
       : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
-      note: 'The run policy accepts P0, the level every holo has until holos carry signed statements. The proofs were checked when it was built.',
+      note: 'The run policy accepts P0. The proofs were checked when the app was built, but the holo does not carry them: it holds no signed proof statement, so `prism-code check` under the default policy (P2) reports P0 and fails (#582).',
     },
   };
 }

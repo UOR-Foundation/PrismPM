@@ -4447,14 +4447,15 @@ const __index = (() => {
   }
 
   /**
-   * The evidence above the archive itself. Format revision 2026-10-23 has no
-   * attestation bundle, so no holo carries these statements yet; each absent
-   * statement withholds its level (docs/proposals/269-assurance-levels.md).
+   * The evidence above the archive itself, for a holo with no attestation
+   * section: each absent statement withholds its level
+   * (docs/proposals/269-assurance-levels.md). The messages are the Rust
+   * verifier's, so both name an absent statement the same way (#582).
    */
   const STATEMENTS = Object.freeze([
-    { check: 'provenance.statement', withholds: 'P1', message: 'The holo carries no provenance statement; format revision 2026-10-23 has no attestation bundle (issues #267 and #268).' },
-    { check: 'proof.statement', withholds: 'P2', message: 'The holo carries no proof statement (issue #266).' },
-    { check: 'replay.statement', withholds: 'P3', message: 'The holo carries no replay statement (issue #284).' },
+    { check: 'provenance.statement', withholds: 'P1', message: 'The holo carries no provenance statement.' },
+    { check: 'proof.statement', withholds: 'P2', message: 'The holo carries no proof statement.' },
+    { check: 'replay.statement', withholds: 'P3', message: 'The holo carries no replay statement.' },
   ]);
 
   /**

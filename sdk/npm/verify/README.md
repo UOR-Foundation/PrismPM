@@ -114,9 +114,9 @@ Serve `Calculator.holo` next to this page and open it.
 
 ```text
 fail P0
-provenance.statement: The holo carries no provenance statement; format revision 2026-10-23 has no attestation bundle (issues #267 and #268).
-proof.statement: The holo carries no proof statement (issue #266).
-replay.statement: The holo carries no replay statement (issue #284).
+provenance.statement: The holo carries no provenance statement.
+proof.statement: The holo carries no proof statement.
+replay.statement: The holo carries no replay statement.
 policy.level: The level is P0; the policy requires P2 or above.
 ```
 
