@@ -258,10 +258,16 @@ Feature: sdk
     Then a host folder or anything outside the grant, the declared world or the active policy is refused with a typed error and no provider runs
     And attaching a store within all of them raises a typed error naming host effects #216 and #217, and never succeeds
 
-
   @DK-41 @build
   Scenario: The prism.system namespace of prism-code reports info, version, df, prune and events over the containers of its own client: info and version name the package, the holo format revision, the runtime and the toolchain and builder image a project's prismpm.lock pins, prune removes exited containers only and no image, events streams the create, start, die and destroy events of the client's containers with since, until and filters, and createPrism and Prism.fromEnv expose the eight other modules of #440 on one client.
     Given a client from createPrism, and one from Prism.fromEnv over a scratch PRISM_HOME
     When containers are created, run and removed, and prism.system reports, prunes and streams events
     Then info and version name the package, the format, the runtime and what the lock pins, and df counts every record
     And prune removes exited containers only, events arrive as create, start, die and destroy, and every unknown option is refused
+
+  @DK-42 @build
+  Scenario: The Rust runtime runs @prism-code/conformance through its shim, prism-conformance-shim, which translates prism/conformance-shim/1 requests to the prismpm library's inspect and verify and judges nothing: every check of the suite runs, the digests checks pass in full, and each check the Rust runtime does not pass is named with its reason in crates/conformance/runtime/declaration.json, so a check that starts to pass or newly fails fails the run.
+    Given the shim built from the conformance crate and the Rust runtime's declaration
+    When the suite runs every check against the shim
+    Then the run passes with every gap declared, and the digests checks pass in full
+    And the checks that pass are exactly the ones DK-42 lists, by feature

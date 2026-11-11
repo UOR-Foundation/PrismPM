@@ -171,9 +171,9 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.policy.name-echoed` | The verdict names the policy it was judged against. | + | N/A | N/A |
 | `verify.damage.footer` | A wrong footer is a failed integrity check that withholds P1. | + | N/A | N/A |
 | `verify.damage.guest-label` | A guest that differs from its label fails integrity even under a correct footer. | + | N/A | N/A |
-| `verify.damage.label` | A forged label fails integrity. | + | N/A | N/A |
+| `verify.damage.label` | A forged blob label is a table the Wire codec refuses: no verdict. | + | N/A | N/A |
 | `verify.damage.model-document` | A damaged model document fails integrity and the document check. | + | N/A | N/A |
-| `verify.damage.manifest` | A damaged application manifest fails the document check. | + | N/A | N/A |
+| `verify.damage.manifest` | A damaged application manifest is not the Wire template, which the codec refuses: no verdict. | + | N/A | N/A |
 | `verify.damage.p0-has-no-requirement` | P0 asks nothing of a holo, so damage is reported and the P0 policy still passes. | + | N/A | N/A |
 | `verify.no-verdict.empty` | An empty file gets no verdict. | + | N/A | N/A |
 | `verify.no-verdict.bad-magic` | A file that is not a holo gets no verdict. | + | N/A | N/A |
@@ -181,7 +181,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.no-verdict.bad-flags` | Non-zero flags get no verdict. | + | N/A | N/A |
 | `verify.no-verdict.truncated-table` | A truncated table gets no verdict. | + | N/A | N/A |
 | `verify.no-verdict.section-overrun` | A section that overruns the body gets no verdict. | + | N/A | N/A |
-| `verify.no-verdict.unknown-revision` | A layout that matches no known format revision gets no verdict. | + | N/A | N/A |
+| `verify.no-verdict.unknown-kind` | A section kind the Wire codec does not put in that row gets no verdict. | + | N/A | N/A |
 | `verify.policy.unknown-level` | A minimum level that does not exist is an invalid policy, not a verdict. | + | N/A | N/A |
 | `verify.policy.unknown-member` | A policy member nobody defined is an invalid policy, not ignored. | + | N/A | N/A |
 | `verify.policy.statements-refused` | A policy cannot carry statements or claim their signature was checked: a level comes from the holo, never from an option. | + | N/A | N/A |
