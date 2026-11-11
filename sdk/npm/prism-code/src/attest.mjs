@@ -23,9 +23,9 @@
 import { readFile } from 'node:fs/promises';
 import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, KeyObject } from 'node:crypto';
 import { SigningError, SignatureInvalidError, IdentityMismatchError, TransparencyError, SubjectMismatchError, AttestationNotFoundError, TrustRootError, VerificationError, PrismError } from './errors.mjs';
-import { parseArchive, resolveArchive, asBytes } from './archive.mjs';
+import { parseArchive, resolveArchive, asBytes, canonicalJson } from './archive.mjs';
 import { blake3Hex } from './blake3.mjs';
-import { readAttestations, appendAttestations, STATEMENT_TYPE, DSSE_PAYLOAD_TYPE } from './attestations.mjs';
+import { readAttestations, appendAttestations, stripAttestations, STATEMENT_TYPE, DSSE_PAYLOAD_TYPE } from './attestations.mjs';
 import { verifyTransparency } from './vendor/verify.mjs';
 
 /** The Fulcio-issued certificates of GitHub Actions workflows name this issuer. */
@@ -284,6 +284,78 @@ export async function experimental_attest(source, options) {
   const bundle = await signStatement(bytes, options);
   const holo = appendAttestations(parsed, [bundle]);
   return { holo, bundle, statement, attestations: readAttestations(holo).length };
+}
+
+/**
+ * A whole statement someone else wrote, such as the proof statement
+ * `prismpm verify` writes (#266): an in-toto Statement v1 whose every subject
+ * is a content blob of this holo with both digests equal. Returns the bytes
+ * to sign, its canonical JSON.
+ */
+function statementBytes(parsed, statement) {
+  let value = statement;
+  if (value instanceof Uint8Array || typeof value === 'string') {
+    try {
+      value = JSON.parse(typeof value === 'string' ? value : new TextDecoder('utf-8', { fatal: true }).decode(value));
+    } catch (cause) {
+      throw new SigningError(`the statement is not JSON: ${cause.message}`, { check: 'sign.statement', cause });
+    }
+  }
+  if (!isObject(value) || value._type !== STATEMENT_TYPE) throw new SigningError(`the statement's _type is not ${STATEMENT_TYPE}`, { check: 'sign.statement' });
+  if (typeof value.predicateType !== 'string' || !URI.test(value.predicateType)) throw new SigningError('the statement has no predicateType URI', { check: 'sign.statement' });
+  if (!Array.isArray(value.subject) || value.subject.length === 0) throw new SigningError('the statement has no subject', { check: 'sign.statement' });
+  for (const subject of value.subject) {
+    const blob = parsed.blobs.find((b) => b.label === `blake3:${subject?.digest?.blake3}`);
+    if (!blob || sha256Hex(blob.content) !== subject.digest.sha256) {
+      throw new SubjectMismatchError(`subject ${JSON.stringify(subject?.name)} is not a content blob of this holo with both digests equal`, { check: 'sign.subject' });
+    }
+  }
+  return { statement: value, bytes: encoder.encode(canonicalJson(value)) };
+}
+
+/**
+ * Sign statements that are already written, and return the holo that carries
+ * them signed (#582). This is how a build on a CI runner turns what
+ * `prismpm build` and `prismpm verify` wrote into evidence a checker accepts:
+ *
+ *   - `unsigned: true` signs each unsigned placeholder in the holo, such as
+ *     the provenance statement `prismpm build` writes (#268), and puts the
+ *     signed bundle in its place. The signed payload is the placeholder's,
+ *     byte for byte.
+ *   - `statements` are whole statements to add, such as the proof statement
+ *     of the verified directory. Each is signed as canonical JSON.
+ *
+ * The signer options are `experimental_attest`'s. The input holo is not
+ * modified. Resolves to `{ holo, signed, attestations }`, where `signed` lists
+ * `{ statement, bundle }` in signing order.
+ *
+ * @param {Uint8Array | ArrayBuffer | string | object} source the holo as bytes, a path, or an opened holo
+ * @param {{ unsigned?: boolean, statements?: Array<object | string | Uint8Array>, key?: string | KeyObject, identityToken?: string, signingConfig?: object | string, tufMirrorUrl?: string, tufRoot?: string, tufCache?: string }} options
+ * @returns {Promise<{ holo: Uint8Array, signed: Array<{ statement: object, bundle: object }>, attestations: number }>}
+ */
+export async function experimental_signStatements(source, options) {
+  if (!isObject(options)) throw new SigningError('signStatements takes an options object', { check: 'sign.statement' });
+  const statements = options.statements ?? [];
+  if (!Array.isArray(statements)) throw new SigningError('statements is an array of statements', { check: 'sign.statement' });
+  const parsed = parseArchive(await holoBytes(source));
+  const added = statements.map((statement) => statementBytes(parsed, statement));
+  const present = readAttestations(parsed);
+  const placeholders = options.unsigned === true ? present.filter((a) => !a.signed) : [];
+  if (added.length === 0 && placeholders.length === 0) {
+    throw new SigningError(options.unsigned === true ? 'the holo has no unsigned statement, and no statement was given' : 'nothing to sign: pass statements, or unsigned: true', { check: 'sign.statement' });
+  }
+  const signed = [];
+  const replaced = new Map();
+  for (const attestation of placeholders) {
+    const bytes = Buffer.from(attestation.envelope.payload, 'base64');
+    const bundle = await signStatement(bytes, options);
+    replaced.set(attestation.index, bundle);
+    signed.push({ statement: attestation.statement, bundle });
+  }
+  for (const { statement, bytes } of added) signed.push({ statement, bundle: await signStatement(bytes, options) });
+  const lines = [...present.map((a) => replaced.get(a.index) ?? a.bytes), ...signed.slice(placeholders.length).map((s) => s.bundle)];
+  const holo = appendAttestations(stripAttestations(parsed), lines);
+  return { holo, signed, attestations: readAttestations(holo).length };
 }
 
 // ---------------------------------------------------------------------------

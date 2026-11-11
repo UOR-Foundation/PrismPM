@@ -3,6 +3,7 @@
 //! Validator probe intervals are allocation-free; separately registered public
 //! package APIs may allocate their owned outputs and have consumer API checks.
 
+mod proof;
 pub mod server;
 
 use crate::config::ProjectConfig;
@@ -2186,6 +2187,16 @@ fn comparable_acceptance(bytes: &[u8]) -> Option<Vec<u8>> {
     encode_value(&value).ok()
 }
 
+/// A proof statement as a re-verification compares it: without the time it
+/// was made, which is the only member that differs between two runs.
+fn comparable_proof(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    if let Some(predicate) = value.get_mut("predicate").and_then(Value::as_object_mut) {
+        predicate.remove("timeVerified");
+    }
+    encode_value(&value).ok()
+}
+
 pub(crate) fn publish(
     output_root: &Path,
     attestation_id: &str,
@@ -2283,6 +2294,8 @@ pub(crate) fn publish(
                 .map_err(|_| PrismError::new("PP4002", "verified artifact is missing"))?;
             let identical = if relative == "application-acceptance.json" {
                 comparable_acceptance(&observed) == comparable_acceptance(expected)
+            } else if relative == proof::FILE {
+                comparable_proof(&observed) == comparable_proof(expected)
             } else {
                 &observed == expected
             };
@@ -2849,11 +2862,48 @@ fn run_application(
     });
     let manifest_bytes = encode_value(&manifest)?;
     let attestation_id = content_id(&manifest_bytes);
-    let files = vec![
+    // The proof statement (#266) is written beside the evidence it names. It
+    // is unsigned; a signer adds it to the holo (#582). Its `timeVerified`
+    // varies per run, so it is not part of the attestation identity.
+    let lock = match std::fs::read(controller.root.join("prismpm.lock")) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(PrismError::new("PP4002", format!("prismpm.lock: {error}"))),
+    };
+    let snapshot: Value = serde_json::from_slice(
+        &std::fs::read(build_root.join("lexlean/snapshot.json"))
+            .map_err(|error| PrismError::new("PP4002", format!("LexLean snapshot: {error}")))?,
+    )
+    .map_err(|error| PrismError::new("PP4004", format!("LexLean snapshot: {error}")))?;
+    let lex_value: Value = serde_json::from_slice(&lex_attestation)
+        .map_err(|error| PrismError::new("PP4004", format!("LexLean attestation: {error}")))?;
+    let guest = format!(
+        "core-wasm/{}_core_wasm.wasm",
+        application.cargo_name().replace('-', "_")
+    );
+    let proof = proof::write(&proof::Evidence {
+        holo: &holo,
+        guest: &guest,
+        lock: lock.as_deref(),
+        snapshot: &snapshot,
+        attestation: &lex_value,
+        attestation_bytes: &lex_attestation,
+        build_manifest: &build_manifest,
+        verification_manifest: &manifest_bytes,
+        processes: &processes,
+        time: crate::holo::provenance::now_utc(),
+    })?;
+    let mut files = vec![
         ("application-acceptance.json".to_owned(), acceptance_bytes),
         ("lexlean-attestation.json".to_owned(), lex_attestation),
         ("manifest.json".to_owned(), manifest_bytes),
     ];
+    match proof {
+        proof::Outcome::Statement(statement) => files.push((proof::FILE.to_owned(), statement)),
+        proof::Outcome::Refused(code, message) => {
+            eprintln!("prismpm: no proof statement ({code}): {message}");
+        }
+    }
     let output_root = config.output_root(&controller.root)?;
     publish(&output_root, &attestation_id, &files)?;
     Ok(VerifyResult {

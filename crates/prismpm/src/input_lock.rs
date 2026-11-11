@@ -18,9 +18,9 @@ pub(crate) const SDK_LOCK_V2: &str = "prismpm/sdk-lock/2";
 pub(crate) const SDK_LOCK_V3: &str = "prismpm/sdk-lock/3";
 
 /// The Rust toolchain inside the SDK image (`tools.lock` `[rust]`).
-const RUSTC_VERSION: &str = "1.97.1";
+pub(crate) const RUSTC_VERSION: &str = "1.97.1";
 /// The wasm-bindgen CLI inside the SDK image (`tools.lock` `[sdk-tools]`).
-const WASM_BINDGEN_VERSION: &str = "0.2.122";
+pub(crate) const WASM_BINDGEN_VERSION: &str = "0.2.122";
 /// The only guest contract today, and the digests of its committed WIT world
 /// (`sdk/npm/spec/worlds/core-wasm.wit`). A test recomputes both.
 const CORE_WASM_CONTRACT: &str = "hologram:guest/core-wasm@1";

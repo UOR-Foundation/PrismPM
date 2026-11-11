@@ -7,11 +7,22 @@
 //! package. This task runs that export and compares each package with the
 //! committed copy under `bindings/generated/<name>`, or replaces the copy with
 //! `--write`. No writer logic is written by hand in any language.
+//!
+//! A package that `prismpm` itself runs is also kept as a module of the
+//! `prismpm` crate, so the published crate carries it: [`VENDORED`] names
+//! each one and the file its exported `src/lib.rs` is copied to.
 
 use crate::Fail;
 use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+/// The exported packages that are also modules of the `prismpm` crate, and
+/// the file each one's `src/lib.rs` is kept in.
+const VENDORED: &[(&str, &str)] = &[(
+    "prism_proof_statement",
+    "crates/prismpm/src/verification/proof_statement.rs",
+)];
 
 /// The files of one exported package, by their path inside it.
 fn package_files(directory: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, Fail> {
@@ -54,6 +65,22 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<(), Fail> {
         } else {
             BTreeMap::new()
         };
+        if let Some((_, module)) = VENDORED.iter().find(|(package, _)| *package == name) {
+            let library = exported
+                .get(Path::new("src/lib.rs"))
+                .ok_or_else(|| format!("the exported package {name} has no src/lib.rs"))?;
+            let target = root.join(module);
+            if std::fs::read(&target).ok().as_ref() != Some(library) {
+                if write {
+                    if let Some(parent) = target.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&target, library)?;
+                } else {
+                    drifted.push((*module).to_owned());
+                }
+            }
+        }
         if exported != committed {
             if write {
                 if committed_dir.exists() {

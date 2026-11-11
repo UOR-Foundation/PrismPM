@@ -25,7 +25,7 @@ import {
   stripAttestations,
   blake3Hex,
 } from '../src/index.mjs';
-import { experimental_attest as attest, experimental_verifyAttestations as verifyAttestations, experimental_verifyBundle as verifyBundle, GITHUB_ACTIONS_ISSUER } from '../src/attest.mjs';
+import { experimental_attest as attest, experimental_signStatements as signStatements, experimental_verifyAttestations as verifyAttestations, experimental_verifyBundle as verifyBundle, GITHUB_ACTIONS_ISSUER } from '../src/attest.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const holo = new Uint8Array(readFileSync(here('../fixtures/Calculator.holo')));
@@ -468,4 +468,40 @@ test('a keyed bundle can still be held to a log entry and a timestamp by a pinne
   const result = await verifyAttestations(signed, { key: publicKey, trustedRoot: conformance.trustedRoot, entries: 1 });
   assert.equal(result.passed, false, 'a bundle with no log entry cannot satisfy entries: 1');
   assert.ok(result.error instanceof TransparencyError);
+});
+
+// #582: a CI build signs what prismpm wrote, the holo's unsigned placeholder and the verified directory's proof statement.
+const proofStatement = JSON.parse(readFileSync(here('../../spec/test/fixtures/attestation/statement/calculator.json'), 'utf8'));
+const placeholderOf = (statement) => ({
+  dsseEnvelope: { payload: Buffer.from(JSON.stringify(statement)).toString('base64'), payloadType: 'application/vnd.in-toto+json', signatures: [{ sig: '' }] },
+  mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
+  verificationMaterial: { publicKey: {} },
+});
+
+test('signStatements signs the unsigned placeholder in its place and adds a whole statement', async () => {
+  const { privateKey, publicKey } = keys();
+  const guest = proofStatement.subject[0];
+  const provenance = { _type: 'https://in-toto.io/Statement/v1', subject: [guest], predicateType: PROVENANCE, predicate: { buildDefinition: { buildType: 'https://uor.foundation/prism/holo-build/v1' } } };
+  const unsigned = appendAttestations(holo, [placeholderOf(provenance)]);
+  const before = unsigned.slice();
+  const out = await signStatements(unsigned, { unsigned: true, statements: [JSON.stringify(proofStatement)], key: privateKey });
+  assert.deepEqual(unsigned, before, 'the input holo is not modified');
+  assert.equal(out.attestations, 2, 'the placeholder is replaced, not kept beside its signed copy');
+  assert.deepEqual(out.signed.map((s) => s.statement.predicateType), [PROVENANCE, PROOF]);
+  const [first, second] = readAttestations(out.holo);
+  assert.equal(first.signed && second.signed, true);
+  assert.equal(first.envelope.payload, readAttestations(unsigned)[0].envelope.payload, 'the placeholder payload is signed byte for byte');
+  assert.deepEqual(second.statement, proofStatement);
+  assert.deepEqual(stripAttestations(out.holo), holo);
+  for (const type of [PROVENANCE, PROOF]) assert.equal((await verifyAttestations(out.holo, { key: publicKey, type })).passed, true, type);
+});
+
+test('signStatements refuses a statement about another holo, and a call with nothing to sign', async () => {
+  const { privateKey } = keys();
+  const other = structuredClone(proofStatement);
+  other.subject[0].digest.sha256 = '0'.repeat(64);
+  await rejects(signStatements(holo, { statements: [other], key: privateKey }), SubjectMismatchError, 'sign.subject');
+  await rejects(signStatements(holo, { statements: ['{"_type":"x"}'], key: privateKey }), SigningError, 'sign.statement');
+  await rejects(signStatements(holo, { unsigned: true, key: privateKey }), SigningError, 'sign.statement');
+  await rejects(signStatements(holo, { key: privateKey }), SigningError, 'sign.statement');
 });
