@@ -1042,6 +1042,65 @@ fn structure(bytes: &[u8]) -> Result<Structure, NoVerdict> {
     Ok((body, footer, rows))
 }
 
+/// The closed schema of each model document a holo can carry, as
+/// `@prism-code/spec` ships it under `schemas/documents/`.
+const MODEL_DOCUMENT_SCHEMA_FILES: [(&str, &str, &[u8]); 4] = [
+    (
+        "prismpm/model-document/1",
+        "model-document-v1.schema.json",
+        include_bytes!("../../schemas/model-document.schema.json"),
+    ),
+    (
+        "prismpm/model-document/2",
+        "model-document-v2.schema.json",
+        include_bytes!("../../schemas/model-document-v2.schema.json"),
+    ),
+    (
+        "prismpm/model-document/5",
+        "model-document-v5.schema.json",
+        include_bytes!("../../schemas/model-document-v5.schema.json"),
+    ),
+    (
+        "prismpm/model-document/6",
+        "model-document-v6.schema.json",
+        include_bytes!("../../schemas/model-document-v6.schema.json"),
+    ),
+];
+
+/// The model document against the closed schema it names, as
+/// `holo.verify()` checks it: every problem, or nothing when it matches.
+fn model_document_problems(value: &Value) -> Result<(), String> {
+    let name = value.get("schema").and_then(Value::as_str);
+    let Some((_, file, bytes)) = MODEL_DOCUMENT_SCHEMA_FILES
+        .iter()
+        .find(|(id, _, _)| Some(*id) == name)
+    else {
+        return Ok(());
+    };
+    let schema: Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("the schema {file} does not parse: {error}"))?;
+    let validator = jsonschema::validator_for(&schema)
+        .map_err(|error| format!("the schema {file} does not compile: {error}"))?;
+    let problems = validator
+        .iter_errors(value)
+        .take(8)
+        .map(|error| {
+            format!(
+                "${}: {error}",
+                error.instance_path().to_string().replace('/', ".")
+            )
+        })
+        .collect::<Vec<_>>();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the model document does not match schemas/documents/{file}: {}",
+            problems.join("; ")
+        ))
+    }
+}
+
 /// The JSON object of one document section, or the problem.
 fn document_object(what: &str, row: Option<&Row>) -> Result<Value, String> {
     let row = row.ok_or_else(|| format!("{what} is missing"))?;
@@ -1349,7 +1408,7 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
                 .and_then(|value| {
                     let schema = value.get("schema").and_then(Value::as_str);
                     if value.is_object() && schema.is_some_and(|schema| MODEL_DOCUMENT_SCHEMAS.contains(&schema)) {
-                        Ok(value)
+                        model_document_problems(&value).map(|()| value)
                     } else {
                         Err(format!(
                             "the model document names schema {}, which no known format revision packs into a holo",
