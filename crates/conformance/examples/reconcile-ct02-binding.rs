@@ -13,7 +13,7 @@ const BASE: &str = "354038b14c26913b475c8a2cf0294051cb4fd632";
 const COMPILER: &str = "bc71b33f9a4ce7f5582c337b5752a7ba9eb49706";
 const FIXTURE: &str = "tests/fixtures/controller/ct-02-prism-code-model/project";
 const SYSTEM: &str = "src/System.lex.tex";
-const APPLICATION: &str = "src/Workbench.lex.tex";
+const APPLICATION: &str = "src/Specification.lex.tex";
 fn require(ok: bool, message: &str) -> Result<()> {
     if ok { Ok(()) } else { Err(message.into()) }
 }
