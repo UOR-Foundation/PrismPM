@@ -189,6 +189,11 @@ export function withGuest(wasm) {
     provenance.guest_content_kappa = newLabel;
     provenance.application_kappa = `blake3:${hex(blake3(bodies[0]))}`;
   });
+  // Holo/1 keeps the content blobs in ascending label order (`wireBlobsValid`),
+  // and the new guest's label may sort anywhere among them.
+  const first = rows.findIndex((r) => r.kind === 16);
+  const blobs = bodies.slice(first).sort((a, b) => Buffer.compare(Buffer.from(a.subarray(0, 71)), Buffer.from(b.subarray(0, 71))));
+  bodies.splice(first, blobs.length, ...blobs);
   const count = bodies.length;
   const head = new Uint8Array(10 + count * 24);
   head.set(bytes.subarray(0, 10));

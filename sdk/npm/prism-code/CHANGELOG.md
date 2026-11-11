@@ -8,6 +8,10 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- `holo.verify()`, `holo.inspect()` and `prism-code check` give no verdict (`archive.table`) on any archive the Wire codec refuses (SPEC section 3), as the Rust verifier does: content blobs out of label order, an application manifest that is not the Wire template, a manifest reference that names no blob, a section kind or extension name out of place, or a row count other than eight (nine with the attestation row last). Such an archive used to get a failing verdict.
+
 ### Features Added
 - `prism-code generate --lang python` (#289): a package from the same code model, importing only the standard library (Python 3.9 and later), typed so that `mypy --strict` passes and laid out as `black` lays it out at 100 columns. `world.py` holds `WORLD`, `EXPORTS`, the protocol `Guest` and `dispatch`; the application's module holds the typed client (`Calculator`, `Operation`, `CalculatorErrorCode` with the model's messages, `CalculatorError`, `ResponseError`, `MODEL`), or a client over bytes. The test replays every typed acceptance vector, as the real guest answers it, through the Python client with `python3`. `--lang` now takes `js`, `rust` and `python`.
 - `prism-code generate --lang rust` (#289): a crate from the same code model as `--lang js`, with no dependencies and no `unsafe`, already formatted as `rustfmt` lays it out. `world.rs` holds `WORLD`, `EXPORTS`, the trait `Guest` (the world's exports and memory, to implement over any WebAssembly engine) and `dispatch`, the world's request protocol over it; the application's module holds the typed client (`Calculator`, `Operation`, `CalculatorErrorCode` with the model's messages, `CalculatorError`, `MODEL`), or a client over bytes when the model has no typed operations. The test builds the generated crate, runs clippy with warnings denied, and replays every typed acceptance vector, as the real guest answers it, through the Rust client.
