@@ -86,14 +86,14 @@ test('the docker invocation is the template\'s, minus the socket unless building
   assert.ok(windows.includes('/work'));
 });
 
-test('check runs docker with the lock\'s image (dry run)', () => {
+test('build --check runs docker with the lock\'s image (dry run)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'prism-code-lock-'));
   writeFileSync(join(dir, 'prismpm.lock'), JSON.stringify({ spec: 'prismpm/sdk-lock/2', sdk_image: IMAGE }));
-  const { code, out } = run(['check', '--verbose'], { cwd: dir, env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
+  const { code, out } = run(['build', '--check', '--verbose'], { cwd: dir, env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(code, 0, out);
   assert.match(out, /^docker run --rm /);
   assert.ok(out.includes(`${IMAGE} prismpm check --verbose`));
-  const missing = run(['check'], { cwd: mkdtempSync(join(tmpdir(), 'prism-code-nolock-')), env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
+  const missing = run(['build', '--check'], { cwd: mkdtempSync(join(tmpdir(), 'prism-code-nolock-')), env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(missing.code, 64);
 });
 

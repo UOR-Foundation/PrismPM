@@ -27,7 +27,7 @@ import {
 import { acceptanceVectors, declarations, names, proofDeclarations, renderModel, renderProofs, renderSpecDocument } from '../src/journey/render.mjs';
 import { answersFromSpec, compile, nextTurn } from '../src/journey/session.mjs';
 import { journeyServer } from '../src/journey/register.mjs';
-import { axiomViolations, declarationAt, parseDiagnostics, steps } from '../src/journey/sdk.mjs';
+import { BUILD_SCRIPT, axiomViolations, buildProgress, declarationAt, parseDiagnostics, steps } from '../src/journey/sdk.mjs';
 import { appDir, modelPath, readSession, scaffold, writeApp } from '../src/journey/project.mjs';
 import { createServer, INSTRUCTIONS } from '../src/journey/mcp.mjs';
 
@@ -260,6 +260,19 @@ test('diagnostics, axiom violations and step markers are read from the SDK outpu
   const proofs = renderProofs(paymentSpec());
   const line = proofs.split('\n').findIndex((l) => l.startsWith('theorem{')) + 1;
   assert.equal(declarationAt(proofs, line), 'inv001Holds');
+});
+
+test('a build names each stage it enters, so a polling agent sees which one is running (#585)', () => {
+  assert.match(BUILD_SCRIPT, /PRISMPM_PROGRESS=1 prismpm verify/);
+  assert.equal(buildProgress('@@step build'), 'Stage: Building the app with prismpm verify.');
+  assert.equal(buildProgress('@@step format'), 'Stage: Formatting the model.');
+  assert.equal(buildProgress('prismpm: stage lean-proof'), 'Stage: Lean proof (lean-proof).');
+  assert.equal(buildProgress('prismpm: stage lean4-prod-build'), 'Stage: Lean export (lean4-prod-build).');
+  assert.equal(buildProgress('prismpm: stage cargo'), 'Stage: Rust (cargo).');
+  assert.equal(buildProgress('prismpm: stage browser-core-wasm'), 'Stage: WebAssembly (browser-core-wasm).');
+  assert.equal(buildProgress('prismpm: stage holo'), 'Stage: the holo (holo).');
+  assert.equal(buildProgress('prismpm: stage text-cli-acceptance'), 'Stage: the acceptance run (text-cli-acceptance).');
+  for (const line of ['@@exit build 0', 'error[PP5004]: application kernel', 'prismpm: stage', 'Compiling foo']) assert.equal(buildProgress(line), null, line);
 });
 
 test('the app lives in prism/, a hand edit of the model is noticed, and renaming follows the spec', () => {

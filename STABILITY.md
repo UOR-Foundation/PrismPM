@@ -158,11 +158,9 @@ Wiring that verification into the verdict is breaking and gets its changelog lin
 
 ### 6.1.1 Deprecated
 
-| Surface | Replacement | Removed in |
-| --- | --- | --- |
-| `prism-code check [args]` with no holo, which runs `prismpm check` in the SDK image | `prism-code build --check [args]`, the same command | `prism-code` 0.4.0 |
+None.
 
-Until then the old spelling runs as before and prints a warning naming the replacement.
+Removed: `prism-code check [args]` with no holo, which ran `prismpm check` in the SDK image. Its removal was announced for `prism-code` 0.4.0 and happened after 0.7.2 (#584). It is now a usage error that names the replacement, `prism-code build --check [args]`.
 
 ### 6.2 SDK exports
 

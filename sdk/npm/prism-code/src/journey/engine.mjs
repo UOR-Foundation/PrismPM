@@ -11,7 +11,7 @@ import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
-import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
 import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
@@ -274,7 +274,15 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
   }
   const started = Date.now();
   log('Building the app: Lean export, Rust, WebAssembly, the holo and its independent acceptance run. The first build takes ten minutes or more...');
-  const run = await runInImage(dir, BUILD_SCRIPT, { socket: true, onLine: (l) => /^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l) && log(l) });
+  // Each stage the build enters becomes a progress line, so a caller polling the log sees which one is running (#585).
+  const run = await runInImage(dir, BUILD_SCRIPT, {
+    socket: true,
+    onLine: (l) => {
+      const stage = buildProgress(l);
+      if (stage) log(stage);
+      else if (/^(error|warning|verified|built|wrote|PP\d|  \w)/.test(l)) log(l);
+    },
+  });
   // The build formats the model; remember it as formatted, so the next proof does not take it for a hand edit.
   const wasProved = session.status.proved?.modelSha === session.status.modelSha;
   rememberModel(dir, session);
@@ -468,12 +476,12 @@ async function built(dir, session, holo, seconds, proof) {
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: ok
-      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest.`
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
       : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
-      note: 'The run policy accepts P0, the level every holo has until holos carry signed statements. The proofs were checked when it was built.',
+      note: 'The run policy accepts P0. The proofs were checked when the app was built, but the holo does not carry them: it holds no signed proof statement, so `prism-code check` under the default policy (P2) reports P0 and fails (#582).',
     },
   };
 }

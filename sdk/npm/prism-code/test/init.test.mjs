@@ -153,7 +153,7 @@ test('npm create prism-code is prism-code init', () => {
   for (const path of a) assert.ok(readFileSync(join(root, 'proj', path)).equals(readFileSync(join(root, 'proj2', path))), path);
 });
 
-test('a bound project points at build --check, the model check, not the deprecated bare check (#368)', { skip: process.platform === 'win32' && 'the docker stub is a POSIX shell script' }, () => {
+test('a bound project points at build --check, the model check, not the removed bare check (#368, #584)', { skip: process.platform === 'win32' && 'the docker stub is a POSIX shell script' }, () => {
   // A stub docker on PATH: `cat` of the image standards.lock prints a fixed file; `prismpm update` writes prismpm.lock.
   const stubDir = scratch();
   const stub = join(stubDir, 'docker');

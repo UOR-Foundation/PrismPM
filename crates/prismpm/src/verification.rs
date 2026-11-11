@@ -1193,6 +1193,20 @@ pub(crate) fn run_process_limited(
     )
 }
 
+/// Names the stage a build or verification is in, on stderr as
+/// `prismpm: stage <name>`, when `PRISMPM_PROGRESS` is set (issue #585).
+/// A caller that streams stderr, such as the guided journey, can then say
+/// which stage is running. Without the variable it prints nothing, so no
+/// output another tool reads changes.
+pub(crate) fn progress(stage: &str) {
+    if std::env::var_os("PRISMPM_PROGRESS").is_some() {
+        use std::io::Write as _;
+        let mut stderr = std::io::stderr().lock();
+        let _ = writeln!(stderr, "prismpm: stage {stage}");
+        let _ = stderr.flush();
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_process_limited_allowed(
     tool: &str,
@@ -1216,6 +1230,7 @@ pub(crate) fn run_process_limited_allowed(
             "allowed process exit-code set is empty or malformed",
         ));
     }
+    progress(tool);
     let timeout = executable("timeout")?;
     let program_bytes =
         std::fs::read(program).or_else(|_| program.canonicalize().and_then(std::fs::read));
@@ -2513,6 +2528,7 @@ fn run_application(
             .map_err(|error| PrismError::new("PP5004", format!("application kernel: {error}")))?;
         application_harness(application, &parse_kernel(&kernel)?)?
     };
+    progress("holo");
     let holo_path = build_root.join(format!("{}.holo", application.name()));
     let holo = std::fs::read(&holo_path)
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", holo_path.display())))?;
@@ -2882,6 +2898,7 @@ pub(crate) fn run(
         )
     })?;
     controller.check_model_configuration(request.config_path.as_deref())?;
+    progress("lean-proof");
     let lex_verified = lex_engine.verify(LexVerifyRequest {
         selection: Selection::Entrypoints,
     });
