@@ -926,3 +926,37 @@ test('pinned Buildx pushes each platform by digest and the assembled two-platfor
     }
   }
 });
+
+test('versioned discovery tags are checked by the digest of the raw bytes they serve', t => {
+  const step = workflow().jobs.release.steps.find(step => step.name === 'Publish accepted OCI discovery tags');
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-discovery-tags-'));
+  t.after(() => rmSync(directory, {recursive: true, force: true}));
+  const bin = join(directory, 'bin'), release = join(directory, 'release');
+  mkdirSync(bin); mkdirSync(release);
+  const served = '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}';
+  writeFileSync(join(directory, 'served.json'), served);
+  // Buildx v0.28.0: --raw prints the served bytes; --format '{{.Manifest.Digest}}'
+  // prints its default text, not the digest.
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh
+set -eu
+test "$1 $2" = "buildx imagetools"
+case "$3" in
+  create) printf '%s\\n' "$*" >> "${directory}/created" ;;
+  inspect)
+    if [ "$4" = --raw ]; then cat "${directory}/served.json"
+    else printf 'Name:      %s\\nMediaType: application/vnd.oci.image.index.v1+json\\n' "$4"; fi ;;
+  *) exit 2 ;;
+esac
+`);
+  chmodSync(join(bin, 'docker'), 0o755);
+  const run = digest => {
+    rmSync(release, {recursive: true, force: true}); mkdirSync(release);
+    writeFileSync(join(release, 'sdk-image.txt'), `ghcr.io/uor-foundation/prismpm-sdk@${digest}\n`);
+    return execFileSync('bash', ['-c', step.run], {cwd: directory, stdio: 'pipe',
+      env: {...process.env, PATH: `${bin}:${process.env.PATH}`, VERSION: '0.4.0'}});
+  };
+  run(sha(Buffer.from(served)));
+  assert.equal(readFileSync(join(directory, 'created'), 'utf8'),
+    `buildx imagetools create --tag ghcr.io/uor-foundation/prismpm-sdk:0.4.0 ghcr.io/uor-foundation/prismpm-sdk@${sha(Buffer.from(served))}\n`);
+  assert.throws(() => run(sha(Buffer.from('other'))), error => error.status !== 0);
+});
