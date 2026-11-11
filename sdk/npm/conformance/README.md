@@ -21,9 +21,9 @@ node sdk/npm/conformance/bin/prism-conformance.mjs run --runtime js
 js: prism-code 0.3.0
 pass            capabilities.none.denies-everything
 ...
-xfail           replay.history.unchanged  #284: Histories and replay are not on main yet; ...
+pass            replay.statement.written
 
-122 checks: 117 pass, 0 fail, 5 xfail, 0 unexpected pass, 0 n/a
+138 checks: 138 pass, 0 fail, 0 xfail, 0 unexpected pass, 0 n/a
 PASSED
 ```
 
@@ -115,6 +115,7 @@ The checks compare what they name and ignore the rest.
 | `inspect` | yes | none | A `prismpm/holo-inspection/1` object |
 | `dispatch` | yes | `requests`, an array of hex | `responses`, one per request, in order: `{ "hex": "..." }`, or `{ "error": { "code": "..." } }` when that request was refused |
 | `acceptance` | yes | none | `total`, `passed` |
+| `replay` | yes | `history`, a `prism/history/1` document as a JSON value or as text; or `record`, an array of hex requests to dispatch through the runtime's recorder first, refusals included | `events`, `divergenceCount`, `divergences` (the index of each diverging event), `statement` (the `prism/replay/v1` in-toto statement), and with `record`, `history`, the recorded document. A divergence is the error `determinism_violation`, and a history that does not read is `replay_failed`. |
 | `capabilities` | no | `capabilities`, `capabilitySet`, `queries` and `asserts`, each a list of `{ kind, resource }`; all optional | `set`, and `answers`, one boolean per query. An assert that is denied is the error. |
 | `auth` | no | `call`: `login` or `logout` with `request`, `inspect` or `stores.get` with `registry`, `identities.fromKey` with `key`, `identities.keyless` with `identityToken`. Optional: `config`, the Docker config to start from, as a JSON value or as text, and `env`, variables beside `DOCKER_CONFIG`. | `value`, what the call returned, and `config`, the Docker config afterwards, null when there is none. Every value in these checks is a test value. |
 
@@ -213,6 +214,8 @@ A placeholder names work that is not on main yet. It has an issue and a reason, 
 ```json
 { "id": "replay.history.unchanged", "title": "...", "placeholder": { "issue": 284, "reason": "..." } }
 ```
+
+The replay checks were placeholders until #284 merged. The suite has none today.
 
 ## The format-change gate
 

@@ -21,14 +21,8 @@ test('the suite covers each part of the runtime contract the issue names', () =>
   assert.equal(new Set(checks.map((check) => check.id)).size, checks.length);
 });
 
-test('every replay check is a placeholder tied to its issue, and no other check is one', () => {
-  for (const check of checks) {
-    if (check.feature === 'replay') {
-      assert.equal(check.placeholder?.issue, 284, check.id);
-    } else {
-      assert.equal(check.placeholder, undefined, check.id);
-    }
-  }
+test('no check is a placeholder: every feature the suite names is on main and runs', () => {
+  for (const check of checks) assert.equal(check.placeholder, undefined, check.id);
 });
 
 test('every operation and every archive is used by a check, so nothing in the contract or the corpus is dead', () => {

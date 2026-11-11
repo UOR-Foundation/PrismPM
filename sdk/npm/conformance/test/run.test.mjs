@@ -59,10 +59,16 @@ test('a feature declared not applicable is not run, and reports n/a', async () =
   assert.equal(results.passed, true);
 });
 
+/** The suite with one feature still to be written, as replay was until #284 merged. */
+const withPlaceholder = () => [
+  ...loadScenarios(),
+  { feature: 'future', title: 'A feature not on main yet', checks: [{ id: 'future.first', title: 'Waits for its issue.', placeholder: { issue: 999, reason: 'Not on main yet.' } }] },
+];
+
 test('a placeholder is xfail for every runtime, without running', async () => {
-  const results = await runSuite({ runtime: 'fake', command: fake('crash'), only: 'replay' });
+  const results = await runSuite({ runtime: 'fake', command: fake('crash'), only: 'future', features: withPlaceholder() });
   assert.ok(results.checks.length > 0);
-  assert.ok(results.checks.every((check) => check.status === 'xfail' && /^#284: /.test(check.reason)));
+  assert.ok(results.checks.every((check) => check.status === 'xfail' && /^#999: /.test(check.reason)));
   assert.equal(results.passed, true);
 });
 
@@ -70,7 +76,7 @@ test('a declaration that names what does not exist is refused, so it cannot go s
   const features = loadScenarios();
   const problemsOf = (members) => problemsOfDeclaration(declaration(members), features);
   assert.match(problemsOf({ xfail: { 'load.no-such-check': 'x' } })[0], /no check of this suite/);
-  assert.match(problemsOf({ xfail: { 'replay.history.unchanged': 'x' } })[0], /placeholder/);
+  assert.match(problemsOfDeclaration(declaration({ xfail: { 'future.first': 'x' } }), withPlaceholder())[0], /placeholder/);
   assert.match(problemsOf({ xfail: { 'load.refuse.empty': '' } })[0], /no reason/);
   assert.match(problemsOf({ notApplicable: { nothing: 'x' } })[0], /no feature/);
   assert.match(problemsOf({ notApplicable: { load: '' } })[0], /no reason/);

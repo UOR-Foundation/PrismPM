@@ -21,7 +21,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Dispatch through the guest (`dispatch`) | 7 | + | N/A | N/A |
 | Typed errors (`errors`) | 8 | + | N/A | N/A |
 | Load a holo (`load`) | 19 | + | N/A | N/A |
-| Histories and replay (`replay`) | 5 | - | N/A | N/A |
+| Histories and replay (`replay`) | 5 | + | N/A | N/A |
 | Verify a holo (`verify`) | 24 | + | N/A | N/A |
 | The world contract (`world`) | 16 | + | N/A | N/A |
 
@@ -154,11 +154,11 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 
 | Check | Asks | JavaScript | Rust | Python |
 | --- | --- | --- | --- | --- |
-| `replay.history.unchanged` | Replaying a recorded history against the same holo finds no divergence. | - | N/A | N/A |
-| `replay.history.divergence` | Replaying against a changed model is a determinism violation (determinism_violation). | - | N/A | N/A |
-| `replay.history.malformed` | A history that does not read is a replay error (replay_failed), not a divergence. | - | N/A | N/A |
-| `replay.recorder.round-trip` | Dispatches recorded into prism/history/1 replay unchanged, refusals included. | - | N/A | N/A |
-| `replay.statement.written` | A replay writes a prism/replay/v1 statement that names the guest and every history by dual digest. | - | N/A | N/A |
+| `replay.history.unchanged` | Replaying a recorded history against the same holo finds no divergence. | + | N/A | N/A |
+| `replay.history.divergence` | Replaying against a changed model is a determinism violation (determinism_violation). | + | N/A | N/A |
+| `replay.history.malformed` | A history that does not read is a replay error (replay_failed), not a divergence. | + | N/A | N/A |
+| `replay.recorder.round-trip` | Dispatches recorded into prism/history/1 replay unchanged, refusals included. | + | N/A | N/A |
+| `replay.statement.written` | A replay writes a prism/replay/v1 statement that names the guest and every history by dual digest. | + | N/A | N/A |
 
 ### Verify a holo
 
@@ -212,10 +212,4 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 
 ## Expected failures
 
-| Runtime | Check | Why |
-| --- | --- | --- |
-| JavaScript | `replay.history.unchanged` | #284: Histories and replay are not on main yet; the scenario is written when #284 merges. |
-| JavaScript | `replay.history.divergence` | #284: Histories and replay are not on main yet; the scenario is written when #284 merges. |
-| JavaScript | `replay.history.malformed` | #284: Histories and replay are not on main yet; the scenario is written when #284 merges. |
-| JavaScript | `replay.recorder.round-trip` | #284: Histories and replay are not on main yet; the scenario is written when #284 merges. |
-| JavaScript | `replay.statement.written` | #284: Histories and replay are not on main yet; the scenario is written when #284 merges. |
+None.
