@@ -20,6 +20,11 @@ import { acceptanceHistory, experimental_recorder, experimental_replay } from '.
 import { createMiddlewareStack } from './middleware.mjs';
 import { worldPolicy } from './vendor/verify.mjs';
 import { createContainers } from './containers.mjs';
+import { createNetworks } from './networks.mjs';
+import { createVolumes } from './volumes.mjs';
+import { createEventBus, createSystem } from './system.mjs';
+import { verify as verifyNamespace } from './verify-namespace.mjs';
+import { errors as errorsNamespace } from './errors-namespace.mjs';
 import * as canonical from './canonical/index.js';
 
 export {
@@ -357,16 +362,88 @@ export async function load(source, options = {}) {
   fail('load.source', 'load() takes bytes, a Blob, a path or a URL');
 }
 
-/**
- * A client with containers of its own (issue #348). `options.store` keeps the
- * records, in memory unless given; `options.warn` receives the warning of an
- * unverified run, `console.warn` unless given.
- */
-export function createPrism(options = {}) {
-  return Object.freeze({ containers: createContainers({ load, ...options }) });
+/** The nine modules of #440, in the order the client exposes them. */
+export const MODULES = Object.freeze(['client', 'images', 'containers', 'networks', 'volumes', 'system', 'auth', 'errors', 'verify']);
+
+const CLIENT_OPTIONS = ['store', 'warn', 'capabilities', 'capabilityStore', 'capabilitySet', 'policy', 'world', 'declarations', 'runner', 'docker', 'spawn', 'readLock', 'auth', 'events'];
+
+/** A capability file kept in memory, which `prism.networks` reads and writes when no store is given. */
+export function memoryCapabilityStore(initial = null) {
+  let text = initial === null || initial === undefined ? null : typeof initial === 'string' ? initial : initial instanceof Uint8Array ? new TextDecoder().decode(initial) : JSON.stringify(initial);
+  return Object.freeze({
+    read: () => text,
+    write: (next) => {
+      text = next;
+    },
+  });
 }
 
-/** The default client: `prism.containers.run(image, input)`. Its records live in memory until removed. */
+const IMAGE_VERBS = Object.freeze(['build', 'pull', 'push', 'inspect', 'verify']);
+
+/**
+ * `prism.images`, loaded on first use. It reads files and registries, so a bundler
+ * leaves `images-namespace.mjs` out of a browser build (package.json `browser`),
+ * and there every verb raises `images.unavailable`. In Node it is `createImages`.
+ */
+function lazyImages(dependencies) {
+  let made = null;
+  const namespace = () => {
+    made ??= import('./images-namespace.mjs').then((module) => {
+      if (typeof module?.createImages !== 'function') fail('images.unavailable', 'prism.images reads files and registries, which this build of prism-code leaves out; use it in Node');
+      return module.createImages(dependencies);
+    });
+    return made;
+  };
+  return Object.freeze(Object.fromEntries(IMAGE_VERBS.map((verb) => [verb, async (...args) => (await namespace())[verb](...args)])));
+}
+
+/** `prism.auth` where there is no credential store or key: in a browser, or a client made without one. Every verb says how to get the real one. */
+const unavailable = (verb) => () => fail('auth.unavailable', `prism.auth.${verb} needs Node's credential stores and keys; use Prism.fromEnv() from prism-code/node, or pass createPrism({ auth })`);
+const NO_AUTH = Object.freeze({
+  login: unavailable('login'),
+  logout: unavailable('logout'),
+  inspect: unavailable('inspect'),
+  stores: Object.freeze({ list: unavailable('stores.list'), get: unavailable('stores.get') }),
+  identities: Object.freeze({ fromKey: unavailable('identities.fromKey'), keyless: unavailable('identities.keyless') }),
+});
+
+/**
+ * A client: the nine modules of #440 as one object (issue #441). Every option is
+ * optional, and each goes to the module that owns it:
+ *
+ * - `containers`: `store` keeps the records, in memory unless given; `warn` receives
+ *   the warning of an unverified run, `console.warn` unless given.
+ * - `networks` and `volumes`: `capabilities` is the capability file, and none grants
+ *   nothing; `capabilityStore` holds it for `networks`, in memory unless given, and
+ *   overrides `capabilities` there. `capabilitySet`, `world`, `policy`,
+ *   `declarations` and `runner` are `createVolumes`'s. `policy` also bounds `networks`.
+ * - `images`: `docker` builds the Docker invocation for `build`, and `spawn` runs it.
+ *   Without `docker`, `build` raises `PP5008` and the other verbs work.
+ * - `system`: `readLock(path)` returns a project's `prismpm.lock`, for `info` and
+ *   `version`; `events` is the bus containers report to, a new one unless given.
+ * - `auth`: a namespace from `createAuth`. It needs Node, so without one every verb
+ *   raises `auth.unavailable`; `Prism.fromEnv()` in `prism-code/node` gives it.
+ *
+ * `createPrism()` stays the documented path in a browser. In Node, `Prism.fromEnv()`
+ * makes the same object from this machine's configuration.
+ */
+export function createPrism(options = {}) {
+  const prototype = options === null || typeof options !== 'object' ? undefined : Object.getPrototypeOf(options);
+  if (prototype !== Object.prototype && prototype !== null) fail('client.option', 'createPrism options must be a plain object');
+  const unknown = Object.keys(options).filter((name) => !CLIENT_OPTIONS.includes(name));
+  if (unknown.length > 0) fail('client.option', `createPrism has no option ${unknown.join(', ')}; it takes ${CLIENT_OPTIONS.join(', ')}`);
+  const { store, warn, capabilities = null, capabilityStore, capabilitySet, policy = null, world = null, declarations, runner = null, docker = null, spawn, readLock = null, auth = NO_AUTH } = options;
+  const events = options.events ?? createEventBus();
+  const containers = createContainers({ load, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit });
+  const networks = createNetworks({ store: capabilityStore ?? memoryCapabilityStore(capabilities), policy: { effects: policy?.effects ?? null, capabilities: policy?.capabilities ?? null } });
+  const volumes = createVolumes({ capabilities, ...(capabilitySet === undefined ? {} : { set: capabilitySet }), world, policy, ...(declarations === undefined ? {} : { declarations }), runner });
+  if (docker !== null && typeof docker !== 'function') fail('client.option', 'docker must be a function that builds the Docker invocation, or null');
+  const images = lazyImages({ docker, ...(spawn === undefined ? {} : { spawn }) });
+  const system = createSystem({ containers, events, readLock });
+  return Object.freeze({ images, containers, networks, volumes, system, auth, errors: errorsNamespace, verify: verifyNamespace });
+}
+
+/** The default client: `prism.containers.run(image, input)`, `prism.images.pull(ref)` and the other modules. Its records live in memory until removed. */
 export const prism = createPrism();
 
 // 0.1.0 compatibility: the canonicalization API stays at `prism-code/canonical`.

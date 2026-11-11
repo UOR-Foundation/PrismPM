@@ -249,12 +249,109 @@ export interface Containers {
   /** The container with this id or unique id prefix. Rejects with `container.missing` or `container.ambiguous`. */
   get(id: string): Promise<Container>;
   remove(id: string): Promise<void>;
+  /** Running containers, or every one with `all`, oldest first, as `docker ps`. */
+  list(options?: { all?: boolean }): Promise<Container[]>;
+  /** Remove exited containers, those that finished before `until` (ms since the epoch) when given. Created and running ones are kept. */
+  prune(options?: { until?: number }): Promise<{ containersDeleted: string[]; spaceReclaimed: number }>;
 }
 
+/** Experimental. `prism.images` (#442): docker-py's verbs over the code that already does the work. Node only; in a browser build every verb raises `images.unavailable`. */
+export interface Images {
+  build(options?: { path?: string; tag?: string; file?: string; locked?: boolean; update?: boolean; release?: string; env?: Record<string, string | undefined> }): Promise<{ schema: 'prism/image-build/1'; digest: string; tag: string | null; path: string | null; bytes: Uint8Array; [member: string]: unknown }>;
+  pull(repository: string, options?: Record<string, unknown>): Promise<{ schema: 'prism/image-pull/1'; digest: string; bytes: Uint8Array; [member: string]: unknown }>;
+  push(repository: string, options?: Record<string, unknown>): Promise<{ schema: 'prism/image-push/1'; digest: string; [member: string]: unknown }>;
+  inspect(image: Uint8Array | ArrayBuffer | Blob | string | URL): Promise<{ schema: 'prism/image-inspection/1'; digest: string; [member: string]: unknown }>;
+  verify(image: Uint8Array | ArrayBuffer | Blob | string | URL, options?: Record<string, unknown>): Promise<Verdict>;
+}
+
+export type SystemEventAction = 'create' | 'start' | 'die' | 'destroy';
+
+/** One container lifecycle event, as `docker events` reports it. */
+export interface SystemEvent {
+  readonly schema: 'prism/system-event/1';
+  readonly sequence: number;
+  readonly type: 'container';
+  readonly action: SystemEventAction;
+  readonly id: string;
+  /** `blake3:<fingerprint>` of the image, or null. */
+  readonly image: string | null;
+  readonly exitCode: number | null;
+  readonly time: string;
+  readonly timeMs: number;
+}
+
+export interface SystemEventStream extends AsyncIterable<SystemEvent> {
+  close(): void;
+}
+
+/** What `prismpm.lock` pins, or null without one. */
+export interface PinnedLock {
+  schema: string | null;
+  sdkVersion: string | null;
+  builder: string;
+  toolchain: Record<string, string> | null;
+}
+
+/** Experimental. `prism.system` (#446): this installation, and its housekeeping. */
+export interface System {
+  version(options?: { path?: string }): Promise<{ schema: 'prism/system-version/1'; version: string; formatRevision: string; runtime: { name: 'node' | 'browser'; version: string | null; platform: string | null }; toolchain: Record<string, string> | null; builder: string | null }>;
+  info(options?: { path?: string }): Promise<{ schema: 'prism/system-info/1'; version: string; formatRevision: string; containers: { total: number; created: number; running: number; exited: number }; images: null; lock: PinnedLock | null; events: boolean; dependsOn: { images: readonly string[] }; [member: string]: unknown }>;
+  df(): Promise<{ schema: 'prism/system-df/1'; containers: { total: number; active: number; size: number; reclaimable: number; rows: { id: string; image: string | null; status: ContainerStatus; size: number }[] }; images: null; dependsOn: { images: readonly string[] } }>;
+  /** Exited containers only; no image is removed until the local store exists (#349). */
+  prune(options?: { until?: Date | string | number }): Promise<{ schema: 'prism/system-prune/1'; containersDeleted: string[]; imagesDeleted: string[]; spaceReclaimed: number; dependsOn: { images: readonly string[] } }>;
+  events(options?: { since?: Date | string | number; until?: Date | string | number; signal?: AbortSignal; filters?: { action?: SystemEventAction | SystemEventAction[]; id?: string | string[] } }): SystemEventStream;
+}
+
+/** The bus a client's containers report to and `system.events` reads. */
+export interface EventBus {
+  emit(event: { action: SystemEventAction; id: string; image?: string | null; exitCode?: number | null }): SystemEvent;
+  subscribe(options?: { since?: number; until?: number; signal?: AbortSignal }): SystemEventStream;
+}
+
+/** Experimental. The nine modules of #440 as one client (#441). `networks`, `volumes`, `auth`, `errors` and `verify` are the namespaces of their own modules. */
+export interface PrismClient {
+  readonly images: Images;
+  readonly containers: Containers;
+  readonly networks: { readonly [verb: string]: (...args: any[]) => Promise<unknown> };
+  readonly volumes: { readonly [verb: string]: (...args: any[]) => Promise<unknown> };
+  readonly system: System;
+  readonly auth: { readonly [member: string]: unknown };
+  readonly errors: { readonly [member: string]: unknown };
+  readonly verify: { readonly [member: string]: unknown };
+}
+
+export interface CreatePrismOptions {
+  store?: ContainerStore;
+  warn?: (message: string) => void;
+  /** The capability file, and none grants nothing. */
+  capabilities?: object | string | Uint8Array | null;
+  /** Holds the capability file for `networks`; in memory unless given. */
+  capabilityStore?: { read(): unknown; write?(text: string): unknown };
+  capabilitySet?: string;
+  policy?: { name?: string; effects?: string[] | null; capabilities?: object | null } | null;
+  world?: { contract?: string; imports: object[] } | null;
+  declarations?: { name: string; type: string; options?: object }[];
+  runner?: { up(declaration: object): Promise<{ env?: object; withheld?: object[] }>; down(declaration: object): Promise<unknown> } | null;
+  /** Builds the Docker invocation for `images.build`. */
+  docker?: ((request: { image: string; cwd: string; command: string; args: string[] }) => { command: string; args: string[]; display: string } | Promise<{ command: string; args: string[]; display: string }>) | null;
+  spawn?: (...args: any[]) => unknown;
+  /** Returns `<path>/prismpm.lock`, or null, for `system.info` and `system.version`. */
+  readLock?: ((path: string) => string | null | Promise<string | null>) | null;
+  /** A namespace from `createAuth`; in a browser every verb raises `auth.unavailable`. */
+  auth?: { readonly [member: string]: unknown };
+  events?: EventBus;
+}
+
+/** The nine modules, `client` first. */
+export const MODULES: readonly ['client', 'images', 'containers', 'networks', 'volumes', 'system', 'auth', 'errors', 'verify'];
+
+/** A capability file kept in memory. */
+export function memoryCapabilityStore(initial?: object | string | Uint8Array | null): { read(): string | null; write(text: string): void };
+
 /** Experimental. The default client. Its records live in memory until removed. */
-export const prism: { readonly containers: Containers };
-/** Experimental. A client with containers of its own. `warn` receives the warning of an unverified run. */
-export function createPrism(options?: { store?: ContainerStore; warn?: (message: string) => void }): { readonly containers: Containers };
+export const prism: PrismClient;
+/** Experimental. A client of the nine modules. In Node, `Prism.fromEnv()` from `prism-code/node` configures one from this machine. */
+export function createPrism(options?: CreatePrismOptions): PrismClient;
 
 export type AssuranceLevel = 'P0' | 'P1' | 'P2' | 'P3';
 

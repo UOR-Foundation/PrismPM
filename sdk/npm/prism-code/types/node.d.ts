@@ -1,5 +1,5 @@
 import type { Server } from 'node:http';
-import type { Application, Capabilities, ContainerStore, LoadOptions, ManifestTarget, ParsedManifest, PrismError } from './index.js';
+import type { Application, Capabilities, ContainerStore, CreatePrismOptions, LoadOptions, ManifestTarget, ParsedManifest, PrismClient, PrismError } from './index.js';
 
 /** Open a `.holo` file or a closure directory. */
 export function fromFile(source: string | URL, options?: LoadOptions): Promise<Application>;
@@ -9,6 +9,11 @@ export function readClosureDirectory(directory: string): Promise<Map<string, Uin
 export function containersDirectory(env?: Record<string, string | undefined>): string;
 /** Experimental. Container records as one JSON file each, readable only by this user. A record holds the output and never the input. */
 export function fileContainerStore(directory?: string): ContainerStore;
+/** docker-py's `docker.from_env()` (#441): containers under `$PRISM_HOME/containers`, `images.build` through this machine's Docker, `system` reading `prismpm.lock`, and `auth` over Docker's credential stores. Other options are `createPrism`'s and win. */
+export const Prism: {
+  fromEnv(options?: CreatePrismOptions & { env?: Record<string, string | undefined> }): PrismClient;
+  create(options?: CreatePrismOptions): PrismClient;
+};
 /** Serve `app.view` as static files and answer `POST /_hologram/intent` with `app.dispatch`. */
 export function serve(app: Application, options?: { port?: number; host?: string }): Promise<{ server: Server; url: string; close(): Promise<void> }>;
 

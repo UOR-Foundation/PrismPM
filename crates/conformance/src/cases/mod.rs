@@ -731,6 +731,13 @@ pub fn run_at(root: &Path, id: &str) {
             &[("sdk/npm/prism-code/test/volumes.test.mjs", 25)],
             "600000",
         ),
+        // The `system` module and the client of #440.
+        "DK-41" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/system.test.mjs", 20)],
+            "600000",
+        ),
         "DK-35" => verify_node_suite(
             root,
             id,
@@ -784,6 +791,12 @@ pub fn run_at(root: &Path, id: &str) {
                 ),
             ],
             "3600000",
+        ),
+        "OC-11" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/images.test.mjs", 43)],
+            "600000",
         ),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
