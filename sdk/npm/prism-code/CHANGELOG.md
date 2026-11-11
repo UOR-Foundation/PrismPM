@@ -20,6 +20,10 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `src/images-namespace.mjs`, the `prism.images` namespace (#442, experimental): `build`, `pull`, `push`, `inspect` and `verify`, reached as `prism.images` on the client (#441). See the root CHANGELOG.
 - The nine modules on one client (#441, #446, experimental): `createPrism()` returns `images`, `containers`, `networks`, `volumes`, `system`, `auth`, `errors` and `verify`; `Prism.fromEnv()` in `prism-code/node` configures it from this machine. `prism.system` (`info`, `version`, `df`, `prune`, `events`), `containers.list` and `containers.prune` are new. See the root CHANGELOG.
 
+### Bugs Fixed
+- A built holo says plainly that it does not carry its proof (#582). `prism_build` and its run note now say that the holo holds no signed proof statement, so the default `prism-code check` reports P0. The verdict's reasons for a holo with no attestation section no longer cite closed issues #266, #267 and #284, and now read as the Rust verifier's do: "The holo carries no provenance statement." and the same for proof and replay.
+
+
 ## [0.7.2] - 2026-11-09
 
 ### Breaking Changes
