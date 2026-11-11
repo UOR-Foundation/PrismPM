@@ -101,12 +101,13 @@ class Container {
   #store;
   #warn;
   #forget;
+  #emit;
   #output;
   #error = null;
   #inFlight = null;
   #removed = false;
 
-  constructor({ record, app = null, input = null, policy, allowUnverified = false, store, warn, forget }) {
+  constructor({ record, app = null, input = null, policy, allowUnverified = false, store, warn, forget, emit }) {
     this.#record = record;
     this.#app = app;
     this.#input = input;
@@ -115,6 +116,7 @@ class Container {
     this.#store = store;
     this.#warn = warn;
     this.#forget = forget;
+    this.#emit = emit;
     this.#output = decodeOutput(record.output);
   }
 
@@ -175,6 +177,7 @@ class Container {
     this.#output = null;
     this.#error = null;
     await this.#store.put(this.#record);
+    this.#emit('start', this.#record);
     let output;
     try {
       output = await this.#app.dispatch(this.#input);
@@ -195,6 +198,7 @@ class Container {
       finishedAt: new Date().toISOString(),
     };
     this.#record.output = output === null ? null : encodeOutput(output);
+    this.#emit('die', this.#record);
     if (this.#record.rm) await this.#drop();
     else await this.#store.put(this.#record);
     return this;
@@ -204,6 +208,7 @@ class Container {
     await this.#store.remove(this.id);
     this.#removed = true;
     this.#forget(this.id);
+    this.#emit('destroy', this.#record);
   }
 
   /**
@@ -224,13 +229,27 @@ class Container {
   }
 }
 
+const utf8Encoder = new TextEncoder();
+
 /**
  * The `containers` namespace over a loader and a store. `load` opens an image;
  * `store` keeps the records; `warn` receives the warning of an unverified run.
+ * `onEvent` receives each lifecycle event, `{ action, id, image, exitCode }` with
+ * Docker's actions `create`, `start`, `die` and `destroy`; the client passes the
+ * bus `system.events` reads (#446). An `onEvent` that throws does not stop a run.
  */
-export function createContainers({ load, store = memoryContainerStore(), warn = (message) => console.warn(`prism-code: ${message}`) }) {
+export function createContainers({ load, store = memoryContainerStore(), warn = (message) => console.warn(`prism-code: ${message}`), onEvent = null }) {
+  if (onEvent !== null && typeof onEvent !== 'function') fail('container.option', 'onEvent must be a function, or null');
   const live = new Map();
   const forget = (id) => live.delete(id);
+  const emit = (action, record) => {
+    if (onEvent === null) return;
+    try {
+      onEvent({ action, id: record.id, image: record.image.digest, exitCode: record.state.exitCode });
+    } catch {
+      // An observer is told; it does not decide.
+    }
+  };
 
   /**
    * Open the image and make a container in state `created`. An image that
@@ -254,8 +273,9 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
       output: null,
     };
     await store.put(record);
-    const container = new Container({ record, app, input: bytes, policy, allowUnverified, store, warn, forget });
+    const container = new Container({ record, app, input: bytes, policy, allowUnverified, store, warn, forget, emit });
     live.set(record.id, container);
+    emit('create', record);
     return container;
   }
 
@@ -272,15 +292,58 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     if (ids.length > 1) fail('container.ambiguous', `${id} names ${ids.length} containers; give more of the id`);
     const known = live.get(ids[0]);
     if (known) return known;
-    const container = new Container({ record: await store.get(ids[0]), store, warn, forget });
+    const container = new Container({ record: await store.get(ids[0]), store, warn, forget, emit });
     live.set(ids[0], container);
     return container;
+  }
+
+  /** Every container in the store, oldest first: running ones only, as `docker ps`, unless `all`. */
+  async function list(options = {}) {
+    const { all = false, ...rest } = options;
+    if (Object.keys(rest).length > 0) fail('container.option', `containers.list has no option ${Object.keys(rest).join(', ')}; it takes all`);
+    if (typeof all !== 'boolean') fail('container.option', 'containers.list option all must be true or false');
+    const found = await Promise.all((await store.find('')).map((id) => get(id)));
+    const records = await Promise.all(found.map(async (container) => [container, await container.inspect()]));
+    return records
+      .filter(([, record]) => all || record.state.status === 'running')
+      .sort(([, a], [, b]) => (a.created < b.created ? -1 : a.created > b.created ? 1 : a.id < b.id ? -1 : 1))
+      .map(([container]) => container);
+  }
+
+  /**
+   * Remove every exited container, or those that finished before `until`
+   * (milliseconds since the epoch), as `docker container prune` does. A created or
+   * running container is kept. `spaceReclaimed` is the bytes of the records' JSON.
+   */
+  async function prune(options = {}) {
+    const { until, ...rest } = options;
+    if (Object.keys(rest).length > 0) fail('container.option', `containers.prune has no option ${Object.keys(rest).join(', ')}; it takes until`);
+    if (until !== undefined && !Number.isFinite(until)) fail('container.option', 'containers.prune option until must be milliseconds since the epoch');
+    const containersDeleted = [];
+    let spaceReclaimed = 0;
+    for (const container of await list({ all: true })) {
+      const record = await container.inspect();
+      if (record.state.status !== 'exited') continue;
+      if (until !== undefined && Date.parse(record.state.finishedAt) >= until) continue;
+      try {
+        await container.remove();
+      } catch (error) {
+        // Started again since it was listed: it is running now, and is kept.
+        if (error?.code === 'container.running') continue;
+        throw error;
+      }
+      containersDeleted.push(record.id);
+      spaceReclaimed += utf8Encoder.encode(JSON.stringify(record)).length;
+    }
+    return { containersDeleted, spaceReclaimed };
   }
 
   return Object.freeze({
     run,
     create,
     get,
+    list,
+    prune,
     start: async (id) => (await get(id)).start(),
     remove: async (id) => (await get(id)).remove(),
   });

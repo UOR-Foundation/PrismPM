@@ -9,7 +9,9 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { resolve, join, extname } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { loadArchive, loadClosure } from './index.mjs';
+import { createPrism, loadArchive, loadClosure } from './index.mjs';
+import { createAuth } from './auth.mjs';
+import { hostDockerArguments } from './host.mjs';
 import { fail } from './errors.mjs';
 import { parseManifest, manifestCapabilities, MANIFEST_FILE } from './manifest.mjs';
 import { parseCapabilities } from './capabilities.mjs';
@@ -222,6 +224,37 @@ export async function serve(app, { port = 0, host = '127.0.0.1' } = {}) {
     close: () => new Promise((resolveClose) => server.close(() => resolveClose())),
   };
 }
+
+/**
+ * `Prism.fromEnv()`, docker-py's `docker.from_env()` (issue #441): the client of
+ * `createPrism` with this machine's configuration and no daemon.
+ *
+ * - `containers` keep their records in `$PRISM_HOME/containers` (`fileContainerStore`).
+ * - `images.build` runs the builder image through the Docker that `prism-code setup`
+ *   recorded, or the one found on the PATH (`host.mjs`).
+ * - `system.info({ path })` and `system.version({ path })` read `<path>/prismpm.lock`.
+ * - `auth` logs in and out through Docker's credential stores and holds signing identities.
+ *
+ * `options.env` replaces `process.env`. Any other option is `createPrism`'s and wins
+ * over these defaults, so a test can pass its own `store` or `docker`.
+ */
+function fromEnv(options = {}) {
+  const { env = process.env, ...rest } = options;
+  return createPrism({
+    store: fileContainerStore(containersDirectory(env)),
+    docker: (request) => hostDockerArguments({ ...request, env }),
+    readLock: (directory) =>
+      readFile(join(toPath(directory), 'prismpm.lock'), 'utf8').catch((error) => {
+        if (error.code === 'ENOENT') return null;
+        return fail('system.lock', `cannot read ${join(toPath(directory), 'prismpm.lock')}: ${error.message}`);
+      }),
+    auth: createAuth({ env }),
+    ...rest,
+  });
+}
+
+/** The client entry point: `Prism.fromEnv()`. `Prism.create` is `createPrism`, for a client configured by hand. */
+export const Prism = Object.freeze({ fromEnv, create: createPrism });
 
 // Signing and checking attestations (#272). The sigstore packages they need are optional and load on first use.
 export { experimental_attest, experimental_verifyAttestations, experimental_verifyBundle, GITHUB_ACTIONS_ISSUER } from './attest.mjs';

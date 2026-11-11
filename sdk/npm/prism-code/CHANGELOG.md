@@ -15,6 +15,8 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Features Added
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
+- `src/images-namespace.mjs`, the `prism.images` namespace (#442, experimental): `build`, `pull`, `push`, `inspect` and `verify`, reached as `prism.images` on the client (#441). See the root CHANGELOG.
+- The nine modules on one client (#441, #446, experimental): `createPrism()` returns `images`, `containers`, `networks`, `volumes`, `system`, `auth`, `errors` and `verify`; `Prism.fromEnv()` in `prism-code/node` configures it from this machine. `prism.system` (`info`, `version`, `df`, `prune`, `events`), `containers.list` and `containers.prune` are new. See the root CHANGELOG.
 
 ## [0.7.2] - 2026-11-09
 

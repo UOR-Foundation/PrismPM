@@ -42,7 +42,10 @@
     "./package.json": "./package.json"
   },
   "browser": {
-    "./src/node.mjs": false
+    "./src/node.mjs": false,
+    "./src/images-namespace.mjs": false,
+    "./src/check.mjs": false,
+    "./src/attest.mjs": false
   },
   "files": [
     "bin",
