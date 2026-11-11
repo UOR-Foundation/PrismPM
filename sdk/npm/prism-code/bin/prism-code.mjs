@@ -51,8 +51,9 @@
  * `push` and `pull` exit 1 when a digest or the holo fails, 2 when the registry
  * gives no answer (#292).
  *
- * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
- * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
+ * `check` without a holo, the 0.2.0 spelling of `build --check`, was removed
+ * (#584, STABILITY.md section 6.1.1): it is a usage error that names
+ * `build --check`.
  */
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -227,7 +228,7 @@ Options for check:    --policy <file>              a Rego file (.rego), the name
                       --unstable-author            also prove the holo came from this project's spec
                       --project <dir>              with --unstable-author, the project; default the current directory
                       --reference <holo>           with --unstable-author, compare Core-Wasm, acceptance and the other sections
-                      deprecated: check without a holo runs build --check; removed in 0.4.0
+                      check takes a holo; the model check is build --check
 Options for push:     --key <private.pem>          sign a statement naming the manifest, per predicate in the holo, for cosign verify-attestation
                       --keyless                    the same with an OIDC token, as attest does; --signing-config for a private instance
                       --no-attestations            push only the holo's manifest; the section stays in the file
@@ -1185,8 +1186,7 @@ async function main(argv) {
       return commandTransfer(command, positional, options);
     case 'check':
       if (namesHolo(positional)) return commandCheck(positional, options);
-      process.stderr.write('prism-code check without a holo is deprecated and is removed in 0.4.0; use prism-code build --check, which runs the same prismpm check\n');
-      return commandDelegate('check', rest);
+      return usage('check takes a holo; the model check is prism-code build --check, which runs prismpm check (the spelling without a holo was removed, #584)');
     case 'build':
       if (options.remote !== undefined) return commandRemoteBuild(positional, options);
       if (rest.includes('--unstable-author')) {
