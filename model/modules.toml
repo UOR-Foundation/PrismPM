@@ -425,6 +425,10 @@ path = "sdk/npm/prism-code/src/hosted.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/images-namespace.mjs"
+module = "images"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/index.mjs"
 module = "client"
 
@@ -535,6 +539,10 @@ module = "verify"
 [[owner]]
 path = "sdk/npm/prism-code/src/studio/"
 module = "client"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/system.mjs"
+module = "system"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/tiers.mjs"

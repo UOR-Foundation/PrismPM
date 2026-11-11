@@ -12,7 +12,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { experimental_verify, grantOf, inspect, load, parseCapabilities, PrismError } from '../src/index.mjs';
+import { experimental_recorder, experimental_replay, experimental_verify, grantOf, inspect, load, parseCapabilities, PrismError } from '../src/index.mjs';
 import { FORMAT_REVISIONS } from '../src/inspect.mjs';
 // `prism.auth` has no package export until #441 connects the modules.
 import { createAuth } from '../src/auth.mjs';
@@ -47,6 +47,7 @@ function loadOptions(input) {
   const options = {};
   if (input.capabilities !== undefined) options.capabilities = input.capabilities;
   if (input.capabilitySet !== undefined) options.capabilitySet = input.capabilitySet;
+  if (input.allowUnverified !== undefined) options.allowUnverified = input.allowUnverified;
   return options;
 }
 
@@ -77,6 +78,17 @@ const OPERATIONS = {
   acceptance: async ({ bytes }) => {
     const { total, passed } = await (await load(bytes)).acceptance();
     return { total, passed };
+  },
+  replay: async ({ bytes, input }) => {
+    const app = await load(bytes);
+    let history = input.history;
+    if (input.record !== undefined) {
+      const recorder = experimental_recorder(app);
+      for (const request of input.record) await recorder.dispatch(hexToBytes(request)).catch(() => {});
+      history = await recorder.history();
+    }
+    const { events, divergenceCount, histories, statement } = await experimental_replay(app, history);
+    return { events, divergenceCount, divergences: histories.flatMap((h) => h.divergences.map((d) => d.index)), statement, ...(input.record === undefined ? {} : { history }) };
   },
   capabilities: async ({ input }) => {
     const file = input.capabilities === undefined ? null : parseCapabilities(input.capabilities);

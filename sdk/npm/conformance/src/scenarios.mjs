@@ -21,6 +21,7 @@ export const OPERATIONS = Object.freeze({
   inspect: true,
   dispatch: true,
   acceptance: true,
+  replay: true,
   capabilities: false,
   auth: false,
 });

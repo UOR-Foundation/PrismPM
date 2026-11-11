@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,4 +95,19 @@ test('check runs docker with the lock\'s image (dry run)', () => {
   assert.ok(out.includes(`${IMAGE} prismpm check --verbose`));
   const missing = run(['check'], { cwd: mkdtempSync(join(tmpdir(), 'prism-code-nolock-')), env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(missing.code, 64);
+});
+
+test('vectors refuses an altered holo, and with --allow-unverified runs it and still exits 1 (#583)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'prism-code-583-'));
+  const altered = new Uint8Array(readFileSync(fixture));
+  altered[300] ^= 1;
+  const path = join(dir, 'altered.holo');
+  writeFileSync(path, altered);
+  const refused = run(['vectors', path]);
+  assert.notEqual(refused.code, 0, refused.out);
+  assert.equal(refused.out, '');
+  assert.match(refused.err, /the holo was altered/);
+  const allowed = run(['vectors', path, '--allow-unverified']);
+  assert.equal(allowed.code, 1, allowed.err);
+  assert.match(allowed.out, /22 of 22 vectors passed \(holo, Calculator, identities NOT verified\)/);
 });

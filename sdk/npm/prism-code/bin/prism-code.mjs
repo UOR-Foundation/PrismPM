@@ -92,7 +92,9 @@ Usage:
                                                     one run as a container: check the holo, dispatch the input, print
                                                     the output, exit with the container's code; --rm removes it on exit
   prism-code rm <container>...                      remove exited containers
-  prism-code vectors <app.holo | closure-dir>       replay every acceptance vector through the guest
+  prism-code vectors <app.holo | closure-dir> [--allow-unverified]
+                                                    replay every acceptance vector through the guest; an altered
+                                                    holo is refused, and with --allow-unverified exits 1 after replaying
   prism-code history <app.holo | closure-dir> [--output <file>]
                                                     write the acceptance vectors as a history, the holo's first
   prism-code replay <history | dir>... --holo <app.holo | closure-dir> [--statement <file>] [--json]
@@ -376,6 +378,7 @@ async function open(path, options) {
     model: options.model ? resolve(options.model) : null,
     capabilities: options.capabilities ? resolve(options.capabilities) : null,
     capabilitySet: options['capability-set'],
+    allowUnverified: options['allow-unverified'] === true,
   });
 }
 
@@ -387,7 +390,7 @@ async function commandVectors(positional, options) {
     process.stdout.write(`vector ${f.index}: request ${JSON.stringify(text(f.request))}\n  expected ${JSON.stringify(text(f.expected))}\n  actual   ${f.actual ? JSON.stringify(text(f.actual)) : String(f.error)}\n`);
   }
   process.stdout.write(`${result.passed} of ${result.total} vectors passed (${app.kind}, ${app.name ?? 'unnamed'}${app.identities.verified ? ', identities verified' : ', identities NOT verified'})\n`);
-  return result.failed.length === 0 && result.total > 0 ? 0 : 1;
+  return result.failed.length === 0 && result.total > 0 && app.identities.verified ? 0 : 1;
 }
 
 async function commandHistory(positional, options) {
