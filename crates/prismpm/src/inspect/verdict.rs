@@ -403,6 +403,24 @@ fn invalid(message: impl Into<String>) -> NoVerdict {
 }
 
 impl Policy {
+    /// A policy given as one JSON object, as `holo.verify()` takes it: the
+    /// members of a policy file and `capabilities`. Any other member is refused.
+    pub fn from_json(value: &Value) -> Result<Self, NoVerdict> {
+        let object = value
+            .as_object()
+            .ok_or_else(|| invalid("the policy must be an object"))?;
+        if let Some(unknown) = object
+            .keys()
+            .find(|key| !POLICY_MEMBERS.contains(&key.as_str()) && *key != "capabilities")
+        {
+            return Err(invalid(format!(
+                "the policy has no member {unknown}; it has {}, capabilities",
+                POLICY_MEMBERS.join(", ")
+            )));
+        }
+        Self::from_value(value)
+    }
+
     /// The policy members of one JSON object, checked as `@prism-code/verify`
     /// checks them. The caller has already refused the members it does not admit.
     fn from_value(value: &Value) -> Result<Self, NoVerdict> {

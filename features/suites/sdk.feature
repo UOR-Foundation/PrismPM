@@ -257,3 +257,10 @@ Feature: sdk
     When prism.volumes creates, lists, inspects and removes stores, and a store is attached to a guest
     Then a host folder or anything outside the grant, the declared world or the active policy is refused with a typed error and no provider runs
     And attaching a store within all of them raises a typed error naming host effects #216 and #217, and never succeeds
+
+  @DK-42 @build
+  Scenario: The Rust runtime runs @prism-code/conformance through its shim, prism-conformance-shim, which translates prism/conformance-shim/1 requests to the prismpm library's inspect and verify and judges nothing: every check of the suite runs, the digests checks pass in full, and each check the Rust runtime does not pass is named with its reason in crates/conformance/runtime/declaration.json, so a check that starts to pass or newly fails fails the run.
+    Given the shim built from the conformance crate and the Rust runtime's declaration
+    When the suite runs every check against the shim
+    Then the run passes with every gap declared, and the digests checks pass in full
+    And the checks that pass are exactly the ones DK-42 lists, by feature
