@@ -104,14 +104,15 @@ test('a wrong magic gives no verdict: VerifyError archive.magic', async () => {
   await assert.rejects(verify(version), (e) => e.code === 'archive.version');
 });
 
-test('an intact holo of an unknown format revision gives no verdict', async () => {
+test('an intact holo whose extension the Wire codec does not name gives no verdict', async () => {
   // Rename the model extension, keeping its length, and reseal: a newer writer.
+  // The codec admits only the names it models, so the table is unreadable.
   const bytes = reference();
   const row = table(bytes)[3];
   const name = new TextEncoder().encode(MODEL_EXTENSION.replace('/v1', '/v9'));
   bytes.set(name, row.offset + 2);
   reseal(bytes);
-  await assert.rejects(verify(bytes), (e) => e instanceof VerifyError && e.code === 'format.revision' && /matches no format revision/.test(e.message));
+  await assert.rejects(verify(bytes), (e) => e instanceof VerifyError && e.code === 'archive.table' && /prismpm-model\/v1 extension/.test(e.message));
 });
 
 test('pinned digests in both algorithms pass, and one wrong digest fails the policy, not the level', async () => {

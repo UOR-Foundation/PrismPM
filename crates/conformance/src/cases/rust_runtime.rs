@@ -14,7 +14,7 @@ const PASSING: [(&str, u64); 5] = [
     ("capabilities", 2),
     ("digests", 18),
     ("errors", 6),
-    ("verify", 21),
+    ("verify", 24),
     ("world", 14),
 ];
 
