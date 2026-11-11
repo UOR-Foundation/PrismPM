@@ -110,7 +110,7 @@ The checks compare what they name and ignore the rest.
 | `op` | Archive | Input | `result` |
 | --- | --- | --- | --- |
 | `describe` | no | none | `contract` (required, must be `prism/conformance-shim/1`), `name`, `version`, `revisions`. Called once, before anything else. |
-| `load` | yes | `capabilities`, `capabilitySet`, both optional | `kind`, `name`, `verified`, `fingerprint`, `limits` (`request`, `response`, `guestAllocation`), `vectors` (a count), `world` (`contract`, `within`, `pure`, `effects`), `capabilities` (`set`, null when no file was given) |
+| `load` | yes | `capabilities`, `capabilitySet`, `allowUnverified` (open a holo whose identities do not verify, which is refused with `digest_mismatch` otherwise), all optional | `kind`, `name`, `verified`, `fingerprint`, `limits` (`request`, `response`, `guestAllocation`), `vectors` (a count), `world` (`contract`, `within`, `pure`, `effects`), `capabilities` (`set`, null when no file was given) |
 | `verify` | yes | `policy`, optional; `throw`, optional | A `prism/verdict/1` object. With `throw: true`, a failed verdict is the error that explains it, carrying the verdict. A verdict is always checked against the schema. |
 | `inspect` | yes | none | A `prismpm/holo-inspection/1` object |
 | `dispatch` | yes | `requests`, an array of hex | `responses`, one per request, in order: `{ "hex": "..." }`, or `{ "error": { "code": "..." } }` when that request was refused |

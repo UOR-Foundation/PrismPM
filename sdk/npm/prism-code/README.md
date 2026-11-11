@@ -139,7 +139,7 @@ nothing. `setup` says so in one line.
 import { load } from 'prism-code';
 
 const app = await load('node_modules/prism-code/fixtures/Calculator.holo');
-app.identities.verified; // footer, blob labels and manifest checked with BLAKE3
+app.identities.verified; // true: footer, blob labels and manifest checked with BLAKE3
 app.limits;             // { request: 52, response: 27, guestAllocation: 65536 }
 const response = await app.dispatch(new TextEncoder().encode('1\tadd\t20\t22'));
 new TextDecoder().decode(response); // '1\tok\t42'
@@ -149,6 +149,15 @@ await app.acceptance();            // { total: 22, passed: 22, failed: [] }
 `load` accepts bytes, a `Blob`, a `.holo` path/URL, or a closure directory
 (path in Node, URL in a browser). Each dispatch uses a fresh guest instance
 and moves bytes only; callers choose text encoding.
+
+An altered holo does not open. When the footer is not the BLAKE3 of the body,
+a blob does not hash to its label, or the manifest, directory and provenance
+name different blobs, `load` rejects with `DigestMismatchError` (`check`
+`holo.integrity`), and so does a closure whose files do not match its
+provenance. `load(source, { allowUnverified: true })` opens it anyway, with
+`identities.verified` false; nothing that reads it should treat its answers
+as the application's. `prism-code vectors` refuses it the same way, and with
+`--allow-unverified` replays it and exits 1.
 
 Fields: `model`, `profile`, `limits`, `vectors`, `directory`, `identities`,
 `evidence`, `view`, `provenance.model/browser`. Archives supply model, limits,
