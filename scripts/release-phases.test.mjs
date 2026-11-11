@@ -413,6 +413,9 @@ test('release crates use stage-owned targets despite an inherited Cargo target d
 
 test('Cargo publication target selection binds the exact package and version archive', () => {
   const body = workflow().jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).run;
+  // The checkout is the runner's, not uid 1000's: every target is stage-owned.
+  assert.ok(body.includes('"$release_parent/prismpm/target/package/prismpm-0.4.0.crate" -'));
+  assert.ok(!body.includes('$PWD/target'), 'the container never writes into the runner-owned checkout');
   const selection = body.slice(body.indexOf('package_target='), body.indexOf('release_cargo "$package" package')).trim();
   const select = (packageName, version, archive) => execFileSync('sh', ['-eu', '-c',
     `${selection}\nprintf '%s\\n' "$package_target"`], {encoding: 'utf8', stdio: 'pipe',
@@ -421,7 +424,7 @@ test('Cargo publication target selection binds the exact package and version arc
     ['prod-ir', '0.1.0', '/release sources/lean4-prod/target'],
     ['prod-codegen', '0.1.0', '/release sources/lean4-prod/target'],
     ['prism-stdlib', '0.2.0', '/release sources/stdlib/target'],
-    ['prismpm', '0.4.0', '/workspace/target'],
+    ['prismpm', '0.4.0', '/tmp/release parent/prismpm/target'],
   ]) {
     assert.equal(select(name, version, `${target}/package/${name}-${version}.crate`), `${target}\n`);
     for (const archive of [`${target}/${name}-${version}.crate`,

@@ -169,7 +169,9 @@
                 "$release_sources/stdlib/Cargo.toml" \
                 "$release_sources/stdlib/target/package/prism-stdlib-0.2.0.crate" \
                 "$PWD/stdlib/generated/prism-stdlib-0.2.0.crate"
+              # The checkout belongs to the runner user, not to uid 1000:
+              # PrismPM packages into a stage-owned target as the others do.
               publish_exact prismpm 0.4.0 crates/prismpm/Cargo.toml \
-                "$PWD/target/package/prismpm-0.4.0.crate" -
+                "$release_parent/prismpm/target/package/prismpm-0.4.0.crate" -
               rm -rf "$release_parent"
             '
