@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
 import { GITHUB_ACTIONS_ISSUER } from '../src/attest.mjs';
+import { check } from '../src/check.mjs';
 import { DigestMismatchError } from '../src/errors.mjs';
 import { fromFile } from '../src/node.mjs';
 import {
@@ -22,6 +23,7 @@ import {
   identityPattern,
   parseRepository,
   remoteBuild,
+  repositorySigner,
   repositoryOf,
   tokenOf,
   unzip,
@@ -166,6 +168,25 @@ test('build.json must be this commit and this repository; the provenance must be
   assert.throws(() => checkProvenance(bundle({ sha: 'd'.repeat(40) }), { repo: REPO, sha: SHA, holoSha256: sha256(holoBytes) }), (e) => e.code === 'remote.commit');
   assert.throws(() => checkProvenance(bundle({ predicateType: 'https://example.com/other' }), { repo: REPO, sha: SHA, holoSha256: sha256(holoBytes) }), (e) => e.code === 'remote.provenance');
   assert.throws(() => checkProvenance({ dsseEnvelope: { payload: 'bm90IGpzb24=' } }, { repo: REPO, sha: SHA, holoSha256: '' }), (e) => e.code === 'remote.provenance');
+});
+
+test('check trusts the statements signed into a remote build only when a workflow of its repository signed them (#582)', async () => {
+  let asked;
+  const result = await verifyRemoteBuild(files(), {
+    cwd: scratch(),
+    repo: REPO,
+    sha: SHA,
+    verifyBundle: signed,
+    checkHolo: async (path, options) => {
+      asked = options;
+      return check(path, options);
+    },
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(asked.signer.certificateOidcIssuer, GITHUB_ACTIONS_ISSUER);
+  assert.ok(asked.signer.certificateIdentityRegexp.test(`https://github.com/${REPO.full}/.github/workflows/build.yml@refs/heads/prism/build/${SHA}`));
+  assert.ok(!asked.signer.certificateIdentityRegexp.test(`https://github.com/other/repo/.github/workflows/build.yml@refs/heads/main`));
+  assert.deepEqual(repositorySigner(REPO), asked.signer);
 });
 
 test('a verified build is written under .prism/build/<build>/ and nothing is written there before every check passed', async () => {
