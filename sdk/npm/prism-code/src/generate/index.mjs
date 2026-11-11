@@ -19,9 +19,10 @@ import { sha256Hex } from '../sha256.mjs';
 import { fail } from '../errors.mjs';
 import { codeModel } from './model.mjs';
 import * as js from './js.mjs';
+import * as rust from './rust.mjs';
 
-/** The writer of each language. Rust and Python follow as further parts of #289. */
-export const WRITERS = Object.freeze({ js });
+/** The writer of each language. Python follows as a further part of #289. */
+export const WRITERS = Object.freeze({ js, rust });
 export const RECORD = 'prism-generate.json';
 export const RECORD_SCHEMA = 'prismpm/generate-record/1';
 

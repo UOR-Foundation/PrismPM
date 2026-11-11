@@ -561,8 +561,32 @@ inputs and intact files writes nothing and says the directory is up to date. An
 edited generated file is written again; a file in the directory that
 `generate` did not write is never overwritten.
 
-`--lang js` is the only writer today. Rust and Python writers follow on the
-same code model (#289).
+`--lang rust` writes a crate from the same code model, with no dependencies
+and no `unsafe`, already formatted as `rustfmt` lays it out:
+
+- `Cargo.toml`, `lib.rs`: the crate `calculator-client`, and `Identity`, the
+  name and both digests of what the bindings came from.
+- `world.rs`: `WORLD`, `EXPORTS`, and the trait `Guest`, the world's exports
+  and its memory. The crate picks no WebAssembly engine: implement `Guest` over
+  the instance of the engine you use, and `dispatch(&mut guest, request)` sends
+  one request by the world's protocol.
+- `calculator.rs`: `Calculator`, with one method per operation over any
+  `FnMut(&[u8]) -> Result<Vec<u8>, E>`, `Operation`, `CalculatorErrorCode` with
+  the guest's codes and their messages, `CalculatorError` and `MODEL`.
+
+```rust
+use calculator_client::{Calculator, CalculatorError, CalculatorErrorCode};
+
+let mut calculator = Calculator::new(|request: &[u8]| world::dispatch(&mut fresh_instance(), request));
+assert_eq!(calculator.add(20, 22)?, 42);
+assert!(matches!(
+    calculator.divide(1, 0),
+    Err(CalculatorError::Refused(CalculatorErrorCode::DivisionByZero))
+));
+```
+
+A Python writer, and `generate` in the Rust CLI, follow on the same code model
+(#289).
 
 ## Check one in CI (experimental)
 

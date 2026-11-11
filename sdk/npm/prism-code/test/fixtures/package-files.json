@@ -47,6 +47,7 @@
   "src/generate/index.mjs",
   "src/generate/js.mjs",
   "src/generate/model.mjs",
+  "src/generate/rust.mjs",
   "src/generate/wit.mjs",
   "src/github.mjs",
   "src/handler.mjs",
