@@ -155,7 +155,42 @@ export const CHECK_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'le
 /** The second tier: Lean proves every theorem and audits every axiom set. About two to four minutes. */
 export const PROVE_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('verify', 'lexlean verify --all')].join('; ');
 /** The third tier: the whole build, the holo and its independent acceptance run. Ten minutes or more when cold. */
-export const BUILD_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('build', 'prismpm verify')].join('; ');
+export const BUILD_SCRIPT = [STEP('prelock', 'lexlean lock'), STEP('format', 'lexlean fmt --all'), STEP('lock', 'lexlean lock'), STEP('build', 'PRISMPM_PROGRESS=1 prismpm verify')].join('; ');
+
+/** What each step of a script is doing, for a progress line. */
+const STEP_LABELS = Object.freeze({
+  prelock: 'Locking the LexLean project',
+  format: 'Formatting the model',
+  lock: 'Locking the formatted model',
+  'lexlean-check': 'Checking the model with LexLean',
+  'prismpm-check': 'Checking the model with PrismPM',
+  verify: 'Lean is proving every theorem',
+  build: 'Building the app with prismpm verify',
+});
+
+/**
+ * The stage a build line names, as a sentence for a progress line, or null
+ * when the line names none (issue #585). `@@step` markers name the script's
+ * steps; `prismpm: stage <tool>` lines, which `prismpm verify` prints under
+ * `PRISMPM_PROGRESS`, name the process or phase it has started. An SDK image
+ * whose prismpm predates those lines still reports its steps.
+ */
+export function buildProgress(line) {
+  const step = /^@@step (\S+)$/.exec(line);
+  if (step) return Object.hasOwn(STEP_LABELS, step[1]) ? `Stage: ${STEP_LABELS[step[1]]}.` : `Stage: ${step[1]}.`;
+  const stage = /^prismpm: stage (\S+)$/.exec(line);
+  if (!stage) return null;
+  const tool = stage[1];
+  const kind =
+    tool === 'lean-proof' ? 'Lean proof'
+    : tool === 'holo' ? 'the holo'
+    : /wasm/.test(tool) ? 'WebAssembly'
+    : /acceptance|replay|consumer|oracle|conformance|harness/.test(tool) ? 'the acceptance run'
+    : /lean|lake|export|leanchecker/.test(tool) ? 'Lean export'
+    : /cargo|rust|generated|native|library|text-cli|server/.test(tool) ? 'Rust'
+    : 'tools';
+  return `Stage: ${kind} (${tool}).`;
+}
 
 /** The steps a script ran and the exit code of each, from its markers. */
 export function steps(output) {
