@@ -1411,8 +1411,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "prism-bindings"
+version = "0.4.0"
+dependencies = [
+ "prism_bindings_js",
+ "prism_bindings_python",
+ "prism_bindings_rust",
+]
+
+[[package]]
 name = "prism-stdlib"
 version = "0.2.0"
+
+[[package]]
+name = "prism_bindings_js"
+version = "0.1.0"
+
+[[package]]
+name = "prism_bindings_python"
+version = "0.1.0"
+
+[[package]]
+name = "prism_bindings_rust"
+version = "0.1.0"
 
 [[package]]
 name = "prismpm"
@@ -2472,6 +2493,7 @@ version = "0.4.0"
 dependencies = [
  "camino",
  "flate2",
+ "lexlean",
  "prismpm",
  "prod-codegen",
  "prod-ir",

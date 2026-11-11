@@ -2,6 +2,9 @@
 resolver = "2"
 members = ["crates/*", "xtask"]
 exclude = [
+    "bindings/generated/prism_bindings_js",
+    "bindings/generated/prism_bindings_python",
+    "bindings/generated/prism_bindings_rust",
     "stdlib/generated/package",
     "vendor/lexlean",
     "vendor/lean4-prod/rust/prod-codegen",

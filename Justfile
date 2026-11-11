@@ -54,6 +54,14 @@ stdlib-package-check:
 stdlib-package-write:
     cargo run --locked --package xtask -- stdlib-package --write
 
+# Check the generated bindings writers against a fresh certified LexLean export.
+bindings-package-check:
+    cargo run --locked --package xtask -- bindings-package
+
+# Regenerate the bindings writer packages from the LexLean model.
+bindings-package-write:
+    cargo run --locked --package xtask -- bindings-package --write
+
 # Verify examples and standard library
 verify-examples:
     cargo run --package xtask -- verify-examples
