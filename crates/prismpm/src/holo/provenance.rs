@@ -324,6 +324,11 @@ fn unix_millis() -> i64 {
         })
 }
 
+/// Now, as UTC RFC 3339 without fractions: when a statement says it was made.
+pub(crate) fn now_utc() -> String {
+    whole_seconds(unix_millis())
+}
+
 /// UTC RFC 3339 without fractions, as the predicate schema requires.
 fn whole_seconds(millis: i64) -> String {
     let days = millis.div_euclid(86_400_000);

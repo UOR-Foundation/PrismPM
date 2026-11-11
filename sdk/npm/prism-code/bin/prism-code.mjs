@@ -22,6 +22,8 @@
  *                                                     print what the holo says about itself, without running it
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
  *                                                     sign a statement into the holo's attestation section
+ *   prism-code attest <app.holo> --unsigned [--statement <file>]
+ *                                                     sign the statements prismpm build and verify wrote
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
  *   prism-code export <NAME@sha256:DIGEST> [--out <dir> | --tar <file>]
  *                                                     write a verified release's six-file browser export
@@ -118,6 +120,10 @@ Usage:
                                                     print a container's state, exit code, image digest and output
   prism-code attest <app.holo> --predicate <file> --type <uri> [--subject <s>]... [--key <private.pem>] [--output <file>]
                                                     sign an in-toto statement into the holo; keyless unless --key
+  prism-code attest <app.holo> [--unsigned] [--statement <file>] [--key <private.pem>] [--output <file>]
+                                                    sign what prismpm wrote: --unsigned the holo's unsigned statements
+                                                    in place, --statement a whole statement such as the verified
+                                                    directory's proof-statement.json; keyless unless --key
   prism-code verify-attestation <app.holo> --certificate-identity <id> --certificate-oidc-issuer <url>
   prism-code verify-attestation <app.holo> --key <public.pem>
                                                     check the holo's attestations against a signer policy;
