@@ -19,10 +19,24 @@ use std::path::{Path, PathBuf};
 
 /// The exported packages that are also modules of the `prismpm` crate, and
 /// the file each one's `src/lib.rs` is kept in.
-const VENDORED: &[(&str, &str)] = &[(
-    "prism_proof_statement",
-    "crates/prismpm/src/verification/proof_statement.rs",
-)];
+const VENDORED: &[(&str, &str)] = &[
+    (
+        "prism_bindings_js",
+        "crates/prismpm/src/generate/js_writer.rs",
+    ),
+    (
+        "prism_bindings_python",
+        "crates/prismpm/src/generate/python_writer.rs",
+    ),
+    (
+        "prism_bindings_rust",
+        "crates/prismpm/src/generate/rust_writer.rs",
+    ),
+    (
+        "prism_proof_statement",
+        "crates/prismpm/src/verification/proof_statement.rs",
+    ),
+];
 
 /// The files of one exported package, by their path inside it.
 fn package_files(directory: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, Fail> {

@@ -149,6 +149,18 @@ pub enum Commands {
         #[arg(long)]
         statement: Option<PathBuf>,
     },
+    /// Write bindings and a typed client for a `.holo` file into a directory (#289, Experimental).
+    /// Regenerating with unchanged inputs writes nothing.
+    Generate {
+        /// The `.holo` file whose WIT world and model the bindings call.
+        holo: PathBuf,
+        /// The language to write.
+        #[arg(long, value_enum)]
+        lang: crate::generate::Language,
+        /// The output directory; generate never writes to a default place.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Sign an in-toto statement about a `.holo` file into its attestation section with a local key (#272, Experimental).
     Attest {
         /// The `.holo` file to attest; rewritten in place unless --output names another file.
@@ -730,6 +742,32 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             script,
         ));
     }
+    // Generate reads a holo and writes into the directory it is given, not into a project.
+    if let Commands::Generate { holo, lang, out } = &cli.command {
+        let bytes = read_holo(holo)?;
+        let generated = crate::generate::generate(&bytes, *lang, out)?;
+        let human = if generated.status == "unchanged" {
+            format!("{}: {} bindings unchanged", out.display(), lang.name())
+        } else {
+            format!(
+                "{}: wrote {} {} file{}",
+                out.display(),
+                generated.files.len(),
+                lang.name(),
+                if generated.files.len() == 1 { "" } else { "s" }
+            )
+        };
+        return Ok((
+            json!({
+                "schema": "prismpm/generate-result/1",
+                "status": generated.status,
+                "out": out.display().to_string(),
+                "files": generated.files,
+                "record": generated.record,
+            }),
+            human,
+        ));
+    }
     // A replay reads a holo and its histories, not a project.
     if let Commands::Replay {
         histories,
@@ -785,6 +823,7 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
     match &cli.command {
         Commands::Completion { .. } => unreachable!("completion returns before project loading"),
         Commands::Replay { .. } => unreachable!("replay returns before project loading"),
+        Commands::Generate { .. } => unreachable!("generate returns before project loading"),
         Commands::Lock {
             command: None,
             check,

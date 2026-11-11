@@ -516,6 +516,16 @@ extension_policy = "closed"
 compatibility = "exact-major-additive-minor"
 
 [[contract]]
+schema = "prismpm/generate-result/1"
+path = "schemas/generate-result.schema.json"
+media_type = "application/vnd.prismpm.generate-result.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 16777216
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major-additive-minor"
+
+[[contract]]
 schema = "prismpm/replay-result/1"
 path = "schemas/replay-result.schema.json"
 media_type = "application/vnd.prismpm.replay-result.v1+json"

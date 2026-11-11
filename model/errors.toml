@@ -372,6 +372,20 @@ exit = 1
 statement = "The Sigstore trusted root cannot be read, is not pinned, or pins none of what the policy relies on."
 
 [[error]]
+code = "PP3201"
+title = "Bindings generation refused"
+class = "holo"
+exit = 1
+statement = "generate cannot bind the holo: its world is not one generate knows or its guest does not conform to it, the vendored WIT world differs from the world the holo names or leaves the subset generate reads, or the model document names no application or operation generate can bind."
+
+[[error]]
+code = "PP3202"
+title = "Bindings output refused"
+class = "artifact"
+exit = 1
+statement = "generate cannot write the bindings: the output directory holds a file generate did not write where a generated file belongs, or a file cannot be written."
+
+[[error]]
 code = "PP4001"
 title = "Artifact checksum mismatch"
 class = "artifact"
