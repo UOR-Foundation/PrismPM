@@ -1510,8 +1510,10 @@ jobs:
             repository=${identity%@*}
             expected=${identity##*@}
             docker buildx imagetools create --tag "$repository:$VERSION" "$identity"
-            observed=$(docker buildx imagetools inspect "$repository:$VERSION" \
-              --format '{{.Manifest.Digest}}')
+            # The digest of the raw bytes the tag serves. Buildx v0.28.0
+            # prints its default text for --format '{{.Manifest.Digest}}'.
+            observed=sha256:$(docker buildx imagetools inspect --raw "$repository:$VERSION" \
+              | sha256sum | cut -d' ' -f1)
             test "$observed" = "$expected"
           done
       - shell: bash
