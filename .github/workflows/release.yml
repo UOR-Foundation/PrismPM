@@ -1108,10 +1108,18 @@ jobs:
         run: |
           set -euo pipefail
           image=$(cat release/sdk-image.txt)
+          # Native evidence binds the source closure of the revision that
+          # built it. A proved build verifies it against that revision's tree.
+          build_root=$PWD
+          if [ "$BUILD_REVISION" != "$GITHUB_SHA" ]; then
+            build_root=$RUNNER_TEMP/build-source
+            git fetch --no-tags --depth=1 origin "$BUILD_REVISION"
+            git worktree add --detach "$build_root" "$BUILD_REVISION"
+          fi
           node scripts/library-sdk-metadata-evidence.mjs join \
             .sdk-gate-evidence/library-sdk-sdk-amd64/root-a/target/library-sdk-evidence/linux-amd64 \
             .sdk-gate-evidence/library-sdk-sdk-arm64/root-a/target/library-sdk-evidence/linux-arm64 \
-            . "$image" "$BUILD_REVISION" > release/sdk-metadata-native-join.json
+            "$build_root" "$image" "$BUILD_REVISION" > release/sdk-metadata-native-join.json
           cp .sdk-gate-evidence/library-sdk-sdk-amd64/sdk-amd64-library-sdk.log release/
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
           # Source evidence is packed with the run that established it: this
@@ -1121,7 +1129,7 @@ jobs:
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
-              "release/sdk-$architecture-native-metadata.tar" . "$image" "$BUILD_REVISION" "$architecture"
+              "release/sdk-$architecture-native-metadata.tar" "$build_root" "$image" "$BUILD_REVISION" "$architecture"
             node scripts/sdk-release-evidence.mjs product-cli \
               ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \
               "$image" "$BUILD_REVISION" "$architecture"
@@ -1327,8 +1335,10 @@ jobs:
                 "$release_sources/stdlib/Cargo.toml" \
                 "$release_sources/stdlib/target/package/prism-stdlib-0.2.0.crate" \
                 "$PWD/stdlib/generated/prism-stdlib-0.2.0.crate"
+              # The checkout belongs to the runner user, not to uid 1000:
+              # PrismPM packages into a stage-owned target as the others do.
               publish_exact prismpm 0.4.0 crates/prismpm/Cargo.toml \
-                "$PWD/target/package/prismpm-0.4.0.crate" -
+                "$release_parent/prismpm/target/package/prismpm-0.4.0.crate" -
               rm -rf "$release_parent"
             '
 
