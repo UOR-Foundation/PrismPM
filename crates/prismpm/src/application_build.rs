@@ -529,8 +529,10 @@ fn application_view(
                         core_crate_version: application.cargo_version.clone(),
                         core_function: entry.to_owned(),
                     },
-                );
-                (generated, model_id, view_model_id)
+                )
+                .map_err(|error| PrismError::new("PP5203", error.to_string()))
+                .and_then(|generated| with_text_brand_closure(generated, &application.view.title));
+                return Ok((generated?, model_id, view_model_id));
             }
         };
     Ok((
@@ -538,6 +540,44 @@ fn application_view(
         model_id,
         view_model_id,
     ))
+}
+
+/// Closure v2 for the Text/1 page (#612): the vendored Text/1 generator
+/// writes the six-file closure v1, and `verify` expects closure v2 for every
+/// browser page. The brand files join the browser assets only, so the
+/// Hologram View attachment keeps its canonical three files, and the
+/// browser projection in the view manifest names the closure it ships.
+fn with_text_brand_closure(
+    mut generated: GeneratedViewV1,
+    title: &str,
+) -> Result<GeneratedViewV1, PrismError> {
+    generated.browser_assets.extend(crate::brand::assets(title));
+    generated
+        .browser_assets
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    let mut manifest: serde_json::Value = serde_json::from_slice(&generated.view_manifest.bytes)
+        .map_err(|error| PrismError::new("PP5203", error.to_string()))?;
+    let projection = manifest["projections"]
+        .as_array_mut()
+        .and_then(|projections| {
+            projections
+                .iter_mut()
+                .find(|projection| projection["target"] == "browser-wasm-bindgen")
+        })
+        .ok_or_else(|| {
+            PrismError::new("PP5203", "Text/1 view manifest has no browser projection")
+        })?;
+    projection["files"] = serde_json::Value::Array(
+        generated
+            .browser_assets
+            .iter()
+            .map(|file| json!({"path": file.path, "sha256": sha256(&file.bytes)}))
+            .collect(),
+    );
+    let mut bytes = encode_value(&manifest)?;
+    bytes.push(b'\n');
+    generated.view_manifest.bytes = bytes;
+    Ok(generated)
 }
 
 fn source_manifest(
