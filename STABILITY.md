@@ -131,7 +131,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code generate <holo> --out <dir>`, `--lang js`, the generated files and the `prismpm/generate-record/1` record in `prism-generate.json` | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
 | `generate --lang rust`: a crate with no dependencies and no `unsafe`, with `world::Guest`, `world::dispatch` and the typed client | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
 | `generate --lang python`: a package that imports only the standard library, with `world.Guest`, `world.dispatch` and the typed client | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
-| `generate` in the Rust CLI | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | Planned |
+| `generate <path.holo> --lang <js\|python\|rust> --out <dir>` in the Rust CLI, its `prismpm/generate-result/1` result and the same `prism-generate.json` record | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
 | `prism-code run <holo>` gated on `check`, `--policy <file>`, `--allow-unverified`; the policy member `effects` and the `policy.effects` reason | [#282](https://github.com/UOR-Foundation/PrismPM/issues/282) | On main |
 | `prism-code replay <history \| dir>... --holo <holo>`, `--statement <file>`, `--json` and exit codes 0, 1, 2; `prism-code check --replay <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
 | `prism-code history <holo>`, `--output <file>`; `prism-code run --record <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |

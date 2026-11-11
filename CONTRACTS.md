@@ -60,6 +60,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/evidence-signature-result/1` | `schemas/evidence-signature-result.schema.json` | `application/vnd.prismpm.evidence-signature-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/fetch-result/1` | `schemas/fetch-result.schema.json` | `application/vnd.prismpm.fetch-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/inspect-result/1` | `schemas/inspect-result.schema.json` | `application/vnd.prismpm.inspect-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/generate-result/1` | `schemas/generate-result.schema.json` | `application/vnd.prismpm.generate-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/replay-result/1` | `schemas/replay-result.schema.json` | `application/vnd.prismpm.replay-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/attest-result/1` | `schemas/attest-result.schema.json` | `application/vnd.prismpm.attest-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/attestation-verification-result/1` | `schemas/attestation-verification-result.schema.json` | `application/vnd.prismpm.attestation-verification-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
@@ -97,6 +98,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `destroy` | `authorized-target-destructive` | `true` | `prismpm/deployment-evidence/1` |
 | `export-browser` | `new-local-browser-directory` | `true` | `prismpm/browser-export/2` |
 | `fetch` | `immutable-cache` | `false` | `prismpm/fetch-result/1` |
+| `generate` | `generated-bindings-directory` | `false` | `prismpm/generate-result/1` |
 | `finalize-contract` | `authorized-target-data-contract` | `true` | `prismpm/deployment-evidence/1` |
 | `inspect` | `never` | `true` | `prismpm/inspect-result/1` |
 | `lock` | `explicit-update-only` | `false` | `prismpm/sdk-lock-change/1` |

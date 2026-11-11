@@ -21,3 +21,4 @@ schemas/**/*.json text eol=lf
 # The matrix is generated and compared byte for byte; the corpus is hashed (#287).
 COMPLIANCE.md text eol=lf
 sdk/npm/conformance/corpus/*.holo binary
+crates/prismpm/src/generate/core-wasm.wit text eol=lf

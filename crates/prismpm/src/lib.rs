@@ -25,6 +25,7 @@ pub mod diagnostics;
 pub mod error;
 mod exporter;
 mod features;
+pub mod generate;
 pub mod holo;
 mod input_lock;
 pub mod inspect;

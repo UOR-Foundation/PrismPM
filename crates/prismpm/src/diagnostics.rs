@@ -353,6 +353,8 @@ probes!(
     ("PP3105", "attestation-subject-mismatch", Exact),
     ("PP3106", "attestation-not-found", Required),
     ("PP3107", "trusted-root-invalid", Required),
+    ("PP3201", "bindings-generation-refused", Exact),
+    ("PP3202", "bindings-output-refused", Complete),
     ("PP4001", "artifact-checksum-mismatch", ArtifactIntegrity),
     ("PP4002", "missing-published-artifact", Required),
     ("PP4003", "emitter-input-digest-drift", Digest),

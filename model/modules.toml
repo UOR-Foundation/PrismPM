@@ -129,6 +129,10 @@ path = "crates/prismpm/src/features.rs"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/generate/"
+module = "client"
+
+[[owner]]
 path = "crates/prismpm/src/holo/"
 module = "images"
 

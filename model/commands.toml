@@ -73,6 +73,12 @@ requires_digest = false
 result_schema = "prismpm/fetch-result/1"
 
 [[command]]
+name = "generate"
+mutates = "generated-bindings-directory"
+requires_digest = false
+result_schema = "prismpm/generate-result/1"
+
+[[command]]
 name = "finalize-contract"
 mutates = "authorized-target-data-contract"
 requires_digest = true

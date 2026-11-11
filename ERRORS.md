@@ -323,6 +323,18 @@ The Sigstore trusted root cannot be read, is not pinned, or pins none of what th
 
 Class: `attestation`. Exit code: 1.
 
+## `PP3201` --- Bindings generation refused
+
+generate cannot bind the holo: its world is not one generate knows or its guest does not conform to it, the vendored WIT world differs from the world the holo names or leaves the subset generate reads, or the model document names no application or operation generate can bind.
+
+Class: `holo`. Exit code: 1.
+
+## `PP3202` --- Bindings output refused
+
+generate cannot write the bindings: the output directory holds a file generate did not write where a generated file belongs, or a file cannot be written.
+
+Class: `artifact`. Exit code: 1.
+
 ## `PP4001` --- Artifact checksum mismatch
 
 An artifact does not match its manifest digest.
