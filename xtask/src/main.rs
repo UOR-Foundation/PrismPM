@@ -10,6 +10,7 @@ use std::process::{Command, ExitCode, Output};
 use std::sync::OnceLock;
 
 mod audit;
+mod bindings;
 mod codegen;
 mod formatting;
 mod gate_driver;
@@ -147,6 +148,7 @@ fn main() -> ExitCode {
         "check-reproducibility" => check_reproducibility(&root),
         "check-fixtures" => check_fixtures(&root, write),
         "package-api" => package_api_check(&root),
+        "bindings-package" => bindings::run(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         "stdlib-package" => stdlib::run(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
