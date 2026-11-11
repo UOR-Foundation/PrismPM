@@ -643,8 +643,8 @@ section exits 2 until the format revision that admits it lands with #267's
 wire model change. From `P2` up, the text form also prints what the check
 trusts the signer for.
 
-`prism-code check` with no holo is the 0.2.0 spelling of `build --check`. It
-still runs, prints a deprecation warning, and is removed in 0.4.0.
+`prism-code check` with no holo was the 0.2.0 spelling of `build --check`.
+It is now a usage error that names `build --check` (#584).
 
 ## Develop with the studio (experimental, #288)
 

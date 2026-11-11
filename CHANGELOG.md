@@ -17,6 +17,9 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 
 ## [Unreleased]
 
+### Breaking Changes
+- `prism-code check` without a holo is removed (#584). It was the 0.2.0 spelling of `build --check`, announced as removed in 0.4.0 but still running through 0.7.2 with a warning that named that version. It is now a usage error (exit 64) that names `prism-code build --check`. Migration: replace `prism-code check [args]` with `prism-code build --check [args]`.
+
 ### Features Added
 - The Rust runtime runs `@prism-code/conformance` (#298, DK-42). `prism-conformance-shim`, a binary of the conformance crate, translates `prism/conformance-shim/1` requests to the `prismpm` library's `inspect` and `verify` and judges nothing. 64 of the 140 checks pass, the digests and verify checks in full; `crates/conformance/runtime/declaration.json` names each other check with its reason, all 76 of them operations the Rust runtime does not have yet (`load`, `dispatch`, `acceptance`, `capabilities`, `auth`, `replay`). `prismpm check` now validates the model document against the closed schema it names, as `holo.verify()` does, and reports a mismatch under `holo.documents`. `Policy::from_json` reads a policy given as one JSON object, as `holo.verify()` takes it.
 - `@prism-code/conformance`: a runtime refuses an altered holo on load (#583). `load.damage.footer-reported` and `load.damage.guest-label-reported` become `load.damage.footer-refused` and `load.damage.guest-label-refused`, which expect `digest_mismatch` with `check` `holo.integrity`, and `load.damage.footer-allowed` and `load.damage.guest-label-allowed` open the same archives with the new `allowUnverified` load input and expect `verified: false`. The suite has 140 checks.
