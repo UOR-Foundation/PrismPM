@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { parts as vvParts } from './vv-assemble.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
-import { assetNames, imageVerificationArguments, platformIndex, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
+import { imageVerificationArguments, platformIndex, publicationPolicy, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
@@ -63,7 +63,6 @@ const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c94
 const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/release/v0.4',
   GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false', REHEARSAL: 'false',
   GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1'});
-const publicationTag = `sdk-oci-${revision}-123456789-1`;
 
 function validateWorkflow(value) {
   assert.deepEqual(value.on.push, {branches: ['release/v0.4'], tags: ['v0.4.0']});
@@ -253,7 +252,7 @@ function validateWorkflow(value) {
   }
   const publication = value.jobs['oci-native'].steps;
   assert.ok(publication.some(step => step.run?.includes('release-phases.mjs prerequisites oci-native')));
-  assert.ok(publication.some(step => step.run?.includes('release-phases.mjs publish-oci')));
+  assert.ok(publication.some(step => step.run === 'node scripts/release-publication.mjs publish-oci release'));
   assert.ok(!publication.some(step => step.run?.includes('imagetools create')));
   assert.ok(!publication.some(step => step.uses?.startsWith('softprops/action-gh-release')),
     'default overwrite-enabled release upload must not replace source-addressed bytes');
@@ -805,141 +804,6 @@ test('release SBOM input binds exact index, child, config, platform, source and 
     writeFileSync(join(directory, 'config.json'), '{}');
     assert.throws(() => invoke('sbom-record'));
   } finally { rmSync(directory, {recursive: true, force: true}); }
-});
-
-test('publisher reuses identical release without writes and refuses all substitutions or partial drafts', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'prismpm-existing-release-'));
-  try {
-    const names = assetNames();
-    for (const name of names) writeFileSync(join(directory, name), 'abc');
-    const initial = {tag_name: publicationTag, target_commitish: revision,
-      draft: false, prerelease: true, body: publicationNotes(revision),
-      assets: names.map(name => ({name, size: 3}))};
-    const fixture = (change = {}, content = 'abc', tagCommit = revision) => {
-      const calls = [];
-      const release = {...structuredClone(initial), ...change};
-      const client = {environment: environment(),
-        api: path => path.includes('/commits/') ? {sha: tagCommit} : release,
-        checked: args => {
-          calls.push(args);
-          assert.equal(args[1], 'download', 'existing releases must never be written');
-          const target = args[args.indexOf('--dir') + 1];
-          for (const name of names) writeFileSync(join(target, name), content);
-        }};
-      return {client, calls};
-    };
-    const same = fixture();
-    assert.equal(await publishOci(directory, revision, same.client),
-      `https://github.com/UOR-Foundation/PrismPM/releases/tag/${publicationTag}`);
-    assert.equal(same.calls.length, 1);
-    for (const [change, content, tagCommit] of [
-      [{}, 'abd', revision], [{draft: true, assets: []}, 'abc', revision],
-      [{prerelease: false}, 'abc', revision], [{body: 'accepted'}, 'abc', revision],
-      [{assets: initial.assets.slice(1)}, 'abc', revision], [{}, 'abc', 'b'.repeat(40)],
-      [{assets: [...initial.assets.slice(1), initial.assets[1]]}, 'abc', revision],
-    ]) {
-      const changed = fixture(change, content, tagCommit);
-      await assert.rejects(publishOci(directory, revision, changed.client));
-      assert.ok(changed.calls.every(args => args[1] === 'download'));
-    }
-    rmSync(join(directory, names[0]));
-    const missing = fixture();
-    await assert.rejects(publishOci(directory, revision, missing.client), /asset closure is incomplete/);
-    assert.equal(missing.calls.length, 0);
-  } finally { rmSync(directory, {recursive: true, force: true}); }
-});
-
-test('new and complete staged publications verify all bytes before becoming public', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'prismpm-new-release-'));
-  try {
-    const names = assetNames();
-    for (const name of names) writeFileSync(join(directory, name), 'abc');
-    for (const [corrupt, resume] of [[false, false], [true, false], [false, true], [true, true]]) {
-      let release = resume ? {tag_name: publicationTag, target_commitish: revision,
-        draft: true, prerelease: true, body: publicationNotes(revision),
-        assets: names.map(name => ({name, size: 3}))} : null;
-      let tag = null;
-      const calls = [];
-      const client = {environment: environment(),
-        api: path => path.includes('/commits/') ? tag : release,
-        checked: args => {
-          calls.push(args);
-          assert.ok(!args.includes('--clobber'));
-          if (args[1] === 'create') {
-            assert.ok(args.includes('--draft') && args.includes('--prerelease'));
-            release = {tag_name: publicationTag, target_commitish: revision, draft: true,
-              prerelease: true, body: args[args.indexOf('--notes') + 1], assets: []};
-          } else if (args[1] === 'upload') {
-            release.assets = names.map(name => ({name, size: 3}));
-          } else if (args[1] === 'download') {
-            const target = args[args.indexOf('--dir') + 1];
-            for (const name of names) writeFileSync(join(target, name), corrupt ? 'bad' : 'abc');
-          } else if (args[1] === 'edit') {
-            assert.deepEqual(args.slice(-1), ['--draft=false']);
-            release.draft = false; tag = {sha: revision};
-          } else assert.fail(`unexpected publication command: ${args[1]}`);
-        }};
-      if (corrupt) {
-        await assert.rejects(publishOci(directory, revision, client), /cannot be overwritten/);
-        assert.equal(release.draft, true);
-        assert.ok(!calls.some(args => args[1] === 'edit'));
-      } else {
-        await publishOci(directory, revision, client);
-        assert.deepEqual(calls.map(args => args[1]), resume ? ['download', 'edit'] : ['create', 'upload', 'download', 'edit']);
-      }
-    }
-  } finally { rmSync(directory, {recursive: true, force: true}); }
-});
-
-test('publication attempts have distinct discovery tags and invalid run contexts perform no I/O', async t => {
-  const directory = mkdtempSync(join(tmpdir(), 'prismpm-attempt-release-'));
-  t.after(() => rmSync(directory, {recursive: true, force: true}));
-  const names = assetNames();
-  for (const name of names) writeFileSync(join(directory, name), 'abc');
-  const releases = new Map(), commits = new Map(), endpoints = [], writes = [];
-  const client = {environment: environment(), api: path => {
-    endpoints.push(path);
-    if (path.includes('/commits/')) return commits.get(path.split('/').at(-1)) ?? null;
-    return releases.get(path.split('/').at(-1)) ?? null;
-  }, checked: args => {
-    const tag = args[2];
-    if (args[1] !== 'download') writes.push(args);
-    if (args[1] === 'create') {
-      assert(!releases.has(tag));
-      releases.set(tag, {tag_name: tag, target_commitish: revision, draft: true, prerelease: true,
-        body: args[args.indexOf('--notes') + 1], assets: []});
-    } else if (args[1] === 'upload') {
-      releases.get(tag).assets = names.map(name => ({name, size: 3}));
-    } else if (args[1] === 'download') {
-      const target = args[args.indexOf('--dir') + 1];
-      for (const name of names) writeFileSync(join(target, name), 'abc');
-    } else if (args[1] === 'edit') {
-      releases.get(tag).draft = false; commits.set(tag, {sha: revision});
-    } else assert.fail('unexpected release operation');
-  }};
-  for (const [run, attempt] of [['123456789', '1'], ['123456789', '2'], ['987654321', '1']]) {
-    client.environment = {...environment(), GITHUB_RUN_ID: run, GITHUB_RUN_ATTEMPT: attempt};
-    const expected = `sdk-oci-${revision}-${run}-${attempt}`;
-    assert.equal(await publishOci(directory, revision, client),
-      `https://github.com/UOR-Foundation/PrismPM/releases/tag/${expected}`);
-    assert(endpoints.some(path => path.endsWith('/tags/' + expected)));
-  }
-  assert.equal(releases.size, 3, 'reruns must not collide with earlier evidence');
-  const before = writes.length;
-  await publishOci(directory, revision, client);
-  assert.equal(writes.length, before, 'identical same-attempt publication is read-only');
-  writeFileSync(join(directory, names[0]), 'abd');
-  await assert.rejects(publishOci(directory, revision, client), /cannot be overwritten/);
-  assert.equal(writes.length, before);
-  for (const change of [{GITHUB_ACTIONS: undefined}, {GITHUB_ACTIONS: 'false'},
-    ...['', '0', '01', '-1', '1.0', '1e3', ' 1', '1\n', '../main', undefined]
-      .flatMap(value => [{GITHUB_RUN_ID: value}, {GITHUB_RUN_ATTEMPT: value}])]) {
-    client.environment = {...environment(), ...change};
-    const requests = endpoints.length;
-    await assert.rejects(publishOci(directory, revision, client));
-    assert.equal(endpoints.length, requests, 'invalid run identity must fail before API access');
-    assert.equal(writes.length, before);
-  }
 });
 
 test('the platform index names exactly the two pushed manifests, canonically', () => {
