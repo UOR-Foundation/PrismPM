@@ -3532,3 +3532,128 @@ regeneration; complete V&V still executes the complete workspace suite. Local
 Rust execution is unavailable, so these new tests and the corrected hosted
 preparation remain unverified until their actual runs complete. The unchanged
 Node preparation suite passes 10/10 locally; it is not Rust-gate evidence.
+
+## Host-effect service systems (SY-09)
+
+`prismpm/system-model/3` (`Production.HostEffectSystem`) puts each `api`
+component on the host network. A served application listens on `127.0.0.1`
+only, and Docker forwards a port published from a bridge network to the
+container's interface, so the first projection, with `ports` bound to
+`127.0.0.1`, could not reach the listener it published. Measured on Docker
+29.1.3 (Linux) with a process listening on `127.0.0.1:P` in its container:
+
+| Network | From the host's `127.0.0.1` | From the host's LAN address |
+| --- | --- | --- |
+| bridge, published `127.0.0.1:P:P` | no answer | not published |
+| host | answers | no answer |
+
+Run on the branch head in WSL:
+
+- The seven owning tests pass, the locked Compose and SPDX oracles included,
+  with `PRISMPM_TEST_SDK_IMAGE` set to the SDK candidate
+  `sha256:0519fe6e2f1d731fc0d475c70ad21d00396d9089051f0c703d477e1ffe39a11c`.
+- `lexlean verify` (LexLean 0.4.0 from that image) with the module added as an
+  entrypoint verifies 61 modules. The module states the soundness theorem and
+  26 decided theorems, each with an empty axiom set.
+- `cargo xtask validate-model` reports the documents current.
+
+Review of the first draft found two gaps, closed in the same change:
+
+- **The audit did not know the roles.** It refused a network mode other than
+  `host` and the host network beside another, but accepted a worker moved
+  whole onto the host network (`networks` removed, `network_mode: host`
+  added). `audit_compose` now takes the model: the services are exactly the
+  components, an `api` service is on the host network alone with one replica,
+  and every other service names no network mode and is on exactly its
+  declared networks.
+- **Replicas of an `api` component.** The schema admits up to 1024, and the
+  projection copies `replicas_min` into `deploy.replicas`; on the host network
+  every replica would bind the same loopback port. An `api` component now runs
+  exactly one replica (`apiRunsOnce` in Lean, mirrored in `host_effect.rs`);
+  workers may run several.
+
+Run on that head in WSL, with the same SDK candidate: the seven owning tests
+pass, the locked Compose oracle and the named release included;
+`authority resolve --locked`, `shipped_standards_lock` and
+`validate-model` pass after `standards.lock` and `sdk/stdlib-sources.tar` were
+regenerated (the lock hashes `authority.rs`, whose test changed); and
+`lexlean check` and `lexlean verify` pass on a project of the module, its
+`Production.Core`, the fixture release and its Calculator (4 modules), with the
+module as an entrypoint. The module now states 28 decided theorems.
+
+Planted defects, each applied alone and reverted afterwards:
+
+| Defect | Rejected by |
+| --- | --- |
+| Lean network rule admits every component | `lexlean verify`: `LLV7002`, `decide` refutes two refusal theorems |
+| Lean network rule lets an `api` component declare a network | `lexlean verify`: `LLV7002`, `apiComponentOnANetworkIsRefused` |
+| Lean listener rule ignores the `api` owner | `lexlean verify`: `LLV7002`, the worker and unknown-component theorems |
+| Rust validator ignores the network rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Rust validator ignores the `api` owner | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Projection leaves the `api` on its declared networks | four owning tests, the oracle test and the named release among them |
+| Projection keeps the `api`'s networks beside the host network | `host_effect_system_compose_puts_each_api_on_the_host_network`, the oracle test, the named release |
+| Projection also publishes the listener's port | the same three tests |
+| Projection no longer refuses a non-loopback listener | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits any network mode | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits a published port | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit admits the host network beside another | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Schema requires a network of every component again | every owning test but the manifest one |
+| Audit ignores where a non-`api` service is placed | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Audit ignores the replicas of an `api` service | `host_effect_system_refuses_every_non_loopback_port_binding` |
+| Rust validator ignores the one-replica rule | `host_effect_system_refuses_open_or_inconsistent_declarations` |
+| Lean `apiRunsOnce` admits every component | `lexlean verify`: `LLV7002`, `decide` refutes `apiComponentWithASecondReplicaIsRefused` |
+| Lean `apiRunsOnce` ignores the kind | `lexlean verify`: `LLV7002`, `decide` refutes `workerWithSeveralReplicasIsAdmitted` |
+
+The named release does not check the module's theorems: with the listener
+rule's `api` owner removed it still passed. The Lean planted defects are
+therefore held by `lexlean verify` alone.
+
+Not established here: the server application binding that issue 216 will
+supply, which would tie a listener to the address the application declares;
+that the listener is reached on a Docker Desktop engine, where host networking
+means something else; and any OCI release, replay or deployment of
+`system-model/3`.
+
+## crates.io readiness (#214)
+
+`just package-release-crates-check` (`scripts/package-release-crates.sh --check`)
+also requires the packaged `prism-stdlib` to be the crate `prismpm build` embeds,
+and packages `prismpm` against the vendored dependencies; `--dry-run` runs
+`cargo publish --dry-run` for the four crates of this repository (network, no
+credential); `crate-metadata-check.sh` reads each archive for what crates.io
+needs. Run on 2026-10-23 on `main` `7afacadf` with this change, in WSL (Ubuntu,
+Rust 1.97.1): `--check` exits 0 in 26 s, and `--dry-run` exits 0 with cargo's
+"aborting upload due to dry run" for `prod-ir`, `prod-codegen`, `prism-stdlib`
+and `prismpm`. The digests are the reviewed ones:
+
+```text
+7cffc0251ee01ce97debe304a41a4e28f6be94ba41691fac1993c811919cdc21  prod-ir-0.1.0.crate
+29270825b581f950b3914509b7a0613f34964f003eb3c61772636d0805b09148  prod-codegen-0.1.0.crate
+58f398f5453e170e19842360ac1bb3ceda2ea032306527bbeb3adf6650b52bca  prism-stdlib-0.2.0.crate
+```
+
+`prismpm-0.3.0.crate` is 545 files and 5.1 MiB compressed, under the 10 MiB limit.
+Its digest depends on the patched dependency lock and is not a pin.
+
+Each defect was planted in the committed tree, run with the real script, and
+restored with `git checkout`; `scripts/crate-readiness.test.mjs` plants the same
+defects on a scratch copy and `scripts/release-phases.test.mjs` plants eleven changes
+to the `crates` job, each of which must fail `validateWorkflow`.
+
+| Planted defect | Command | Observed | Restored |
+| --- | --- | --- | --- |
+| a package one byte from the embedded crate (byte 1000 overwritten) | `package-release-crates.sh --identity <package>` | exit 1: the packaged digest is not the `crate_sha256` of `stdlib/release.json` | file removed |
+| `stdlib/release.json` names another hash (`58f3…` as `68f3…`) | `--identity stdlib/generated/prism-stdlib-0.2.0.crate` | exit 1 | `git checkout` |
+| the SDK includes `prism-stdlib-0.1.0.crate` instead of 0.2.0 in `application_build.rs` | same | exit 1: no include of the reviewed archive | `git checkout` |
+| no `CARGO_REGISTRY_TOKEN` | `--publish` | exit 64, "set CARGO_REGISTRY_TOKEN for this command; this script never stores it"; no cargo or curl call | none needed |
+| a token and uncommitted changes | `--publish` | exit 1, "the working tree must be clean: the upload is of committed bytes"; no cargo or curl call | none needed |
+| an archive without a description, a license, a repository, or the readme it names; or over 10 MiB | `crate-metadata-check.sh` | exit 1, each named | scratch archives |
+| the `crates` job without the dry run, without the unchanged-bytes check after it, without the metadata check, without the skip when no credential exists, with the `lexlean` wait unconditional, without the `lexlean` patch, with the token not from the secret, or with the trusted-publishing step unguarded | `node --test scripts/release-phases.test.mjs` | `validateWorkflow` throws for each | scratch YAML |
+| an apostrophe in a comment of the job script, which sits inside one single-quoted `bash -c` argument (found while writing this change) | same | `bash: line 110: unexpected EOF while looking for matching` a quote, from the new `bash -n` check of the script | `cp` of the saved workflow |
+
+What this does not show: `release.yml` has never run, and the `crates` job is
+read, not executed. In `scripts/release-phases.test.mjs`, 17 of 18 tests pass
+here; the Buildx test ("pinned Buildx pushes a genuine two-platform OCI index")
+needs `docker buildx`, which this environment lacks, and does not touch the
+`crates` job. The layout-custody test failed once when the file ran beside
+`crate-readiness.test.mjs` and passed alone and in the next full run.

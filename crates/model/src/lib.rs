@@ -9,6 +9,7 @@ mod browser_view_diagnostics;
 pub mod codegen;
 pub mod registry;
 pub mod release;
+mod sdk_diagnostics;
 mod stdlib_exports;
 mod stdlib_package;
 
@@ -17,6 +18,7 @@ pub use browser_adapter_diagnostics::{
 };
 pub use browser_diagnostics::{BrowserDiagnostic, BrowserDiagnostics};
 pub use browser_view_diagnostics::BrowserViewDiagnostics;
+pub use sdk_diagnostics::{SdkDiagnostic, SdkDiagnostics};
 pub use stdlib_exports::{StdlibExport, StdlibExports};
 pub use stdlib_package::StdlibPackage;
 
@@ -62,6 +64,8 @@ pub struct Model {
     pub browser_adapter_diagnostics: BrowserAdapterDiagnostics,
     /// model/browser-view-diagnostics.toml
     pub browser_view_diagnostics: BrowserViewDiagnostics,
+    /// model/sdk-diagnostics.toml
+    pub sdk_diagnostics: SdkDiagnostics,
 }
 
 /// Model load/check failure.
@@ -106,6 +110,7 @@ impl Model {
             browser_diagnostics: read(dir, "browser-diagnostics.toml")?,
             browser_adapter_diagnostics: read(dir, "browser-adapter-diagnostics.toml")?,
             browser_view_diagnostics: read(dir, "browser-view-diagnostics.toml")?,
+            sdk_diagnostics: read(dir, "sdk-diagnostics.toml")?,
         })
     }
 
@@ -120,6 +125,8 @@ impl Model {
         self.browser_diagnostics.check()?;
         self.browser_adapter_diagnostics.check()?;
         self.browser_view_diagnostics.check()?;
+        self.sdk_diagnostics
+            .check(|id| self.ids.get(id).is_some())?;
         self.ledger.check()?;
         self.check_ids()?;
         self.check_authorities()?;
@@ -582,8 +589,12 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 60);
+        assert_eq!(model.contracts.contract.len(), 71);
         for (schema, path) in [
+            (
+                "prismpm/model-document/7",
+                "schemas/model-document-v7.schema.json",
+            ),
             (
                 "prismpm/model-document/6",
                 "schemas/model-document-v6.schema.json",
@@ -597,6 +608,10 @@ mod tests {
                 "schemas/system-model-v2.schema.json",
             ),
             (
+                "prismpm/system-model/3",
+                "schemas/system-model-v3.schema.json",
+            ),
+            (
                 "prismpm/browser-system-release/1",
                 "schemas/browser-system-release.schema.json",
             ),
@@ -607,6 +622,14 @@ mod tests {
             (
                 "prismpm/browser-publication-integrity/1",
                 "schemas/browser-publication-integrity.schema.json",
+            ),
+            (
+                "prismpm/browser-publication-integrity/2",
+                "schemas/browser-publication-integrity-v2.schema.json",
+            ),
+            (
+                "prismpm/browser-export/2",
+                "schemas/browser-export-v2.schema.json",
             ),
             (
                 "prismpm/model-document/3",

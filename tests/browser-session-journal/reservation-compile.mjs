@@ -5,17 +5,19 @@ import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
-import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
+import {run, sha, stageLeanRuntime, ownedAttestations} from '../browser-view/compile.mjs';
+import {compilerInputPaths, captureCompilerInputs, requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {mutateReservationSource} from './reservation-mutations.mjs';
 import {executeWasm} from './runtime.mjs';
+import {lexiconPaths} from '../browser-view/lexicon-inputs.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const selected = 'Foundation.Browser.Application.V1.SessionJournalReservationWire';
+const family = 'session-journal-reservation';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
 const capturedInputs = new WeakSet();
 function read(path) {
@@ -44,7 +46,7 @@ export function frozenInputs() {
     'tests/browser-session/wire.mjs', 'tests/browser-session/corpus.mjs',
     'tests/browser-session/maxima.mjs', 'tests/browser-session/budget.mjs',
     'sdk/browser/effects-wire.mjs', 'sdk/browser/effects-module.mjs', 'sdk/browser/presentation-wire.mjs',
-    'tests/fixtures/library/native-library/project/lexlean.toml', 'model/dependencies.toml',
+    ...lexiconPaths(repository), 'tests/fixtures/library/native-library/project/lexlean.toml', 'model/dependencies.toml',
     'model/authorities.toml', 'lean-toolchain', 'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE',
     'vendor/lean4-prod/lean.tar']) files.add(path);
   // Capture transitive static imports, not only the visible entry filenames.
@@ -66,6 +68,8 @@ export function frozenInputs() {
       const input = tree + '/' + relative; assert.equal(sha(read(input)), digest); files.add(input);
     }
   }
+  // Hash, never parse: the registered compiler closure includes vendored test fixtures.
+  for (const path of compilerInputPaths(family)) files.add(path);
   const inputs = Object.freeze(Object.fromEntries([...files].sort().map(path => [path, sha(read(path))])));
   for (const [path, bytes] of modules) assert.equal(sha(bytes), inputs[path], 'captured static module ' + path);
   capturedInputs.add(inputs);
@@ -78,6 +82,22 @@ export function verifyFrozenInputs(inputs) {
   for (const [path, digest] of Object.entries(inputs))
     assert.equal(sha(read(path)), digest, 'immutable captured reservation input ' + path);
 }
+function assertCompilerSubset(compilerInputs, inputs) {
+  for (const [path, digest] of Object.entries(compilerInputs))
+    assert.equal(inputs[path], digest, 'actual compiler input belongs to complete reservation snapshot ' + path);
+}
+export function compilerInputs(inputs) {
+  verifyFrozenInputs(inputs);
+  const captured = captureCompilerInputs(family);
+  assertCompilerSubset(captured, inputs);
+  return captured;
+}
+function boundCompiler(owner, inputs) {
+  verifyFrozenInputs(inputs);
+  const compiler = requireCompilerOwner(owner, family);
+  assertCompilerSubset(compiler.evidence.inputs, inputs);
+  return compiler;
+}
 export function assertCapturedReservationSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
     Object.keys(inputs).filter(path => path.startsWith('stdlib/src/') && path.endsWith('.lex.tex')).sort(),
@@ -85,16 +105,18 @@ export function assertCapturedReservationSources(inputs, sources) {
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
-export function prepareReservation(mutation = null, baseline = null, inputs = frozenInputs()) {
+export function prepareReservation(compilerOwner, mutation = null, baseline = null, inputs = frozenInputs()) {
   const startedAt = performance.now();
   for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_SESSION_JOURNAL_'), 'no owner bypass');
   assert.deepEqual(frozenInputs(), inputs, 'one immutable reservation owner closure');
+  const compiler = boundCompiler(compilerOwner, inputs);
   const sources = sourceClosure();
   assertCapturedReservationSources(inputs, sources);
   if (mutation !== null) {
     assert.ok(baseline?.sources instanceof Map, 'positive source baseline required');
     assert.deepEqual([...sources], [...baseline.sources], 'exact original positive source inventory');
     assert.deepEqual(baseline.inputs, inputs, 'same complete positive input closure');
+    assert.equal(baseline.compilerOwner, compiler, 'same serial compiler owner as the positive baseline');
     mutateReservationSource(sources, mutation);
   }
   const captured = path => { const bytes = read(path); assert.equal(sha(bytes), inputs[path], 'frozen input ' + path); return bytes; };
@@ -107,22 +129,12 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
   let complete = false;
   try {
     stage('rust-toolchain.toml', captured('rust-toolchain.toml'));
-    // This verifies registered compiler trees before any captured driver runs.
-    const exporter = ensureProdExport(repository, work);
-    assert.equal(sha(readFileSync(join(exporter.dir, '.source-lean.tar'))), inputs['vendor/lean4-prod/lean.tar']);
-    for (const path of Object.keys(inputs).filter(path => path.startsWith('vendor/lexlean/') || path.startsWith('vendor/lean4-prod/rust/')))
-      stage(path, captured(path));
-    for (const name of ['Cargo.toml', 'Cargo.lock', 'src/main.rs']) {
-      const source = 'tests/browser-session-journal/reservation-driver/' + name;
-      stage('tests/browser-session-journal/driver/' + name, captured(source));
-    }
-    const driverTarget = createPrivateDriverTarget(work);
-    const manifest = join(work, 'tests/browser-session-journal/driver/Cargo.toml');
-    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-      '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: driverTarget});
-    const driver = join(driverTarget, 'debug/browser-session-journal-driver');
+    // Only the compiler tools (driver, exporter) are reused, built once per
+    // serial owner. This new model project, kernel evidence, generated
+    // Lean/IR/native/two Wasm packages are rebuilt for every mutation.
     for (const [name, bytes] of sources) stage('project/src/' + name.replaceAll('.', '/') + '.lex.tex', bytes);
     const project = join(work, 'project');
+    for (const path of lexiconPaths(repository)) stage('project/' + path, captured(path));
     stage('project/lexlean.toml', captured('tests/fixtures/library/native-library/project/lexlean.toml').toString('utf8')
       .replace('name = "library-probe"', 'name = "session-journal-conformance"')
       .replace('module_prefix = "LibraryProbe"', 'module_prefix = "PrismPM"')
@@ -130,7 +142,7 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
     stage('project/lean-toolchain', captured('lean-toolchain'));
     stage('project/lakefile.toml', 'name = "session_journal_conformance"\nversion = "0.1.0"\n');
     run('lake', ['update'], project);
-    const verified = JSON.parse(run(driver, ['verify', join(project, 'lexlean.toml')], work));
+    const verified = JSON.parse(compiler.runDriver(['verify', join(project, 'lexlean.toml')], work));
     assert.deepEqual(verified.modules, [...sources.keys()]);
     const attestationBytes = readFileSync(join(verified.root, 'attestation.json'));
     const buildManifest = readFileSync(join(verified.root, 'build-manifest.json'));
@@ -141,8 +153,8 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
       const data = readSemantic(bytes.toString('utf8'));
       return data.declarations.map(declaration => ['PrismPM.' + name + '.' + declaration.name, declaration.axioms ?? []]);
     }));
-    assert.equal(attestation.declarations.length, expected.size);
-    for (const declaration of attestation.declarations) {
+    assert.equal(ownedAttestations(attestation).length, expected.size);
+    for (const declaration of ownedAttestations(attestation)) {
       assert.ok(expected.has(declaration.name)); const axioms = expected.get(declaration.name);
       assert.equal(declaration.result, 'ok'); assert.deepEqual(declaration.policy, {kind: axioms.length ? 'exact' : 'none', axioms});
       assert.deepEqual(declaration.observed, axioms); expected.delete(declaration.name);
@@ -155,15 +167,15 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
     const lean = join(work, 'lean');
     stage('lean/lean-toolchain', captured('lean-toolchain'));
     stage('lean/lakefile.toml', 'name = "journal_projection"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['
-      + [...sources.keys()].map(name => '"PrismPM.' + name + '"').join(',') + ']\n');
+      + stageLeanRuntime(verified, lean) + [...sources.keys()].map(name => '"PrismPM.' + name + '"').join(',') + ']\n');
     run('lake', ['build', 'PrismGenerated'], lean);
     const exported = join(work, 'export'), roots = ['PrismPM.' + selected + '.sessionJournalReservationBytes'];
-    run(exporter.bin, ['--module', 'PrismPM.' + selected, ...roots.flatMap(name => ['--root', name]),
-      '--ir-module', 'SessionJournalReservation', '--out', exported], exporter.dir, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
+    compiler.runExporter(['--module', 'PrismPM.' + selected, ...roots.flatMap(name => ['--root', name]),
+      '--ir-module', 'SessionJournalReservation', '--out', exported], join(lean, '.lake/build/lib/lean'));
     const ir = join(exported, 'kernel.ir'), generated = join(work, 'generated');
     for (const name of ['LICENSE-MIT', 'LICENSE-APACHE']) stage('licenses/' + name, captured(name));
     const licenses = join(work, 'licenses');
-    const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
+    const generation = JSON.parse(compiler.runDriver(['native', ir, generated, licenses], work));
     const generatedPackages = [captureGeneratedPackage(generated,
       {kind: 'native', inputIrSha256: generation.ir_sha256})];
     const wasm = {}, wasmArtifacts = [];
@@ -171,7 +183,7 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
       const guests = [];
       for (const label of ['a', 'b']) {
         const output = join(work, entry + '-' + label);
-        assert.deepEqual(JSON.parse(run(driver, [entry, ir, output, licenses], work)), generation);
+        assert.deepEqual(JSON.parse(compiler.runDriver([entry, ir, output, licenses], work)), generation);
         const capturedPackage = captureGeneratedPackage(output, {kind: 'wasm', inputIrSha256: generation.ir_sha256});
         generatedPackages.push(capturedPackage); capturedPackage.verify();
         const target = join(work, entry + '-' + label + '-target');
@@ -224,6 +236,7 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
       finally {unchanged();}
     }
     function unchanged() {
+      boundCompiler(compiler, inputs);
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       for (const artifact of wasmArtifacts) artifact.verify();
@@ -232,13 +245,12 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);
       assert.equal(sha(readFileSync(ir)), generation.ir_sha256);
-      assert.equal(sha(readFileSync(join(exporter.dir, '.source-lean.tar'))), inputs['vendor/lean4-prod/lean.tar']);
     }
-    unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-journal'); unchanged();
+    unchanged();
     const preparationMs = performance.now() - startedAt;
     console.log(JSON.stringify({scope: 'private-reservation-preparation', mutation, work, preparationMs}));
     complete = true;
-    return Object.freeze({work, sources, verified, generation, wasm, compileNative, runNative, runWasm, nativeEvidence, unchanged, inputs, cacheRetirement, preparationMs,
+    return Object.freeze({work, sources, verified, generation, wasm, compileNative, runNative, runWasm, nativeEvidence, unchanged, inputs, compilerOwner: compiler, preparationMs,
       wasmArtifacts: Object.freeze(wasmArtifacts.map(artifact => artifact.evidence)),
       generatedPackages: Object.freeze(generatedPackages.map(({directory, kind, files}) =>
         Object.freeze({path: directory.slice(work.length + 1), kind, files})))});

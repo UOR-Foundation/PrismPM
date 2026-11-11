@@ -43,6 +43,8 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
         "prismpm/model-document/3"
     } else if matches!(&doc.application, Some(Application::Browser(_))) {
         "prismpm/model-document/4"
+    } else if matches!(&doc.application, Some(Application::Server(_))) {
+        "prismpm/model-document/7"
     } else if let Some(Application::Text(application)) = &doc.application {
         if application.profile == "prismpm/text-application/3" {
             "prismpm/model-document/6"
@@ -95,8 +97,31 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
         }
         match application {
             Application::Legacy(value) => validate_application(value)?,
-            Application::Text(value) => validate_text_application(value)?,
+            Application::Text(value) => {
+                validate_text_application(value)?;
+                if value.workbench.is_some() && value.profile != super::workbench::PROFILE {
+                    return Err(PrismError::new(
+                        "PP2009",
+                        "a workbench is admitted only by the text/3 profile",
+                    ));
+                }
+                if let Some(workbench) = value.workbench_application() {
+                    super::workbench::validate(&workbench)?;
+                    // Web and command line state one purpose: the CLI help
+                    // paragraph is the workbench purpose plus its line end.
+                    let description = value.cli.as_ref().map(|cli| cli.description.as_str());
+                    if description.map(|text| text.strip_suffix('\n').unwrap_or(text))
+                        != Some(workbench.view.purpose.as_str())
+                    {
+                        return Err(PrismError::new(
+                            "PP2009",
+                            "a text/3 workbench purpose must equal its command-line description",
+                        ));
+                    }
+                }
+            }
             Application::Browser(value) => super::browser_application::validate(value)?,
+            Application::Server(value) => super::server_application::validate(value)?,
         }
         return Ok(());
     }

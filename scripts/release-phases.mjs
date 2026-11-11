@@ -18,7 +18,7 @@ const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'
 export function publicationPolicy(value) {
   assert.deepEqual(Object.keys(value).sort(), ['event', 'publishCrates', 'ref', 'repository', 'revision', 'version']);
   assert.equal(value.repository, repository);
-  assert.equal(value.version, '0.3.0');
+  assert.equal(value.version, '0.4.0');
   assert.match(value.revision, /^[0-9a-f]{40}$/);
   let publishCrates;
   if (value.event === 'workflow_dispatch') {
@@ -27,7 +27,7 @@ export function publicationPolicy(value) {
     publishCrates = value.publishCrates;
   } else {
     assert.equal(value.event, 'push');
-    assert.equal(value.ref, 'refs/tags/v0.3.0');
+    assert.equal(value.ref, 'refs/tags/v0.4.0');
     assert.equal(value.publishCrates, null);
     publishCrates = true;
   }
@@ -213,11 +213,11 @@ export function releaseSbomRecord(image, indexBytes, childBytes, configBytes, sp
     spdx: describeSpdx(spdxBytes), production_accepted: false};
 }
 
-export function imageVerificationArguments(image, revision, ref, trustedRoot) {
+export function imageVerificationArguments(image, revision, ref, trustedRoot, event) {
   const [name, digest, extra] = image.split('@');
   assert.equal(extra, undefined);
   return verificationArguments({source_revision: revision}, digest, trustedRoot,
-    releaseTransportPolicy(name, ref));
+    releaseTransportPolicy(name, ref, event));
 }
 
 export function verifyExistingRelease(release, expected, downloaded, tagCommit, draft = false) {
@@ -289,8 +289,8 @@ export function assetNames() {
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
     ]),
     ...['x86_64', 'aarch64'].flatMap(architecture => [
-      `prismpm-0.3.0-${architecture}-unknown-linux-gnu.tar.gz`,
-      `prismpm-0.3.0-${architecture}-unknown-linux-gnu.tar.gz.sha256`,
+      `prismpm-0.4.0-${architecture}-unknown-linux-gnu.tar.gz`,
+      `prismpm-0.4.0-${architecture}-unknown-linux-gnu.tar.gz.sha256`,
     ]),
     ...imageNames.flatMap(name => [
       `${name}-image.txt`, `${name}-image-index.json`, `${name}-provenance.sigstore.json`,
@@ -365,7 +365,7 @@ async function main([command, ...args]) {
     process.stdout.write(`${await publishOci(resolve(args[0]), process.env.GITHUB_SHA)}\n`);
   } else if (command === 'image-verify') {
     assert.equal(args.length, 4);
-    const verification = imageVerificationArguments(...args);
+    const verification = imageVerificationArguments(...args, process.env.GITHUB_EVENT_NAME);
     assert.equal(sha(readFileSync(args[3])), trustRootDigest);
     process.stdout.write(execFileSync('cosign', verification,
       {stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 8 * 1024 * 1024, timeout: 300_000}));
@@ -375,7 +375,7 @@ async function main([command, ...args]) {
     const read = name => readFileSync(join(directory, name));
     const record = releaseSbomRecord(image, read('index.json'), read('manifest.json'), read('config.json'),
       read('sbom.spdx.json'), architecture, revision);
-    const options = releaseTransportPolicy(image.split('@')[0], ref);
+    const options = releaseTransportPolicy(image.split('@')[0], ref, process.env.GITHUB_EVENT_NAME);
     if (command === 'sbom-publish') policyFromEnvironment(process.env);
     transportSbom(command, directory, record, trustedRoot, options);
   } else throw new Error('unsupported release phase operation');

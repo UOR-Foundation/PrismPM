@@ -5,8 +5,9 @@
 //! and the explicit `-` argument. A report must be byte-identical to the guest's
 //! and exit with the code of its modeled outcome. A request over the modeled
 //! maximum cannot reach the guest through the program: it must be refused with
-//! the typed `InputLimit` failure before dispatch, so the guest's response to it
-//! is compared only with the model.
+//! the typed `InputLimit` failure before dispatch, exiting with the modeled
+//! limit code (the code of `error` unless the surface declares its own), so the
+//! guest's response to it is compared only with the model.
 
 use super::{binary_path, help};
 use crate::error::PrismError;
@@ -57,23 +58,34 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn plan(application: &TextApplicationModel, cli: &TextCli) -> Result<Value, PrismError> {
+pub(super) fn plan(application: &TextApplicationModel, cli: &TextCli) -> Result<Value, PrismError> {
     let mut vectors = Vec::new();
     for vector in &application.acceptance_vectors {
-        let outcome = cli
-            .classify(&vector.response)
-            .ok_or_else(|| invalid("an acceptance response has no modeled outcome"))?;
-        vectors.push(json!({
-            "code": outcome.exit_code,
-            "request": hex(&vector.request),
-            "response": hex(&vector.response),
-        }));
+        match cli.classify(&vector.response) {
+            Some(outcome) => vectors.push(json!({
+                "code": outcome.exit_code,
+                "request": hex(&vector.request),
+                "response": hex(&vector.response),
+            })),
+            // A workbench frame: the guest answers in the workbench protocol
+            // and the program refuses the report, without output.
+            None if crate::holo::text_cli::workbench_frame(application, &vector.request) => {
+                vectors.push(json!({
+                    "code": cli.fault_code(),
+                    "refusal": "ReportUnclassified",
+                    "request": hex(&vector.request),
+                    "response": hex(&vector.response),
+                }));
+            }
+            None => return Err(invalid("an acceptance response has no modeled outcome")),
+        }
     }
     Ok(json!({
         "binary": application.cargo_name,
         "command": cli.command,
         "examples": cli.examples,
         "fault_code": cli.fault_code(),
+        "limit_code": cli.limit_code(),
         "help": help(application, cli),
         "outcomes": cli
             .outcomes

@@ -17,7 +17,7 @@ const jobs = [
 
 function sourceEvents(name, value) {
   const expected = {
-    'ci-parallel': {pull_request: null, workflow_dispatch: null},
+    'ci-parallel': {pull_request: null, merge_group: {branches: ['main']}, workflow_dispatch: null},
     vv: {push: {branches: ['main'], tags: ['v*']}, workflow_dispatch: null},
     bootstrap: {workflow_dispatch: null},
     reproducibility: {schedule: [{cron: '17 3 * * *'}], workflow_dispatch: null},
@@ -36,6 +36,11 @@ function parallelContract(value) {
   assert.equal(image.steps.at(-1).uses, 'devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6');
   assert.equal(image.steps.at(-1).with.push, 'never');
   assert.equal(image.steps.at(-1).with.runCmd, 'true');
+  for (const job of Object.values(value.jobs)) {
+    const cleanup = job.steps.findIndex(step => step.uses === './.github/actions/prepare-devcontainer-runner');
+    const cache = job.steps.findIndex(step => step.uses === './.github/actions/devcontainer-cache');
+    assert(cleanup > 0 && cleanup < cache, 'prepare disk before importing construction layers');
+  }
   for (const [id, name, timeout, command] of jobs) {
     const job = value.jobs[id];
     assert.equal(job.needs, 'devcontainer-image', id);
@@ -50,6 +55,8 @@ function parallelContract(value) {
     assert(!run.with.runCmd.includes('|| true'), id);
     assert.equal(job.steps[0].uses, 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683');
   }
+  // Rule 6 of check-modules reads the merge base, and skips with no origin/main.
+  assert.equal(value.jobs['model-and-audits'].steps[0].with['fetch-depth'], 0);
 }
 
 test('three capped jobs preserve every pull request gate name and complete command', () => {
@@ -145,6 +152,10 @@ test('source trigger policy refuses missing filtered broadened or redundant exec
       value => value.on.pull_request = {paths: ['src/**']},
     ];
     if (name !== 'ci-parallel') mutations.push(value => value.on.pull_request = null);
+    if (name === 'ci-parallel') mutations.push(value => delete value.on.merge_group,
+      value => value.on.merge_group = null,
+      value => value.on.merge_group = {branches: ['main', 'other']});
+    else mutations.push(value => value.on.merge_group = {branches: ['main']});
     if (name !== 'reproducibility') mutations.push(value => value.on.schedule = [{cron: '* * * * *'}]);
     if (name !== 'vv') mutations.push(value => value.on.push = {branches: ['main']});
     else mutations.push(value => delete value.on.push, value => value.on.push = null,
@@ -324,9 +335,9 @@ const expectedMatrices = {
 const candidateJobs = {
   'input-policy': [30, '1a2606aed5c40be2c5fd6ade291d4d8cc8f48b265ec77346e886d7e429331b1c'],
   policy: [30, 'd8c166a9586b9ecf4e6852352218bdeec51b918562604c920fea38db8e13d499'],
-  build: [180, '54a93dd0777745bc3e2d455e06019b4971bce7fc4c3b2baed1451fbc796f143d'],
+  build: [180, 'ceb7c095142feabc8764b446bfe74f6b2648236091dfd7f0e18eed004ef1a9ce'],
   publish: [60, 'eed34aecea86d7fb123167999bb1a0048f62609f6fc91d6979eeb0dcb8340128'],
-  'unpublished-construction': [180, '1d3f4bfbee8ab48dcb68a2a754be821358dcd5658ea7993ad4e32aee7c023254'],
+  'unpublished-construction': [180, '41becc11023405b4a03aef46605180df69124b5ebdcc3a90c572b3716c492999'],
   'construction-integrity': [90, '6cf032e9b0febd74a52489ce4f06439f93ddebb3e13910e503e9f68f90fc3fa7'],
   'unpublished-prerequisites': [360, 'eaa51e906cb16a3b390033e524e84548554ce7fbdb38a9148fbdeb80d02e2938'],
   'unpublished-installed': [360, 'fb575ed29295c2c233a4ca401e6915c35994ed2a8e805845fe293304c567f86c'],
@@ -348,6 +359,15 @@ function candidateContract(value) {
       assert(job.steps[0].run.endsWith(extra));
       delete job.steps[0].env.QUALIFICATION_SELECTION;
       job.steps[0].run = job.steps[0].run.slice(0, -extra.length);
+    }
+    if (id === 'build') {
+      // Strip ONLY the exact first step that frees runner disk, after checking
+      // it. The unchanged original build owner still has its original hash.
+      assert.deepEqual(job.steps[0], {
+        name: 'Free runner disk for the image and its inventory',
+        run: 'sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL\ndf -h /\n',
+      });
+      job.steps.shift();
     }
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }

@@ -42,8 +42,17 @@ function nativeFixture(root) {
   const source = '/unit-only/source';
   for (const [prefix, args, status] of nativeInvocations(source, image, 'amd64', 1000, 1000)) commandFixture(root, prefix, 'docker', args, status);
   put(root, 'native-result.json', {schema: 'prismpm/native-equivalence-retention/1', scope: 'original-native-sdk-comparison-only',
-    ...context, root: source, uid: 1000, gid: 1000, archive: descriptor('prismpm-0.3.0-x86_64-unknown-linux-gnu.tar.gz', Buffer.from('fixture archive'))});
+    ...context, root: source, uid: 1000, gid: 1000, archive: descriptor('prismpm-0.4.0-x86_64-unknown-linux-gnu.tar.gz', Buffer.from('fixture archive'))});
 }
+
+test('native and container mutable references use the PP6101 exit class', () => {
+  for (const architecture of ['amd64', 'arm64']) {
+    const invocations = nativeInvocations('/unit-only/source', image, architecture, 1000, 1000);
+    assert.deepEqual(invocations.map(([prefix, , status]) => [prefix, status]), [
+      ['native-check', 0], ['container-check', 0], ['native-error', 5], ['container-error', 5],
+    ]);
+  }
+});
 
 test('actual child execution preserves exact binary stdout, stderr and nonzero status', async t => {
   const root = temporary(t), args = ['-e', 'process.stdout.write(Buffer.from([0,255,10]));process.stderr.write("original error\\n");process.exitCode=7'];
@@ -354,9 +363,11 @@ test('missing bootstrap, failed command, substituted bytes and wrong native invo
     ]],
     ['native-equivalence', nativeFixture, context, [
       root => rmSync(join(root, 'container-error.stderr')),
+      root => {const row = JSON.parse(readFileSync(join(root, 'native-result.json'))); row.archive.path = 'prismpm-0.3.0-x86_64-unknown-linux-gnu.tar.gz'; put(root, 'native-result.json', row);},
+      root => {const row = JSON.parse(readFileSync(join(root, 'native-error.json'))); row.status = 6; put(root, 'native-error.json', row);},
       root => commandFixture(root, 'container-error', 'docker', ['run', 'changed'], 6),
       root => {const row = JSON.parse(readFileSync(join(root, 'native-error.json'))); row.status = 0; put(root, 'native-error.json', row);},
-      root => {const row = JSON.parse(readFileSync(join(root, 'native-result.json'))); row.archive.path = 'prismpm-0.3.0-aarch64-unknown-linux-gnu.tar.gz'; put(root, 'native-result.json', row);},
+      root => {const row = JSON.parse(readFileSync(join(root, 'native-result.json'))); row.archive.path = 'prismpm-0.4.0-aarch64-unknown-linux-gnu.tar.gz'; put(root, 'native-result.json', row);},
       root => {const row = JSON.parse(readFileSync(join(root, 'container-check.json'))); commandFixture(root, 'container-check', row.command, row.arguments, 0, 'different success');},
     ]],
   ]) for (const mutate of changes) {

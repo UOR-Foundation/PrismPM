@@ -20,6 +20,7 @@ const WRAPPER_SOURCE: &[u8] = include_bytes!("authority.rs");
 const UPSTREAM_CONFORMANCE_SOURCE: &[u8] = include_bytes!("upstream_conformance.rs");
 const ASYNCAPI_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/asyncapi-parser.mjs");
 const KUBERNETES_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/kubernetes-validator.mjs");
+const OSCAL_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/oscal/src/main.rs");
 const INTOTO_WRAPPER_SOURCE: &[u8] =
     include_bytes!("../sdk/oracles/go/intoto-statement-validator/main.go");
 const MCP_SCHEMA_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/mcp-schema-validator.mjs");
@@ -352,6 +353,7 @@ fn wrapper_sha256(row: &OracleRow) -> Result<String, PrismError> {
         "crates/prismpm/src/upstream_conformance.rs" => UPSTREAM_CONFORMANCE_SOURCE,
         "sdk/oracles/asyncapi-parser.mjs" => ASYNCAPI_WRAPPER_SOURCE,
         "sdk/oracles/kubernetes-validator.mjs" => KUBERNETES_WRAPPER_SOURCE,
+        "sdk/oracles/oscal/src/main.rs" => OSCAL_WRAPPER_SOURCE,
         "sdk/oracles/go/intoto-statement-validator/main.go" => INTOTO_WRAPPER_SOURCE,
         "sdk/oracles/mcp-schema-validator.mjs" => MCP_SCHEMA_WRAPPER_SOURCE,
         "sdk/oracles/mcp-conformance-server.mjs" => MCP_CONFORMANCE_WRAPPER_SOURCE,
@@ -531,7 +533,7 @@ fn download_https(url: &str, destination: &Path, maximum_bytes: u64) -> Result<(
             "=https",
             "--tlsv1.2",
             "--user-agent",
-            "PrismPM-authority-fetch/0.3.0",
+            "PrismPM-authority-fetch/0.4.0",
         ])
         .arg("--output")
         .arg(destination)
@@ -2390,6 +2392,7 @@ fn run_oracle_inner(
         "devcontainer" => "devcontainer-c95ffeed",
         "compose" => "compose-fee041b3",
         "kubernetes" => "kubernetes-1.36.4",
+        "oscal" => "oscal-1.1.0-structural",
         "mcp-schema" => "mcp-schema-2026-07-28",
         "mcp-conformance-server" => "mcp-conformance-server-2026-07-28",
         _ => {
@@ -3271,6 +3274,50 @@ mod tests {
     }
 
     #[test]
+    fn host_effect_system_compose_passes_the_locked_oracle() {
+        let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE").unwrap();
+        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let standards = resolved_lock().unwrap();
+        std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
+        write_sdk_lock(root.path(), standards.digest(), sdk_image);
+        let (system, _) = crate::system::host_effect::example();
+        for projection in crate::system::projections(&system, &[]).unwrap() {
+            let name = projection.path.rsplit('/').next().unwrap();
+            let (profile, oracle) = match name {
+                "compose.json" => ("compose", "compose-fee041b3"),
+                "spdx.json" => ("spdx", "spdx-3.0.1-model"),
+                other => panic!("unplanned host-effect projection {other}"),
+            };
+            let path = root.path().join(name);
+            std::fs::write(&path, &projection.bytes).unwrap();
+            let result = run_oracle_in_project(root.path(), profile, &path)
+                .unwrap_or_else(|error| panic!("{name} must pass {oracle}: {error:?}"));
+            assert!(result.valid);
+            assert_eq!(result.oracle, oracle);
+            assert_eq!(std::fs::read(&path).unwrap(), projection.bytes);
+            if profile == "compose" {
+                // The oracle checks Compose validity; the loopback audit of the
+                // emitted bytes is the check a wildcard binding cannot pass.
+                let compose: Value = serde_json::from_slice(&projection.bytes).unwrap();
+                crate::system::host_effect::audit_compose(&compose, system.value()).unwrap();
+                assert_eq!(compose["services"]["gateway"]["network_mode"], "host");
+                let mut dangling = compose.clone();
+                dangling["services"]["gateway"]["depends_on"]["absent"] =
+                    json!({"condition":"service_healthy","required":true});
+                let path = root.path().join("compose-dangling.json");
+                std::fs::write(&path, encode_value(&dangling).unwrap()).unwrap();
+                assert_eq!(
+                    run_oracle_in_project(root.path(), "compose", &path)
+                        .unwrap_err()
+                        .code,
+                    "PP5404"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn docker_sandbox_compose_checks_secret_references_without_credentials() {
         let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE").unwrap();
         crate::oci::validate_reference(&sdk_image, true).unwrap();
@@ -3415,6 +3462,21 @@ mod tests {
         .unwrap();
         assert_eq!(
             run_oracle_in_project(root.path(), "devcontainer", &workspace)
+                .unwrap_err()
+                .code,
+            "PP5404"
+        );
+
+        let oscal = root.path().join("component-definition.json");
+        let component_definition: &[u8] =
+            include_bytes!("../../../tests/fixtures/threat-model/oscal-subjects/complete.json");
+        std::fs::write(&oscal, component_definition).unwrap();
+        run_oracle_in_project(root.path(), "oscal", &oscal).unwrap();
+        let mut planted: Value = serde_json::from_slice(component_definition).unwrap();
+        planted["component-definition"]["metadata"]["oscal-version"] = json!("1.1.1");
+        std::fs::write(&oscal, serde_json::to_vec(&planted).unwrap()).unwrap();
+        assert_eq!(
+            run_oracle_in_project(root.path(), "oscal", &oscal)
                 .unwrap_err()
                 .code,
             "PP5404"

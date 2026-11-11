@@ -9,13 +9,13 @@ handwritten Lean or target-specific application code.
 
 The historical `v0.1.0` release is a systems-modeling prototype; `v0.2.0`
 introduced portable applications. The production-system SDK candidate is
-`v0.3.0`, and it is releasable only when the generated
+`v0.4.0`, and it is releasable only when the generated
 `prism-stdlib` and `prism-calculator` crates, `Calculator.holo`, the independent
 Hologram execution evidence, and the public `calculator-example` Pages
 application and complete CalculatorSystem reference all pass the atomic release
 contract in [SPEC.md](SPEC.md).
 
-Version 0.3.0 is not an accepted production-system release. Component tests,
+Version 0.4.0 is not an accepted production-system release. Component tests,
 contract fixtures and a successful Pages upload do not establish that acceptance.
 [Release status](RELEASE-STATUS.md) records the remaining release boundaries.
 
@@ -93,8 +93,8 @@ assert_eq!(calculate(Operation::Add, 20, 22), Ok(42));
 The public reference application is
 [`UOR-Foundation/calculator-example`](https://github.com/UOR-Foundation/calculator-example).
 Its publication contract requires the exact content-addressed model, repeated
-PrismPM acceptance, the published registry crate and only the generated six-file
-browser closure. Registry publication remains deferred as recorded in release status.
+PrismPM acceptance, the published registry crate and only the generated browser
+closure (six files before closure v2, sixteen since; see SPEC §1.2.1). Registry publication remains deferred as recorded in release status.
 
 ## Verification scope
 
@@ -103,6 +103,14 @@ browser closure. Registry publication remains deferred as recorded in release st
 it is not a substitute for current complete SDK, downstream and live acceptance.
 The `Browser` application profile remains refused with `PP2011` until its generated runtime,
 authenticated effects, durable recovery and full owning verification are complete.
+The `Server` application profile declares and validates its host effects and generates a host adapter
+(an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
+the core of a server application is built through `production` (`PP2025` refuses an export the host
+adapter cannot bound), a served application listens on the loopback interface only and answers RFC 9112
+requests through the generated adapter, and `prismpm verify` of a server application builds the consumer's locked workspace
+around the production core and accepts the program (every vector with its effect transcript, the binding
+and the served exchanges); a release of one holds the consumer's workspace, assembly and every replay check its acceptance against the model and the released files,
+and `prismpm replay-acceptance` rebuilds the released program and answers every vector without the source.
 
 ## Development and acceptance
 
@@ -149,5 +157,10 @@ integrity against the release's own evidence, not deployment acceptance.
 - [RELEASE-STATUS.md](RELEASE-STATUS.md) — Current release status and required acceptance
 - [VERIFICATION.md](VERIFICATION.md) — Detailed verification evidence, digests, and test descriptions
 - [SPEC.md](SPEC.md) — Atomic release contract specification
+- [docs/vocabulary.md](docs/vocabulary.md) — Prism nouns and verbs mapped to Docker's
 - [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
+- [COMPLIANCE.md](COMPLIANCE.md) — Generated matrix of which runtime passes which part of the runtime contract
 - [ERRORS.md](ERRORS.md) — Error code registry
+- [STABILITY.md](STABILITY.md) — Stability tiers and pre-1.0 versioning policy
+- [RELEASES.md](RELEASES.md) — How releases are cut, what each may contain, and support windows
+- [SECURITY.md](SECURITY.md) — How to report a vulnerability, and how to verify a release

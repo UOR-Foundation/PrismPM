@@ -9,8 +9,10 @@
 
 pub mod acceptance;
 mod application_build;
+pub mod attest;
 pub mod authority;
 mod binary_cli;
+mod brand;
 mod browser_build;
 mod browser_oracle;
 pub mod cli;
@@ -22,24 +24,35 @@ mod design;
 pub mod diagnostics;
 pub mod error;
 mod exporter;
+mod features;
 pub mod holo;
+mod input_lock;
+pub mod inspect;
 mod lean_project;
 mod library_build;
 mod library_verification;
 pub mod lifecycle;
+mod lock_command;
 pub mod oci;
 pub mod operations;
 mod process_resources;
 mod release_verification;
+pub mod replay;
 pub mod sdk;
+pub mod server_build;
+pub mod server_host;
+pub mod server_release;
+pub use verification::server as server_verification;
 pub mod supply_chain;
 pub mod system;
 pub mod template;
 #[cfg(test)]
 mod test_compiler;
 mod text_cli;
+mod threat_model;
 pub mod upstream_conformance;
 mod verification;
+mod workbench;
 
 pub use controller::Controller;
 pub use error::{DiagnosticCode, PrismError};

@@ -1,0 +1,270 @@
+name: npm prism-code
+
+# The JavaScript runtime and CLI in sdk/npm/prism-code. Short, path-filtered,
+# and outside the devcontainer: the package has no dependencies and must work
+# on a plain Node 22 or 24 on every host a consumer has. Publishing runs only
+# on a `prism-code-v*` tag, with npm provenance. A tag release-please created starts
+# no workflow, so a maintainer publishes it by hand:
+#   gh workflow run npm-prism-code.yml --ref prism-code-v<version>
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - sdk/npm/prism-code/**
+      # test/inspect.test.mjs checks its format revision table against the spec's.
+      - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
+      # src/vendor/verify.mjs is a copy of this file; test/verify.test.mjs checks it.
+      - sdk/npm/verify/browser.js
+      # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
+      - sdk/npm/spec/test/fixtures/manifest/**
+      - sdk/npm/spec/test/fixtures/capabilities/**
+      # test/replay.test.mjs runs the spec's history fixtures and the verifier's replay check (#284).
+      - sdk/npm/spec/test/fixtures/history/**
+      - sdk/npm/spec/test/fixtures/attestation/statement/calculator-replay.json
+      - sdk/npm/spec/predicates/replay-v1.schema.json
+      - sdk/npm/verify/src/statements.mjs
+      - sdk/npm/verify/src/level.mjs
+      # templates/text-request is a byte copy of this fixture (#281); sync-templates --check holds them equal.
+      - tests/fixtures/holo/ho-11-text-application/project/**
+      - sdk/npm/create-prism-code/**
+      # test/reference-archives.test.mjs is written with @prism-code/testing (#286).
+      - sdk/npm/testing/**
+      - .github/workflows/npm-prism-code.yml
+  push:
+    branches: [main]
+    paths:
+      - sdk/npm/prism-code/**
+      - sdk/npm/spec/constants.mjs
+      # src/vendor/spec is a copy of this file and the one above; test/errors-namespace.test.mjs checks them (#448).
+      - sdk/npm/spec/assurance-levels.mjs
+      # test/errors-registered.test.mjs compares the codes the package raises with these (#448).
+      - model/errors.toml
+      - ERRORS.md
+      - sdk/npm/verify/browser.js
+      # test/manifest.test.mjs and test/capabilities.test.mjs run the spec's schema fixtures through the runtime.
+      - sdk/npm/spec/test/fixtures/manifest/**
+      - sdk/npm/spec/test/fixtures/capabilities/**
+      # test/replay.test.mjs runs the spec's history fixtures and the verifier's replay check (#284).
+      - sdk/npm/spec/test/fixtures/history/**
+      - sdk/npm/spec/test/fixtures/attestation/statement/calculator-replay.json
+      - sdk/npm/spec/predicates/replay-v1.schema.json
+      - sdk/npm/verify/src/statements.mjs
+      - sdk/npm/verify/src/level.mjs
+      # templates/text-request is a byte copy of this fixture (#281); sync-templates --check holds them equal.
+      - tests/fixtures/holo/ho-11-text-application/project/**
+      - sdk/npm/create-prism-code/**
+      # test/reference-archives.test.mjs is written with @prism-code/testing (#286).
+      - sdk/npm/testing/**
+      - .github/workflows/npm-prism-code.yml
+    tags:
+      - prism-code-v*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-prism-code-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: sdk/npm/prism-code
+
+jobs:
+  test:
+    name: node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # Pull requests test every OS on Node 24 and Node 22 on Linux only; main
+      # pushes and tags run the full OS x Node matrix.
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        node: ${{ fromJSON(github.event_name == 'pull_request' && '["24"]' || '["22", "24"]') }}
+        include:
+          - os: ubuntu-24.04
+            node: '22'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ matrix.node }}
+      # sdk/npm/spec/index.mjs and index.d.ts are generated from the files in the
+      # package and are not committed. Build them before anything imports the package.
+      - name: Build the spec package's generated entry point
+        working-directory: sdk/npm/spec
+        run: npm run build
+      # The sigstore packages are optional dependencies, used by attest and
+      # verify-attestation (#272); the attest tests need them installed.
+      - name: Install the optional sigstore packages
+        run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
+      # test/reference-archives.test.mjs imports @prism-code/testing, which resolves prism-code through a link.
+      - name: Link prism-code for @prism-code/testing
+        working-directory: sdk/npm/testing
+        run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
+      - name: Unit tests
+        run: npm test
+      - name: The init templates are their fixtures
+        run: node scripts/sync-templates.mjs --check
+      - name: create-prism-code
+        working-directory: sdk/npm/create-prism-code
+        run: node --test "test/*.test.mjs"
+      - name: Package size and contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > pack.json
+          size=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("pack.json","utf8"))[0].unpackedSize)')
+          echo "unpacked size: $size bytes"
+          # The cap and the reviewed file list live in scripts/check-package.mjs, once, so this step holds no second copy of them.
+          node scripts/check-package.mjs pack.json
+          rm pack.json
+      - name: The entry points import cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in ./src/index.mjs ./src/node.mjs ./src/browser.mjs ./src/canonical/index.js; do
+            node --input-type=module -e "import('$entry').then(m => { if (Object.keys(m).length === 0) throw new Error('$entry exports nothing') })"
+          done
+          # Every reference archive replays its vectors (#278): Calculator and Payment Approval.
+          for holo in fixtures/*.holo; do node bin/prism-code.mjs vectors "$holo"; done
+      # Every reference archive replays its committed history (#284): Calculator and Payment Approval.
+      - name: The reference archives replay green
+        shell: bash
+        run: |
+          set -euo pipefail
+          for history in fixtures/*.history.json; do
+            holo="${history%.history.json}.holo"
+            test -f "$holo"
+            node bin/prism-code.mjs replay "$history" --holo "$holo"
+          done
+      - name: A changed model fails replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Its own vectors pass, so only the recorded history can tell.
+          node bin/prism-code.mjs vectors test/fixtures/Calculator.changed-model.holo
+          code=0
+          node bin/prism-code.mjs replay fixtures/Calculator.history.json --holo test/fixtures/Calculator.changed-model.holo || code=$?
+          test "$code" -eq 1
+      - name: The negative fixture is what the reference archive derives to
+        run: node scripts/derive-changed-model.mjs --check
+      - name: Release tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/prism-code-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./package.json").version')
+          test "refs/tags/prism-code-v${version}" = "${{ github.ref }}"
+
+  # Keyless attest and verify-attestation against the public Sigstore instance
+  # (#272). The job's own GitHub Actions OIDC token is the identity: Fulcio
+  # certifies this workflow, Rekor v2 and the timestamp authority witness the
+  # signature, and verify-attestation then names this workflow as the only
+  # acceptable signer. A pull request from a fork has no id-token, so it skips.
+  keyless:
+    name: keyless round trip on the public Sigstore instance
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Install the optional sigstore packages
+        run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts
+      - name: Attest the Calculator keyless
+        env:
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"run":"%s","note":"keyless attest round trip of #272"}\n' "$RUN_ID" > "$RUNNER_TEMP/predicate.json"
+          node bin/prism-code.mjs attest fixtures/Calculator.holo \
+            --predicate "$RUNNER_TEMP/predicate.json" \
+            --type https://example.com/prism/ci-round-trip/v1 \
+            --output "$RUNNER_TEMP/attested.holo"
+      - name: Verify it names this workflow, with the public root over TUF
+        env:
+          IDENTITY: https://github.com/${{ github.workflow_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node bin/prism-code.mjs verify-attestation "$RUNNER_TEMP/attested.holo" \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --type https://example.com/prism/ci-round-trip/v1 --json | tee "$RUNNER_TEMP/result.json"
+          node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!r.passed || !r.results[0].time) throw new Error("not verified at a signed time")' "$RUNNER_TEMP/result.json"
+      - name: Verification refuses every other signer
+        env:
+          IDENTITY: https://github.com/${{ github.workflow_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub runs `bash -e`, so a command that is meant to fail must be guarded.
+          expect_failure() {
+            local want="$1"; shift
+            local out code=0
+            out=$(node bin/prism-code.mjs verify-attestation "$RUNNER_TEMP/attested.holo" "$@" --json) || code=$?
+            echo "$out"
+            test "$code" -eq 1
+            echo "$out" | grep -q "\"code\":\"$want\""
+          }
+          expect_failure identity_mismatch --certificate-identity "${IDENTITY}x" --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          expect_failure identity_mismatch --certificate-identity "$IDENTITY" --certificate-oidc-issuer https://accounts.google.com
+          expect_failure attestation_not_found --certificate-identity "$IDENTITY" --certificate-oidc-issuer https://token.actions.githubusercontent.com --type https://example.com/other
+
+  publish:
+    name: publish to npm
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/prism-code-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      # Trusted publishing: npm exchanges this job's OIDC token (repository
+      # UOR-Foundation/PrismPM, workflow npm-prism-code.yml, environment npm,
+      # as registered on npmjs.com for prism-code) for a short-lived publish
+      # credential and attaches provenance itself. No npm token exists in
+      # this repository for the package, and none may be set here: a token
+      # in NODE_AUTH_TOKEN would take precedence over the OIDC exchange.
+      - name: npm 11.5 or newer, the first release with trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global npm@11
+          npm --version
+          node -e 'const [a, b] = process.argv[1].split(".").map(Number); if (a < 11 || (a === 11 && b < 5)) throw new Error("npm 11.5+ required")' "$(npm --version)"
+      # npm refuses a prerelease without --tag, and a candidate must not become latest.
+      - name: Publish with provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(node -p 'require("./package.json").version')" in
+            *-*) npm publish --provenance --access public --tag next ;;
+            *) npm publish --provenance --access public ;;
+          esac

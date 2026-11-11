@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.uor.foundation/prism/manifest/1",
+  "title": "Manifest",
+  "description": "prism.toml, as the TOML reader returns it after the overlay for the build target (prism.browser.toml or prism.node.toml) is merged in: tables merge key by key, any other value replaces the one it overrides. Rules a schema cannot state are lint errors in the runtime: a variable marked secret must take its value from env(NAME), and no string may be a credential. Design: docs/proposals/280-prism-toml.md and docs/proposals/294-provider-services.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "application"
+  ],
+  "properties": {
+    "manifest_version": {
+      "description": "The manifest format. Absent means 1.",
+      "const": 1
+    },
+    "application": {
+      "$ref": "#/$defs/application"
+    },
+    "model": {
+      "$ref": "#/$defs/model"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "variables": {
+      "description": "The configuration variables the holo reads, by name. A capability set must also allow a variable for the holo to read it.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/variable"
+      }
+    }
+  },
+  "$defs": {
+    "application": {
+      "description": "What the application is called and which version it is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        },
+        "version": {
+          "description": "Semantic Versioning 2.0.0.",
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "authors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "model": {
+      "description": "Where the model comes from and what a development loop watches.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/path"
+        },
+        "build": {
+          "description": "The command that builds the model.",
+          "type": "string",
+          "minLength": 1
+        },
+        "watch": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        }
+      }
+    },
+    "path": {
+      "description": "A path inside the project: relative, forward slashes, no .. segment.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?![/])(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+$"
+    },
+    "capabilities": {
+      "description": "The grant: either the members of one prism/capabilities/1 set, inline, or file (and set) naming a capability file. Absent means nothing is granted. Beside either form, a table under any other name declares a capability that a provider provisions; the name matches ^[a-z][a-z0-9_]*$, and file and set are reserved.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/providerCapability"
+          },
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/path"
+            },
+            "set": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            }
+          },
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(file|set|[a-z][a-z0-9_]*)$"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/providerCapability"
+          },
+          "properties": {
+            "allow-outbound-hosts": {
+              "$ref": "#/$defs/hosts"
+            },
+            "deny-outbound-hosts": {
+              "$ref": "#/$defs/hosts"
+            },
+            "allow-key-value-stores": {
+              "$ref": "#/$defs/stores"
+            },
+            "deny-key-value-stores": {
+              "$ref": "#/$defs/stores"
+            },
+            "allow-variables": {
+              "$ref": "#/$defs/variableEntries"
+            },
+            "deny-variables": {
+              "$ref": "#/$defs/variableEntries"
+            },
+            "allow-providers": {
+              "$ref": "#/$defs/providerEntries"
+            },
+            "deny-providers": {
+              "$ref": "#/$defs/providerEntries"
+            }
+          },
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^((allow|deny)-(outbound-hosts|key-value-stores|variables|providers)|(?!file$|set$)[a-z][a-z0-9_]*)$"
+          }
+        }
+      ]
+    },
+    "hosts": {
+      "description": "As in prism/capabilities/1.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^([*]|[a-z][a-z0-9+.-]*)://([*]|([*][.])?[a-z0-9]([a-z0-9-]*[a-z0-9])?([.][a-z0-9]([a-z0-9-]*[a-z0-9])?)*)(:([*]|[0-9]{1,5}))?$"
+      }
+    },
+    "stores": {
+      "description": "As in prism/capabilities/1.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^([*]|[a-z0-9][a-z0-9_-]*)$"
+      }
+    },
+    "variableEntries": {
+      "description": "As in prism/capabilities/1.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^([*]|[a-z][a-z0-9_]*)$"
+      }
+    },
+    "providerEntries": {
+      "description": "As in prism/capabilities/1.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^([*]|[a-z][a-z0-9-]*)$"
+      }
+    },
+    "providerCapability": {
+      "description": "A capability a provider provisions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/provider"
+        }
+      }
+    },
+    "provider": {
+      "description": "Prism runs prism-provider-<type> from the PATH with the options as flags, and produces the key/values it returns as <NAME>_<VAR> environment variables. The capability set must allow the type, and must allow each variable for it to be produced.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "The provider: the part of the executable name after prism-provider-.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "options": {
+          "description": "Passed as --<key>=<value>. An array repeats the flag.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/providerOption"
+          }
+        }
+      }
+    },
+    "providerOption": {
+      "description": "A value or a list of values.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/providerOptionValue"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/providerOptionValue"
+          }
+        }
+      ]
+    },
+    "providerOptionValue": {
+      "description": "A string, integer or boolean. A string holds no control character and is not env(NAME): a command line is visible to every process on the machine, so a provider reads its secrets from its own environment.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?!env\\([A-Za-z_][A-Za-z0-9_]*\\)$)[^\\u0000-\\u001f\\u007f]*$"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "variable": {
+      "description": "A literal value, env(NAME) to read the environment at run time, or a table. A table marked secret takes its value from env(NAME), or from the variable's name in upper case when it has no value.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "secret"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "pattern": "^env\\([A-Za-z_][A-Za-z0-9_]*\\)$"
+            },
+            "secret": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "secret": {
+              "const": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod server;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Binding {
@@ -344,6 +346,12 @@ pub(crate) fn validate(
             "validator",
         ]
     };
+    if matches!(model.application, Some(Application::Server(_))) {
+        // The acceptance record is what a server release is for: say which file lacks.
+        for name in names {
+            file(verification_files, name)?;
+        }
+    }
     exact_files(
         verification_files,
         &names.iter().map(|name| (*name).to_owned()).collect(),
@@ -366,7 +374,18 @@ pub(crate) fn validate(
     let lex = canonical_json(file(verification_files, "lexlean-attestation.json")?, true)?;
     let snapshot = canonical_json(file(build_files, "lexlean/snapshot.json")?, true)?;
     lexlean_binding(&build, build_files, &model, &lex, &snapshot)?;
-    if let Some(application) = &model.application {
+    if let Some(Application::Server(server)) = &model.application {
+        server::binding(
+            &manifest,
+            &lex,
+            &model,
+            server,
+            &build_id,
+            build_files,
+            verification_files,
+            processes,
+        )?;
+    } else if let Some(application) = &model.application {
         application_binding(
             &manifest,
             &lex,
@@ -600,9 +619,114 @@ fn lexlean_binding(
             .and_then(|_| crate::system::browser::replay(projected, files))
             .map_err(|error| invalid(format!("browser system replay: {}", error.message)))?;
     }
-    declaration_audits(lex, snapshot_modules)?;
-    lexlean_processes(lex, &modules)?;
+    let closure = language_closure(lex, &modules, files)?;
+    declaration_audits(lex, snapshot_modules, &closure)?;
+    lexlean_processes(lex, &closure)?;
     Ok(())
+}
+
+/// What a language-1.2 verification compiles beside the project's own
+/// modules, derived here from the retained build exactly as the compiler
+/// derives it, so that no row of the attestation is accepted on its own say.
+struct Closure {
+    /// The project's modules and the runtime modules they import: compiled,
+    /// replayed, audited and held as oleans.
+    modules: BTreeSet<String>,
+    /// The runtime modules among them, with their exact axioms.
+    runtime: Vec<&'static lexlean::backend::runtime::RuntimeModule>,
+    /// Whether any module has a production root, so that its computational
+    /// closure is extracted and its certificates are compiled.
+    roots: bool,
+    /// The preservation environment compiled in its own workspace.
+    environment: Vec<String>,
+    /// The certificate modules of every root and target, compiled and
+    /// replayed in that workspace.
+    certificates: BTreeSet<String>,
+}
+
+fn language_closure(
+    lex: &Value,
+    modules: &BTreeSet<String>,
+    files: &BTreeMap<String, Vec<u8>>,
+) -> Result<Closure, PrismError> {
+    use lexlean::production::preserve;
+    let mut texts = Vec::new();
+    for module in modules {
+        let name = format!("lexlean/build/modules/{}.lean", module.replace('.', "/"));
+        texts.push(
+            std::str::from_utf8(file(files, &name)?)
+                .map_err(|error| invalid(format!("LexLean module text: {error}")))?,
+        );
+    }
+    // The production roots, in the order the compiler numbers them: by
+    // module name, then as the module's report lists them.
+    let mut reports = Vec::new();
+    for (name, bytes) in files {
+        if name.starts_with("lexlean/build/production/") && name.ends_with(".eligibility.json") {
+            reports.push(canonical_json(bytes, true)?);
+        }
+    }
+    reports.sort_by(|left, right| left["module"].as_str().cmp(&right["module"].as_str()));
+    let mut targets = Vec::new();
+    for report in &reports {
+        for root in array(&report["roots"])? {
+            let mut rows = Vec::new();
+            for row in array(&root["targets"])? {
+                rows.push(string(&row["target"])?.to_owned());
+            }
+            targets.push(rows);
+        }
+    }
+    let roots = !targets.is_empty();
+    ensure(
+        lex.get("preservation").is_some() == roots && lex.get("compiler_input").is_some() == roots,
+        "LexLean preservation evidence differs from the production roots",
+    )?;
+    if roots {
+        for module in preserve::TARGET_MODULES {
+            texts.push(preserve::module_text(module).map_err(|error| invalid(error.message))?);
+        }
+    }
+    let mut runtime =
+        lexlean::backend::runtime::imported_by(texts).map_err(|error| invalid(error.message))?;
+    // The runtime's own project generates these modules itself.
+    runtime.retain(|module| !modules.contains(&module.name));
+    let mut all = modules.clone();
+    all.extend(runtime.iter().map(|module| module.name.clone()));
+    let mut environment = Vec::new();
+    let mut certificates = BTreeSet::new();
+    if roots {
+        environment.extend(
+            preserve::TARGET_MODULES
+                .iter()
+                .map(|module| (*module).to_owned()),
+        );
+        environment.extend(
+            preserve::library()
+                .map_err(|error| invalid(error.message))?
+                .modules,
+        );
+        let semantic = string(&lex["semantic_id"])?;
+        for (index, rows) in targets.iter().enumerate() {
+            let module = format!("LexLeanPreserve.C{}.R{index}", &semantic[..32]);
+            for target in rows {
+                for base in [module.clone(), format!("{module}.Compose")] {
+                    certificates.insert(
+                        lexlean::production::rust_cert::module_for(&base, target)
+                            .ok_or_else(|| invalid("a production target is not a Rust target"))?,
+                    );
+                }
+            }
+            certificates.insert(module);
+        }
+    }
+    Ok(Closure {
+        modules: all,
+        runtime,
+        roots,
+        environment,
+        certificates,
+    })
 }
 
 fn lexlean_modules(manifest: &Value) -> Result<BTreeSet<String>, PrismError> {
@@ -815,6 +939,26 @@ fn selected_application_snapshot(
             "application selected source map identity differs",
         )?;
     }
+    // The production roots of the selected modules are exported with their
+    // eligibility records (LexLean language 1.2); nothing else is added.
+    let selected_names = modules
+        .iter()
+        .map(|module| string(&module["lean_module"]))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    for row in array(&full_manifest["outputs"])? {
+        if row["kind"] != "production-eligibility" {
+            continue;
+        }
+        let path = string(&row["path"])?;
+        let name = path
+            .strip_prefix("production/")
+            .and_then(|path| path.strip_suffix(".eligibility.json"))
+            .ok_or_else(|| invalid("LexLean production eligibility path is not canonical"))?
+            .replace('/', ".");
+        if selected_names.contains(name.as_str()) {
+            expected_rows.push(("production-eligibility".to_owned(), path.to_owned()));
+        }
+    }
     expected_rows.sort();
     let observed_rows = array(&manifest["outputs"])?
         .iter()
@@ -831,8 +975,20 @@ fn selected_application_snapshot(
     )
 }
 
-fn declaration_audits(lex: &Value, modules: &[Value]) -> Result<(), PrismError> {
-    let mut expected = BTreeMap::new();
+fn declaration_audits(lex: &Value, modules: &[Value], closure: &Closure) -> Result<(), PrismError> {
+    let mut expected: BTreeMap<String, Value> = BTreeMap::new();
+    // A runtime module's every declaration observes exactly the axioms its
+    // native source pins.
+    for module in &closure.runtime {
+        for (name, axioms) in &module.declarations {
+            ensure(
+                expected
+                    .insert(name.clone(), json!({"axioms": axioms, "kind": "exact"}))
+                    .is_none(),
+                "duplicate LexLean declaration",
+            )?;
+        }
+    }
     for module in modules {
         for declaration in array(&module["declarations"])? {
             let name = format!(
@@ -842,7 +998,7 @@ fn declaration_audits(lex: &Value, modules: &[Value]) -> Result<(), PrismError> 
             );
             ensure(
                 expected
-                    .insert(name, &declaration["axiom_policy"])
+                    .insert(name, declaration["axiom_policy"].clone())
                     .is_none(),
                 "duplicate LexLean declaration",
             )?;
@@ -856,7 +1012,7 @@ fn declaration_audits(lex: &Value, modules: &[Value]) -> Result<(), PrismError> 
             seen.insert(name.to_owned())
                 && expected
                     .get(name)
-                    .is_some_and(|policy| **policy == row["policy"])
+                    .is_some_and(|policy| *policy == row["policy"])
                 && row["result"] == "ok",
             "LexLean declaration audit closure or policy differs",
         )?;
@@ -1033,7 +1189,7 @@ fn validate_exporter_authority(
     Ok(())
 }
 
-fn lexlean_processes(lex: &Value, modules: &BTreeSet<String>) -> Result<(), PrismError> {
+fn lexlean_processes(lex: &Value, closure: &Closure) -> Result<(), PrismError> {
     keys(&lex["toolchain"], &["lake", "lean", "leanchecker"])?;
     for name in ["lake", "lean", "leanchecker"] {
         keys(
@@ -1047,74 +1203,90 @@ fn lexlean_processes(lex: &Value, modules: &BTreeSet<String>) -> Result<(), Pris
         )?;
     }
     let processes = process_records(&lex["processes"], true)?;
-    let mut compiled = BTreeSet::new();
-    let mut replayed = BTreeSet::new();
-    let mut audited = BTreeSet::new();
     let semantic = string(&lex["semantic_id"])?;
     let prefix = &semantic[..32];
-    let mut probe = false;
-    for row in processes {
-        let module = string(&row["module"])?;
-        let argv = strings(&row["argv"])?;
-        match string(&row["tool"])? {
-            "leanchecker" => {
-                ensure(
-                    modules.contains(module)
-                        && replayed.insert(module.to_owned())
-                        && argv == ["env", "$TOOLCHAIN/bin/leanchecker", module],
-                    "LexLean replay process identity differs",
-                )?;
-            }
-            "lean" if modules.contains(module) => {
-                let path = module.replace('.', "/");
-                ensure(
-                    compiled.insert(module.to_owned())
-                        && row["argv"]
-                            == json!([
-                                "env",
-                                "lean",
-                                "-R",
-                                "$STAGING/lean-src",
-                                "-o",
-                                format!("$STAGING/oleans/{path}.olean"),
-                                format!("$STAGING/lean-src/{path}.lean")
-                            ]),
-                    "LexLean compilation process identity differs",
-                )?;
-            }
-            "lean" if module == format!("LexLeanProbe.P{prefix}") => {
-                ensure(
-                    !probe
-                        && row["argv"]
-                            == json!(["env", "lean", format!("$STAGING/probe/{module}.lean")]),
-                    "LexLean probe process identity differs",
-                )?;
-                probe = true;
-            }
-            "lean" => {
-                let original = module
-                    .strip_prefix(&format!("LexLeanAudit.A{prefix}."))
-                    .ok_or_else(|| invalid("LexLean audit process identity differs"))?;
-                ensure(
-                    modules.contains(original)
-                        && audited.insert(original.to_owned())
-                        && row["argv"]
-                            == json!(["env", "lean", format!("$STAGING/audit/{module}.lean")]),
-                    "LexLean audit process closure differs",
-                )?;
-            }
-            _ => return Err(invalid("unknown LexLean verification process")),
+    let modules = &closure.modules;
+    // The processes a verification runs, by tool and module, each once.
+    let compile = |source: &str, objects: &str, module: &str| {
+        let path = module.replace('.', "/");
+        json!([
+            "env",
+            "lean",
+            "-R",
+            format!("$STAGING/{source}"),
+            "-o",
+            format!("$STAGING/{objects}/{path}.olean"),
+            format!("$STAGING/{source}/{path}.lean")
+        ])
+    };
+    let replay = |module: &str| json!(["env", "$TOOLCHAIN/bin/leanchecker", module]);
+    let mut expected: BTreeMap<(&str, String), Value> = BTreeMap::new();
+    let probe = format!("LexLeanProbe.P{prefix}");
+    expected.insert(
+        ("lean", probe.clone()),
+        json!(["env", "lean", format!("$STAGING/probe/{probe}.lean")]),
+    );
+    for module in modules {
+        expected.insert(
+            ("lean", module.clone()),
+            compile("lean-src", "oleans", module),
+        );
+        expected.insert(("leanchecker", module.clone()), replay(module));
+        let audit = format!("LexLeanAudit.A{prefix}.{module}");
+        let argv = json!(["env", "lean", format!("$STAGING/audit/{audit}.lean")]);
+        expected.insert(("lean", audit), argv);
+    }
+    if closure.roots {
+        let extract = format!("LexLeanExtract.X{prefix}");
+        let argv = json!(["env", "lean", format!("$STAGING/extract/{extract}.lean")]);
+        expected.insert(("lean", extract), argv);
+        for module in &closure.environment {
+            expected.insert(
+                ("lean", module.clone()),
+                compile("preserve-src", "preserve-oleans", module),
+            );
         }
+        for module in &closure.certificates {
+            expected.insert(
+                ("lean", module.clone()),
+                compile("preserve-src", "preserve-oleans", module),
+            );
+            expected.insert(("leanchecker", module.clone()), replay(module));
+        }
+        expected.insert(
+            ("lean", "LexLeanPreserve.Audit".to_owned()),
+            json!([
+                "env",
+                "lean",
+                "-R",
+                "$STAGING/preserve-src",
+                "$STAGING/preserve-src/LexLeanPreserve/Audit.lean"
+            ]),
+        );
+    }
+    for row in processes {
+        let tool = string(&row["tool"])?;
+        let module = string(&row["module"])?;
+        let key = (
+            ["lean", "leanchecker"]
+                .into_iter()
+                .find(|known| *known == tool)
+                .ok_or_else(|| invalid("unknown LexLean verification process"))?,
+            module.to_owned(),
+        );
+        let argv = expected
+            .remove(&key)
+            .ok_or_else(|| invalid("unknown LexLean verification process"))?;
         ensure(
-            row["executable_sha256"]
-                == lex["toolchain"][string(&row["tool"])?]["executable_sha256"],
+            row["argv"] == argv,
+            "LexLean verification process identity differs",
+        )?;
+        ensure(
+            row["executable_sha256"] == lex["toolchain"][tool]["executable_sha256"],
             "LexLean process executable identity differs",
         )?;
     }
-    ensure(
-        probe && compiled == *modules && replayed == *modules && audited == *modules,
-        "LexLean process closure is incomplete",
-    )?;
+    ensure(expected.is_empty(), "LexLean process closure is incomplete")?;
     let mut oleans = BTreeSet::new();
     for row in array(&lex["oleans"])? {
         keys(row, &["byte_length", "module", "sha256"])?;
@@ -1227,6 +1399,38 @@ fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
     Ok(platform)
 }
 
+// The per-vector summary `verify` writes from the oracle's dispatch-to-render
+// samples, in whole microseconds so the acceptance document stays canonical.
+fn browser_timing(value: &Value) -> Result<(), PrismError> {
+    for row in array(value)? {
+        keys(
+            row,
+            &[
+                "engine",
+                "engine_version",
+                "maximum_microseconds",
+                "median_microseconds",
+                "repetitions",
+                "vector_index",
+            ],
+        )?;
+        ensure(
+            [
+                "maximum_microseconds",
+                "median_microseconds",
+                "repetitions",
+                "vector_index",
+            ]
+            .iter()
+            .all(|field| row[*field].is_u64())
+                && row["engine"].is_string()
+                && row["engine_version"].is_string(),
+            "application browser timing differs from its summary shape",
+        )?;
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn application_binding(
     manifest: &Value,
@@ -1255,11 +1459,22 @@ fn application_binding(
         owned || manifest["schema"] == "prismpm/application-verification-manifest/1",
         "application verification family differs",
     )?;
+    // `browser_timing` is a per-run measurement, not a modeled fact: `verify`
+    // binds `acceptance_sha256` to the acceptance document without it, so two
+    // runs of one build share an attestation id. Bind the same projection here
+    // and hold the unbound timing to its closed summary shape.
+    let acceptance = canonical_json(file(files, "application-acceptance.json")?, false)?;
+    let mut comparable_acceptance = acceptance.clone();
+    if let Some(timing) = comparable_acceptance
+        .as_object_mut()
+        .and_then(|object| object.remove("browser_timing"))
+    {
+        browser_timing(&timing)?;
+    }
+    let comparable_bytes =
+        encode_value(&comparable_acceptance).map_err(|error| invalid(error.message))?;
     for (key, bytes) in [
-        (
-            "acceptance_sha256",
-            file(files, "application-acceptance.json")?,
-        ),
+        ("acceptance_sha256", comparable_bytes.as_slice()),
         (
             "lexlean_attestation_sha256",
             file(files, "lexlean-attestation.json")?,
@@ -1280,7 +1495,6 @@ fn application_binding(
     let guest_name = format!("core-wasm/{stem}_core_wasm.wasm");
     let guest = file(build_files, &guest_name)?;
     let identities = application_archive(application, model, build_files, guest)?;
-    let acceptance = canonical_json(file(files, "application-acceptance.json")?, false)?;
     let mut modeled_acceptance = json!({
         "application":application.name(), "artifact_closure":"verified", "browser_projection":"verified",
         "build_id":build_id, "cargo_package":{"name":application.cargo_name(),"sha256":hex(file(build_files, &crate_name)?),"version":application.cargo_version()},
@@ -1311,7 +1525,7 @@ fn application_binding(
         )?;
     }
     ensure(
-        acceptance == modeled_acceptance,
+        comparable_acceptance == modeled_acceptance,
         "application acceptance differs from actual model or artifacts",
     )?;
     let mut expected = PREFLIGHT.to_vec();
@@ -1644,26 +1858,14 @@ fn application_archive(
         "application LCNF evidence differs",
     )?;
     let stem = application.cargo_name().replace('-', "_");
-    let expected_browser: BTreeSet<_> = [
-        "app.css".to_owned(),
-        "app.js".to_owned(),
-        "index.html".to_owned(),
-        format!("{stem}.js"),
-        format!("{stem}_bg.wasm"),
-        "provenance.json".to_owned(),
-    ]
-    .into_iter()
-    .map(|name| format!("view/browser/{name}"))
-    .collect();
-    ensure(
-        files
-            .keys()
-            .filter(|name| name.starts_with("view/browser/"))
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            == expected_browser,
-        "application browser closure differs",
-    )?;
+    // Exactly closure v1 (the six-file page) or closure v2 (v1 plus the brand files).
+    let browser_names = files
+        .keys()
+        .filter_map(|name| name.strip_prefix("view/browser/"))
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let closure = crate::brand::closure_version(&browser_names, &stem);
+    ensure(closure.is_some(), "application browser closure differs")?;
     let browser_bytes = file(files, "view/browser/provenance.json")?;
     let browser = canonical_json(browser_bytes, false)?;
     ensure(
@@ -1679,6 +1881,28 @@ fn application_archive(
             && browser["view_model_id"] == provenance["view_binding"]["view_model_id"],
         "application browser provenance differs",
     )?;
+    if closure == Some(2) {
+        // Closure v2 provenance names the digest of every other closure file.
+        let mut listed = BTreeSet::new();
+        for name in browser_names
+            .iter()
+            .filter(|name| name.as_str() != "provenance.json")
+        {
+            ensure(
+                browser["schema"] == "prismpm/browser-provenance/2"
+                    && browser["files"][name.as_str()]
+                        == hex(file(files, &format!("view/browser/{name}"))?),
+                "application browser provenance differs",
+            )?;
+            listed.insert(name.as_str());
+        }
+        ensure(
+            browser["files"].as_object().is_some_and(|rows| {
+                rows.len() == listed.len() && rows.keys().all(|name| listed.contains(name.as_str()))
+            }),
+            "application browser provenance differs",
+        )?;
+    }
     Ok(identities)
 }
 

@@ -30,6 +30,15 @@ The three honesty levels:
 | `AR-09` | `build` | Source maps provide complete token traceability between .lex.tex and generated Lean. |
 | `AR-10` | `build` | Coverage reports document all modeled and unmodeled elements. |
 
+## assurance
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `AL-03` | `build` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. |
+| `AL-05` | `build` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. |
+| `AL-06` | `build` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. |
+| `AL-07` | `build` | The prism.verify namespace of prism-code gives the verdicts and refusals of experimental_verify, check and @prism-code/verify on every archive of the conformance corpus, leaves a signed holo at P0 with no signer or another signer, refuses outside Node instead of appearing to pass, and at load imports no Node module and only the modules the nine-module design gives verify or errors. |
+
 ## authorities
 
 | ID | Level | Statement |
@@ -41,8 +50,7 @@ The three honesty levels:
 | `AU-05` | `build` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. |
 | `AU-06` | `build` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. |
 | `AU-07` | `build` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. |
-| `AU-08` | `build` | MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused. |
-| `AU-09` | `build` | The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic. |
+| `AU-08` | `build` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. |
 
 ## controller
 
@@ -59,6 +67,8 @@ The three honesty levels:
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
 | `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
+| `CT-12` | `build` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. |
+| `CT-13` | `build` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. |
 
 ## deployment
 
@@ -101,6 +111,10 @@ The three honesty levels:
 | `FT-09` | `build` | Facet lexicons produce deterministic canonical LaTeX and Lean lowerings. |
 | `FT-10` | `build` | Lexicon package locks reproduce across multiple directory roots. |
 | `FT-11` | `build` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. |
+| `FT-12` | `build` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. |
+| `FT-13` | `build` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. |
+| `FT-14` | `build` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. |
+| `FT-15` | `build` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. |
 
 ## holo
 
@@ -124,6 +138,31 @@ The three honesty levels:
 | `HO-16` | `build` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. |
 | `HO-17` | `build` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. |
 | `HO-18` | `build` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. |
+| `HO-19` | `build` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. |
+| `HO-31` | `build` | A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build. |
+| `HO-20` | `build` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. |
+| `HO-21` | `build` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. |
+| `HO-22` | `build` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. |
+| `HO-23` | `build` | A holo without the attestation section loads and verifies with the same bytes and identities as before the section existed, and reports no attestations. |
+| `HO-24` | `build` | An attestation section is an Extension row named https://uor.foundation/extension/attestation-bundle/v1, is the last row, appears at most once, and the footer is BLAKE3 of the body including it. |
+| `HO-25` | `build` | Removing the attestation section yields the unsigned archive byte for byte; rows 0 to 7, every blob label and application_kappa are unchanged by adding it, and the Rust and JavaScript writers produce the same bytes. |
+| `HO-26` | `build` | Every attestation line is one Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1, and every subject names a content blob of the archive with matching sha256 and blake3. |
+| `HO-27` | `build` | A blank line, a v0.2 bundle, a messageSignature, a single-digest subject and an oci-manifest subject inside the holo are each refused with a registered diagnostic. |
+| `HO-28` | `build` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. |
+| `HO-29` | `build` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. |
+| `HO-30` | `build` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. |
+| `HO-32` | `build` | A build stamped with provenance carries exactly one unsigned SLSA provenance v1 statement in the attestation section with no flag, keeps every other row byte for byte, records the identities of the stamped archive, writes in min mode the same bytes as the JavaScript reference on every run, and stays at P0. |
+| `HO-33` | `build` | The provenance statement's subjects, build type, external parameters, builder and dependencies equal the lock and the archive, and PP3018 refuses a lock that does not describe the build and an archive that already has a statement. |
+| `HO-34` | `build` | --provenance=max adds exactly the arguments, platform, invocation id and whole-second timestamps, and min records none of them. |
+| `HO-35` | `build` | --no-provenance writes no statement and needs no lock, and an application build that asked for provenance with nothing to derive it from is refused with PP3018 before compiling. |
+| `HO-36` | `build` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. |
+| `HO-37` | `build` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. |
+| `HO-38` | `build` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. |
+| `HO-39` | `build` | prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic. |
+| `HO-40` | `build` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2026. |
+| `HO-41` | `build` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. |
+| `HO-42` | `build` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. |
+| `HO-43` | `build` | The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request: request_begin before the core runs with the request's number in the process and its body, request_end after the answer is written with the same number, the request body and the answer body, including a request the adapter or the core refuses; the number pairs each end with its begin when requests on other connections interleave; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged. |
 
 ## lifecycle
 
@@ -150,6 +189,7 @@ The three honesty levels:
 | `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
 | `OC-09` | `build` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. |
 | `OC-10` | `build` | Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment. |
+| `OC-11` | `build` | The prism.images namespace of prism-code exposes build, pull, push, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, an option a verb does not have is refused, and list, tag and remove stay absent until the local image store exists. |
 
 ## operations
 
@@ -220,6 +260,10 @@ The three honesty levels:
 | `DK-37` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
 | `DK-38` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 | `DK-35` | `build` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. |
+| `DK-39` | `build` | The prism.networks namespace is a view over a capability file with create, list, inspect, remove, connect and disconnect: it refuses with CapabilityDeniedError any grant outside the image's declared world or the active policy, raises networks.unavailable naming #216 and #217 for any call that needs host effects, never reads or writes a system model, and imports only errors and the capability code of verify. |
+| `DK-40` | `build` | The prism.volumes namespace of prism-code is a view over the capability file with create, list, inspect and remove: a host-folder mount, a name or provider outside the grant, and a store outside the image's declared world or the active policy are refused with CapabilityDeniedError before any provider runs, attaching a store to a guest raises a typed error naming host effects #216 and #217, and the module never reads or writes a system model and imports only errors and the capability code. |
+| `DK-41` | `build` | The prism.system namespace of prism-code reports info, version, df, prune and events over the containers of its own client: info and version name the package, the holo format revision, the runtime and the toolchain and builder image a project's prismpm.lock pins, prune removes exited containers only and no image, events streams the create, start, die and destroy events of the client's containers with since, until and filters, and createPrism and Prism.fromEnv expose the eight other modules of #440 on one client. |
+| `DK-42` | `build` | The Rust runtime runs @prism-code/conformance through its shim, prism-conformance-shim, which translates prism/conformance-shim/1 requests to the prismpm library's inspect and verify and judges nothing: every check of the suite runs, the digests checks pass in full, and each check the Rust runtime does not pass is named with its reason in crates/conformance/runtime/declaration.json, so a check that starts to pass or newly fails fails the run. |
 
 ## security
 
@@ -233,6 +277,7 @@ The three honesty levels:
 | `SE-06` | `build` | Memory safety is enforced across all Rust crates with unsafe code forbidden. |
 | `SE-07` | `build` | Input parsing rejects excessively large inputs before memory exhaustion. |
 | `SE-08` | `build` | Dependency audits with cargo-deny enforce license and advisory policies. |
+| `SE-09` | `build` | The prism.auth namespace of prism-code logs in and out through the stores Docker reads, fails a login or logout that does not read back as done, and keeps the secrets it is given: no return value, error or output holds a password, key or token, and it makes no trust decision. |
 
 ## stdlib
 
@@ -256,6 +301,7 @@ The three honesty levels:
 | `ST-16` | `build` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. |
 | `ST-17` | `build` | The private PKCE S256 primitive generates and validates source-owned verifier bytes and encodes actual browser SHA-256 challenges against RFC 7636 vectors without authenticating an account or mailbox. |
 | `ST-18` | `build` | Prism-stdlib defines OPM and UML design view primitives in Foundation.Arch. |
+| `ST-19` | `build` | Prism-stdlib proves with an empty axiom set that the normalized feature and journey validator is sound and complete, and refuses a feature without a call, a feature without acceptance, a journey step outside the declared features and a journey actor outside the stakeholders. |
 
 ## supply-chain
 
@@ -280,6 +326,7 @@ The three honesty levels:
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
 | `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
 | `SY-08` | `build` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. |
+| `SY-09` | `build` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. |
 
 ## template-ci
 
@@ -324,6 +371,9 @@ The three honesty levels:
 | `OCI-RUNTIME-1-3-0` | `1.3.0` | https://codeload.github.com/opencontainers/runtime-spec/tar.gz/92249139eea7161e13745abd4cb6d0ea02a3227a | `fbed724a4bbdce2260eea9a4d6dcf534a5e2446e581ed1b8bf27abe536cee17a` | `AU-01`, `LC-03` |
 | `OPENAPI-3-2-0` | `3.2.0` | https://codeload.github.com/OAI/OpenAPI-Specification/tar.gz/99710bcb26cbe4be646565eebeb04348f02374b5 | `0b4ae65636d0335ec9fd758d11cb2cb6097ace0490c1eaefaa951c723494e788` | `AU-01`, `SY-04` |
 | `OPENAPI-SCHEMA-3-2-2025-11-23` | `3.2@2025-11-23` | https://spec.openapis.org/oas/3.2/schema/2025-11-23 | `7d48f01f37eeae4799041b371ad5f533f9f533fd2b0caa1011a8ba27c5b48b70` | `AU-01`, `SY-04` |
+| `OSCAL-1-1-0` | `1.1.0` | https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_complete_schema.json | `c57fe854b05dd6c249343349ea76aaf59cca87289e5c791ba832eedc2a0ae653` | `AU-07`, `AU-08` |
+| `OSCAL-COMPONENT-SCHEMA-1-1-0` | `1.1.0` | https://github.com/usnistgov/OSCAL/releases/download/v1.1.0/oscal_component_schema.json | `41c14d6a7d6798a7cc3b87d07bf2888b2027210acd79d27f10b6579610f3afd2` | `AU-07`, `AU-08` |
+| `JSONSCHEMA-ENGINE-0-58-2` | `0.58.2` | https://static.crates.io/crates/jsonschema/jsonschema-0.58.2.crate | `657c6a38b0e00dda091d9c006cc1741957ba2377f00dccfd6e79df4c95619bb1` | `AU-07`, `AU-08` |
 | `JSON-SCHEMA-2020-12` | `2020-12@c9510e3b` | https://codeload.github.com/json-schema-org/JSON-Schema-Test-Suite/tar.gz/c9510e3bf8a896c3cba4e08509cf752b4f30dff8 | `cf0e16252ef08add662b9db2b7f0f099644cdaffd1c429b1ce9212cebf086aba` | `AU-05`, `SY-04` |
 | `UNICODE-17-0-0` | `17.0.0` | https://www.unicode.org/Public/17.0.0/ucd/UCD.zip | `2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e` | `AU-01`, `SY-05` |
 | `OIDC-1-0-ERRATA1` | `1.0-errata1` | https://codeload.github.com/openid/connect/tar.gz/a173cb87c85c9b8d1bc11e2b8a84ed9271e97d6d | `2da00079757a1e699cc7072df23f262dbedb360b4677fde2eb4f875fb480c8af` | `AU-01`, `SY-05` |
@@ -348,7 +398,7 @@ The three honesty levels:
 | `DEVCONTAINER-C95FFEED` | `c95ffeed1d05` | https://codeload.github.com/devcontainers/spec/tar.gz/c95ffeed1d059abfe9ffbe79762dc2fa4e7c2421 | `1b97d24f6b6cf0b65ea6d737a12812e802e6a443c306312ae43d90715bc08074` | `AU-01`, `TM-02` |
 | `COMPOSE-FEE041B3` | `fee041b381ff` | https://codeload.github.com/compose-spec/compose-spec/tar.gz/fee041b381ffd4aad263410980bdce0cdf4beb7d | `09916fd41b9a36b404c3b99b75c43f771624a8cab74d33d794a237d49d34be81` | `AU-01`, `DP-02` |
 | `KUBERNETES-1-36-4` | `1.36.4` | https://codeload.github.com/kubernetes/kubernetes/tar.gz/bb826b1d48562f110659e64e8ec444327433db95 | `edde021b39188a92163596c3887372bc4164467927b426dd75c586ff927fa182` | `AU-01`, `DP-03` |
-| `ISO-42010-2022` | `2022` | https://www.iso.org/standard/74393.html | `not-acquired` | `FT-01`, `ST-01` |
+| `ISO-42010-2022` | `2022` | https://www.iso.org/standard/74393.html | `not-acquired` | `FT-01`, `FT-12`, `FT-13`, `ST-01`, `ST-19` |
 | `ISO-27034-1-2011` | `2011-cor1-2014` | https://www.iso.org/standard/44378.html | `not-acquired` | `FT-02`, `ST-02` |
 | `ISO-27034-5-2017` | `2017` | https://www.iso.org/standard/55585.html | `not-acquired` | `FT-03`, `ST-03` |
 | `ISO-27005-2022` | `2022` | https://www.iso.org/standard/80585.html | `not-acquired` | `FT-04`, `ST-04` |
@@ -357,10 +407,6 @@ The three honesty levels:
 | `OMG-UML-2-5-1` | `2.5.1` | https://www.omg.org/spec/UML/2.5.1 | `not-acquired` | `FT-11`, `HO-18`, `ST-18` |
 | `CLOUDEVENTS-1-0-2` | `1.0.2` | https://codeload.github.com/cloudevents/spec/tar.gz/fc1f6f31f5f011a72183f1bcea20c987cb683ade | `b9e35734ccddc3baae04b4a18c8539e3d9f4148bbcdf48cd7b65751ee3d62614` | `AU-01`, `SY-04` |
 | `CLOUDEVENTS-SDK-GO-2-16-2` | `2.16.2` | https://codeload.github.com/cloudevents/sdk-go/tar.gz/af3e8599b3316ab6b4b73ff69aa8ec0efddbb5bb | `542bd94a70070c58ab96c5fe49affb04af6dc371b7ea6d0ad6d09337e4b3836a` | `AU-06`, `SY-04` |
-| `MCP-2026-07-28` | `2026-07-28` | https://codeload.github.com/modelcontextprotocol/modelcontextprotocol/tar.gz/80041ab0a139a8f4fb3adbc99f7ae9113ea59671 | `b0a70543278c720097f3b579e6a6eb864e4502b00d45d31504712789e647772e` | `AU-08`, `AU-09` |
-| `MCP-TASKS-SEP-2663` | `SEP-2663@80041ab0` | https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/80041ab0a139a8f4fb3adbc99f7ae9113ea59671/seps/2663-tasks-extension.md | `2bd75e527a0796ffbc07ed34c47307a43c78de1e3001eada52e601051c09a385` | `AU-08` |
-| `MCP-CONFORMANCE-232A9014` | `0.2.0-alpha.10+232a9014` | https://codeload.github.com/modelcontextprotocol/conformance/tar.gz/232a9014457eaf4c59559916e3d616d2f7f28f05 | `23f39518f67861dc2a82ecb542c578e20b713ae09661486b69a78cd49cb0e71e` | `AU-08`, `AU-09` |
-| `MCP-APPS-2026-01-26` | `2026-01-26` | https://raw.githubusercontent.com/modelcontextprotocol/ext-apps/298e884ec3f02daba085acdb02042d73bd00b355/specification/2026-01-26/apps.mdx | `ee452a7d1b9b7fb900acfeb4d6932d3963375b0f3f37d196a4b93eb80312af0e` | `AU-08` |
 
 ## Claims that are not conformance IDs
 

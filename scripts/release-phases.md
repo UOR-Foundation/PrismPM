@@ -1,6 +1,30 @@
 # Publication phases
 
-`release.yml` accepts an exact `main` dispatch or the `v0.3.0` tag. Source
+## v0.4 release branch
+
+The authoritative v0.4 pipeline is the copy of `release.yml` on `release/v0.4`,
+not the older workflow described below on `main`. Every push to `release/v0.4`
+runs its complete existing qualification pipeline as a forced rehearsal:
+`version=0.4.0`, `rehearsal=true`, `publish-crates=false`. Use the last release
+fix's merge SHA and its automatic run; do not launch a duplicate dispatch or
+change that source during qualification.
+
+Rehearsals retain every source, installed SDK, native, image and reproducibility
+gate. They push images by digest and write public signatures/attestations, while
+skipping release assets, discovery aliases, crates, native archive provenance
+and the final release. Follow `docs/release/v0.4.0-runbook.md` for qualification
+and publication. Tag ownership does not delay a qualified release.
+
+Image/SBOM verification can consume release-branch `push` or `workflow_dispatch`
+signatures, requiring the exact actual event, ref, source SHA and workflow.
+When independently verifying a push run, set `GITHUB_EVENT_NAME=push`; a
+dispatch matcher cannot authenticate a push-produced signature. The retained
+main workflow supports only its historical dispatch identity; main push
+signatures are not admitted by this addition.
+
+## Retained main workflow
+
+`release.yml` accepts an exact `main` dispatch or the `v0.4.0` tag. Source
 verification runs `just vv` twice without cleanup. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
 
@@ -52,7 +76,7 @@ Buildx 0.28.0 uses digest-pinned BuildKit 0.26.2 and its `docker-container`
 driver; the default Docker driver does not support digest-only exports.
 
 Cargo publication is a separate explicit phase. Only its success permits the
-existing versioned discovery aliases and `v0.3.0` publication job. Neither phase
+existing versioned discovery aliases and `v0.4.0` publication job. Neither phase
 substitutes for the independent ecosystem acceptance contract.
 
 Each platform's full Syft 1.51.1 SPDX bytes are a layer in an OCI 1.1 artifact
@@ -76,6 +100,13 @@ consumer lock is changed by this workflow split.
 Regression tests: `node --test scripts/release-phases.test.mjs` in the PrismPM
 devcontainer. They reject missing/failed/skipped gates, Cargo coupling,
 unshipped reproducible bytes, source/ref drift and changed existing releases.
+The dependency-free `node --test scripts/release-native-contract.test.mjs` runs
+before source verification or image construction. It checks native smoke
+expectations against the registered diagnostic exit and workspace release
+version; its synthetic records are never release evidence. Source verification
+imports the devcontainer layer cache populated by PR Fast Checks, but still
+executes every check. Cache misses rebuild normally. Hosted timing is required
+before claiming a release-duration reduction.
 Publication tests use an isolated GitHub command fixture, not live publication.
 The planted self-comparison defect in the shipped-digest check failed the real
 reproducibility regression; restoring the comparison restored the passing gate.

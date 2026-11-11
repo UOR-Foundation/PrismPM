@@ -33,6 +33,8 @@ import {
   installRuntime,
   publishRuntime,
   TRANSIENT_CURL_STATUS,
+  TRANSIENT_HTTP_STATUS,
+  isTransient,
   withTransientRetry,
 } from './install.mjs';
 
@@ -461,4 +463,49 @@ test('downloads retry only transient curl statuses, with bounded doubling backof
     assert.equal(calls, 1, `status ${status} must not be retried`);
   }
   assert.throws(() => withTransientRetry(() => 'x', { attempts: 0 }), /positive integer/);
+});
+
+test('an HTTP error is retried only when curl wrote a transient status', () => {
+  const httpFailing = (written) => {
+    let calls = 0;
+    return {
+      download: () => {
+        if (calls++ === 0)
+          throw Object.assign(new Error(`curl 22 ${written}`), {
+            status: 22,
+            stdout: written,
+          });
+        return 'downloaded';
+      },
+      calls: () => calls,
+    };
+  };
+  const sleep = () => {};
+  assert.deepEqual([...TRANSIENT_HTTP_STATUS], [408, 429, 500, 502, 503, 504]);
+  for (const written of ['408', '429', '500', '502', '503', '504']) {
+    const recovered = httpFailing(written);
+    assert.equal(withTransientRetry(recovered.download, { sleep }), 'downloaded');
+    assert.equal(recovered.calls(), 2, `HTTP ${written} must be retried`);
+  }
+  for (const written of ['404', '403', '410', '501', '', undefined, '503\n', ' 503', '5030', 'abc']) {
+    const permanent = httpFailing(written);
+    assert.throws(() => withTransientRetry(permanent.download, { sleep }), /curl 22/);
+    assert.equal(permanent.calls(), 1, `HTTP ${JSON.stringify(written)} must not be retried`);
+  }
+  // A transient HTTP status only counts beside curl's HTTP-error status.
+  assert(!isTransient({ status: 23, stdout: '503' }));
+  assert(!isTransient({ stdout: '503' }));
+  const exhausted = { calls: 0 };
+  assert.throws(
+    () =>
+      withTransientRetry(
+        () => {
+          exhausted.calls++;
+          throw Object.assign(new Error('curl 22'), { status: 22, stdout: '503' });
+        },
+        { attempts: 3, sleep },
+      ),
+    /curl 22/,
+  );
+  assert.equal(exhausted.calls, 3);
 });

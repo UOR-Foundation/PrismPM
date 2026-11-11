@@ -47,3 +47,9 @@ Feature: system
     Given the locked PrismPM production fixture
     When the SY-08 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @SY-09 @build
+  Scenario: Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's.
+    Given the locked PrismPM production fixture
+    When the SY-09 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 
-const CORE: &str = "pub fn dispatch(request: Vec<u8>) -> Vec<u8> {\n    match request.first() {\n        Some(b'a') => b\"accepted\\n\".to_vec(),\n        Some(b'r') => b\"rejected\\n\".to_vec(),\n        Some(b'z') => b\"zz\\n\".to_vec(),\n        _ => b\"error: bad request\\n\".to_vec(),\n    }\n}\n";
+const CORE: &str = "pub fn dispatch(request: Vec<u8>) -> Vec<u8> {\n    match request.first() {\n        Some(b'a') => b\"accepted\\n\".to_vec(),\n        Some(b'r') => b\"rejected\\n\".to_vec(),\n        Some(b'u') => b\"{\\\"ui\\\":1}\\n\".to_vec(),\n        Some(b'z') => b\"zz\\n\".to_vec(),\n        _ => b\"error: bad request\\n\".to_vec(),\n    }\n}\n";
 
 fn model() -> TextApplicationModel {
     serde_json::from_value(json!({
@@ -86,10 +86,25 @@ fn cargo(arguments: &[&str], directory: &Path, target: &Path) -> Output {
         .expect("cargo runs")
 }
 
+/// The fixture with prism-code's map: `InputLimit` has its own code, 3.
+fn limited() -> TextApplicationModel {
+    let mut value = serde_json::to_value(model()).unwrap();
+    value["cli"]["limit_code"] = json!(3);
+    serde_json::from_value(value).expect("a text/3 model with a limit code deserializes")
+}
+
 fn built() -> &'static Built {
     static BUILT: OnceLock<Built> = OnceLock::new();
-    BUILT.get_or_init(|| {
-        let application = model();
+    BUILT.get_or_init(|| build(&model()))
+}
+
+fn built_limited() -> &'static Built {
+    static BUILT: OnceLock<Built> = OnceLock::new();
+    BUILT.get_or_init(|| build(&limited()))
+}
+
+fn build(application: &TextApplicationModel) -> Built {
+    {
         let directory = tempfile::tempdir().unwrap();
         let core = directory.path().join("core");
         std::fs::create_dir_all(core.join("src")).unwrap();
@@ -101,7 +116,7 @@ fn built() -> &'static Built {
         std::fs::write(core.join("src/lib.rs"), CORE).unwrap();
         let package = directory.path().join("cli");
         std::fs::create_dir_all(package.join("src")).unwrap();
-        let generated = generate(&application).unwrap();
+        let generated = generate(application).unwrap();
         for item in &generated.files {
             let bytes = if item.path == "Cargo.toml" {
                 let manifest = String::from_utf8(item.bytes.clone()).unwrap();
@@ -129,11 +144,15 @@ fn built() -> &'static Built {
             target,
             _directory: directory,
         }
-    })
+    }
 }
 
 fn run(arguments: &[&str], stdin: &[u8]) -> Output {
-    let mut child = Command::new(&built().program)
+    run_program(&built().program, arguments, stdin)
+}
+
+fn run_program(program: &Path, arguments: &[&str], stdin: &[u8]) -> Output {
+    let mut child = Command::new(program)
         .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -555,6 +574,7 @@ pub extern "C" fn holo_run(at: usize, len: usize) -> i64 {
     let report: &[u8] = match first {
         b'a' => b"accepted\n",
         b'r' => b"rejected\n",
+        b'u' => b"{\"ui\":1}\n",
         _ => b"error: bad request\n",
     };
     let out = holo_alloc(report.len());
@@ -572,6 +592,20 @@ fn acceptance_runs_every_vector_through_core_wasm_and_the_program() {
         .push(crate::holo::model_document::ApplicationAcceptanceVector {
             request: vec![b'a'; 17],
             response: b"accepted\n".to_vec(),
+        });
+    // A workbench frame: the guest answers outside the command-line protocol and
+    // the program must refuse it as `ReportUnclassified` on every transport.
+    let document: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/workbench-model-document.json"
+    ))
+    .unwrap();
+    application.workbench =
+        Some(serde_json::from_value(document["application"]["workbench"].clone()).unwrap());
+    application
+        .acceptance_vectors
+        .push(crate::holo::model_document::ApplicationAcceptanceVector {
+            request: b"ui-raw-v1\x1fq".to_vec(),
+            response: b"{\"ui\":1}\n".to_vec(),
         });
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("guest.rs");
@@ -625,9 +659,9 @@ fn acceptance_runs_every_vector_through_core_wasm_and_the_program() {
         .collect();
     let evidence =
         super::acceptance::evidence(&application, std::env::consts::ARCH, &digests).unwrap();
-    assert_eq!(evidence["vectors"], 4);
+    assert_eq!(evidence["vectors"], 5);
     assert_eq!(evidence["oversized_vectors"], 1);
-    assert_eq!(evidence["within_request_maximum"], 3);
+    assert_eq!(evidence["within_request_maximum"], 4);
     assert_eq!(evidence["executed_target"], host);
     // A program whose behavior differs from the guest is not accepted.
     std::fs::write(
@@ -654,4 +688,130 @@ fn acceptance_runs_every_vector_through_core_wasm_and_the_program() {
         super::acceptance::execute(&application, &wrong, &program, directory.path(), &node, &[])
             .unwrap_err();
     assert_eq!(error.code, "PP6003");
+}
+
+#[test]
+fn acceptance_plan_expects_framed_workbench_vectors_to_be_refused() {
+    use crate::holo::model_document::{Application, ModelDocument};
+    let mut document: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/workbench-model-document.json"
+    ))
+    .unwrap();
+    *document.pointer_mut("/application/cli/outcomes").unwrap() = json!([
+        {"name": "ok", "prefix": "ok ", "exit_code": 0},
+        {"name": "error", "prefix": "error ", "exit_code": 2}
+    ]);
+    let vectors = document
+        .pointer_mut("/application/acceptance_vectors")
+        .unwrap()
+        .as_array_mut()
+        .unwrap();
+    for vector in vectors.iter_mut() {
+        if vector["request"][0] != json!(b'u') {
+            vector["response"] = json!(b"error boundary".to_vec());
+        }
+    }
+    vectors.push(json!({"request": b"plain".to_vec(), "response": b"ok plain".to_vec()}));
+    let document: ModelDocument = serde_json::from_value(document).unwrap();
+    let Some(Application::Text(mut application)) = document.application else {
+        panic!("the workbench fixture is a text application");
+    };
+    let cli = application.cli.clone().unwrap();
+    let plan = super::acceptance::plan(&application, &cli).unwrap();
+    let planned = plan["vectors"].as_array().unwrap();
+    assert_eq!(planned.len(), application.acceptance_vectors.len());
+    for (vector, entry) in application.acceptance_vectors.iter().zip(planned) {
+        if vector.request.starts_with(b"ui-") {
+            assert_eq!(entry["refusal"], "ReportUnclassified");
+            assert_eq!(entry["code"], cli.fault_code());
+        } else {
+            assert_eq!(entry.get("refusal"), None);
+            assert_eq!(
+                entry["code"],
+                cli.classify(&vector.response).unwrap().exit_code
+            );
+        }
+    }
+    // Without the workbench a framed JSON result has no modeled outcome.
+    application.workbench = None;
+    assert_eq!(
+        super::acceptance::plan(&application, &cli)
+            .unwrap_err()
+            .code,
+        "PP6003"
+    );
+}
+
+#[test]
+fn without_a_limit_code_input_limit_keeps_the_error_code() {
+    let application = model();
+    let cli = application.cli.as_ref().unwrap();
+    let surface = surface(&application, cli).unwrap();
+    assert!(surface.contains("pub const FAULT_CODE: u8 = 2;"));
+    assert!(
+        surface.contains("pub const LIMIT_CODE: u8 = 2;"),
+        "{surface}"
+    );
+    let text = help(&application, cli);
+    assert!(!text.contains(" limit "), "{text}");
+    assert!(text.ends_with(
+        "    A request over 16 bytes, a failed computation and an unclassified report\n    exit with the code of error.\n"
+    ));
+    assert!(serde_json::to_value(cli)
+        .unwrap()
+        .get("limit_code")
+        .is_none());
+}
+
+#[test]
+fn a_declared_limit_code_is_rendered_into_the_surface_and_the_help() {
+    let application = limited();
+    let cli = application.cli.as_ref().unwrap();
+    let surface = surface(&application, cli).unwrap();
+    assert!(surface.contains("pub const FAULT_CODE: u8 = 2;"));
+    assert!(
+        surface.contains("pub const LIMIT_CODE: u8 = 3;"),
+        "{surface}"
+    );
+    let text = help(&application, cli);
+    for expected in [
+        "  2  error     report begins with",
+        "  3  limit     request over 16 bytes",
+        " 64  usage",
+        "    A failed computation and an unclassified report exit with the code of error.\n",
+    ] {
+        assert!(text.contains(expected), "{expected:?} in {text}");
+    }
+    assert!(!text.contains("A request over 16 bytes"), "{text}");
+}
+
+#[test]
+fn oversized_input_exits_with_the_declared_limit_code() {
+    let program = &built_limited().program;
+    let output = run_program(program, &["check"], &[b'a'; 17]);
+    assert_eq!(output.status.code(), Some(3), "{}", text(&output.stderr));
+    assert!(output.stdout.is_empty());
+    assert_eq!(text(&output.stderr), "echo-check: InputLimit\n");
+    // Every other fault keeps the code of error; reports keep their own codes.
+    let unclassified = run_program(program, &["check"], b"z");
+    assert_eq!(unclassified.status.code(), Some(2));
+    let error = run_program(program, &["check"], b"x");
+    assert_eq!(error.status.code(), Some(2));
+    assert_eq!(error.stdout, b"error: bad request\n");
+    let help_output = run_program(program, &["--help"], b"");
+    let application = limited();
+    assert_eq!(
+        text(&help_output.stdout),
+        help(&application, application.cli.as_ref().unwrap())
+    );
+    let unit = cargo(
+        &["test", "--offline"],
+        &built_limited().package,
+        &built_limited().target,
+    );
+    assert!(
+        unit.status.success(),
+        "{}",
+        String::from_utf8_lossy(&unit.stderr)
+    );
 }

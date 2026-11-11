@@ -6,13 +6,14 @@ import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {lexiconPaths} from '../browser-view/lexicon-inputs.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const work = mkdtempSync(join(tmpdir(), 'prismpm-semantic-source-'));
 const modules = ['Fixture', 'Foundation.Bytes', 'Foundation.Codec', 'Foundation.Codec.Cbor.V1.Primitive',
   'Foundation.View.Browser.V1.Model', 'Foundation.View.Browser.V1.Wire',
-  'Foundation.View.Browser.V1.Design', 'Foundation.View.Browser.V1.DesignWire', 'Foundation.View.Browser.V1.Semantics',
+  'Foundation.View.Browser.V1.Design', 'Foundation.View.Browser.V1.DesignWire', 'Foundation.View.Browser.V1.HologramDesign', 'Foundation.View.Browser.V1.Semantics',
   'Foundation.View.Browser.V1.SemanticsWire'].sort();
 const frozen = [];
 const write = (path, bytes) => { mkdirSync(dirname(path), {recursive: true}); writeFileSync(path, bytes, {flag: 'wx'}); };
@@ -53,6 +54,7 @@ try {
     .replace('module_prefix = "LibraryProbe"', 'module_prefix = "PrismPM"')
     .replace('entrypoints = ["src/Probe.lex.tex"]', 'entrypoints = ["src/Fixture.lex.tex"]');
   write(join(project, 'lexlean.toml'), configuration);
+  for (const path of lexiconPaths(root)) stage(path, join(project, path));
   write(join(project, 'lakefile.toml'), 'name = "semantic_presentation_source"\nversion = "0.1.0"\n');
   stage('lean-toolchain', join(project, 'lean-toolchain'));
   const target = join(work, 'driver-target');

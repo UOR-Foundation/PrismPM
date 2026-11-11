@@ -43,13 +43,19 @@ Feature: authorities
     Then its positive evidence passes and its planted defect is rejected
 
   @AU-08 @build
-  Scenario: MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused.
-    Given the locked PrismPM production fixture
-    When the AU-08 contract is exercised
-    Then its positive evidence passes and its planted defect is rejected
+  Scenario: prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance.
+    Given the emitted component definition of a checked threat model
+    When the locked OSCAL structural validator reads it
+    Then it is accepted and a copy with a planted defect is refused
 
   @AU-09 @build
-  Scenario: The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic.
+  Scenario: MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused.
     Given the locked PrismPM production fixture
     When the AU-09 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected
+
+  @AU-10 @build
+  Scenario: The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic.
+    Given the locked PrismPM production fixture
+    When the AU-10 contract is exercised
     Then its positive evidence passes and its planted defect is rejected

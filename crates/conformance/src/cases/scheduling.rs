@@ -62,6 +62,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "HO-13"
             | "HO-15"
             | "HO-16"
+            | "HO-19"
             | "OC-07"
             | "OC-08"
             | "OC-09"
@@ -74,6 +75,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "ST-16"
             | "ST-17"
             | "SY-08"
+            | "SY-09"
     )
     .then(compiler_slot)
 }
@@ -118,6 +120,7 @@ mod tests {
                 "HO-13".to_owned(),
                 "HO-15".to_owned(),
                 "HO-16".to_owned(),
+                "HO-19".to_owned(),
                 "OC-07".to_owned(),
                 "OC-08".to_owned(),
                 "OC-09".to_owned(),
@@ -130,6 +133,7 @@ mod tests {
                 "ST-16".to_owned(),
                 "ST-17".to_owned(),
                 "SY-08".to_owned(),
+                "SY-09".to_owned(),
             ])
             .collect::<Vec<_>>();
         let barrier = Arc::new(Barrier::new(owners.len() + 1));

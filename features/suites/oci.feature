@@ -59,3 +59,9 @@ Feature: oci
     Given the locked PrismPM production fixture
     When the OC-10 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @OC-11 @build
+  Scenario: The prism.images namespace of prism-code exposes build, pull, push, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, an option a verb does not have is refused, and list, tag and remove stay absent until the local image store exists.
+    Given images built, pushed and planted in a store or a registry, including one with changed bytes, a false statement and a verdict below the policy
+    When prism.images pulls, pushes, inspects, verifies and builds them
+    Then a failing image leaves no byte at any output, and every value returned is the one the code underneath returned, in developer-view terms

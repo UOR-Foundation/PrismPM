@@ -55,13 +55,18 @@ plan.vectors.forEach((vector, index) => {
   ];
   for (const [transport, args, input] of runs) {
     const result = execute(args, input);
-    if (request.length <= plan.request_maximum) {
+    if (request.length <= plan.request_maximum && vector.refusal !== undefined) {
+      // A workbench frame: the program refuses the guest's report, without output.
+      assert.equal(result.status, vector.code, `${transport} refusal code of vector ${index}`);
+      assert.deepEqual(result.stdout, empty, `${transport} refusal output of vector ${index}`);
+      assert.deepEqual(result.stderr, Buffer.from(`${plan.binary}: ${vector.refusal}\n`));
+    } else if (request.length <= plan.request_maximum) {
       assert.deepEqual(result.stdout, expected, `${transport} report bytes of vector ${index}`);
       assert.equal(result.status, vector.code, `${transport} exit code of vector ${index}`);
       assert.deepEqual(result.stderr, empty, `${transport} diagnostics of vector ${index}`);
     } else {
       // The request maximum is enforced before dispatch, with a typed refusal.
-      assert.equal(result.status, plan.fault_code, `${transport} refusal code of vector ${index}`);
+      assert.equal(result.status, plan.limit_code, `${transport} refusal code of vector ${index}`);
       assert.deepEqual(result.stdout, empty, `${transport} refusal output of vector ${index}`);
       const detail = transport === 'file' ? `: ${path}` : '';
       assert.deepEqual(result.stderr, Buffer.from(`${plan.binary}: InputLimit${detail}\n`));

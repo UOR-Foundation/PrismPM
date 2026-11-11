@@ -12,7 +12,19 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 60] = [
+const CONTRACTS: [Contract; 71] = [
+    Contract {
+        id: "prismpm/workbench-view-projection/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4096,
+        schema: include_bytes!("../schemas/workbench-view-projection.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/7",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v7.schema.json"),
+    },
     Contract {
         id: "prismpm/model-document/6",
         maximum_bytes: 16_777_216,
@@ -42,6 +54,12 @@ const CONTRACTS: [Contract; 60] = [
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/browser-publication-integrity.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-publication-integrity/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-publication-integrity-v2.schema.json"),
     },
     Contract {
         id: "prismpm/library-build-binding/1",
@@ -74,10 +92,22 @@ const CONTRACTS: [Contract; 60] = [
         schema: include_bytes!("../schemas/model-document-v3.schema.json"),
     },
     Contract {
+        id: "prismpm/server-release-replay/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/server-release-replay.schema.json"),
+    },
+    Contract {
         id: "prismpm/browser-export/1",
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/browser-export.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-export/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-export-v2.schema.json"),
     },
     Contract {
         id: "prismpm/workspace-view-labels/1",
@@ -105,10 +135,22 @@ const CONTRACTS: [Contract; 60] = [
         schema: include_bytes!("../schemas/sdk-lock-update-v2.schema.json"),
     },
     Contract {
+        id: "prismpm/sdk-lock-change/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/sdk-lock-change.schema.json"),
+    },
+    Contract {
         id: "prismpm/sdk-lock/2",
         maximum_bytes: 67_108_864,
         maximum_items: 65_536,
         schema: include_bytes!("../schemas/sdk-lock-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/sdk-lock/3",
+        maximum_bytes: 67_108_864,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/sdk-lock-v3.schema.json"),
     },
     Contract {
         id: "prismpm/model-document/2",
@@ -237,6 +279,24 @@ const CONTRACTS: [Contract; 60] = [
         schema: include_bytes!("../schemas/inspect-result.schema.json"),
     },
     Contract {
+        id: "prismpm/replay-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/replay-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/attest-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/attest-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/attestation-verification-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/attestation-verification-result.schema.json"),
+    },
+    Contract {
         id: "prismpm/product-release-result/1",
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
@@ -339,6 +399,12 @@ const CONTRACTS: [Contract; 60] = [
         schema: include_bytes!("../schemas/system-model-v2.schema.json"),
     },
     Contract {
+        id: "prismpm/system-model/3",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/system-model-v3.schema.json"),
+    },
+    Contract {
         id: "prismpm/browser-system-release/1",
         maximum_bytes: 16_777_216,
         maximum_items: 65_536,
@@ -381,6 +447,28 @@ fn contract(id: &str) -> Result<&'static Contract, PrismError> {
         .iter()
         .find(|contract| contract.id == id)
         .ok_or_else(|| PrismError::new("PP1101", format!("unsupported contract {id}")))
+}
+
+/// Whether `value` satisfies the subschema at `pointer` of the registered
+/// schema `id`, so an earlier check applies exactly the rule that contract
+/// enforces later instead of a copy of it.
+pub(crate) fn satisfies_subschema(
+    id: &str,
+    pointer: &str,
+    value: &Value,
+) -> Result<bool, PrismError> {
+    let schema: Value = serde_json::from_slice(contract(id)?.schema)
+        .map_err(|error| PrismError::new("PP9001", format!("registered schema {id}: {error}")))?;
+    let subschema = schema.pointer(pointer).ok_or_else(|| {
+        PrismError::new("PP9001", format!("registered schema {id} has no {pointer}"))
+    })?;
+    let validator = jsonschema::validator_for(subschema).map_err(|error| {
+        PrismError::new(
+            "PP9001",
+            format!("compile registered schema {id}{pointer}: {error}"),
+        )
+    })?;
+    Ok(validator.is_valid(value))
 }
 
 fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> bool {
@@ -541,11 +629,14 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             | "prismpm/model-document/4"
             | "prismpm/model-document/5"
             | "prismpm/model-document/6"
+            | "prismpm/model-document/7"
     ) {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
             PrismError::new(
                 if id == "prismpm/model-document/4" {
                     "PP2010"
+                } else if id == "prismpm/model-document/7" {
+                    "PP2013"
                 } else if matches!(
                     id,
                     "prismpm/model-document/2"
@@ -562,7 +653,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1" => {
+        "prismpm/browser-export/1"
+        | "prismpm/browser-publication-integrity/1"
+        | "prismpm/browser-export/2"
+        | "prismpm/browser-publication-integrity/2" => {
             vec![("files", "path")]
         }
         "prismpm/capability-coverage/1" => {
@@ -574,7 +668,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         ],
         "prismpm/standards-lock/1" => vec![("authorities", "id"), ("oracles", "id")],
         "prismpm/sdk-lock/1" => vec![("inventory", "id")],
-        "prismpm/sdk-lock/2" => vec![("platforms", "platform")],
+        "prismpm/sdk-lock/2" | "prismpm/sdk-lock/3" => vec![("platforms", "platform")],
         "prismpm/system-model/1" => vec![
             ("acceptance", "id"),
             ("alerts", "id"),
@@ -639,7 +733,8 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             ));
         }
     }
-    if id == "prismpm/sdk-lock/2" {
+    // A /3 lock carries every /2 field unchanged, so the same platform rules apply.
+    if id == "prismpm/sdk-lock/2" || id == "prismpm/sdk-lock/3" {
         crate::sdk::validate_platform_lock(value)?;
     }
     if id == "prismpm/sdk-lock-migration/1" {
@@ -926,7 +1021,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
-        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1"
+        "prismpm/browser-export/1"
+            | "prismpm/browser-publication-integrity/1"
+            | "prismpm/browser-export/2"
+            | "prismpm/browser-publication-integrity/2"
     ) {
         let reference = value["reference"]
             .as_str()
@@ -940,7 +1038,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             ));
         }
     }
-    if id == "prismpm/browser-publication-integrity/1" {
+    if matches!(
+        id,
+        "prismpm/browser-publication-integrity/1" | "prismpm/browser-publication-integrity/2"
+    ) {
         crate::oci::validate_browser_publication_receipt(value)?;
     }
     Ok(())

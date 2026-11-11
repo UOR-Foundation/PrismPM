@@ -1503,6 +1503,8 @@ struct VerifiedReleaseCapture {
     state: VerifiedRoot,
     build_manifest: Vec<u8>,
     build_files: BTreeMap<String, Vec<u8>>,
+    /// The retained verification files, by path in the verification directory.
+    runtime: BTreeMap<String, Vec<u8>>,
     #[cfg(test)]
     release: CanonicalDocument,
     #[cfg(test)]
@@ -1741,6 +1743,7 @@ fn verified_release_capture(
         state,
         build_manifest: build_manifest_bytes,
         build_files,
+        runtime: _verification.runtime.clone(),
         #[cfg(test)]
         release,
         #[cfg(test)]
@@ -1822,6 +1825,25 @@ fn require_verified_capture(
         ));
     }
     Ok(observed)
+}
+
+/// A release's build manifest, build files and retained verification files.
+pub(crate) type ReleasedFiles = (
+    Vec<u8>,
+    BTreeMap<String, Vec<u8>>,
+    BTreeMap<String, Vec<u8>>,
+);
+
+/// The build manifest, the build files and the retained verification files of an
+/// immutable, fully verified local release, for the source-free replay of the
+/// application it holds (`crate::server_release`).
+pub(crate) fn released_files(root: &Path, reference: &str) -> Result<ReleasedFiles, PrismError> {
+    let captured = browser_export::capture(root, reference)?;
+    Ok((
+        captured.build_manifest,
+        captured.build_files,
+        captured.runtime,
+    ))
 }
 
 /// Export the exact browser files of an immutable, fully verified local release.
