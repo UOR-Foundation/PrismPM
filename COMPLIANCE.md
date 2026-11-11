@@ -20,7 +20,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Dual digests (`digests`) | 18 | + | N/A | N/A |
 | Dispatch through the guest (`dispatch`) | 7 | + | N/A | N/A |
 | Typed errors (`errors`) | 8 | + | N/A | N/A |
-| Load a holo (`load`) | 19 | + | N/A | N/A |
+| Load a holo (`load`) | 21 | + | N/A | N/A |
 | Histories and replay (`replay`) | 5 | - | N/A | N/A |
 | Verify a holo (`verify`) | 24 | + | N/A | N/A |
 | The world contract (`world`) | 16 | + | N/A | N/A |
@@ -144,8 +144,10 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `load.refuse.undecodable-guest` | A guest that does not compile is refused. | + | N/A | N/A |
 | `load.refuse.undecodable-view` | A HOLOVIEW bundle that does not decode is refused. | + | N/A | N/A |
 | `load.refuse.undecodable-model` | A model document with no application is refused. | + | N/A | N/A |
-| `load.damage.footer-reported` | A wrong footer is not hidden: the holo opens and reports its identities unverified. | + | N/A | N/A |
-| `load.damage.guest-label-reported` | A guest whose bytes differ from its label is not hidden, even under a correct footer. | + | N/A | N/A |
+| `load.damage.footer-refused` | A wrong footer is refused: an altered holo does not open by default. | + | N/A | N/A |
+| `load.damage.guest-label-refused` | A guest whose bytes differ from its label is refused, even under a correct footer. | + | N/A | N/A |
+| `load.damage.footer-allowed` | Asked to open an altered holo, a runtime opens it and reports its identities unverified. | + | N/A | N/A |
+| `load.damage.guest-label-allowed` | Asked to open a holo whose guest differs from its label, a runtime opens it and reports it unverified. | + | N/A | N/A |
 | `load.attestation.tolerated` | An attestation section as the last row does not stop a load or change the identities. | + | N/A | N/A |
 | `load.attestation.not-last` | An attestation section that is not the last row is refused. | + | N/A | N/A |
 | `load.attestation.duplicate` | Two attestation sections are refused. | + | N/A | N/A |

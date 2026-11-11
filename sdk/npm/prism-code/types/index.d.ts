@@ -841,6 +841,14 @@ export interface LoadOptions {
   capabilities?: Capabilities | Uint8Array | string | URL | null;
   /** The set of `capabilities` to apply. Default `default`. */
   capabilitySet?: string;
+  /**
+   * Open an application whose bytes do not match its identities (#583): an
+   * altered footer, a blob that does not hash to its label, or a closure file
+   * that does not match its provenance. Without it, `load` rejects with
+   * `DigestMismatchError` (`check` `holo.integrity`). `identities.verified`
+   * stays false on what it opens. Default false.
+   */
+  allowUnverified?: boolean;
 }
 
 /** The resource kinds a capability set grants. */
@@ -942,11 +950,11 @@ export function parseToml(source: string | Uint8Array): Record<string, unknown>;
 
 /** Open a `.holo` (bytes, Blob, path or URL) or a closure (directory path or URL). */
 export function load(source: Uint8Array | ArrayBuffer | Blob | string | URL, options?: LoadOptions): Promise<Application>;
-export function loadArchive(source: Uint8Array | ArrayBuffer, options?: Pick<LoadOptions, 'capabilities' | 'capabilitySet'>): Promise<Application>;
+export function loadArchive(source: Uint8Array | ArrayBuffer, options?: Pick<LoadOptions, 'capabilities' | 'capabilitySet' | 'allowUnverified'>): Promise<Application>;
 export function loadClosure(
   files: Map<string, Uint8Array>,
   importGlue: (name: string) => Promise<Record<string, unknown>>,
-  options?: { model?: Record<string, unknown> | Uint8Array | null } & Pick<LoadOptions, 'capabilities' | 'capabilitySet'>,
+  options?: { model?: Record<string, unknown> | Uint8Array | null } & Pick<LoadOptions, 'capabilities' | 'capabilitySet' | 'allowUnverified'>,
 ): Promise<Application>;
 
 export interface ParsedArchive {

@@ -57,7 +57,7 @@ export async function fromFile(source, options = {}) {
     const file = toPath(capabilities);
     capabilities = new Uint8Array(await readFile(file).catch(() => fail('capabilities.path', `${file} does not exist`)));
   }
-  const grant = { capabilities, capabilitySet: options.capabilitySet };
+  const grant = { capabilities, capabilitySet: options.capabilitySet, allowUnverified: options.allowUnverified === true };
   if (info.isDirectory()) {
     const files = await readClosureDirectory(path);
     let model = options.model ?? null;

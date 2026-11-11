@@ -10,6 +10,7 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Breaking Changes
 
+- `load()` refuses an altered holo (#583). When the footer is not the BLAKE3 of the body, a content blob does not hash to its label, or the manifest, directory and provenance name different blobs, `load`, `loadArchive` and `fromFile` reject with `DigestMismatchError` (`code` `digest_mismatch`, `check` `holo.integrity`), and so does `loadClosure` when a closure file does not match its provenance. Before, the application opened and dispatched, and only `identities.verified` said otherwise. `{ allowUnverified: true }` opens it as before. `prism-code vectors` and `history` refuse it too; `--allow-unverified` replays it, and `vectors` then exits 1.
 - `holo.verify()`, `holo.inspect()` and `prism-code check` give no verdict (`archive.table`) on any archive the Wire codec refuses (SPEC section 3), as the Rust verifier does: content blobs out of label order, an application manifest that is not the Wire template, a manifest reference that names no blob, a section kind or extension name out of place, or a row count other than eight (nine with the attestation row last). Such an archive used to get a failing verdict.
 
 ### Features Added

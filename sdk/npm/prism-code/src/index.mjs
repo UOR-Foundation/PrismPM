@@ -13,7 +13,7 @@ import { decodeHoloview } from './view.mjs';
 import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptance } from './core.mjs';
 import { parseCapabilities, grantOf, DEFAULT_SET } from './capabilities.mjs';
 import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
-import { CapabilityDeniedError, PrismCodeError, fail } from './errors.mjs';
+import { CapabilityDeniedError, DigestMismatchError, PrismCodeError, fail } from './errors.mjs';
 import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
 import { acceptanceHistory, experimental_recorder, experimental_replay } from './replay.mjs';
@@ -226,6 +226,7 @@ export async function loadArchive(source, options = {}) {
       metadata = parsed.metadata.text;
     }
   }
+  refuseUnverified(unverifiedArchive(parsed, resolved.identities), options);
   const middleware = createMiddlewareStack();
   let app = null;
   const step = stepper(middleware, () => app);
@@ -280,6 +281,30 @@ export async function loadArchive(source, options = {}) {
 }
 
 /**
+ * Why a holo's identities do not verify, or null when they do: the footer,
+ * a blob whose content does not hash to its label, or a manifest, directory
+ * and provenance that name different blobs.
+ */
+function unverifiedArchive(parsed, identities) {
+  if (identities.verified) return null;
+  const problems = [];
+  if (!parsed.verification.footer) problems.push('the footer is not the BLAKE3 of the body');
+  if (!parsed.verification.labels) problems.push('a content blob does not hash to its label');
+  if (!identities.consistent) problems.push('the manifest, directory and provenance do not name the same blobs');
+  return `the holo was altered: ${problems.join('; ')}`;
+}
+
+/**
+ * Refuse an application whose bytes are not the ones its identities name
+ * (#583), unless the caller asked for it with `allowUnverified: true`. Nothing
+ * has run: the checks before this one only decode.
+ */
+function refuseUnverified(problem, { allowUnverified = false } = {}) {
+  if (problem === null || allowUnverified === true) return;
+  throw new DigestMismatchError(`${problem}; to open it anyway, pass allowUnverified: true (--allow-unverified on the command line)`, { check: 'holo.integrity' });
+}
+
+/**
  * Open a six-file closure. `files` maps file names to bytes; `importGlue(name)`
  * imports the wasm-bindgen glue module by file name (a file URL in Node, a
  * URL in browsers). `model` is optional and only needed to dispatch through a
@@ -287,9 +312,12 @@ export async function loadArchive(source, options = {}) {
  * `capabilities` and `capabilitySet` are as for `loadArchive`; a closure's
  * imports belong to its glue, so only `app.capabilities` carries the grant.
  */
-export async function loadClosure(files, importGlue, { model = null, capabilities = null, capabilitySet = DEFAULT_SET } = {}) {
+export async function loadClosure(files, importGlue, { model = null, capabilities = null, capabilitySet = DEFAULT_SET, allowUnverified = false } = {}) {
   const grant = grantFor({ capabilities, capabilitySet });
   const { stem, glueName, wasmName, provenance, verification } = await verifyClosure(files);
+  if (!verification.verified) {
+    refuseUnverified(`the closure's files do not match its provenance: ${verification.mismatches.map((m) => m.field).join(', ')}`, { allowUnverified });
+  }
   const glue = initializeGlue(await importGlue(glueName), files.get(wasmName));
   const modelDocument = model ? (model instanceof Uint8Array ? JSON.parse(decoder.decode(model)) : model) : null;
   const application = modelDocument?.application ?? null;

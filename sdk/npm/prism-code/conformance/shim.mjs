@@ -47,6 +47,7 @@ function loadOptions(input) {
   const options = {};
   if (input.capabilities !== undefined) options.capabilities = input.capabilities;
   if (input.capabilitySet !== undefined) options.capabilitySet = input.capabilitySet;
+  if (input.allowUnverified !== undefined) options.allowUnverified = input.allowUnverified;
   return options;
 }
 

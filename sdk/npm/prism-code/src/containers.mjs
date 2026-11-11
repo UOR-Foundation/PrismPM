@@ -260,7 +260,7 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     const { policy, allowUnverified = false, rm = false, ...loadOptions } = options;
     // A copy: a later `start` runs the input as it was given here.
     const bytes = inputBytes(input).slice();
-    const app = typeof image?.dispatch === 'function' ? image : await load(image, loadOptions);
+    const app = typeof image?.dispatch === 'function' ? image : await load(image, { ...loadOptions, allowUnverified });
     const fingerprint = app.identities?.archiveFingerprint;
     const record = {
       schema: CONTAINER_SCHEMA,
