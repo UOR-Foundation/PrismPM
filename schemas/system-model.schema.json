@@ -978,11 +978,12 @@
             "openapi",
             "asyncapi",
             "cloudevents",
+            "mcp",
             "internal"
           ]
         },
         "protocol": {
-          "enum": ["https-json", "http-json", "amqp-0.9.1", "cloudevents-json", "otlp-grpc-http", "internal"]
+          "enum": ["https-json", "http-json", "amqp-0.9.1", "cloudevents-json", "mcp-http-2026-07-28", "otlp-grpc-http", "internal"]
         },
         "errors": {
           "items": { "maxLength": 128, "minLength": 1, "type": "string" },

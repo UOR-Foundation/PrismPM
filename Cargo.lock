@@ -1424,6 +1424,7 @@ dependencies = [
  "clap",
  "ctrlc",
  "ed25519-dalek",
+ "flate2",
  "fs4",
  "jsonschema",
  "lexlean",
