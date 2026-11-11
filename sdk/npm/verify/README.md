@@ -75,8 +75,8 @@ What this package does check today appears as reasons that withhold P1:
 | `holo.integrity` | The footer is not the BLAKE3 of the body, a content blob's `blake3:` label is not the BLAKE3 of its content, the manifest, directory and provenance name different blobs, or the model document's sha256 is not the `model_id` the provenance records. |
 | `holo.documents` | The application manifest is not the 356-byte Wire form, or the source manifest, directory, provenance or model document is not JSON valid against its schema, or names a contract or schema the format revision does not use. |
 | `world.contract` | The guest module does not have the imports and exports of the WIT world its contract names: an import the world does not list, a missing or extra export, or an export of another kind or signature (issue #278). Not checked when the guest fails its label, which `holo.integrity` already reports. |
-| `provenance.statement` | When the holo carries no provenance statement; the build writes none yet (issue #268). |
-| `proof.statement` | When the holo carries no proof statement; the build writes none yet (issues #268 and #582). Withholds P2. |
+| `provenance.statement` | Always, until the attestation bundle exists (issues #267 and #268). |
+| `proof.statement` | Always, until the proof predicate is carried (issue #266). Withholds P2. |
 | `replay.statement` | Always, until `verify` reads statements (issue #267). Replay itself has arrived (issue #284): `prism-code replay` writes the statement. Withholds P3. |
 | `policy.level` | The level is below `policy.minimum`. Code `PP5601`. |
 | `policy.digests.<part>` | A pinned digest does not match. |
@@ -114,9 +114,9 @@ Serve `Calculator.holo` next to this page and open it.
 
 ```text
 fail P0
-provenance.statement: The holo carries no provenance statement; the build does not write one into the holo yet (issue #268).
-proof.statement: The holo carries no proof statement; Lean proves the model at build, but the build does not write that proof into the holo yet (issues #268 and #582).
-replay.statement: The holo carries no replay statement (issue #284).
+provenance.statement: The holo carries no provenance statement.
+proof.statement: The holo carries no proof statement.
+replay.statement: The holo carries no replay statement.
 policy.level: The level is P0; the policy requires P2 or above.
 ```
 

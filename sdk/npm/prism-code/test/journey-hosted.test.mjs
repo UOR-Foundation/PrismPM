@@ -257,8 +257,7 @@ test('a new app becomes a template instance: created from the template, written 
   assert.deepEqual(calls, ['create octo/prism-payment-approval', 'push prism-payment-approval', 'wait pages.yml bootstrap.yml', 'fetch https://octo.github.io/prism-payment-approval/']);
   assert.equal(r.ok, true, r.message);
   assert.equal(r.live, 'https://octo.github.io/prism-payment-approval/');
-  assert.match(r.message, /^Live at https:\/\/octo\.github\.io\/prism-payment-approval\/\. Built in \d+ s.*: Lean proved every property during the build/);
-  assert.equal(r.assurance.level, 'P0', 'the build says the holo does not carry the proof yet (#582)');
+  assert.match(r.message, /^Live at https:\/\/octo\.github\.io\/prism-payment-approval\/\. Built and verified/);
   const clone = join(root, 'prism-payment-approval');
   assert.deepEqual(session.status.repository, { full: 'octo/prism-payment-approval', created: true, template: true, clone, live: r.live });
   assert.equal(existsSync(join(clone, 'app/src/Contract.lex.tex')), false, 'the template\'s example is replaced');

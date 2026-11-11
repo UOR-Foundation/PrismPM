@@ -4445,14 +4445,15 @@ const __index = (() => {
   }
 
   /**
-   * The evidence above the archive itself. The build writes none of these
-   * statements into the holo yet (#268, #582), so each absent one withholds
-   * its level (docs/proposals/269-assurance-levels.md).
+   * The evidence above the archive itself, for a holo with no attestation
+   * section: each absent statement withholds its level
+   * (docs/proposals/269-assurance-levels.md). The messages are the Rust
+   * verifier's, so both name an absent statement the same way (#582).
    */
   const STATEMENTS = Object.freeze([
-    { check: 'provenance.statement', withholds: 'P1', message: 'The holo carries no provenance statement; the build does not write one into the holo yet (issue #268).' },
-    { check: 'proof.statement', withholds: 'P2', message: 'The holo carries no proof statement; Lean proves the model at build, but the build does not write that proof into the holo yet (issues #268 and #582).' },
-    { check: 'replay.statement', withholds: 'P3', message: 'The holo carries no replay statement (issue #284).' },
+    { check: 'provenance.statement', withholds: 'P1', message: 'The holo carries no provenance statement.' },
+    { check: 'proof.statement', withholds: 'P2', message: 'The holo carries no proof statement.' },
+    { check: 'replay.statement', withholds: 'P3', message: 'The holo carries no replay statement.' },
   ]);
 
   /**
@@ -4461,7 +4462,7 @@ const __index = (() => {
    * caller cannot claim otherwise: only a signed statement inside the holo will,
    * once the check reads the attestation section (#267).
    */
-  const DETACHED = Object.freeze({ verified: false, message: "The replay statement came from beside the holo and is unsigned; only a signed statement in the holo's attestation section can support P3." });
+  const DETACHED = Object.freeze({ verified: false, message: "The replay statement came from beside the holo and is unsigned; only a signed statement in the holo's attestation section can support P3 (issues #267 and #270)." });
 
   /**
    * The `statements` option: `{ provenance, proof }`, each `{ statement, envelope }`

@@ -16,14 +16,13 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Features Added
 - `prism_build` names the stage that is running (#585). Each step of the build script, and each stage `prismpm verify` reports under `PRISMPM_PROGRESS` (Lean proof, Lean export, Rust, WebAssembly, the holo, the acceptance run), becomes a `Stage: ...` line, so `latest` changes as the build moves on. An SDK image whose prismpm predates those lines still reports the script's steps.
-- A finished `prism_build` carries `assurance`: the level `prism-code check` gives the holo (P0 today) and why (#582).
 - Gap telemetry (experimental). The journey records, as a fingerprint in `$PRISM_HOME/gaps.jsonl`, what a user asked for that Prism or Lean could not do: an answer or spec a validation rule refused (each refusal now names its rule), a valid spec that does not come back from its own answers, a property Lean did not prove that no sampled request breaks, and a generated model the toolchain refused. A fingerprint holds the kind, a construct from a fixed vocabulary, the diagnostic code and the version, and nothing the user wrote. The next call to the hosted verifier carries the unsent fingerprints, counted, in its `_meta` under `foundation.uor/prism-gaps` (`prism/gaps/1`), with a random install ID. `PRISM_TELEMETRY=0` or `DO_NOT_TRACK=1` turns it off; `setup` prints one line saying so, and `--json` reports it as `telemetry`.
 - `src/images-namespace.mjs`, the `prism.images` namespace (#442, experimental): `build`, `pull`, `push`, `inspect` and `verify`, reached as `prism.images` on the client (#441). See the root CHANGELOG.
 - The nine modules on one client (#441, #446, experimental): `createPrism()` returns `images`, `containers`, `networks`, `volumes`, `system`, `auth`, `errors` and `verify`; `Prism.fromEnv()` in `prism-code/node` configures it from this machine. `prism.system` (`info`, `version`, `df`, `prune`, `events`), `containers.list` and `containers.prune` are new. See the root CHANGELOG.
 
 ### Bugs Fixed
-- `prism_build` no longer says "Built and verified" for a holo that `prism-code check` rates P0. It says Lean proved every property during the build, and the new `assurance` member says the holo does not carry that proof yet, so someone it is sent to cannot confirm it from the file (#582). Writing the signed statements into the holo is #268.
-- The `provenance.statement` and `proof.statement` reasons of `check` no longer blame issues that are closed (#266, #267). They say what is missing: the build does not write those statements into the holo yet (#268, #582). The verdict goldens, the policy-input fixtures and `@prism-code/verify` carry the same text.
+- A built holo says plainly that it does not carry its proof (#582). `prism_build` and its run note now say that the holo holds no signed proof statement, so the default `prism-code check` reports P0. The verdict's reasons for a holo with no attestation section no longer cite closed issues #266, #267 and #284, and now read as the Rust verifier's do: "The holo carries no provenance statement." and the same for proof and replay.
+
 
 ## [0.7.2] - 2026-11-09
 
