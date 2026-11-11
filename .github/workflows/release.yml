@@ -1242,7 +1242,7 @@ jobs:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
           REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
-        run: node scripts/release-phases.mjs publish-oci release
+        run: node scripts/release-publication.mjs publish-oci release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: oci-native-publication

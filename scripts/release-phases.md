@@ -26,6 +26,11 @@ downloaded asset must match. Complete, identical drafts may resume publication;
 different bytes and incomplete drafts fail closed. The workflow never deletes,
 overwrites or silently repairs them. Each credentialed writer independently
 checks the allowed repository, source revision, event, ref and Cargo choice.
+`scripts/release-publication.mjs` performs this publication. It is release
+plumbing outside the build plumbing, so a publication fix never invalidates a
+build receipt. It reads GitHub as the REST API answers: a draft is found in the
+release list, since `releases/tags/{tag}` serves published releases only, and a
+tag resolves through `git/ref/tags/{tag}`, whose 404 is the only absence.
 
 All six native installed-SDK part records and their original command transcripts,
 genuine product-CLI evidence, and complete browser/library logs are retained in
