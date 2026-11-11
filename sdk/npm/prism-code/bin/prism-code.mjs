@@ -125,9 +125,10 @@ Usage:
                                                     <project>/.prism/oci, or one tarball, with the holo's
                                                     attestations beside it; every byte is checked against
                                                     the build manifest
-  prism-code generate <app.holo> --out <dir> [--lang js|rust|python]
-                                                    write bindings and a typed client from the holo's WIT world
-                                                    and model into <dir>; writes nothing when nothing changed
+  prism-code generate <app.holo> --out <dir> [--lang <language>]
+                                                    write bindings and a typed client (js, rust or python;
+                                                    js by default) from the holo's WIT world and model into
+                                                    <dir>; writes nothing when nothing changed
   prism-code check <app.holo> [--policy <file>] [--json]
                                                     judge the holo against a policy and print its verdict:
                                                     exit 0 passed, 1 failed, 2 no verdict
