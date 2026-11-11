@@ -18,8 +18,11 @@
  *      this repository through GitHub's OIDC issuer (prism-code's own Sigstore
  *      verifier, or `gh attestation verify` when the Sigstore packages are not
  *      installed);
- *   5. `check` reaches a verdict the policy accepts, the fingerprint is the
- *      one the runner recorded, and every acceptance vector replays here.
+ *   5. `check` reaches a verdict the policy accepts, trusting the statements
+ *      signed into the holo only when a workflow of this repository signed
+ *      them (so a keylessly signed proof statement reaches P2), the
+ *      fingerprint is the one the runner recorded, and every acceptance
+ *      vector replays here.
  *
  * Every refusal is typed: `remote.*` is a refusal of this machine's (exit 2),
  * a digest that differs is `DigestMismatchError` (exit 1), and a verdict or a
@@ -46,10 +49,17 @@ export const REMOTE_BUILD_SCHEMA = 'prism/remote-build/1';
 export const BUILD_REF_PREFIX = 'refs/heads/prism/build/';
 export const SLSA_PROVENANCE_V1 = 'https://slsa.dev/provenance/v1';
 export const API_URL = 'https://api.github.com';
-/** The verdict a remote build is held to when the caller names no policy: the level every holo has until holos carry signed statements; the provenance is the detached bundle, checked here apart from `check`. */
+/** The verdict a remote build is held to when the caller names no policy: the least level. The detached provenance bundle is checked here apart from `check`; the statements signed into the holo raise its level when they verify against this repository's workflows (`repositorySigner`). */
 export const DEFAULT_POLICY = Object.freeze({ minimum: 'P0' });
 /** A GitHub Actions workflow's signing identity: the workflow file at a ref of the repository. */
 export const identityPattern = (repo) => new RegExp(`^https://github\\.com/${repo.full.replace(/[.]/g, '\\.')}/\\.github/workflows/[A-Za-z0-9._-]+\\.ya?ml@refs/`);
+
+/**
+ * The signer `check` trusts for a remote build (#582): a workflow of the
+ * repository the build was pushed to, through GitHub's OIDC issuer. A proof
+ * statement the build signed keylessly counts towards P2 only under it.
+ */
+export const repositorySigner = (repo) => ({ certificateIdentityRegexp: identityPattern(repo), certificateOidcIssuer: GITHUB_ACTIONS_ISSUER });
 
 const sha256Hex = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const SHA = /^[0-9a-f]{40}$/;
@@ -353,9 +363,10 @@ export function checkRecord(files, { repo, sha }) {
 /**
  * Verify a downloaded artifact in `staging` and write the build under
  * `<cwd>/<project>/.prism/build/<build>/`. Resolves to what was verified;
- * rejects with the typed error of the first check that failed.
+ * rejects with the typed error of the first check that failed. `checkHolo`
+ * (`check`) is injectable for tests.
  */
-export async function verifyRemoteBuild(files, { cwd, repo, sha, runInfo = null, policy, verifyBundle, run = spawnSync, env = process.env }) {
+export async function verifyRemoteBuild(files, { cwd, repo, sha, runInfo = null, policy, verifyBundle, run = spawnSync, env = process.env, checkHolo = check }) {
   const record = checkRecord(files, { repo, sha });
   const holoBytes = files.get(`build/${record.holo}`);
   if (!holoBytes) fail('remote.artifact', `the artifact has no build/${record.holo}`);
@@ -384,7 +395,7 @@ export async function verifyRemoteBuild(files, { cwd, repo, sha, runInfo = null,
   const stagedHolo = join(staging, 'build', record.holo);
   const signature = await verifySignature(bundle, { repo, holoPath: stagedHolo, verifyBundle, run });
 
-  const verdict = await check(stagedHolo, { policy: policy ?? DEFAULT_POLICY, env });
+  const verdict = await checkHolo(stagedHolo, { policy: policy ?? DEFAULT_POLICY, env, signer: repositorySigner(repo) });
   const app = await fromFile(stagedHolo);
   const fingerprint = app.identities?.archiveFingerprint ?? null;
   if (fingerprint !== record.fingerprint) fail('remote.fingerprint', `the holo's fingerprint is ${fingerprint}, not the ${record.fingerprint} the runner recorded`);
