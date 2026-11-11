@@ -2,7 +2,7 @@ name: Prepare M0 LexLean reconciliation patch
 
 on:
   push:
-    branches: [work/compression-m0-reconcile, fix/594-release-lexlean-466-sdk-admission]
+    branches: [work/compression-m0-reconcile]
   workflow_dispatch:
 
 permissions:
@@ -96,11 +96,6 @@ jobs:
             -path './vendor' -prune -o \
             -path './target' -prune -o \
             -name lexlean.toml -type f -print | sort)
-          # Closed CT02 source binding through the selected Engine and SDK writer.
-          # This authoring receipt is not a proof or acceptance result.
-          cargo run --locked --offline -p repo-conformance --example reconcile-ct02-binding -- \
-            "$PWD" "$RUNNER_TEMP/m0-reconcile.json" \
-            "$RUNNER_TEMP/m0-reconciliation-diagnostics/ct02-binding"
 
       - name: Regenerate owned PrismPM evidence through the pinned devcontainer
         id: generated_prefix

@@ -163,7 +163,7 @@ test('reconciliation workflow pins selected source and has no repository writer'
  const workflow=readFileSync(join(repository,'.github/workflows/m0-lexlean-reconcile.yml'),'utf8');
  const selected='bc71b33f9a4ce7f5582c337b5752a7ba9eb49706';
  assert.match(workflow,/workflow_dispatch:/);
- assert.match(workflow,/branches: \[work\/compression-m0-reconcile, fix\/594-release-lexlean-466-sdk-admission\]/);
+ assert.match(workflow,/branches: \[work\/compression-m0-reconcile\]/);
  assert.doesNotMatch(workflow,/pull_request_target:/);
  assert.equal((workflow.match(new RegExp(selected,'g'))??[]).length,3);
  assert.match(workflow,/permissions:\n  contents: read/);
@@ -292,11 +292,6 @@ function assertCompleteRelocking(workflow) {
             -path './vendor' -prune -o \
             -path './target' -prune -o \
             -name lexlean.toml -type f -print | sort)
-          # Closed CT02 source binding through the selected Engine and SDK writer.
-          # This authoring receipt is not a proof or acceptance result.
-          cargo run --locked --offline -p repo-conformance --example reconcile-ct02-binding -- \
-            "$PWD" "$RUNNER_TEMP/m0-reconcile.json" \
-            "$RUNNER_TEMP/m0-reconciliation-diagnostics/ct02-binding"
 
 `);
 }
