@@ -111,17 +111,33 @@
       "expect": { "ok": false, "error": { "code": "archive.model" } }
     },
     {
-      "id": "load.damage.footer-reported",
-      "title": "A wrong footer is not hidden: the holo opens and reports its identities unverified.",
+      "id": "load.damage.footer-refused",
+      "title": "A wrong footer is refused: an altered holo does not open by default.",
       "op": "load",
       "archive": "footer-flipped",
+      "expect": { "ok": false, "error": { "code": "digest_mismatch", "check": "holo.integrity" } }
+    },
+    {
+      "id": "load.damage.guest-label-refused",
+      "title": "A guest whose bytes differ from its label is refused, even under a correct footer.",
+      "op": "load",
+      "archive": "guest-data-flipped",
+      "expect": { "ok": false, "error": { "code": "digest_mismatch", "check": "holo.integrity" } }
+    },
+    {
+      "id": "load.damage.footer-allowed",
+      "title": "Asked to open an altered holo, a runtime opens it and reports its identities unverified.",
+      "op": "load",
+      "archive": "footer-flipped",
+      "input": { "allowUnverified": true },
       "expect": { "ok": true, "result": { "verified": false } }
     },
     {
-      "id": "load.damage.guest-label-reported",
-      "title": "A guest whose bytes differ from its label is not hidden, even under a correct footer.",
+      "id": "load.damage.guest-label-allowed",
+      "title": "Asked to open a holo whose guest differs from its label, a runtime opens it and reports it unverified.",
       "op": "load",
       "archive": "guest-data-flipped",
+      "input": { "allowUnverified": true },
       "expect": { "ok": true, "result": { "verified": false } }
     },
     {
