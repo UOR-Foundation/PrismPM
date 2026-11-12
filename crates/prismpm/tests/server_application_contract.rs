@@ -4,8 +4,8 @@
 
 mod support;
 
-use prismpm::holo::canonical::{decode_canonical, encode_canonical};
 use prismpm::holo::model_document::Application;
+use prismpm::holo::model_document::{decode_canonical, encode_canonical};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use support::{declaration, fixture, project, rejected, root, schema, source, typed, MODEL};
@@ -24,7 +24,7 @@ fn server_contract_roundtrips_and_requires_the_closed_declaration() {
     };
     assert_eq!(server.host.effects.len(), 2);
     assert_eq!(server.host.transcripts.len(), 2);
-    prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", value.clone())
+    prismpm::model_contract::contract_from_value("prismpm/model-document/7", value.clone())
         .unwrap();
 
     let mut missing = value.clone();
@@ -34,8 +34,7 @@ fn server_contract_roundtrips_and_requires_the_closed_declaration() {
         .remove("host");
     assert!(!schema().is_valid(&missing));
     assert!(
-        prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", missing)
-            .is_err()
+        prismpm::model_contract::contract_from_value("prismpm/model-document/7", missing).is_err()
     );
     for pointer in [
         "/application/extra",
@@ -54,7 +53,7 @@ fn server_contract_roundtrips_and_requires_the_closed_declaration() {
         unknown.pointer_mut(parent).unwrap()[name] = json!(1);
         assert!(!schema().is_valid(&unknown), "{pointer}");
         assert!(
-            prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", unknown)
+            prismpm::model_contract::contract_from_value("prismpm/model-document/7", unknown)
                 .is_err(),
             "{pointer}"
         );

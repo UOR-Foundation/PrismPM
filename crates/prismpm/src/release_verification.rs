@@ -5,7 +5,8 @@
 //! boundary. Imported LexLean documents retain their canonical final LF.
 
 use crate::error::PrismError;
-use crate::holo::canonical::{content_id, decode_canonical, encode_value};
+use crate::holo::canonical::{content_id, encode_value};
+use crate::holo::model_document::decode_canonical;
 use crate::holo::model_document::{Application, ModelDocument};
 use lexlean::artifact::content_id as lex_ids;
 use lexlean::artifact::snapshot::snapshot_spec;
