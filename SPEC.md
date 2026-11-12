@@ -1142,6 +1142,24 @@ the text profile carries strictly validated UTF-8 byte requests/responses.
 Both call only the generated crate API; JavaScript domain arithmetic is
 forbidden.
 
+`kernel.ir` names every exported definition once, and a call names the
+definition it reaches. A requested root is named by the last component of its
+Lean name, which is its public Rust name. Any other definition of the closure
+is named by its last component while no other definition of the closure has
+that component. Otherwise it is named by its qualified name: `__prod_q`, then
+for each component in order `_`, the component's length in characters, `_`
+and the component, a numeric component being `_n` and its value. So
+`Kernel.Admission.answer` and `Kernel.Range.answer` in one application are
+`__prod_q_6_Kernel_9_Admission_6_answer` and
+`__prod_q_6_Kernel_5_Range_6_answer`. A definition that is not a root and
+whose last component starts with `__prod_q` is named the same way, so a
+qualified name never equals another definition's name. An application in which
+no two definitions share a last component exports the `kernel.ir` it exported
+before this rule. Two requested roots that share a last component have no
+distinct public name: `prod-export` refuses them by name and the build fails
+with `PP5004`. HO-46 owns this rule. The native library profile (§12.6) still
+requires every definition of its closure to have a distinct last component.
+
 The application owner composes the generated Core-Wasm package's exact
 target Rust flags with its owned workspace and registry path remaps. It passes
 each argument through Cargo's encoded Rust-flags environment, retaining memory,
