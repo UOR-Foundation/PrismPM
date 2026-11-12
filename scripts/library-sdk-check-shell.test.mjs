@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {chmodSync,copyFileSync,cpSync,existsSync,linkSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
+import {chmodSync,copyFileSync,cpSync,existsSync,linkSync,lstatSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -52,8 +52,9 @@ process.exit(64);
 
 function fixture(t){
  const work=mkdtempSync(join(tmpdir(),'prismpm-library-shell-'));t.after(()=>rmSync(work,{recursive:true,force:true}));
+ // Mutation fixtures own their copies, even when the harness is mounted read-only.
  const root=join(work,'source');mkdirSync(root);
- for(const row of capturedSource.files){const destination=join(root,row.path);mkdirSync(dirname(destination),{recursive:true});if(row.kind==='directory')mkdirSync(destination,{recursive:true});else if(row.kind==='file')copyFileSync(join(source,row.path),destination);else symlinkSync(row.target,destination);}
+ for(const row of capturedSource.files){const destination=join(root,row.path);mkdirSync(dirname(destination),{recursive:true});if(row.kind==='directory')mkdirSync(destination,{recursive:true});else if(row.kind==='file'){copyFileSync(join(source,row.path),destination);chmodSync(destination,lstatSync(destination).mode|0o200);}else symlinkSync(row.target,destination);}
  writeFileSync(join(root,'standards.lock'),sdk.standards);
  const architecture=process.arch==='x64'?'amd64':'arm64';
  writeFileSync(join(work,'lock.json'),sdk.bytes);
