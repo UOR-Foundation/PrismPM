@@ -146,12 +146,14 @@ Usage:
   prism-code dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--image <path>]
                                                     watch the project, rebuild and re-check on every change, and
                                                     serve the local studio at http://localhost:4100: tabs Check, Replay
-  prism-code push <app.holo | dir://store:tag> <reference> [--key <private.pem> | --keyless] [--store <dir>]
+  prism-code push [<app.holo | dir://store:tag>] <reference> [--key <private.pem> | --keyless] [--store <dir>]
                                                     put the holo in an OCI registry or a local store, each attestation
-                                                    a referrer; a signer also signs a statement naming the manifest
+                                                    a referrer; a signer also signs a statement naming the manifest;
+                                                    with no holo, the image of that name in the local image store
   prism-code pull <reference> [<out.holo> | dir://store:tag] [--policy <file>] [--store <dir>]
                                                     fetch a holo and write it only after it verifies: digests, archive,
-                                                    verdict, attestations; the verify-attestation flags add a signer policy
+                                                    verdict, attestations; the verify-attestation flags add a signer policy;
+                                                    a verified holo is also kept in the local image store
   prism-code build --check [--hosted | --local] [args]
                                                     validate the model, write nothing: prismpm check in the SDK image
                                                     the nearest prismpm.lock pins, when the image is here and so is a

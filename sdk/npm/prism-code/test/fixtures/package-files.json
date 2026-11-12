@@ -63,6 +63,8 @@
   "src/handler.mjs",
   "src/host.mjs",
   "src/hosted.mjs",
+  "src/image-store-rules.json",
+  "src/image-store.mjs",
   "src/images-namespace.mjs",
   "src/index.mjs",
   "src/init-cli.mjs",

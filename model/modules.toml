@@ -454,6 +454,10 @@ path = "sdk/npm/prism-code/src/hosted.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/image-store.mjs"
+module = "images"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/images-namespace.mjs"
 module = "images"
 

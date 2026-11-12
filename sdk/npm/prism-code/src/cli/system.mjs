@@ -24,10 +24,11 @@ export const help = `  prism-code system info [--project <dir>] [--json]
                                                     container create, start, die and destroy events, read from the
                                                     container store; follows it until --until or interrupted. A time
                                                     is ISO 8601, Unix seconds or a duration ago such as 10m
-  prism-code system df [--verbose] [--json]         what the container records take; images once the store exists (#349)
-  prism-code system prune [--filter until=<time>] [--force] [--json]
-                                                    remove exited containers, never an image a container references;
-                                                    asks first unless --force
+  prism-code system df [--verbose] [--json]         what the container records and the local image store take
+  prism-code system prune [-a|--all] [--filter until=<time>] [--force] [--json]
+                                                    remove exited containers, then untagged images no container
+                                                    references (--all: every image none references); asks first
+                                                    unless --force
 `;
 
 /** How often a following `events` reads the store, in milliseconds. */
@@ -97,7 +98,7 @@ async function info(argv, io) {
       `Holo format:    ${report.formatRevision}`,
       runtimeLine(report.runtime),
       `Containers:     ${total} (${created} created, ${running} running, ${exited} exited)`,
-      `Images:         no local image store yet (${report.dependsOn.images.join(', ')})`,
+      `Images:         ${report.images === null ? 'no local image store' : report.images}`,
       ...lockLines(report.lock),
     ].join('\n') + '\n',
   );
@@ -181,13 +182,20 @@ async function events(argv, io) {
   return 0;
 }
 
+const imagesLine = (images) =>
+  images === null ? 'Images       -       -        -          -  (no local image store)' : `Images       ${String(images.total).padEnd(8)}${String(images.active).padEnd(9)}${bytes(images.size).padEnd(11)}${bytes(images.reclaimable)}`;
+
 async function df(argv, io) {
   const { positional, options } = readArgs(argv, { flags: ['json', 'verbose'], short: { v: 'verbose' } });
   if (positional.length > 0) throw new UsageError('system df takes no arguments');
   const report = await io.prism.system.df();
   if (options.json) return io.stdout.write(json(report)), 0;
   const c = report.containers;
-  const lines = ['TYPE         TOTAL   ACTIVE   SIZE       RECLAIMABLE', `Containers   ${String(c.total).padEnd(8)}${String(c.active).padEnd(9)}${bytes(c.size).padEnd(11)}${bytes(c.reclaimable)}`, `Images       -       -        -          -  (no local image store yet, ${report.dependsOn.images.join(', ')})`];
+  const lines = ['TYPE         TOTAL   ACTIVE   SIZE       RECLAIMABLE', `Containers   ${String(c.total).padEnd(8)}${String(c.active).padEnd(9)}${bytes(c.size).padEnd(11)}${bytes(c.reclaimable)}`, imagesLine(report.images)];
+  if (options.verbose && report.images?.rows.length > 0) {
+    lines.push('', 'IMAGE ID       TAGS                                      SIZE     CONTAINERS');
+    for (const row of report.images.rows) lines.push(`${row.digest.slice('blake3:'.length, 'blake3:'.length + 12).padEnd(15)}${(row.tags.join(', ') || '<none>').padEnd(42)}${bytes(row.size).padEnd(9)}${row.containers}`);
+  }
   if (options.verbose && c.rows.length > 0) {
     lines.push('', 'CONTAINER ID                                                      STATUS    SIZE     IMAGE');
     for (const row of c.rows) lines.push(`${row.id.padEnd(66)}${row.status.padEnd(10)}${bytes(row.size).padEnd(9)}${row.image ?? 'none'}`);
@@ -209,20 +217,21 @@ async function confirm(io, question) {
 }
 
 async function prune(argv, io) {
-  const { positional, options } = readArgs(argv, { values: ['filter'], flags: ['json', 'force'], short: { f: 'force' }, repeat: ['filter'] });
+  const { positional, options } = readArgs(argv, { values: ['filter'], flags: ['json', 'force', 'all'], short: { f: 'force', a: 'all' }, repeat: ['filter'] });
   if (positional.length > 0) throw new UsageError('system prune takes no arguments');
   const wanted = filters(options.filter, { until: 'until' });
   if ((wanted.until?.size ?? 0) > 1) throw new UsageError('--filter until= is given once');
   const until = wanted.until ? parseTime('filter until', [...wanted.until][0]) : undefined;
   if (!options.force) {
-    const yes = await confirm(io, 'This removes every exited container record. Images are never removed. Continue?');
+    const yes = await confirm(io, `This removes every exited container record, then ${options.all ? 'every image' : 'every untagged image'} no remaining container references. Continue?`);
     if (yes === null) throw new UsageError('system prune asks before removing anything; pass --force where there is no terminal to ask on');
     if (!yes) return 0;
   }
-  const result = await io.prism.system.prune(until === undefined ? {} : { until });
+  const result = await io.prism.system.prune({ ...(until === undefined ? {} : { until }), ...(options.all ? { all: true } : {}) });
   if (options.json) return io.stdout.write(json(result)), 0;
   const ids = result.containersDeleted.map((id) => `${id}\n`).join('');
-  io.stdout.write(`${ids ? `Deleted containers:\n${ids}\n` : ''}Total reclaimed space: ${bytes(result.spaceReclaimed)}\n`);
+  const images = (result.imagesDeleted ?? []).map((digest) => `${digest}\n`).join('');
+  io.stdout.write(`${ids ? `Deleted containers:\n${ids}\n` : ''}${images ? `Deleted images:\n${images}\n` : ''}Total reclaimed space: ${bytes(result.spaceReclaimed)}\n`);
   return 0;
 }
 

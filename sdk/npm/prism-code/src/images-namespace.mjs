@@ -6,6 +6,11 @@
  *   build    the project into an image, in the builder image `prismpm.lock` pins
  *   pull     an image from a registry or a store, verified before anything is written
  *   push     an image and its attestations to a registry or a store
+ *   list     the images in the local store, newest first
+ *   get      one image from the local store, with its bytes
+ *   tag      one more name for a stored image
+ *   remove   a tag, or a stored image no container holds
+ *   prune    untagged images no container holds (`all`: every image none holds)
  *   inspect  what an image says about itself, without running it
  *   verify   the verdict of `check` on an image
  *
@@ -15,9 +20,9 @@
  * is `check`, credentials are `oci-auth.mjs`.
  *
  * The shapes follow docker-py: `pull(repository, { tag })`, `push(repository, { tag })`,
- * `build({ path, tag, file })`. They differ in one place: `push` takes the image as
- * `source`, because there is no local image store yet. `list`, `tag` and `remove`
- * need that store and come with it (#349), so they are absent, not stubbed.
+ * `build({ path, tag, file })`, `tag(source, target)`, `remove(name, { force })`.
+ * `build` and `pull` write into the local image store (`image-store.mjs`, #349),
+ * and `push` sends the stored image its name names unless `source` is given.
  *
  * An option a verb does not have is refused. A misspelled `policy` that was
  * ignored would pull an image under a weaker rule than the caller wrote.
@@ -31,7 +36,9 @@ import { asBytes, parseArchive } from './archive.mjs';
 import { readAttestations } from './attestations.mjs';
 import { blake3Hex } from './blake3.mjs';
 import { fail, PrismError, ReferenceInvalidError } from './errors.mjs';
+import { createImageStore, localName, storedName } from './image-store.mjs';
 import { inspect as inspectHolo } from './inspect.mjs';
+import { parseReference } from './oci-reference.mjs';
 import { sha256Hex } from './sha256.mjs';
 
 export const IMAGE_BUILD_SCHEMA = 'prism/image-build/1';
@@ -46,6 +53,16 @@ const PULL_OPTIONS = [...REGISTRY_OPTIONS, ...SIGNER_OPTIONS, 'output', 'policy'
 const PUSH_OPTIONS = [...REGISTRY_OPTIONS, ...TUF_OPTIONS, 'source', 'key', 'keyless', 'noAttestations', 'signingConfig', 'identityToken', 'onProgress'];
 const VERIFY_OPTIONS = [...SIGNER_OPTIONS, 'policy', 'capabilities', 'replay', 'env'];
 const BUILD_OPTIONS = ['path', 'tag', 'file', 'locked', 'update', 'release', 'env'];
+
+/** A tag `build` was given that is also a local name, or none. A release reference that is not one stays the builder's. */
+function builtName(tag) {
+  if (tag === undefined) return null;
+  try {
+    return localName(tag);
+  } catch {
+    return null;
+  }
+}
 
 /** `prismpm build` prints one JSON value, so this is plenty; the last of the logs is what explains a failure. */
 const MAX_RESULT_BYTES = 16 * 1024 * 1024;
@@ -311,10 +328,16 @@ function inspectionView(inspection, parsed) {
  * (model/modules.toml), so `client` passes it in. Without it `build` raises `PP5008`,
  * and every other verb works.
  *
- * @param {{ spawn?: Function, docker?: (request: { image: string, cwd: string, command: string, args: string[] }) => ({ command: string, args: string[], display: string } | Promise<{ command: string, args: string[], display: string }>) | null }} [dependencies]
+ * `store` is the backend of the local image store (`fileImageStore` or
+ * `memoryImageStore`), in memory unless given; `references()` lists what containers
+ * hold, `[{ digest, running }]`, which `client` passes in because `images` may not
+ * import `containers`.
+ *
+ * @param {{ spawn?: Function, docker?: (request: { image: string, cwd: string, command: string, args: string[] }) => ({ command: string, args: string[], display: string } | Promise<{ command: string, args: string[], display: string }>) | null, store?: object, references?: Function }} [dependencies]
  */
-export function createImages({ spawn, docker = null } = {}) {
+export function createImages({ spawn, docker = null, store, references } = {}) {
   if (docker !== null && typeof docker !== 'function') fail('PP1001', 'images: docker must be a function that builds the Docker invocation, or null');
+  const local = createImageStore({ ...(store === undefined ? {} : { backend: store }), ...(references === undefined ? {} : { references }) });
   /**
    * Build the project in the builder image `prismpm.lock` pins, as `prism-code build`
    * does, and return the image it made.
@@ -353,10 +376,13 @@ export function createImages({ spawn, docker = null } = {}) {
     }
     if (result === null) fail('PP4004', 'the build exited 0 and printed no JSON result', { logs });
     const { bytes, digest, path } = await builtImage(root, result);
+    const name = builtName(options.tag);
+    const stored = await local.add(bytes, { tags: name === null ? [] : [name] });
     return {
       schema: IMAGE_BUILD_SCHEMA,
       digest,
       tag: options.tag ?? null,
+      tags: stored.tags,
       path,
       fileDigest: await digestsOf(bytes),
       size: bytes.length,
@@ -384,7 +410,11 @@ export function createImages({ spawn, docker = null } = {}) {
     if (options.maxSize !== undefined && (!Number.isSafeInteger(options.maxSize) || options.maxSize <= 0)) fail('PP1001', 'images.pull option maxSize must be a positive whole number of bytes');
     const { experimental_pull } = await import('./push-pull.mjs');
     const { tag, maxSize, ...rest } = options;
-    const pulled = await experimental_pull(named(repository, tag), { ...rest, ...(maxSize === undefined ? {} : { maxHoloBytes: maxSize }) });
+    const text = named(repository, tag);
+    const pulled = await experimental_pull(text, { ...rest, ...(maxSize === undefined ? {} : { maxHoloBytes: maxSize }) });
+    // Only a verified image reaches the store: `experimental_pull` has refused anything else by now.
+    const name = storedName(parseReference(text, options.store === undefined ? {} : { store: options.store }));
+    const stored = await local.add(pulled.holo, { tags: name === null ? [] : [name] });
     return {
       schema: IMAGE_PULL_SCHEMA,
       reference: pulled.reference,
@@ -400,6 +430,7 @@ export function createImages({ spawn, docker = null } = {}) {
         verified: pulled.attestations.verified.map(fromImage),
       },
       output: pulled.output,
+      tags: stored.tags,
       bytes: pulled.holo,
     };
   }
@@ -415,9 +446,15 @@ export function createImages({ spawn, docker = null } = {}) {
     allow('push', options, PUSH_OPTIONS);
     allowText('push', options, ['store']);
     const { tag, source, ...rest } = options;
-    if (source === undefined || source === null) fail('load.source', 'images.push needs the image as options.source: there is no local image store to find it in until #349');
+    const target = named(repository, tag);
+    let image;
+    if (source === undefined || source === null) {
+      // `docker push name:tag` pushes the local image of that name; a `dir://` name has no local one.
+      if (target.startsWith('dir://')) fail('load.source', `images.push to ${target} needs the image as options.source, or push a stored image by its name with options.store`);
+      image = (await local.get(localName(target))).bytes;
+    } else image = await sourceOf(source);
     const { experimental_push } = await import('./push-pull.mjs');
-    const pushed = await experimental_push(await sourceOf(source), named(repository, tag), rest);
+    const pushed = await experimental_push(image, target, rest);
     return {
       schema: IMAGE_PUSH_SCHEMA,
       reference: pushed.reference,
@@ -471,7 +508,33 @@ export function createImages({ spawn, docker = null } = {}) {
     return check(await sourceOf(image), { policy, capabilities, replay, env, signer: Object.keys(signer).length > 0 ? signer : undefined });
   }
 
-  return Object.freeze({ build, pull, push, inspect, verify });
+  /** The images in the local store, newest first: `{ dangling, name }` as `docker image ls --filter dangling=` and `docker image ls name` filter them. */
+  async function list(options = {}) {
+    allow('list', options, ['dangling', 'name']);
+    if (options.dangling !== undefined && typeof options.dangling !== 'boolean') fail('PP1001', 'images.list option dangling must be true or false');
+    allowText('list', options, ['name']);
+    return local.list(options);
+  }
+
+  /** One stored image by tag, digest or id prefix, with its bytes checked against its digests. */
+  const get = (name) => local.get(name);
+
+  /** `docker tag`: `target` names the image `source` names. */
+  const tag = (source, target) => local.tag(source, target);
+
+  /** `docker rmi`: refuses while a container references the image unless `force`, and always while one runs. */
+  async function remove(name, options = {}) {
+    allow('remove', options, ['force']);
+    return local.remove(name, options);
+  }
+
+  /** `docker image prune [-a]`: untagged images no container references, or with `all` every image none references. */
+  async function prune(options = {}) {
+    allow('prune', options, ['all']);
+    return local.prune(options);
+  }
+
+  return Object.freeze({ build, pull, push, list, get, tag, remove, prune, inspect, verify, usage: local.usage });
 }
 
 /** The namespace with no Docker host: every verb but `build`. `createPrism()` builds the whole one (#441). */

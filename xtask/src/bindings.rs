@@ -35,6 +35,10 @@ const VENDORED: &[(&str, &str)] = &[
     ),
     ("prism_developer_view", "xtask/src/developer_view/model.rs"),
     (
+        "prism_image_store_rules",
+        "xtask/src/image_store_rules/model.rs",
+    ),
+    (
         "prism_proof_statement",
         "crates/prismpm/src/verification/proof_statement.rs",
     ),

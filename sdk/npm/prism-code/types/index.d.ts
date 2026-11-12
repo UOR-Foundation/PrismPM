@@ -312,11 +312,50 @@ export interface Containers {
   prune(options?: { until?: number }): Promise<{ containersDeleted: string[]; spaceReclaimed: number }>;
 }
 
-/** Experimental. `prism.images` (#442): docker-py's verbs over the code that already does the work. Node only; in a browser build every verb raises `images.unavailable`. */
+/** One image in the local store (#349): kept once under its BLAKE3 digest, with its tags as names. */
+export interface StoredImage {
+  readonly schema: 'prism/image/1';
+  /** `blake3:<hex>`, the digest the image's own footer names; `id` is the same. */
+  readonly id: string;
+  readonly digest: string;
+  /** The digests of the file's bytes, BLAKE3 and sha256. */
+  readonly fileDigest: { sha256: string; blake3: string };
+  readonly size: number;
+  readonly created: string;
+  /** `[registry/]repository:tag`, sorted; none for an untagged image. */
+  readonly tags: readonly string[];
+}
+
+/** The backend of the local image store: `fileImageStore(dir)` or `memoryImageStore()` from `prism-code/node`. */
+export interface ImageStoreBackend {
+  readonly location: string | null;
+  read(): unknown;
+  write(index: object): unknown;
+  get(hex: string): Uint8Array | null | Promise<Uint8Array | null>;
+  put(hex: string, bytes: Uint8Array): unknown;
+  drop(hex: string): unknown;
+}
+
+/** Experimental. `prism.images` (#442): docker-py's verbs over the code that already does the work, and the local image store (#349). Node only; in a browser build every verb raises `images.unavailable`. */
 export interface Images {
-  build(options?: { path?: string; tag?: string; file?: string; locked?: boolean; update?: boolean; release?: string; env?: Record<string, string | undefined> }): Promise<{ schema: 'prism/image-build/1'; digest: string; tag: string | null; path: string | null; bytes: Uint8Array; [member: string]: unknown }>;
-  pull(repository: string, options?: Record<string, unknown>): Promise<{ schema: 'prism/image-pull/1'; digest: string; bytes: Uint8Array; [member: string]: unknown }>;
+  /** Builds the image and keeps it in the local store, tagged with `tag` when that is a local name. */
+  build(options?: { path?: string; tag?: string; file?: string; locked?: boolean; update?: boolean; release?: string; env?: Record<string, string | undefined> }): Promise<{ schema: 'prism/image-build/1'; digest: string; tag: string | null; tags: string[]; path: string | null; bytes: Uint8Array; [member: string]: unknown }>;
+  /** Verifies before anything is written, then keeps the image in the local store under the name it was pulled by. */
+  pull(repository: string, options?: Record<string, unknown>): Promise<{ schema: 'prism/image-pull/1'; digest: string; tags: string[]; bytes: Uint8Array; [member: string]: unknown }>;
+  /** Pushes `source`, or without one the stored image `repository:tag` names. */
   push(repository: string, options?: Record<string, unknown>): Promise<{ schema: 'prism/image-push/1'; digest: string; [member: string]: unknown }>;
+  /** The stored images, newest first. */
+  list(options?: { dangling?: boolean; name?: string }): Promise<StoredImage[]>;
+  /** One stored image by tag, `blake3:` digest or id prefix, with its bytes checked against its digests. */
+  get(name: string): Promise<StoredImage & { bytes: Uint8Array }>;
+  /** `docker tag SOURCE TARGET`. */
+  tag(source: string, target: string): Promise<StoredImage>;
+  /** `docker rmi`: refused with `image.in-use` while a container references the image unless `force`, and always while one runs. */
+  remove(name: string, options?: { force?: boolean }): Promise<{ schema: 'prism/image-remove/1'; untagged: string[]; deleted: string[]; spaceReclaimed: number }>;
+  /** `docker image prune [-a]`: untagged images no container references, or with `all` every image none references. */
+  prune(options?: { all?: boolean }): Promise<{ schema: 'prism/image-prune/1'; imagesDeleted: string[]; spaceReclaimed: number }>;
+  /** What `system.df` reports for images. */
+  usage(): Promise<{ rows: { digest: string; tags: string[]; size: number; containers: number }[]; location: string | null }>;
   inspect(image: Uint8Array | ArrayBuffer | Blob | string | URL): Promise<{ schema: 'prism/image-inspection/1'; digest: string; [member: string]: unknown }>;
   verify(image: Uint8Array | ArrayBuffer | Blob | string | URL, options?: Record<string, unknown>): Promise<Verdict>;
 }
@@ -352,10 +391,10 @@ export interface PinnedLock {
 /** Experimental. `prism.system` (#446): this installation, and its housekeeping. */
 export interface System {
   version(options?: { path?: string }): Promise<{ schema: 'prism/system-version/1'; version: string; formatRevision: string; runtime: { name: 'node' | 'browser'; version: string | null; platform: string | null }; toolchain: Record<string, string> | null; builder: string | null }>;
-  info(options?: { path?: string }): Promise<{ schema: 'prism/system-info/1'; version: string; formatRevision: string; containers: { total: number; created: number; running: number; exited: number }; images: null; lock: PinnedLock | null; events: boolean; dependsOn: { images: readonly string[] }; [member: string]: unknown }>;
-  df(): Promise<{ schema: 'prism/system-df/1'; containers: { total: number; active: number; size: number; reclaimable: number; rows: { id: string; image: string | null; status: ContainerStatus; size: number }[] }; images: null; dependsOn: { images: readonly string[] } }>;
-  /** Exited containers only; no image is removed until the local store exists (#349). */
-  prune(options?: { until?: Date | string | number }): Promise<{ schema: 'prism/system-prune/1'; containersDeleted: string[]; imagesDeleted: string[]; spaceReclaimed: number; dependsOn: { images: readonly string[] } }>;
+  info(options?: { path?: string }): Promise<{ schema: 'prism/system-info/1'; version: string; formatRevision: string; containers: { total: number; created: number; running: number; exited: number }; images: number | null; lock: PinnedLock | null; events: boolean; [member: string]: unknown }>;
+  df(): Promise<{ schema: 'prism/system-df/1'; containers: { total: number; active: number; size: number; reclaimable: number; rows: { id: string; image: string | null; status: ContainerStatus; size: number }[] }; images: { total: number; active: number; size: number; reclaimable: number; location: string | null; rows: { digest: string; tags: string[]; size: number; containers: number }[] } | null }>;
+  /** Exited containers, then images no remaining container references: untagged ones, or with `all` tagged ones too. */
+  prune(options?: { until?: Date | string | number; all?: boolean }): Promise<{ schema: 'prism/system-prune/1'; containersDeleted: string[]; imagesDeleted: string[]; spaceReclaimed: number }>;
   events(options?: { since?: Date | string | number; until?: Date | string | number; signal?: AbortSignal; filters?: { action?: SystemEventAction | SystemEventAction[]; id?: string | string[] } }): SystemEventStream;
 }
 
@@ -397,6 +436,8 @@ export interface CreatePrismOptions {
   /** A namespace from `createAuth`; in a browser every verb raises `auth.unavailable`. */
   auth?: { readonly [member: string]: unknown };
   events?: EventBus;
+  /** The local image store's backend; in memory unless given. */
+  imageStore?: ImageStoreBackend;
 }
 
 /** The nine modules, `client` first. */

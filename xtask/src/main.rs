@@ -17,6 +17,7 @@ mod formatting;
 mod gate_driver;
 mod gate_root;
 mod golden_preflight;
+mod image_store_rules;
 mod modules;
 mod source_copy;
 mod spec_links;
@@ -144,6 +145,7 @@ fn main() -> ExitCode {
         "validate-spec-links" => spec_links::validate(&root),
         "validate-contract" => validate_contract(),
         "check-modules" => modules::validate(&root),
+        "check-image-store-rules" => image_store_rules::check(&root, write),
         "check-developer-view" => developer_view::validate(&root, write),
         "verify-examples" => verify_examples(&root, write),
         "check-golden" => check_golden(&root, write),
@@ -290,6 +292,7 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
     codegen::check_model(root, write)?;
     spec_links::validate(root)?;
     modules::validate(root)?;
+    image_store_rules::check(root, write)?;
     developer_view::validate(root, write)?;
     audit_all(root)
 }

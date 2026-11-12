@@ -25,6 +25,9 @@ const hostDocker = (request) => hostDockerArguments({ ...request, probe: false }
 import { createImages, images, IMAGE_BUILD_SCHEMA, IMAGE_INSPECTION_SCHEMA, IMAGE_PULL_SCHEMA, IMAGE_PUSH_SCHEMA } from '../src/images-namespace.mjs';
 import { startRegistry } from './support/registry.mjs';
 
+// A CLI pull keeps what it pulled in the local image store (#349); this suite's stays in a scratch folder.
+process.env.PRISM_IMAGES ??= (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'prism-images-store-'));
+
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const fixture = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
 const plain = new Uint8Array(readFileSync(fixture));
@@ -86,10 +89,9 @@ async function plantInStore(store, name, holo) {
 
 // The namespace
 
-test('the namespace is exactly the five verbs that work; what #349 owns is absent, not stubbed', () => {
-  assert.deepEqual(Object.keys(images).sort(), ['build', 'inspect', 'pull', 'push', 'verify']);
+test('the namespace is the verbs of #442 over the local store of #349, and usage for system.df', () => {
+  assert.deepEqual(Object.keys(images).sort(), ['build', 'get', 'inspect', 'list', 'prune', 'pull', 'push', 'remove', 'tag', 'usage', 'verify']);
   assert.ok(Object.isFrozen(images));
-  for (const verb of ['list', 'tag', 'remove']) assert.equal(images[verb], undefined, verb);
 });
 
 test('the client exposes it as prism.images, and only a client with a Docker host can build', async () => {
@@ -228,14 +230,31 @@ test('the verbs return what the code under them returned, under the new names', 
   assert.deepEqual(above.attestations, { image: below.attestations.holo, referrers: below.attestations.referrers, signatures: 'not checked', verified: [] });
 });
 
-test('a pull with no output writes nothing and returns the bytes, as there is no local store yet (#349)', async () => {
+test('a pull with no output writes no file and keeps the image in the local store under the name it was pulled by', async () => {
   const store = fresh('store');
-  await images.push('app:1', { source: plain, store });
+  const local = createImages();
+  await local.push('app:1', { source: plain, store });
   const before = snapshot(dir);
-  const pulled = await images.pull('app:1', { store });
+  const pulled = await local.pull('app:1', { store });
   assert.equal(pulled.output, null);
   assert.ok(same(pulled.bytes, plain));
   assert.deepEqual(snapshot(dir), before);
+  assert.deepEqual(pulled.tags, ['app:1']);
+  assert.deepEqual((await local.list()).map((image) => [image.digest, image.tags]), [[FINGERPRINT, ['app:1']]]);
+  assert.ok(same((await local.get('app:1')).bytes, plain));
+});
+
+test('push without a source sends the stored image its name names, as docker push does', async () => {
+  const local = createImages();
+  const store = fresh('store');
+  await local.push('seed:1', { source: plain, store });
+  await local.pull('seed:1', { store });
+  await local.tag('seed:1', 'app:2');
+  const target = fresh('store');
+  assert.equal((await local.push('app:2', { store: target })).digest, FINGERPRINT);
+  assert.deepEqual((await openStore(target).list()).map((item) => item.name), ['app:2']);
+  await assert.rejects(local.push('app:3', { store: target }), { code: 'image.missing' });
+  await assert.rejects(local.push(`dir://${target}:4`), (error) => error.code === 'load.source' && /options.source/.test(error.message));
 });
 
 test('push takes the image as bytes, a Blob, a path, a file URL or a store; without one it says why', async () => {
@@ -244,7 +263,7 @@ test('push takes the image as bytes, a Blob, a path, a file URL or a store; with
   for (const source of [plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength), new Blob([plain]), fixture, pathToFileURL(fixture), `dir://${store}:1`]) {
     assert.equal((await images.push('to:1', { source, store: fresh('store') })).digest, from.digest);
   }
-  await assert.rejects(images.push('app:1', { store }), (error) => error instanceof PrismCodeError && error.code === 'load.source' && /#349/.test(error.message));
+  await assert.rejects(createImages().push('app:1', { store }), (error) => error instanceof PrismCodeError && error.code === 'image.missing');
   await assert.rejects(images.push('app:1', { source: join(dir, 'nothing.holo'), store }), (error) => error.code === 'load.path');
   await assert.rejects(images.push('app:1', { source: new URL('https://example.invalid/a.holo'), store }), (error) => error.code === 'load.path');
 });

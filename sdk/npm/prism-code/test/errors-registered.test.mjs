@@ -48,6 +48,11 @@ function raisedCodes() {
     const patterns = [/\bfail\(\s*(['"`])([^'"`]+)\1/g, /new PrismCodeError\(\s*(['"`])([^'"`]+)\1/g, /new [A-Z]\w*Error\([^;]{0,300}?\bcode: (')([^']+)'/g];
     for (const pattern of patterns) for (const match of text.matchAll(pattern)) raised.add(match[2].replace(/\$\{[^}]+\}/g, '*'));
   }
+  // A decision table generated from a LexLean model (src/image-store-rules.json) names the code it refuses with.
+  for (const file of filesUnder(dir, ['.json'])) {
+    if (/[\\/]vendor[\\/]/.test(file)) continue;
+    for (const match of readFileSync(file, 'utf8').matchAll(/"refuse ([a-z][\w.-]*)"/g)) raised.add(match[1]);
+  }
   return raised;
 }
 

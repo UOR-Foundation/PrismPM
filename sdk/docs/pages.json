@@ -125,6 +125,10 @@
           "narrative": true
         },
         {
+          "path": "guides/local-images",
+          "narrative": true
+        },
+        {
           "path": "guides/run-and-gate",
           "narrative": true
         },

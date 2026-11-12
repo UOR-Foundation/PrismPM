@@ -203,6 +203,16 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code images ls",
+      "name": "ls"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images prune",
+      "name": "prune"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code images pull",
       "name": "pull"
     },
@@ -210,6 +220,16 @@
       "kind": "verb",
       "place": "prism-code images push",
       "name": "push"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images rm",
+      "name": "rm"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images tag",
+      "name": "tag"
     },
     {
       "kind": "verb",
@@ -340,6 +360,11 @@
       "kind": "flag",
       "place": "--check",
       "name": "check"
+    },
+    {
+      "kind": "flag",
+      "place": "--dangling",
+      "name": "dangling"
     },
     {
       "kind": "flag",
@@ -773,8 +798,23 @@
     },
     {
       "kind": "method",
+      "place": "prism.images.get",
+      "name": "get"
+    },
+    {
+      "kind": "method",
       "place": "prism.images.inspect",
       "name": "inspect"
+    },
+    {
+      "kind": "method",
+      "place": "prism.images.list",
+      "name": "list"
+    },
+    {
+      "kind": "method",
+      "place": "prism.images.prune",
+      "name": "prune"
     },
     {
       "kind": "method",
@@ -785,6 +825,21 @@
       "kind": "method",
       "place": "prism.images.push",
       "name": "push"
+    },
+    {
+      "kind": "method",
+      "place": "prism.images.remove",
+      "name": "remove"
+    },
+    {
+      "kind": "method",
+      "place": "prism.images.tag",
+      "name": "tag"
+    },
+    {
+      "kind": "method",
+      "place": "prism.images.usage",
+      "name": "usage"
     },
     {
       "kind": "method",

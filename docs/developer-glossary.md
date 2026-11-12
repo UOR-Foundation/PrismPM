@@ -24,15 +24,15 @@ A Docker word is used only for its Docker meaning. Where Docker has a behaviour 
 | `stop` | verb | stop a running instance | After #350 |
 | `logs` | verb | read an instance's output | Now |
 | `ls` | verb | list the store capability grants | Now |
-| `images` | verb | list the local store | After #349 |
-| `tag` | verb | name a local store entry | After #349 |
-| `rmi` | verb | remove a local store entry | After #349 |
+| `images` | verb | list the local store | Now |
+| `tag` | verb | name a local store entry | Now |
+| `rmi` | verb | remove a local store entry | Now |
 
 ## Other words of the surface
 
 Docker's own verbs and the terms that are new with Prism (verify, proof, replay, world) keep their names.
 
-`attest`, `auth`, `axioms`, `build`, `check`, `conformance`, `connect`, `containers`, `create`, `dev`, `df`, `disconnect`, `dispatch`, `errors`, `events`, `export`, `export-browser`, `fromKey`, `generate`, `get`, `identities`, `images`, `info`, `init`, `inspect`, `keyless`, `list`, `lock`, `login`, `logout`, `manifest`, `mcp`, `networks`, `open`, `providers`, `prune`, `pull`, `push`, `remove`, `replay`, `setup`, `start`, `stores`, `system`, `template`, `vectors`, `verify`, `verify-attestation`, `version`, `volumes`
+`attest`, `auth`, `axioms`, `build`, `check`, `conformance`, `connect`, `containers`, `create`, `dev`, `df`, `disconnect`, `dispatch`, `errors`, `events`, `export`, `export-browser`, `fromKey`, `generate`, `get`, `identities`, `images`, `info`, `init`, `inspect`, `keyless`, `list`, `lock`, `login`, `logout`, `manifest`, `mcp`, `networks`, `open`, `providers`, `prune`, `pull`, `push`, `remove`, `replay`, `setup`, `start`, `stores`, `system`, `template`, `usage`, `vectors`, `verify`, `verify-attestation`, `version`, `volumes`
 
 ## Deprecated aliases
 

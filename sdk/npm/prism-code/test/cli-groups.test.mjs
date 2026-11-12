@@ -44,9 +44,9 @@ test('the help lists every group verb, and a module alone is a usage error namin
   const help = cli('--help');
   assert.equal(help.status, 0);
   for (const line of groupUsage().split('\n')) assert.ok(help.stdout.includes(line), line);
-  const bare = cli('images');
+  const bare = cli('containers');
   assert.equal(bare.status, 64);
-  assert.match(bare.stderr, /^images takes one of build, inspect, pull, push, verify/);
+  assert.match(bare.stderr, /^containers takes one of /);
   const group = cli('images', '--help');
   assert.equal(group.status, 0);
   assert.match(group.stdout, /^ {2}prism-code images push /m);

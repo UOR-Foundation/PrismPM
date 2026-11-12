@@ -992,6 +992,13 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `hosted.layout` |  | `DK-41` | lexlean.toml cannot be read or has a layout the hosted profile does not take. |
 | `hosted.unreachable` |  | `DK-41` | The hosted verifier did not answer, or refused the call. |
 | `identity_mismatch` | `IdentityMismatchError` | `CT-12` | The attestation was signed by an identity other than the one required. |
+| `image.ambiguous` |  | `OC-12` | An image id prefix names more than one stored image; nothing was read or changed. |
+| `image.corrupt` |  | `OC-12` | The bytes the local image store keeps for an image no longer match its digests, or are missing; they are never served. |
+| `image.in-use` |  | `OC-12` | prism.images.remove would delete an image a container references; it is refused unless forced, and always while that container runs. |
+| `image.missing` |  | `OC-12` | The local image store holds no image under that name, digest or id prefix. |
+| `image.name` |  | `OC-12` | An image name is not [registry/]repository[:tag], or pins a digest where a tag is a name. |
+| `image.store` |  | `OC-12` | The local image store cannot be read or written, or its index is not prism/image-store/1; nothing changed. |
+| `image.tagged` |  | `OC-12` | prism.images.remove named by digest an image that has more than one tag; it is refused unless forced. |
 | `images.unavailable` |  | `OC-11` | prism.images reads files and registries, which this build of prism-code leaves out; use it in Node. |
 | `init.template` |  | `DK-41` | init was asked for a template it does not have, or the template already holds a generated file. |
 | `inspect.kind` |  | `OC-11` | inspect was given a directory or a closure, which has no section table; it reads a .holo archive. |
