@@ -67,7 +67,7 @@ The three honesty levels:
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
 | `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
-| `CT-12` | `build` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes. |
+| `CT-12` | `build` | The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises, the code of each error class and each check code of a PrismCodeError, is a row of model/sdk-diagnostics.toml owned by its module's capability, with no code left unregistered. |
 | `CT-13` | `build` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. |
 
 ## deployment
