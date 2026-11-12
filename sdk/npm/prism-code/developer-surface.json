@@ -553,13 +553,28 @@
     },
     {
       "kind": "method",
+      "place": "prism.containers.dispatch",
+      "name": "dispatch"
+    },
+    {
+      "kind": "method",
       "place": "prism.containers.get",
       "name": "get"
     },
     {
       "kind": "method",
+      "place": "prism.containers.inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "method",
       "place": "prism.containers.list",
       "name": "list"
+    },
+    {
+      "kind": "method",
+      "place": "prism.containers.logs",
+      "name": "logs"
     },
     {
       "kind": "method",

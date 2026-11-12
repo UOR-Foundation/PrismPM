@@ -20,9 +20,10 @@ A Docker word is used only for its Docker meaning. Where Docker has a behaviour 
 | `run` | verb | instantiate and dispatch, one shot | Now |
 | `rm` | verb | remove an exited instance | Now |
 | `record` | verb | write the acceptance vectors as a history | Now |
-| `ps` | verb | list running instances | After #350 |
+| `ps` | verb | list running instances | Now |
 | `stop` | verb | stop a running instance | After #350 |
-| `logs` | verb | read an instance's output | After #350 |
+| `logs` | verb | read an instance's output | Now |
+| `ls` | verb | list the store capability grants | Now |
 | `images` | verb | list the local store | After #349 |
 | `tag` | verb | name a local store entry | After #349 |
 | `rmi` | verb | remove a local store entry | After #349 |
