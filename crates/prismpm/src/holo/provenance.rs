@@ -335,7 +335,10 @@ pub(crate) fn now_utc() -> String {
 /// The statement time for a `SOURCE_DATE_EPOCH` value: its seconds when it is a
 /// whole number of seconds, else now.
 pub(crate) fn statement_time(source_date_epoch: Option<&str>) -> String {
-    match source_date_epoch.map(str::trim).and_then(|s| s.parse::<i64>().ok()) {
+    match source_date_epoch
+        .map(str::trim)
+        .and_then(|s| s.parse::<i64>().ok())
+    {
         Some(seconds) if seconds >= 0 => whole_seconds(seconds.saturating_mul(1000)),
         _ => whole_seconds(unix_millis()),
     }
