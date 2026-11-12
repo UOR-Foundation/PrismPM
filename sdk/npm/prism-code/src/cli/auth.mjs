@@ -20,7 +20,8 @@ export const help = `  prism-code auth login [<registry>] --username <name> [--p
                                                     default), then store them where Docker would; the password is
                                                     read from stdin or a prompt, never from the command line
   prism-code auth logout [<registry>] [--json]      remove the registry's credential from every store that holds it
-  prism-code login ...  /  prism-code logout ...    the same verbs
+  prism-code login ...                              the same as prism-code auth login
+  prism-code logout ...                             the same as prism-code auth logout
 `;
 
 /** The process's streams and environment, or a test's. */

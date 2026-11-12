@@ -68,6 +68,11 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code logout",
+      "name": "logout"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code manifest",
       "name": "manifest"
     },
