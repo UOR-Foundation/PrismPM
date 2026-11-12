@@ -22,6 +22,7 @@
       "release-type": "simple",
       "component": "prismpm",
       "include-component-in-tag": false,
+      "skip-github-release": true,
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },

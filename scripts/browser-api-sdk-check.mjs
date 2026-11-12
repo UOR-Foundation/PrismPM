@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
 import {executeOwnedSdkCommand} from './sdk-command-owner.mjs';
+import {workspaceVersion} from './workspace-version.mjs';
 
 export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','features/suites/stdlib.feature','features/suites/holo.feature','model','language',
@@ -163,8 +164,9 @@ export function verifyImage(value,image,architecture,revision){
  assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
  assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
- assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.4.0');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],workspaceVersion());
 }
+
 
 export function verifyTap(tap,minimum){
  assert.equal(typeof tap,'string');assert.ok(Number.isSafeInteger(minimum)&&minimum>0);

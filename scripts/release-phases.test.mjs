@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { parts as vvParts } from './vv-assemble.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
-import { imageVerificationArguments, platformIndex, publicationPolicy, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
+import { imageVerificationArguments, platformIndex, publicationPolicy, workspaceVersion, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const { load } = require('js-yaml');
@@ -52,20 +52,23 @@ test('OCI mismatch diagnostics execute bounded real archive fixtures and remain 
 
 const revision = 'a'.repeat(40);
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/release/v0.4',
-  event: 'workflow_dispatch', version: '0.4.0', publishCrates: false, rehearsal: false, revision});
+const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/tags/v0.5.0',
+  event: 'workflow_dispatch', version: '0.5.0', publishCrates: false, rehearsal: false, revision});
+const rehearsal = () => ({...policy(), ref: 'refs/heads/main', rehearsal: true});
 const buildStages = ['images', 'native', 'reproducibility', 'installed-sdk'];
 const prerequisites = (names, route = 'establish') => Object.fromEntries(names.map(name => [name,
   name === 'factory' ? {result: 'success', outputs: {'build-route': route}}
     : {result: route === 'proved' && buildStages.includes(name) ? 'skipped' : 'success'}]));
 const ociNeeds = ['gate', 'factory', ...buildStages];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
-const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/release/v0.4',
-  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false', REHEARSAL: 'false',
+const workspace = workspaceVersion();
+const workspaceMinor = workspace.split('.').slice(0, 2).join('.');
+const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: `refs/tags/v${workspace}`,
+  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: workspace, PUBLISH_CRATES: 'false', REHEARSAL: 'false',
   GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1'});
 
 function validateWorkflow(value) {
-  assert.deepEqual(value.on.push, {branches: ['release/v0.4'], tags: ['v0.4.0']});
+  assert.deepEqual(value.on.push, {branches: ['release/v*'], tags: ['v*']});
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
   // Publication runs on its build stages' success, or on their skip when the
   // factory routed the build to a receipt; nothing else (scripts/factory.mjs).
@@ -414,7 +417,9 @@ test('release crates use stage-owned targets despite an inherited Cargo target d
 test('Cargo publication target selection binds the exact package and version archive', () => {
   const body = workflow().jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).run;
   // The checkout is the runner's, not uid 1000's: every target is stage-owned.
-  assert.ok(body.includes('"$release_parent/prismpm/target/package/prismpm-0.4.0.crate" -'));
+  // PrismPM's version is the workspace version, which the gate passes in.
+  assert.ok(body.includes('publish_exact prismpm "$VERSION" crates/prismpm/Cargo.toml'));
+  assert.ok(body.includes('"$release_parent/prismpm/target/package/prismpm-$VERSION.crate" -'));
   assert.ok(!body.includes('$PWD/target'), 'the container never writes into the runner-owned checkout');
   const selection = body.slice(body.indexOf('package_target='), body.indexOf('release_cargo "$package" package')).trim();
   const select = (packageName, version, archive) => execFileSync('sh', ['-eu', '-c',
@@ -434,43 +439,48 @@ test('Cargo publication target selection binds the exact package and version arc
   }
 });
 
-test('explicit OCI-only dispatch is distinct from Cargo publication and rejects foreign refs', () => {
-  assert.deepEqual(publicationPolicy(policy()), {version: '0.4.0', publishCrates: false, rehearsal: false});
-  assert.equal(publicationPolicy({...policy(), rehearsal: true}).rehearsal, true);
-  assert.throws(() => publicationPolicy({...policy(), rehearsal: true, publishCrates: true}), /rehearsal cannot publish/);
+test('a tag dispatch publishes, a branch dispatch rehearses, and foreign refs are refused', () => {
+  assert.deepEqual(publicationPolicy(policy()), {version: '0.5.0', publishCrates: false, rehearsal: false});
+  assert.equal(publicationPolicy({...policy(), publishCrates: true}).publishCrates, true);
+  assert.deepEqual(publicationPolicy(rehearsal()), {version: '0.5.0', publishCrates: false, rehearsal: true});
+  assert.equal(publicationPolicy({...rehearsal(), ref: 'refs/heads/release/v0.5'}).rehearsal, true);
+  assert.throws(() => publicationPolicy({...rehearsal(), publishCrates: true}), /rehearsal cannot publish/);
+  assert.throws(() => publicationPolicy({...rehearsal(), rehearsal: false}), /only the tag publishes/);
+  assert.throws(() => publicationPolicy({...policy(), rehearsal: true}), /only the tag publishes/);
   assert.throws(() => publicationPolicy({...policy(), rehearsal: 'true'}));
   assert.throws(() => publicationPolicy({...policy(), rehearsal: null}));
-  assert.throws(() => publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null, rehearsal: true}));
-  assert.equal(publicationPolicy({...policy(), publishCrates: true}).publishCrates, true);
-  assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null, rehearsal: null}).publishCrates, true);
+  assert.throws(() => publicationPolicy({...policy(), event: 'push', publishCrates: null, rehearsal: true}));
+  assert.equal(publicationPolicy({...policy(), event: 'push', publishCrates: null, rehearsal: null}).publishCrates, true);
   for (const change of [{publishCrates: 'false'}, {publishCrates: null}, {repository: 'other/PrismPM'},
-    {ref: 'refs/heads/main'}, {ref: 'refs/heads/feature'}, {ref: 'refs/heads/release/v0.5'}, {ref: 'refs/tags/v0.3.0'}, {event: 'pull_request'},
-    {version: '0.5.0'}, {revision: 'main'}, {extra: true}]) {
+    {ref: 'refs/heads/feature'}, {ref: 'refs/heads/release/v0.4'}, {ref: 'refs/heads/release/v0.6'}, {ref: 'refs/tags/v0.4.0'},
+    {ref: 'refs/tags/v0.5.1'}, {event: 'pull_request'}, {version: '0.5'}, {version: '05.0.0'}, {revision: 'main'}, {extra: true}]) {
     assert.throws(() => publicationPolicy({...policy(), ...change}));
   }
 });
 
-test('release branch pushes force rehearsal and preserve tag publication policy', () => {
-  const pushed = {...policy(), event: 'push', publishCrates: null, rehearsal: null};
-  assert.deepEqual(publicationPolicy(pushed), {version: '0.4.0', publishCrates: false, rehearsal: true});
-  for (const ref of ['refs/heads/main', 'refs/heads/feature', 'refs/heads/release/v0.5', 'refs/tags/v0.3.0']) {
+test('release branch pushes force rehearsal, main rehearses only by dispatch, and a tag push publishes', () => {
+  const pushed = {...policy(), ref: 'refs/heads/release/v0.5', event: 'push', publishCrates: null, rehearsal: null};
+  assert.deepEqual(publicationPolicy(pushed), {version: '0.5.0', publishCrates: false, rehearsal: true});
+  for (const ref of ['refs/heads/main', 'refs/heads/feature', 'refs/heads/release/v0.4', 'refs/tags/v0.4.0']) {
     assert.throws(() => publicationPolicy({...pushed, ref}));
   }
-  for (const change of [{publishCrates: true}, {rehearsal: false}, {version: '0.5.0'}]) {
+  for (const change of [{publishCrates: true}, {rehearsal: false}, {version: '0.6.0'}]) {
     assert.throws(() => publicationPolicy({...pushed, ...change}));
   }
   const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
   const output = execFileSync(process.execPath, [helper, 'policy'], {encoding: 'utf8',
-    env: {...process.env, ...environment(), GITHUB_EVENT_NAME: 'push', GITHUB_REF_NAME: 'release/v0.4',
-      DISPATCH_VERSION: '9.9.9', PUBLISH_CRATES: 'true', REHEARSAL: 'false'}});
-  assert.equal(output, 'version=0.4.0\npublish-crates=false\nrehearsal=true\n');
+    env: {...process.env, ...environment(), GITHUB_EVENT_NAME: 'push', GITHUB_REF: `refs/heads/release/v${workspaceMinor}`,
+      GITHUB_REF_NAME: `release/v${workspaceMinor}`, DISPATCH_VERSION: '9.9.9', PUBLISH_CRATES: 'true', REHEARSAL: 'false'}});
+  assert.equal(output, `version=${workspace}\npublish-crates=false\nrehearsal=true\n`);
+  assert.throws(() => execFileSync(process.execPath, [helper, 'policy'], {stdio: 'pipe',
+    env: {...process.env, ...environment(), DISPATCH_VERSION: '9.9.9'}}), /workspace version/);
 });
 
 test('image-index signatures require the exact current source, ref, trigger, name, issuer and repository', () => {
   const imageDigest = `sha256:${'b'.repeat(64)}`;
   for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
-    for (const [ref, event] of [['refs/heads/release/v0.4', 'workflow_dispatch'],
-      ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
+    for (const [ref, event] of [['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/main', 'workflow_dispatch'],
+      ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push'], ['refs/tags/v0.5.0', 'workflow_dispatch']]) {
       const image = `ghcr.io/uor-foundation/prismpm-${name}@${imageDigest}`;
       assert.deepEqual(imageVerificationArguments(image, revision, ref, '/trusted-root', event), [
         'verify', '--trusted-root', '/trusted-root', '--certificate-identity',
@@ -485,7 +495,7 @@ test('image-index signatures require the exact current source, ref, trigger, nam
   }
   const image = `ghcr.io/uor-foundation/prismpm-sdk@${imageDigest}`;
   for (const [ref, event] of [['refs/heads/release/v0.4', 'pull_request'],
-    ['refs/heads/release/v0.4', 'push|workflow_dispatch'], ['refs/tags/v0.4.0', 'workflow_dispatch']]) {
+    ['refs/heads/release/v0.4', 'push|workflow_dispatch'], ['refs/heads/main', 'push'], ['refs/tags/v0.4.0', 'pull_request']]) {
     assert.throws(() => imageVerificationArguments(image, revision, ref, '/trusted-root', event));
   }
   for (const [subject, source, ref] of [
@@ -493,8 +503,8 @@ test('image-index signatures require the exact current source, ref, trigger, nam
     [image.replace('prismpm-sdk', 'prismpm-sdk-candidate'), revision, 'refs/heads/release/v0.4'],
     [image.replace(imageDigest, 'latest'), revision, 'refs/heads/release/v0.4'],
     [`${image}@${imageDigest}`, revision, 'refs/heads/release/v0.4'],
-    [image, 'main', 'refs/heads/release/v0.4'], [image, revision, 'refs/heads/feature'], [image, revision, 'refs/heads/main'],
-    [image, revision, 'refs/tags/v0.3.0'],
+    [image, 'main', 'refs/heads/release/v0.4'], [image, revision, 'refs/heads/feature'], [image, revision, 'refs/heads/release/v04'],
+    [image, revision, 'refs/tags/v0.3'], [image, revision, 'refs/tags/0.3.0'],
   ]) assert.throws(() => imageVerificationArguments(subject, source, ref, '/trusted-root'));
 });
 
@@ -596,7 +606,7 @@ function layout(directory, architecture, marker = 'same') {
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
-    'org.opencontainers.image.version': '0.4.0', marker}}}), mediaType: 'application/vnd.oci.image.config.v1+json'};
+    'org.opencontainers.image.version': workspaceVersion(), marker}}}), mediaType: 'application/vnd.oci.image.config.v1+json'};
   const layers = [Buffer.alloc(200_003, 97), Buffer.from('second layer\n')].map(bytes =>
     ({...putBytes(bytes), mediaType: 'application/vnd.oci.image.layer.v1.tar'}));
   const manifest = put({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config, layers});
@@ -865,7 +875,7 @@ test('pinned Buildx pushes each platform by digest and the assembled two-platfor
       '--build-arg', 'SOURCE_DATE_EPOCH=0', '--label', 'org.opencontainers.image.created=1970-01-01T00:00:00Z',
       '--label', `org.opencontainers.image.revision=${revision}`, '--label',
       'org.opencontainers.image.source=https://github.com/UOR-Foundation/PrismPM',
-      '--label', 'org.opencontainers.image.version=0.4.0'];
+      '--label', `org.opencontainers.image.version=${workspaceVersion()}`];
     const platforms = [];
     for (const architecture of ['amd64', 'arm64']) {
       const metadata = join(directory, `${architecture}-metadata.json`);

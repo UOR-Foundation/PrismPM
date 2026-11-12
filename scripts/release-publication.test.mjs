@@ -8,13 +8,15 @@ import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
-import {assetNames, publicationNotes} from './release-phases.mjs';
+import {assetNames, publicationNotes, workspaceVersion} from './release-phases.mjs';
 import {apiWith, githubClient, publicationTag, publishOci, releaseByTag, tagCommit} from './release-publication.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
 const revision = 'a'.repeat(40);
-const environment = (change = {}) => ({GITHUB_REPOSITORY: repository, GITHUB_REF: 'refs/heads/release/v0.4',
-  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false', REHEARSAL: 'false',
+// Publication runs at the version tag: the factory's cut dispatches it there.
+const version = workspaceVersion();
+const environment = (change = {}) => ({GITHUB_REPOSITORY: repository, GITHUB_REF: `refs/tags/v${version}`,
+  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: version, PUBLISH_CRATES: 'false', REHEARSAL: 'false',
   GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1', ...change});
 const firstTag = `sdk-oci-${revision}-123456789-1`;
 const reasons = {200: 'OK', 404: 'Not Found', 422: 'Unprocessable Entity', 500: 'Internal Server Error'};

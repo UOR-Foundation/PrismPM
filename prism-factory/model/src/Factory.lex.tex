@@ -141,7 +141,7 @@ definition{
   name: render,
   parameters: [planned : (List Factory.Engine::Planned), weights : (List (String * String)), tree : (List (Bytes * Bytes))],
   result: Bytes,
-  body: (let described : Bytes := (Factory.Engine::joinedReversed (prim list_fold (fun [tree] (sofar : (List Bytes)) (entry : Factory.Engine::Planned) => (cons (describe entry tree) sofar)) (nil Bytes) planned : (List Bytes))); (let ordered : Bytes := (prim list_fold (fun (sofar : Bytes) (entry : (String * Nat)) => (prim append sofar (words (cons "schedule" (cons (first entry) (nil String)))) : Bytes)) 0x (schedule planned weights) : Bytes); (prim append (prim append described ordered : Bytes) (words (cons "releasable" (cons (if (Factory.Engine::releasable planned) then "yes" else "no") (nil String)))) : Bytes))),
+  body: (let described : Bytes := (Factory.Engine::joinedReversed (prim list_fold (fun [tree] (sofar : (List Bytes)) (entry : Factory.Engine::Planned) => (cons (describe entry tree) sofar)) (nil Bytes) planned : (List Bytes))); (let ordered : Bytes := (prim list_fold (fun (sofar : Bytes) (entry : (String * Nat)) => (prim append sofar (words (cons "schedule" (cons (first entry) (nil String)))) : Bytes)) 0x (schedule planned weights) : Bytes); (prim append (prim append (prim append described ordered : Bytes) (words (cons "cuttable" (cons (if (Factory.Engine::cuttable planned) then "yes" else "no") (nil String)))) : Bytes) (words (cons "releasable" (cons (if (Factory.Engine::releasable planned) then "yes" else "no") (nil String)))) : Bytes))),
   executable: true
 }
 
@@ -227,7 +227,7 @@ definition{
   name: workflow,
   parameters: [selector : Bytes],
   result: Bytes,
-  body: (if (prim equal selector (Factory.Engine::text "release") : Bool) then (releaseWorkflow) else (Factory.Workflow::render 0x (Factory.Workflow::factoryLines))),
+  body: (if (prim equal selector (Factory.Engine::text "release") : Bool) then (releaseWorkflow) else (if (prim equal selector (Factory.Engine::text "cut") : Bool) then (Factory.Workflow::render 0x (Factory.Workflow::cutLines)) else (Factory.Workflow::render 0x (Factory.Workflow::factoryLines)))),
   executable: true,
   production: {effects: [allocation, overflow, recursion], targets: [rust-std]}
 }

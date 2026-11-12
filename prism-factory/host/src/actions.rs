@@ -328,6 +328,7 @@ pub(crate) fn route_record(options: &Options) -> Result<bool, String> {
 fn projection(options: &Options) -> Result<Vec<u8>, String> {
     match options.name.as_str() {
         "factory" => Ok(prism_factory_host::workflow(b"")),
+        "cut" => Ok(prism_factory_host::workflow(b"cut")),
         "release" => {
             let skeleton = String::from_utf8(prism_factory_host::workflow(b"release")).map_err(|_| "projection")?;
             let mut placed = BTreeSet::new();

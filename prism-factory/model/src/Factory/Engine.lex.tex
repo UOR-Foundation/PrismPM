@@ -514,6 +514,30 @@ definition{
 }
 
 definition{
+  name: runIndependent,
+  parameters: [obligation : Obligation],
+  result: Bool,
+  body: ((not (member "@mode" (project obligation inputs))) && (not (member "@run" (project obligation inputs)))),
+  executable: true
+}
+
+definition{
+  name: cutSet,
+  parameters: [graph : (List Obligation)],
+  result: (List String),
+  body: (prim list_fold (fun (sofar : (List String)) (obligation : Obligation) => (if (runIndependent obligation) then (prim append sofar (cons (project obligation name) (nil String)) : (List String)) else sofar)) (nil String) graph : (List String)),
+  executable: true
+}
+
+definition{
+  name: cuttable,
+  parameters: [planned : (List Planned)],
+  result: Bool,
+  body: (prim list_fold (fun (sofar : Bool) (entry : Planned) => (sofar && ((not (runIndependent (project entry obligation))) || (isProved (project entry verdict))))) true planned : Bool),
+  executable: true
+}
+
+definition{
   name: orderedStep,
   parameters: [state : ((List String) * Bool), obligation : Obligation],
   result: ((List String) * Bool),

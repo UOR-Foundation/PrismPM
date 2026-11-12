@@ -44,6 +44,13 @@ For a release with no existing GitHub Release, such as a hand-pushed `v0.4.0`, `
 
 ### The gap: release.yml can only publish 0.4.0
 
+Closed by the factory's release cut: `release.yml` now reads the workspace
+version, rehearses on `main` or `release/vMAJOR.MINOR`, and publishes at the tag
+`vVERSION`, which `release-cut.yml` creates once a rehearsal passed and the
+certified plan says the commit is cuttable (`prism-factory/README.md`,
+"Cutting a release"). The root package now sets `skip-github-release`, so step 6
+below tags only the npm packages. What follows is the record of the gap.
+
 The root package gets its tag from this flow, but `release.yml` cannot yet publish that tag. Three things stand in the way, and this pull request fixes none of them.
 
 - **The version is fixed.** `release.yml`, `scripts/release-phases.mjs`, `crates/model/src/release.rs`, `xtask/src/main.rs` and others name `0.4.0`, and the workflow triggers only on that tag.

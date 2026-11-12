@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateConfig } from './sdk-candidate.mjs';
+import { semver, workspaceVersion } from './workspace-version.mjs';
+
+export { workspaceVersion };
 import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, verificationArguments } from './sdk-candidate-sbom.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
@@ -16,37 +19,49 @@ const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}
 const buildStages = ['images', 'native', 'reproducibility', 'installed-sdk'];
 const ociNeeds = ['gate', 'factory', ...buildStages];
 
+// The release line. The version has one source, the workspace version in
+// Cargo.toml (release-please bumps it). A rehearsal runs on `main` or on the
+// release branch of that minor (`release/vMAJOR.MINOR`); publication runs only
+// at the tag `vVERSION`, by a push of that tag or by the factory's cut, which
+// dispatches the run at the tag once a rehearsal of the same commit passed.
+export function releaseRefKind(ref, version) {
+  assert.match(version, semver);
+  const [major, minor] = version.split('.');
+  if (ref === 'refs/heads/main' || ref === `refs/heads/release/v${major}.${minor}`) return 'branch';
+  if (ref === `refs/tags/v${version}`) return 'tag';
+  throw new assert.AssertionError({message: `${ref} is not a release ref for ${version}`});
+}
+
 export function publicationPolicy(value) {
   assert.deepEqual(Object.keys(value).sort(), ['event', 'publishCrates', 'ref', 'rehearsal', 'repository', 'revision', 'version']);
   assert.equal(value.repository, repository);
-  assert.equal(value.version, '0.4.0');
+  assert.match(value.version, semver);
   assert.match(value.revision, /^[0-9a-f]{40}$/);
-  let publishCrates, rehearsal = false;
+  const kind = releaseRefKind(value.ref, value.version);
+  let publishCrates, rehearsal;
   if (value.event === 'workflow_dispatch') {
-    assert.equal(value.ref, 'refs/heads/release/v0.4');
     assert.equal(typeof value.publishCrates, 'boolean', 'Cargo publication choice must be explicit');
     assert.equal(typeof value.rehearsal, 'boolean', 'rehearsal choice must be explicit');
     publishCrates = value.publishCrates; rehearsal = value.rehearsal;
     assert(!(rehearsal && publishCrates), 'a rehearsal cannot publish crates');
+    assert.equal(rehearsal, kind === 'branch', 'a branch run is a rehearsal and only the tag publishes');
   } else {
     assert.equal(value.event, 'push');
     assert.equal(value.publishCrates, null);
     assert.equal(value.rehearsal, null);
-    if (value.ref === 'refs/heads/release/v0.4') {
-      publishCrates = false; rehearsal = true;
-    } else {
-      assert.equal(value.ref, 'refs/tags/v0.4.0');
-      publishCrates = true;
-    }
+    assert.notEqual(value.ref, 'refs/heads/main', 'main rehearses only by dispatch');
+    rehearsal = kind === 'branch'; publishCrates = !rehearsal;
   }
   return {version: value.version, publishCrates, rehearsal};
 }
 
-function policyFromEnvironment(environment) {
+export function policyFromEnvironment(environment) {
   const event = environment.GITHUB_EVENT_NAME;
+  const version = workspaceVersion();
+  if (event === 'workflow_dispatch' && environment.DISPATCH_VERSION)
+    assert.equal(environment.DISPATCH_VERSION, version, 'the dispatched version must be the workspace version');
   return publicationPolicy({repository: environment.GITHUB_REPOSITORY, ref: environment.GITHUB_REF,
-    event, version: event === 'push' && environment.GITHUB_REF === 'refs/heads/release/v0.4'
-      ? '0.4.0' : environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
+    event, version,
     publishCrates: event === 'push' ? null : JSON.parse(environment.PUBLISH_CRATES),
     rehearsal: event === 'push' ? null : JSON.parse(environment.REHEARSAL), revision: environment.GITHUB_SHA});
 }
@@ -317,7 +332,7 @@ export function publicationNotes(revision) {
     'Public Cargo qualification and ecosystem acceptance are separate later phases.\n';
 }
 
-export function assetNames() {
+export function assetNames(version = workspaceVersion()) {
   return [
     'SHA256SUMS', 'factory-route.json', 'source-vv.tar', 'sdk-metadata-native-join.json',
     ...['amd64', 'arm64'].flatMap(architecture => [
@@ -327,8 +342,8 @@ export function assetNames() {
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
     ]),
     ...['x86_64', 'aarch64'].flatMap(architecture => [
-      `prismpm-0.4.0-${architecture}-unknown-linux-gnu.tar.gz`,
-      `prismpm-0.4.0-${architecture}-unknown-linux-gnu.tar.gz.sha256`,
+      `prismpm-${version}-${architecture}-unknown-linux-gnu.tar.gz`,
+      `prismpm-${version}-${architecture}-unknown-linux-gnu.tar.gz.sha256`,
     ]),
     ...imageNames.flatMap(name => [
       `${name}-image.txt`, `${name}-image-index.json`, `${name}-provenance.sigstore.json`,

@@ -53,6 +53,7 @@
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
           UPLOAD: ${{ env.HAS_CARGO_REGISTRY_TOKEN == 'true' || env.TRUSTED_PUBLISHING == 'true' }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
           sdk_image=$(cat .release-sdk/sdk-image.txt)
@@ -64,6 +65,7 @@
             --user 1000:1000 \
             --env CARGO_REGISTRY_TOKEN \
             --env UPLOAD \
+            --env VERSION \
             --mount "type=bind,source=$PWD,target=/workspace" \
             --workdir /workspace \
             --entrypoint /bin/bash \
@@ -171,7 +173,7 @@
                 "$PWD/stdlib/generated/prism-stdlib-0.2.0.crate"
               # The checkout belongs to the runner user, not to uid 1000:
               # PrismPM packages into a stage-owned target as the others do.
-              publish_exact prismpm 0.4.0 crates/prismpm/Cargo.toml \
-                "$release_parent/prismpm/target/package/prismpm-0.4.0.crate" -
+              publish_exact prismpm "$VERSION" crates/prismpm/Cargo.toml \
+                "$release_parent/prismpm/target/package/prismpm-$VERSION.crate" -
               rm -rf "$release_parent"
             '

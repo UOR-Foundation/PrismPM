@@ -103,11 +103,14 @@ test('a qualification candidate is the newest release-line ancestor whose images
   // A later failure elsewhere in the run does not disqualify its images.
   assert.deepEqual(findCandidate(path, proposal, candidates([run(9, newer), run(7, older)])), {run_id: '9', revision: newer});
   assert.deepEqual(findCandidate(path, proposal, candidates([run(9, newer), run(7, older)], {9: built().slice(1)})), {run_id: '7', revision: older});
+  // main and every release/vMAJOR.MINOR branch are the release line.
+  for (const head_branch of ['main', 'release/v0.5', 'release/v1.0'])
+    assert.deepEqual(findCandidate(path, proposal, candidates([run(9, newer, {head_branch})])), {run_id: '9', revision: newer});
   const failed = built(); failed[0] = {...failed[0], conclusion: 'failure'};
   const platform = built(); platform[imageJobs] = {...platform[imageJobs], conclusion: 'cancelled'};
   for (const [runs, jobs, artifacts] of [
     [[run(9, foreign)], {}, {}], [[run(9, 'x'.repeat(40))], {}, {}], [[run(9, newer, {event: 'pull_request'})], {}, {}],
-    [[run(9, newer, {head_branch: 'main'})], {}, {}], [[run(9, newer, {head_repository: {full_name: 'fork/PrismPM'}})], {}, {}],
+    [[run(9, newer, {head_branch: 'feature'})], {}, {}], [[run(9, newer, {head_branch: 'release/v05'})], {}, {}], [[run(9, newer, {head_repository: {full_name: 'fork/PrismPM'}})], {}, {}],
     [[run(9, newer, {path: '.github/workflows/vv.yml'})], {}, {}], [[run(9, newer)], {9: failed}, {}], [[run(9, newer)], {9: platform}, {}],
     [[run(9, newer)], {}, {9: [{name: 'sdk-image', expired: true}]}], [[run(9, newer)], {}, {9: []}], [[], {}, {}],
   ]) assert.throws(() => findCandidate(path, proposal, candidates(runs, jobs, artifacts)), /no release-line run/);

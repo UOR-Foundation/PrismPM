@@ -16,19 +16,12 @@ import {createReadStream, lstatSync, mkdtempSync, readdirSync, rmSync} from 'nod
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {assetNames, publicationNotes, publicationPolicy, requirePrerequisites, verifyExistingRelease} from './release-phases.mjs';
+import {assetNames, policyFromEnvironment, publicationNotes, requirePrerequisites, verifyExistingRelease} from './release-phases.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
 const releasePage = 100;
 
-export function policyFromEnvironment(environment) {
-  const event = environment.GITHUB_EVENT_NAME;
-  return publicationPolicy({repository: environment.GITHUB_REPOSITORY, ref: environment.GITHUB_REF,
-    event, version: event === 'push' && environment.GITHUB_REF === 'refs/heads/release/v0.4'
-      ? '0.4.0' : environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
-    publishCrates: event === 'push' ? null : JSON.parse(environment.PUBLISH_CRATES),
-    rehearsal: event === 'push' ? null : JSON.parse(environment.REHEARSAL), revision: environment.GITHUB_SHA});
-}
+export {policyFromEnvironment};
 
 export function publicationTag(environment) {
   assert.equal(environment.GITHUB_ACTIONS, 'true', 'publication requires GitHub Actions context');

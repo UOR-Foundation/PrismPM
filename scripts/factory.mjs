@@ -18,6 +18,7 @@ const repository = 'UOR-Foundation/PrismPM';
 // Mirrors `plumbing` in factory/src/Factory/Release.lex.tex; factory.test.mjs
 // keeps the two equal. Entries ending in `/` are directory prefixes.
 export const plumbing = Object.freeze([
+  '.github/workflows/release-cut.yml',
   '.github/workflows/release-qualify.yml',
   '.github/workflows/release.yml',
   'factory/',
@@ -86,11 +87,13 @@ export const isAncestor = (root, ancestor, revision) =>
 // (.github/workflows/release-qualify.yml); the merged commit's own release run
 // still checks its own images.
 export const imageJobs = 6;
+// The branches a release rehearsal runs on: main and release/vMAJOR.MINOR.
+export const releaseLine = branch => branch === 'main' || /^release\/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(branch ?? '');
 export function findCandidate(root, revision, client) {
   oid(revision);
-  const runs = client.api(`repos/${repository}/actions/workflows/release.yml/runs?branch=release/v0.4&per_page=50`).workflow_runs;
+  const runs = client.api(`repos/${repository}/actions/workflows/release.yml/runs?per_page=100`).workflow_runs;
   for (const run of runs) {
-    if (!['push', 'workflow_dispatch'].includes(run.event) || run.head_branch !== 'release/v0.4') continue;
+    if (!['push', 'workflow_dispatch'].includes(run.event) || !releaseLine(run.head_branch)) continue;
     if (run.repository?.full_name !== repository || run.head_repository?.full_name !== repository) continue;
     if (run.path !== '.github/workflows/release.yml' && !String(run.path).startsWith('.github/workflows/release.yml@')) continue;
     if (!/^[0-9a-f]{40}$/.test(run.head_sha) || !isAncestor(root, run.head_sha, revision)) continue;
@@ -123,7 +126,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(result.status ?? 1);
   } else if (operation === 'candidate' && args.length === 1) {
     // Qualification runs only for changes proposed to the release line.
-    assert.equal(process.env.GITHUB_BASE_REF, 'release/v0.4', 'release-line pull request required');
+    assert.ok(releaseLine(process.env.GITHUB_BASE_REF), 'release-line pull request required');
     const found = findCandidate(root, args[0], {api: gh});
     process.stdout.write(`run-id=${found.run_id}\nrevision=${found.revision}\n`);
   } else {

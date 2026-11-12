@@ -5,6 +5,8 @@
 #   factory.sh ci                     plan and run this host's obligations against the receipts branch
 #   factory.sh actions-route          a release run's factory job: run host obligations, write routes
 #   factory.sh actions-receipts       a release run's receipts job: record and push its receipts
+#   factory.sh actions-cut            the release cut: tag vVERSION and dispatch its publication run
+#                                     when the certified plan says the rehearsed commit is cuttable
 #   factory.sh site DIR               build the GitHub Pages site into DIR
 #
 # Decisions are made by the certified core in prism-factory/certified; this
@@ -93,6 +95,59 @@ case "$command" in
     "$host" actions-receipts --receipts "$fresh"
     publish_receipts "$fresh"
     ;;
+  actions-cut)
+    # The certified plan decides; this only reads GitHub and writes the tag.
+    build
+    fetch_receipts
+    : "${CUT_REVISION:?}" "${GITHUB_REPOSITORY:?}"
+    repo=$GITHUB_REPOSITORY
+    version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"$/\1/p' Cargo.toml)
+    [[ $version =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "factory: workspace version '$version'" >&2; exit 65; }
+    tag=v$version minor="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" patch=${BASH_REMATCH[3]}
+    test "$(git rev-parse HEAD)" = "$CUT_REVISION"
+    if gh api "repos/$repo/git/ref/tags/$tag" >/dev/null 2>&1; then
+      echo "factory: $tag already exists; nothing to cut"
+      exit 0
+    fi
+    plan=$("$host" plan --rev "$CUT_REVISION" --receipts "$store" --context mode=publish --context run=cut)
+    grep -E '^(obligation|cuttable) ' <<<"$plan"
+    if ! grep -qx 'cuttable yes' <<<"$plan"; then
+      echo "factory: $CUT_REVISION is not cuttable: a run-independent obligation has no passing receipt"
+      exit 0
+    fi
+    # A minor release ships when its milestone's planned work is done.
+    milestone=
+    if [ "$patch" = 0 ]; then
+      milestone=$(gh api "repos/$repo/milestones?state=open&per_page=100" \
+        --jq ".[] | select(.title | split(\" \") | index(\"$minor\")) | \"\(.number) \(.open_issues)\"")
+      if [ -z "$milestone" ] || [ "$(wc -l <<<"$milestone")" != 1 ]; then
+        echo "factory: no single open milestone names $minor; not cutting $tag"
+        exit 0
+      fi
+      if [ "${milestone#* }" != 0 ]; then
+        echo "factory: milestone $minor has ${milestone#* } open issues; not cutting $tag"
+        exit 0
+      fi
+    fi
+    object=$(gh api "repos/$repo/git/tags" -f tag="$tag" -f message="PrismPM $version" \
+      -f object="$CUT_REVISION" -f type=commit --jq .sha)
+    gh api "repos/$repo/git/refs" -f ref="refs/tags/$tag" -f sha="$object" >/dev/null
+    echo "factory: tagged $tag at $CUT_REVISION"
+    # The release body is the version's changelog entry, as release-please would
+    # write it; the publication run appends RELEASE_NOTES.md and the assets.
+    notes=$(mktemp)
+    node --input-type=module -e "import {readFileSync} from 'node:fs'; import {entryFor} from './sdk/docs/lib/changelog.mjs';
+      const body = entryFor(readFileSync('CHANGELOG.md', 'utf8'), process.argv[1]); if (!body) process.exit(65);
+      process.stdout.write(body);" "$version" > "$notes"
+    gh release create "$tag" --verify-tag --repo "$repo" --title "$tag" --notes-file "$notes"
+    gh workflow run release.yml --repo "$repo" --ref "$tag" \
+      -f version="$version" -f rehearsal=false -f publish-crates=true
+    echo "factory: dispatched the publication run of $tag"
+    if [ -n "$milestone" ]; then
+      gh api -X PATCH "repos/$repo/milestones/${milestone%% *}" -f state=closed >/dev/null
+      echo "factory: closed milestone $minor"
+    fi
+    ;;
   site)
     out=${2:?usage: factory.sh site DIR}
     rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
@@ -107,7 +162,7 @@ case "$command" in
     exec "$host" "$command" "$@"
     ;;
   *)
-    sed -n '2,9p' "$0" >&2
+    sed -n '2,11p' "$0" >&2
     exit 64
     ;;
 esac

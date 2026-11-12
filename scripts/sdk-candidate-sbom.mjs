@@ -28,15 +28,21 @@ function transportPolicy(options) {
   assert.equal(options.kind, 'release');
   assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']
     .some(name => options.repository === `ghcr.io/uor-foundation/prismpm-${name}`));
-  assert.ok(['refs/heads/release/v0.4', 'refs/tags/v0.4.0'].includes(options.ref));
-  assert.ok((options.ref === 'refs/heads/release/v0.4' && ['push', 'workflow_dispatch'].includes(options.event))
-    || (options.ref === 'refs/tags/v0.4.0' && options.event === 'push'), 'exact release ref/event pair required');
+  // The release line (scripts/release-phases.mjs releaseRefKind): rehearsals on
+  // main (dispatch only) or a release branch, publication at a version tag by a
+  // push of the tag or by the factory's cut dispatching the run at the tag.
+  const n = '(0|[1-9][0-9]*)';
+  const branch = options.ref === 'refs/heads/main' || new RegExp(`^refs/heads/release/v${n}\\.${n}$`).test(options.ref);
+  const tag = new RegExp(`^refs/tags/v${n}\\.${n}\\.${n}$`).test(options.ref);
+  assert.ok(branch || tag, 'release ref required');
+  assert.ok(options.ref === 'refs/heads/main' ? options.event === 'workflow_dispatch'
+    : ['push', 'workflow_dispatch'].includes(options.event), 'exact release ref/event pair required');
   return {repository: options.repository, workflow: `${source}/.github/workflows/release.yml@${options.ref}`,
     ref: options.ref, event: options.event,
     name: 'PrismPM OCI/native and Cargo publication', candidate: false};
 }
 
-export function releaseTransportPolicy(repository, ref, event = ref === 'refs/heads/release/v0.4' ? 'workflow_dispatch' : 'push') {
+export function releaseTransportPolicy(repository, ref, event = ref.startsWith('refs/tags/') ? 'push' : 'workflow_dispatch') {
   const options = {kind: 'release', repository, ref, event};
   transportPolicy(options);
   return options;

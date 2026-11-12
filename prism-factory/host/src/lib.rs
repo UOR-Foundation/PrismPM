@@ -25,8 +25,8 @@ pub fn reweigh(request: &[u8]) -> Result<Vec<u8>, Overflow> {
 }
 
 /// A generated GitHub workflow projection: `b"release"` for the release
-/// skeleton (job fragments are placed by the host), anything else for the
-/// pull-request workflow.
+/// skeleton (job fragments are placed by the host), `b"cut"` for the release
+/// cut, anything else for the pull-request workflow.
 pub fn workflow(selector: &[u8]) -> Vec<u8> {
     factory_workflow::run(factory_workflow::Bytes::lit(selector)).octets().to_vec()
 }

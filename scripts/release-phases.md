@@ -1,6 +1,8 @@
 # Publication phases
 
-`release.yml` accepts a push or dispatch on `release/v0.4`, or the `v0.4.0` tag. Source
+`release.yml` runs for the workspace version in `Cargo.toml` (`workspaceVersion`):
+a dispatch on `main`, a push or dispatch on `release/vMAJOR.MINOR`, or the tag
+`vVERSION` by a push or by the factory's cut (`prism-factory/README.md`). Source
 verification runs one pass as the eight `just vv-part` jobs listed in
 `scripts/vv-assemble.mjs`. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
@@ -9,7 +11,8 @@ A dispatch with `rehearsal=true`, the default, runs every check and publishes no
 release assets, discovery aliases, crates or native-archive provenance. It still pushes
 images by digest and signs them, because later checks read those exact images.
 
-Every push to `release/v0.4` forces version `0.4.0`, `rehearsal=true` and
+A branch run is always a rehearsal and only the tag publishes. Every push to a
+release branch forces the workspace version, `rehearsal=true` and
 `publish-crates=false`, independently of dispatch inputs. Merging release fixes
 therefore qualifies the exact merge commit without manual Actions dispatch.
 Branch-push signatures bind the actual `push` trigger; explicit dispatch signatures

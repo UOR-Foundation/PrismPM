@@ -26,4 +26,3 @@
           set -euo pipefail
           node scripts/release-phases.mjs policy >> "$GITHUB_OUTPUT"
           test "$(git status --porcelain)" = ""
-          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.4.0

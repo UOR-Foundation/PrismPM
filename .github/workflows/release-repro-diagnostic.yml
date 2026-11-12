@@ -63,7 +63,7 @@ jobs:
               --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
               --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --label org.opencontainers.image.version=0.4.0 \
+              --label "org.opencontainers.image.version=$(node --input-type=module -e "import {workspaceVersion} from './scripts/workspace-version.mjs'; process.stdout.write(workspaceVersion())")" \
               --platform linux/arm64 \
               --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" \
               2>&1 | tee "diagnostics/$root-build.log"

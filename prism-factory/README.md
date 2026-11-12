@@ -108,6 +108,38 @@ starts with `@`. Changing a file,
 an input, the command, the environment or any upstream identity changes the
 identity. Nothing else does.
 
+## Cutting a release
+
+A release is one decision, merging the release-please pull request, and the
+rest is the factory's:
+
+1. `release-please` (mode `open-pr`) opens the release pull request: the
+   workspace version in `Cargo.toml` and the changelog entry. Merging it
+   bumps `main`. release-please tags only the npm packages; the root package
+   sets `skip-github-release`, because its tag is the cut's.
+2. Dispatch `release.yml` on `main` (or push `release/vMAJOR.MINOR`). Every
+   branch run is a rehearsal: it establishes each obligation and records a
+   receipt for it. `scripts/release-phases.mjs` holds every ref to the workspace
+   version (`main`, `release/vMAJOR.MINOR`, the tag `vVERSION`).
+3. When that run passes, `release-cut.yml` (generated from `Workflow.lex.tex`)
+   asks the certified plan about the rehearsed commit in mode `publish`. It cuts
+   only when the plan says `cuttable yes`: every obligation that reads neither
+   the release mode nor the run (`factory-model`, `vv-sdk`, `source-vv`,
+   `build`; the theorem
+   `a_cut_rests_only_on_the_model_the_vv_sdk_the_source_vv_and_the_build`
+   pins that set) has a passing receipt. For a `.0` release, the open milestone
+   that names `vMAJOR.MINOR` must also have no open issue.
+4. The cut creates the annotated tag `vVERSION` at the rehearsed commit and its
+   GitHub Release (body: the changelog entry), dispatches `release.yml` at the
+   tag, and closes the milestone. That run proves the build and source V&V from
+   the rehearsal's receipts, so it runs only the policy, the gate and
+   publication, about an hour.
+
+The tag is created with `GITHUB_TOKEN`, which starts no workflow, so the cut
+dispatches the publication run itself; its signatures name
+`release.yml@refs/tags/vVERSION` like a tag push does. A pushed tag still
+publishes too.
+
 ## Running it
 
 ```sh
