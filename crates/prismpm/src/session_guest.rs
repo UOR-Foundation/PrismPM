@@ -68,7 +68,10 @@ impl SessionGuestSpec {
                 self.maximum_pages
             ));
         }
-        if self.stack_bytes == 0 || self.stack_bytes % 16 != 0 || u64::from(self.stack_bytes) >= memory {
+        if self.stack_bytes == 0
+            || self.stack_bytes % 16 != 0
+            || u64::from(self.stack_bytes) >= memory
+        {
             return Some(format!(
                 "core stack bytes {} must be positive, a multiple of 16 and below the memory maximum",
                 self.stack_bytes
@@ -158,8 +161,16 @@ fn runtime_module_name(module: &Module) -> String {
 /// Render the runtime module of the shim from the bounds, the module name and
 /// the call of the entry. Public to the crate so tests and the conformance
 /// probe use the same bytes the generator emits.
-pub(crate) fn render_runtime(spec: &SessionGuestSpec, runtime_module: &str, fallible: bool) -> String {
-    let adapter = if fallible { ".unwrap_or_else(|_| trap())" } else { "" };
+pub(crate) fn render_runtime(
+    spec: &SessionGuestSpec,
+    runtime_module: &str,
+    fallible: bool,
+) -> String {
+    let adapter = if fallible {
+        ".unwrap_or_else(|_| trap())"
+    } else {
+        ""
+    };
     let invoke = format!(
         "let answer: alloc::vec::Vec<u8> = crate::{}(turn){adapter};",
         rust_ident(&spec.entry)
@@ -169,7 +180,10 @@ pub(crate) fn render_runtime(spec: &SessionGuestSpec, runtime_module: &str, fall
         .replace("@REQUEST_MAXIMUM@", &spec.request_maximum.to_string())
         .replace("@STATE_MAXIMUM@", &spec.state_maximum.to_string())
         .replace("@RESPONSE_MAXIMUM@", &spec.response_maximum.to_string())
-        .replace("@RESPONSE_COUNT_MAXIMUM@", &spec.response_count_maximum.to_string())
+        .replace(
+            "@RESPONSE_COUNT_MAXIMUM@",
+            &spec.response_count_maximum.to_string(),
+        )
         .replace("@MAXIMUM_PAGES@", &spec.maximum_pages.to_string())
         .replace("@INVOKE_ENTRY@", &invoke)
 }
@@ -212,7 +226,9 @@ pub fn generate_session_guest_package(
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {
-        return Err(refused("the input IR digest is not 64 lowercase hex characters"));
+        return Err(refused(
+            "the input IR digest is not 64 lowercase hex characters",
+        ));
     }
     if let Some(problem) = spec.bounds_problem() {
         return Err(refused(format!("session guest bounds: {problem}")));
@@ -221,8 +237,16 @@ pub fn generate_session_guest_package(
         .definitions
         .iter()
         .find(|definition| definition.name == spec.entry)
-        .ok_or_else(|| refused(format!("the session entry {} is not in the module", spec.entry)))?;
-    if definition.params.len() != 1 || definition.params[0].1 != Type::Bytes || definition.ret != Type::Bytes {
+        .ok_or_else(|| {
+            refused(format!(
+                "the session entry {} is not in the module",
+                spec.entry
+            ))
+        })?;
+    if definition.params.len() != 1
+        || definition.params[0].1 != Type::Bytes
+        || definition.ret != Type::Bytes
+    {
         return Err(refused(format!(
             "the session entry {} must be Bytes -> Bytes",
             spec.entry
@@ -230,7 +254,8 @@ pub fn generate_session_guest_package(
     }
     let fallible = prod_codegen::byte_entry_is_fallible(module, &spec.entry)
         .map_err(|error| refused(error.to_string()))?;
-    let generated = prod_codegen::generate_module(module).map_err(|error| refused(error.to_string()))?;
+    let generated =
+        prod_codegen::generate_module(module).map_err(|error| refused(error.to_string()))?;
     let runtime = render_runtime(spec, &runtime_module_name(module), fallible);
     let source = format!("{CRATE_HEADER}\n{generated}\n\n{runtime}");
 
@@ -255,7 +280,13 @@ pub fn generate_session_guest_package(
     ];
     let records = files
         .iter()
-        .map(|item| format!("{{\"path\":\"{}\",\"sha256\":\"{}\"}}", item.path, sha256(&item.bytes)))
+        .map(|item| {
+            format!(
+                "{{\"path\":\"{}\",\"sha256\":\"{}\"}}",
+                item.path,
+                sha256(&item.bytes)
+            )
+        })
         .collect::<Vec<_>>()
         .join(",");
     let manifest = format!(

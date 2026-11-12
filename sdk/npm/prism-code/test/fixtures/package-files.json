@@ -98,6 +98,7 @@
   "src/remote-github.mjs",
   "src/replay-cli.mjs",
   "src/replay.mjs",
+  "src/session.mjs",
   "src/setup-cli.mjs",
   "src/setup-machine.mjs",
   "src/setup.mjs",

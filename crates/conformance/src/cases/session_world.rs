@@ -12,12 +12,18 @@ fn run(root: &Path, id: &str, arguments: &[&str]) -> String {
         .args(arguments)
         .args(["--", "--nocapture", "--test-threads=1"])
         // A target disjoint from the outer conformance Cargo owner's lock.
-        .env("CARGO_TARGET_DIR", root.join("target/conformance-session-world"))
+        .env(
+            "CARGO_TARGET_DIR",
+            root.join("target/conformance-session-world"),
+        )
         .output()
         .expect("the owning suite executes");
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 owning stdout");
     let stderr = String::from_utf8(output.stderr).expect("UTF-8 owning stderr");
-    assert!(output.status.success(), "{id} {arguments:?}: {stdout}\n{stderr}");
+    assert!(
+        output.status.success(),
+        "{id} {arguments:?}: {stdout}\n{stderr}"
+    );
     assert!(
         stdout.contains("test result: ok.") && !stdout.contains("running 0 tests"),
         "{id} requires a nonempty executed suite: {arguments:?}"

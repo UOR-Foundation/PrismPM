@@ -49,7 +49,13 @@ fn the_package_is_a_function_of_the_bounds_and_the_ir() {
     let paths: Vec<_> = first.files.iter().map(|file| file.path.as_str()).collect();
     assert_eq!(
         paths,
-        [".cargo/config.toml", "Cargo.lock", "Cargo.toml", "generation-manifest.json", "src/lib.rs"]
+        [
+            ".cargo/config.toml",
+            "Cargo.lock",
+            "Cargo.toml",
+            "generation-manifest.json",
+            "src/lib.rs"
+        ]
     );
     let mut wider = spec();
     wider.state_maximum += 1;
@@ -74,16 +80,23 @@ fn the_manifest_names_the_contract_the_schema_and_every_bound() {
     assert_eq!(records.len(), 4);
     for record in records {
         let path = record["path"].as_str().expect("path");
-        let file = package.files.iter().find(|file| file.path == path).expect("listed file exists");
+        let file = package
+            .files
+            .iter()
+            .find(|file| file.path == path)
+            .expect("listed file exists");
         assert_eq!(record["sha256"], sha256(&file.bytes));
     }
 }
 
 #[test]
 fn the_shim_exports_the_session_world_and_never_holo_run() {
-    let source = source_of(&generate_session_guest_package(&module(IR), &spec()).expect("generates"));
+    let source =
+        source_of(&generate_session_guest_package(&module(IR), &spec()).expect("generates"));
     assert!(source.contains("pub extern \"C\" fn holo_alloc(size: i32) -> i32"));
-    assert!(source.contains("pub extern \"C\" fn holo_step(request_ptr: i32, request_len: i32) -> i64"));
+    assert!(
+        source.contains("pub extern \"C\" fn holo_step(request_ptr: i32, request_len: i32) -> i64")
+    );
     assert!(!source.contains("holo_run"));
     assert!(source.contains("let answer: alloc::vec::Vec<u8> = crate::step(turn);"));
     assert!(!source.contains('@'), "every template token is replaced");
@@ -91,7 +104,8 @@ fn the_shim_exports_the_session_world_and_never_holo_run() {
 
 #[test]
 fn the_shim_checks_every_declared_bound_of_the_answer_and_the_request() {
-    let source = source_of(&generate_session_guest_package(&module(IR), &spec()).expect("generates"));
+    let source =
+        source_of(&generate_session_guest_package(&module(IR), &spec()).expect("generates"));
     for line in [
         "const REQUEST_MAXIMUM: u32 = 4096;",
         "const STATE_MAXIMUM: u32 = 65536;",
@@ -112,7 +126,8 @@ fn the_shim_checks_every_declared_bound_of_the_answer_and_the_request() {
 #[test]
 fn the_runtime_module_never_collides_with_a_model_name() {
     let ir = "(module SessionFixture (def __prism_session_runtime ((turn Bytes)) Bytes turn) (def step ((turn Bytes)) Bytes turn))";
-    let source = source_of(&generate_session_guest_package(&module(ir), &spec()).expect("generates"));
+    let source =
+        source_of(&generate_session_guest_package(&module(ir), &spec()).expect("generates"));
     assert!(source.contains("mod __prism_session_runtime_1 {"));
 }
 
@@ -168,7 +183,10 @@ fn every_bound_that_cannot_be_generated_is_refused_by_name() {
         (|s| s.request_maximum = 0, "positive"),
         (|s| s.response_maximum = 0, "positive"),
         (|s| s.response_count_maximum = 0, "response count"),
-        (|s| s.response_count_maximum = RESPONSE_COUNT_LIMIT + 1, "response count"),
+        (
+            |s| s.response_count_maximum = RESPONSE_COUNT_LIMIT + 1,
+            "response count",
+        ),
         (
             |s| {
                 s.state_maximum = u32::MAX;
@@ -225,11 +243,23 @@ fn the_session_probe_is_the_generated_shim_around_its_test_entry() {
         read("entry.rs"),
         render_runtime(&bounds, "__prism_session_runtime", false)
     );
-    assert_eq!(read("src/lib.rs"), expected, "regenerate the probe from the template");
+    assert_eq!(
+        read("src/lib.rs"),
+        expected,
+        "regenerate the probe from the template"
+    );
     let generated = generate_session_guest_package(&module(IR), &bounds).expect("generates");
     for path in [".cargo/config.toml", "Cargo.toml"] {
-        let file = generated.files.iter().find(|file| file.path == path).expect("generated");
+        let file = generated
+            .files
+            .iter()
+            .find(|file| file.path == path)
+            .expect("generated");
         let mine = String::from_utf8(file.bytes.clone()).expect("UTF-8");
-        assert_eq!(read(path), mine, "{path} of the probe differs from the generator's");
+        assert_eq!(
+            read(path),
+            mine,
+            "{path} of the probe differs from the generator's"
+        );
     }
 }
