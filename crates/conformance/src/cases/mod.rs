@@ -15,6 +15,7 @@ mod host_effect_system;
 mod mailbox_admission;
 mod native_lease;
 mod native_library;
+mod qualified_definitions;
 mod node_suite;
 mod organization_lifecycle;
 mod owner_timing;
@@ -558,6 +559,7 @@ pub fn run_at(root: &Path, id: &str) {
             &[("sdk/npm/prism-code/test/session.test.mjs", 18)],
             "600000",
         ),
+        "HO-46" => qualified_definitions::verify(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
