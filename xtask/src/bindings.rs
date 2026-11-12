@@ -9,16 +9,17 @@
 //! `--write`. No writer logic is written by hand in any language.
 //!
 //! A package that `prismpm` itself runs is also kept as a module of the
-//! `prismpm` crate, so the published crate carries it: [`VENDORED`] names
-//! each one and the file its exported `src/lib.rs` is copied to.
+//! `prismpm` crate, so the published crate carries it, and one this gate runs
+//! as a module of `xtask`: [`VENDORED`] names each one and the file its
+//! exported `src/lib.rs` is copied to.
 
 use crate::Fail;
 use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// The exported packages that are also modules of the `prismpm` crate, and
-/// the file each one's `src/lib.rs` is kept in.
+/// The exported packages that are also modules of the `prismpm` crate or of
+/// `xtask`, and the file each one's `src/lib.rs` is kept in.
 const VENDORED: &[(&str, &str)] = &[
     (
         "prism_bindings_js",
@@ -32,6 +33,7 @@ const VENDORED: &[(&str, &str)] = &[
         "prism_bindings_rust",
         "crates/prismpm/src/generate/rust_writer.rs",
     ),
+    ("prism_developer_view", "xtask/src/developer_view/model.rs"),
     (
         "prism_proof_statement",
         "crates/prismpm/src/verification/proof_statement.rs",

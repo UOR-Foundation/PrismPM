@@ -343,7 +343,7 @@ checks that the holo came from its spec.
 ```sh
 npx prism-code dev
 npx prism-code dev path/to/project --policy policy.json --no-open
-npx prism-code dev --build "make holo" --holo out/app.holo
+npx prism-code dev --build "make holo" --image out/app.holo
 ```
 
 Studio watches, rebuilds and checks at `http://localhost:4100`; `--port`
@@ -434,9 +434,9 @@ Classes/codes: `VerificationError` / `verification_failed`,
 ## Histories and typed clients (experimental)
 
 ```sh
-npx prism-code history app.holo --output app.history.json
-npx prism-code replay app.history.json --holo app.holo
-npx prism-code replay histories/ --holo app.holo --statement replay.json
+npx prism-code record app.holo --output app.history.json
+npx prism-code replay app.history.json --image app.holo
+npx prism-code replay histories/ --image app.holo --statement replay.json
 npx prism-code run app.holo --record live.history.json --allow-unverified
 npx prism-code generate Calculator.holo --out src/calculator
 ```

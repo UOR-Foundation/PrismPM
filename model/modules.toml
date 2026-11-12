@@ -393,6 +393,10 @@ path = "sdk/npm/prism-code/src/dev.mjs"
 module = "client"
 
 [[owner]]
+path = "sdk/npm/prism-code/src/developer-view.mjs"
+module = "client"
+
+[[owner]]
 path = "sdk/npm/prism-code/src/docker.mjs"
 module = "images"
 

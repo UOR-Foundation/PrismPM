@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 mod audit;
 mod bindings;
 mod codegen;
+mod developer_view;
 mod formatting;
 mod gate_driver;
 mod gate_root;
@@ -143,6 +144,7 @@ fn main() -> ExitCode {
         "validate-spec-links" => spec_links::validate(&root),
         "validate-contract" => validate_contract(),
         "check-modules" => modules::validate(&root),
+        "check-developer-view" => developer_view::validate(&root, write),
         "verify-examples" => verify_examples(&root, write),
         "check-golden" => check_golden(&root, write),
         "check-reproducibility" => check_reproducibility(&root),
@@ -288,6 +290,7 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
     codegen::check_model(root, write)?;
     spec_links::validate(root)?;
     modules::validate(root)?;
+    developer_view::validate(root, write)?;
     audit_all(root)
 }
 
