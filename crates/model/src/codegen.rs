@@ -307,5 +307,19 @@ pub fn render_contracts(model: &Model) -> String {
             );
         }
     }
+    let _ = writeln!(w);
+    let _ = writeln!(w, "## Command groups");
+    let _ = writeln!(w);
+    let _ = writeln!(w, "`prismpm <module> <verb>` runs the command beside it, with the same arguments, output and result schema (#441). The groups are named after the nine modules of `model/modules.toml`; the flat commands stay as aliases. A module that is also a command (`verify`) is a group only when the next word is one of its verbs.");
+    let _ = writeln!(w);
+    let _ = writeln!(w, "| Group verb | Command |");
+    let _ = writeln!(w, "| --- | --- |");
+    for row in &model.commands.group {
+        let _ = writeln!(
+            w,
+            "| `prismpm {} {}` | `prismpm {}` |",
+            row.module, row.verb, row.command
+        );
+    }
     out
 }

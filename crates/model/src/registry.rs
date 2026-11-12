@@ -550,6 +550,21 @@ pub struct Commands {
     pub spec: String,
     /// Stable public command contracts.
     pub command: Vec<CommandRow>,
+    /// Module groups (#441): `prismpm <module> <verb>` names a command above.
+    #[serde(default)]
+    pub group: Vec<CommandGroup>,
+}
+
+/// One group verb: `prismpm <module> <verb>` runs `prismpm <command>`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandGroup {
+    /// One of the nine modules of model/modules.toml.
+    pub module: String,
+    /// The verb under the module.
+    pub verb: String,
+    /// The command it runs: a command name, then any of its subcommands.
+    pub command: String,
 }
 
 /// One stable public command contract.
@@ -662,6 +677,41 @@ impl Commands {
             return Err(ModelError::Inconsistent(
                 "public command contract is incomplete or noncanonical".to_owned(),
             ));
+        }
+        self.check_groups(&names)
+    }
+
+    /// Group rows are sorted and unique by module and verb, use lowercase
+    /// kebab-case words, and run a registered command. A module that is also a
+    /// command keeps that command: its group verbs must not be the command's
+    /// own subcommands.
+    fn check_groups(&self, names: &[&str]) -> Result<(), ModelError> {
+        let word = |text: &str| {
+            !text.is_empty()
+                && !text.starts_with('-')
+                && !text.ends_with('-')
+                && text.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
+        };
+        let bad = |row: &CommandGroup, why: &str| {
+            Err(ModelError::Inconsistent(format!(
+                "command group `{} {}` {why}",
+                row.module, row.verb
+            )))
+        };
+        let mut previous: Option<(&str, &str)> = None;
+        for row in &self.group {
+            let key = (row.module.as_str(), row.verb.as_str());
+            if previous.is_some_and(|previous| previous >= key) {
+                return bad(row, "is out of order or repeated");
+            }
+            previous = Some(key);
+            if !word(&row.module) || !word(&row.verb) {
+                return bad(row, "is not lowercase kebab-case");
+            }
+            let mut words = row.command.split(' ');
+            if !words.clone().all(word) || !words.next().is_some_and(|head| names.contains(&head)) {
+                return bad(row, "does not run a registered command");
+            }
         }
         Ok(())
     }
