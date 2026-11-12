@@ -181,6 +181,17 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
     }
 }
 
+/// The `version` of `[workspace.package]` in a workspace manifest.
+pub fn workspace_version(manifest: &str) -> Option<String> {
+    let section = &manifest[manifest.find("[workspace.package]")?..];
+    section
+        .lines()
+        .skip(1)
+        .take_while(|line| !line.starts_with('['))
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .map(str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -206,15 +217,4 @@ mod tests {
             assert!(!super::has_dated_release_entry(entry, "0.3.0"), "{entry}");
         }
     }
-}
-
-/// The `version` of `[workspace.package]` in a workspace manifest.
-pub fn workspace_version(manifest: &str) -> Option<String> {
-    let section = &manifest[manifest.find("[workspace.package]")?..];
-    section
-        .lines()
-        .skip(1)
-        .take_while(|line| !line.starts_with('['))
-        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
-        .map(str::to_owned)
 }
