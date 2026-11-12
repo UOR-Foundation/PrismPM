@@ -7,9 +7,7 @@ import {mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import test from 'node:test';
-import {buildArtifacts, buildIdentity, buildJobs, buildPlumbing, findBuildReceipt, findCandidate, findReceipt, imageJobs, isPlumbing, kappa,
-  plumbing, plumbingTests, routeRecord, workflowJobs} from './factory.mjs';
-import {parts as vvParts} from './vv-assemble.mjs';
+import {findCandidate, imageJobs, isPlumbing, kappa, plumbing, plumbingTests} from './factory.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
 const root = new URL('..', import.meta.url).pathname;
@@ -77,55 +75,9 @@ test('κ ignores the plumbing and follows every other byte, mode and path', t =>
   assert.match(kappa(path, renamed), /^[0-9a-f]{64}$/);
 });
 
-const established = () => [{name: 'gate', conclusion: 'success'}, ...vvParts.map(part => ({name: `source-vv (${part})`, conclusion: 'success'}))];
-function client(runs, jobs = {}, artifacts = {}) {
-  return {api(path) {
-    if (path.includes('/workflows/release.yml/runs?')) return {workflow_runs: runs};
-    let match = path.match(/\/runs\/(\d+)\/jobs\?filter=latest&per_page=100$/);
-    if (match) return {jobs: jobs[match[1]] ?? established()};
-    match = path.match(/\/runs\/(\d+)\/artifacts\?name=source-vv$/);
-    if (match) return {artifacts: artifacts[match[1]] ?? [{name: 'source-vv', expired: false}]};
-    throw new Error(`unexpected ${path}`);
-  }};
-}
 const run = (id, sha, extra = {}) => ({id, head_sha: sha, run_attempt: 2, event: 'push', head_branch: 'release/v0.4',
   path: '.github/workflows/release.yml', repository: {full_name: 'UOR-Foundation/PrismPM'},
   head_repository: {full_name: 'UOR-Foundation/PrismPM'}, ...extra});
-
-test('a receipt is an ancestor\'s passed gate for the same κ, and nothing else', t => {
-  const {path, commit, git} = repository(t);
-  const proved = commit({'src/a.txt': 'a\n', '.github/workflows/release.yml': 'one\n'}, 'proved');
-  const changedSource = commit({'src/a.txt': 'changed\n'}, 'source');
-  const restored = commit({'src/a.txt': 'a\n'}, 'restored');
-  const current = commit({'.github/workflows/release.yml': 'fixed\n'}, 'plumbing fix');
-  git('checkout', '-q', '-b', 'side', proved); const foreign = commit({'.github/workflows/release.yml': 'side\n'}, 'side');
-  git('checkout', '-q', 'release/v0.4');
-  assert.equal(kappa(path, current), kappa(path, proved));
-  const found = findReceipt(path, current, client([run(7, proved)]));
-  assert.deepEqual(found, {route: 'proved', kappa: kappa(path, current), source_revision: proved, run_id: '7', run_attempt: '2'});
-  // The newest matching ancestor wins: the restored commit has the same κ again.
-  assert.equal(findReceipt(path, current, client([run(9, restored), run(7, proved)])).source_revision, restored);
-  const none = {route: 'establish', kappa: kappa(path, current), source_revision: current, run_id: '', run_attempt: ''};
-  for (const runs of [
-    [], [run(7, changedSource)], [run(7, foreign)],
-    [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
-    [run(7, proved, {repository: {full_name: 'fork/PrismPM'}})], [run(7, proved, {head_repository: {full_name: 'fork/PrismPM'}})],
-    [run(7, proved, {path: '.github/workflows/vv.yml'})], [run(7, 'x'.repeat(40))],
-  ]) assert.deepEqual(findReceipt(path, current, client(runs)), none, JSON.stringify(runs[0] ?? {}));
-  // Another run of this very commit (the rehearsal, for the tag run) is a
-  // receipt; this run itself never is.
-  assert.deepEqual(findReceipt(path, current, client([run(7, current)]), '8'),
-    {route: 'proved', kappa: kappa(path, current), source_revision: current, run_id: '7', run_attempt: '2'});
-  assert.deepEqual(findReceipt(path, current, client([run(7, current)]), '7'), none);
-  const without = name => established().filter(job => job.name !== name);
-  for (const jobs of [[], [{name: 'gate', conclusion: 'failure'}, ...without('gate')], [...established(), {name: 'gate', conclusion: 'success'}],
-    // A run proved by a receipt skipped source-vv; it is never itself a receipt.
-    [{name: 'gate', conclusion: 'success'}, ...vvParts.map(part => ({name: `source-vv (${part})`, conclusion: 'skipped'}))],
-    without('source-vv (gates)')])
-    assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {7: jobs})), none);
-  for (const artifacts of [[], [{name: 'source-vv', expired: true}], [{name: 'source-vv-part-gates', expired: false}]])
-    assert.deepEqual(findReceipt(path, current, client([run(7, proved)], {}, {7: artifacts})), none);
-});
 
 const built = () => [...Array.from({length: imageJobs}, (_, index) => ({name: `images (image-${index})`, conclusion: 'success'})),
   {name: 'image-platforms (ubuntu-24.04, amd64)', conclusion: 'success'}, {name: 'image-platforms (ubuntu-24.04-arm, arm64)', conclusion: 'success'},
@@ -161,105 +113,6 @@ test('a qualification candidate is the newest release-line ancestor whose images
   ]) assert.throws(() => findCandidate(path, proposal, candidates(runs, jobs, artifacts)), /no release-line run/);
 });
 
-// A release workflow and build plumbing, as written, for build identities.
-const releaseWorkflow = (extra = {}) => ({'.github/workflows/release.yml': 'name: release\non:\n  push:\njobs:\n'
-  + ['policy', 'factory', 'gate', ...Object.keys(buildJobs), 'oci-native'].map(name => `  ${name}:\n    runs-on: ${extra[name] ?? 'x'}\n`).join(''),
-  ...Object.fromEntries(buildPlumbing.map(path => [path, `// ${path}\n`]))});
-
-test('the route record binds this commit, its κ, its build identity and the runs that established the evidence', t => {
-  const {path, commit} = repository(t);
-  const proved = commit({'src/a.txt': 'a\n', ...releaseWorkflow()}, 'proved');
-  const current = commit(releaseWorkflow({gate: 'fixed'}), 'plumbing fix');
-  const evidence = Buffer.from('{"schema":"prismpm/vv-evidence/1"}\n');
-  const build = {route: 'proved', revision: proved, run_id: '7', run_attempt: '2'};
-  const record = JSON.parse(routeRecord(path, current, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, build));
-  assert.equal(record.schema, 'prismpm/factory-route/2'); assert.equal(record.revision, current);
-  assert.deepEqual(record.build, {route: 'proved', identity: buildIdentity(path, current), revision: proved, run_id: '7', run_attempt: '2',
-    jobs: Object.keys(buildJobs), plumbing: [...buildPlumbing]});
-  const own = {route: 'established', revision: current, run_id: '9', run_attempt: '1'};
-  assert.equal(JSON.parse(routeRecord(path, current, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, own)).build.route, 'established');
-  for (const wrong of [undefined, {...build, route: 'assumed'}, {...own, revision: proved}, {...build, run_id: ''}])
-    assert.throws(() => routeRecord(path, current, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, wrong));
-  const rebuilt = commit(releaseWorkflow({gate: 'fixed', images: 'changed'}), 'build plumbing change');
-  assert.throws(() => routeRecord(path, rebuilt, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, build), /different build identity/);
-  assert.equal(record.kappa, kappa(path, current)); assert.equal(record.route, 'proved');
-  assert.deepEqual(record.plumbing, [...plumbing]);
-  assert.equal(record.receipt.source_revision, proved); assert.equal(record.receipt.source_vv_sha256.length, 64);
-  const established = JSON.parse(routeRecord(path, current, 'established', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence, own));
-  assert.equal(established.receipt.source_revision, current);
-  assert.throws(() => routeRecord(path, current, 'established', {source_revision: proved, run_id: '9', run_attempt: '1'}, evidence, own));
-  assert.equal(JSON.parse(routeRecord(path, current, 'proved', {source_revision: current, run_id: '9', run_attempt: '1'}, evidence, own)).route, 'proved');
-  assert.throws(() => routeRecord(path, current, 'proved', {source_revision: proved, run_id: '', run_attempt: '1'}, evidence, own));
-  assert.throws(() => routeRecord(path, current, 'assumed', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, own));
-  const changed = commit({'src/a.txt': 'b\n'}, 'source change');
-  assert.throws(() => routeRecord(path, changed, 'proved', {source_revision: proved, run_id: '7', run_attempt: '2'}, evidence, own), /different κ/);
-});
-
-const buildRun = () => Object.entries(buildJobs).flatMap(([name, count]) =>
-  Array.from({length: count}, (_, index) => ({name: `${name} (${index})`, conclusion: 'success'})));
-const buildOutputs = () => ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles'].flatMap(image =>
-  [`${image}-image`, `${image}-supply-chain`, `reproducibility-${image}-amd64`, `reproducibility-${image}-arm64`])
-  .concat(['native-x86_64-unknown-linux-gnu', 'native-aarch64-unknown-linux-gnu', 'source-vv', 'reproducibility-diagnostics-sdk-amd64'],
-    ...['amd64', 'arm64'].map(arch => [`product-cli-sdk-${arch}`, `browser-sdk-sdk-${arch}`, `library-sdk-sdk-${arch}`, `sdk-equivalence-${arch}`]))
-  .map(name => ({name, expired: false}));
-function builds(runs, jobs = {}, artifacts = {}) {
-  return {api(path) {
-    if (path.includes('/workflows/release.yml/runs?')) return {workflow_runs: runs};
-    let match = path.match(/\/runs\/(\d+)\/jobs\?filter=latest&per_page=100$/);
-    if (match) return {jobs: jobs[match[1]] ?? buildRun()};
-    match = path.match(/\/runs\/(\d+)\/artifacts\?per_page=100$/);
-    if (match) return {artifacts: artifacts[match[1]] ?? buildOutputs()};
-    throw new Error(`unexpected ${path}`);
-  }};
-}
-
-test('a build receipt is another run\'s passed build for the same build identity, with every output retained', t => {
-  const {path, commit, git} = repository(t);
-  const proved = commit({'src/a.txt': 'a\n', ...releaseWorkflow()}, 'proved');
-  const gateFix = commit(releaseWorkflow({gate: 'fixed', 'oci-native': 'fixed'}), 'publication plumbing fix');
-  const imageFix = commit(releaseWorkflow({gate: 'fixed', 'oci-native': 'fixed', 'image-platforms': 'changed'}), 'build plumbing fix');
-  const rebuildFix = commit({'scripts/release-rebuild.sh': 'changed\n'}, 'rebuild plumbing fix');
-  const source = commit({'src/a.txt': 'b\n'}, 'source');
-  git('checkout', '-q', '-b', 'side', proved); const foreign = commit({'src/z.txt': 'z\n'}, 'side');
-  // A release line older than the build route: no build jobs, no build plumbing.
-  git('checkout', '-q', '--orphan', 'legacy'); git('rm', '-rqf', '.');
-  const legacy = commit({'src/a.txt': 'a\n', '.github/workflows/release.yml': 'name: legacy\njobs:\n  publish:\n    runs-on: x\n'}, 'legacy');
-  git('checkout', '-q', '-f', 'release/v0.4');
-  // The workflow is split into its header and each job exactly as written.
-  assert.deepEqual(Object.keys(workflowJobs(readFileSync(join(path, '.github/workflows/release.yml'), 'utf8'))),
-    ['header', 'policy', 'factory', 'gate', ...Object.keys(buildJobs), 'oci-native']);
-  assert.throws(() => workflowJobs('name: x\njobs:\n  a:\n  a:\n'), /duplicate job a/);
-  // Publication plumbing does not change the build; build plumbing and source do.
-  assert.equal(buildIdentity(path, gateFix), buildIdentity(path, proved));
-  for (const revision of [imageFix, rebuildFix, source]) assert.notEqual(buildIdentity(path, revision), buildIdentity(path, proved));
-  const expected = {build_route: 'proved', build_identity: buildIdentity(path, gateFix), build_revision: proved, build_run_id: '7', build_run_attempt: '2'};
-  assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(7, proved)]), '8'), expected);
-  // The tag run of a rehearsed commit is proved by the rehearsal, never by itself.
-  assert.equal(findBuildReceipt(path, gateFix, builds([run(7, gateFix)]), '8').build_route, 'proved');
-  const none = revision => ({build_route: 'establish', build_identity: buildIdentity(path, revision), build_revision: revision, build_run_id: '', build_run_attempt: ''});
-  assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(7, gateFix)]), '7'), none(gateFix));
-  for (const revision of [imageFix, rebuildFix, source]) assert.deepEqual(findBuildReceipt(path, revision, builds([run(7, proved)]), '8'), none(revision));
-  // Such a run is a different identity, never an error that stops the search.
-  assert.notEqual(buildIdentity(path, legacy), buildIdentity(path, proved));
-  assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(6, legacy), run(7, proved)]), '8'), expected);
-  for (const runs of [[run(7, legacy)], [run(7, foreign)], [run(7, proved, {event: 'pull_request'})], [run(7, proved, {head_branch: 'main'})],
-    [run(7, proved, {head_repository: {full_name: 'fork/PrismPM'}})], [run(7, proved, {path: '.github/workflows/vv.yml'})]])
-    assert.deepEqual(findBuildReceipt(path, gateFix, builds(runs), '8'), none(gateFix));
-  for (const name of Object.keys(buildJobs)) {
-    const failed = buildRun().map(job => job.name.startsWith(`${name} (`) ? {...job, conclusion: 'failure'} : job);
-    const skipped = buildRun().map(job => job.name.startsWith(`${name} (`) ? {...job, conclusion: 'skipped'} : job);
-    const missing = buildRun().filter(job => job.name !== `${name} (0)`);
-    for (const jobs of [failed, skipped, missing]) assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(7, proved)], {7: jobs}), '8'), none(gateFix), name);
-  }
-  for (const [pattern] of buildArtifacts) {
-    const outputs = buildOutputs();
-    const expired = outputs.map(artifact => pattern.test(artifact.name) ? {...artifact, expired: true} : artifact);
-    const dropped = outputs.filter((artifact, index) => !(pattern.test(artifact.name) && index === outputs.findIndex(row => pattern.test(row.name))));
-    for (const artifacts of [expired, dropped])
-      assert.deepEqual(findBuildReceipt(path, gateFix, builds([run(7, proved)], {}, {7: artifacts}), '8'), none(gateFix), String(pattern));
-  }
-});
-
 test('the release workflow is the model\'s route', () => {
   const model = read('factory/src/Factory/Release.lex.tex');
   const route = definition(model, 'route');
@@ -269,7 +122,7 @@ test('the release workflow is the model\'s route', () => {
     native: ['native'], installedSdk: ['installed-sdk'], publication: ['gate', 'oci-native', 'crates', 'release']};
   const routed = [...route.matchAll(/Stage\.([a-zA-Z]+)/g)].map(match => match[1]);
   assert.deepEqual(routed.sort(), Object.keys(stageJobs).sort());
-  const support = ['policy', 'factory', 'devcontainer-image'];
+  const support = ['policy', 'factory', 'devcontainer-image', 'vv-sdk', 'receipts'];
   assert.deepEqual(Object.keys(workflow.jobs).sort(), [...support, ...Object.values(stageJobs).flat()].sort());
   // onlyPublicationWaitsForTheSource: no projection stage needs source V&V or the gate.
   const needs = job => [workflow.jobs[job].needs ?? []].flat();
@@ -278,6 +131,21 @@ test('the release workflow is the model\'s route', () => {
     assert(!upstream(job).has('source-vv') && !upstream(job).has('gate'), `${job} starts beside source V&V`);
   for (const job of ['oci-native', 'crates', 'release']) assert(upstream(job).has('gate'), `${job} waits for the gate`);
   assert(upstream('gate').has('source-vv') && upstream('gate').has('factory'));
+  // Source V&V runs its oracles in the one image vv-sdk built, never one of its own.
+  assert(upstream('source-vv').has('vv-sdk'));
+  assert(!JSON.stringify(workflow.jobs['source-vv']).includes('sdk-image-inputs.mjs build'));
+  // Receipts are recorded after every job, and only the factory core decides routes.
+  assert.deepEqual(needs('receipts').sort(), Object.keys(workflow.jobs).filter(name => name !== 'receipts').sort());
+  assert(!read('.github/workflows/release.yml').includes('factory.mjs find-receipt'));
+});
+
+test('the certified factory\'s source V&V reads every path except exactly this plumbing', () => {
+  const model = read('prism-factory/model/src/Factory/PrismPM.lex.tex');
+  const graph = definition(model, 'graph');
+  const sourceVv = graph.slice(graph.indexOf('(obligation "source-vv"'), graph.indexOf('(obligation "build"'));
+  const inputs = strings(sourceVv).filter(value => value === '' || value.startsWith('!'));
+  assert.deepEqual(inputs[0], '');
+  assert.deepEqual(inputs.slice(1).map(value => value.slice(1)).sort(), [...plumbing].sort());
 });
 
 test('the factory catalog names only first-party products', () => {
