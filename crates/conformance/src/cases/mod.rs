@@ -741,6 +741,13 @@ pub fn run_at(root: &Path, id: &str) {
             &[("sdk/npm/prism-code/test/system.test.mjs", 20)],
             "600000",
         ),
+        // The `prism-code system` and `auth` command groups of #446 and #447.
+        "DK-44" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/system-auth-cli.test.mjs", 15)],
+            "600000",
+        ),
         "DK-35" => verify_node_suite(
             root,
             id,
