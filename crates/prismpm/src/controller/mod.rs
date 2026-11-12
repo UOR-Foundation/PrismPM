@@ -298,31 +298,74 @@ fn application_selection(
     snapshot: &lexlean::SemanticSnapshot,
 ) -> Result<Option<Selection>, PrismError> {
     let mut paths = BTreeSet::new();
+    let mut server = false;
     for module in snapshot.modules() {
-        if module.declarations().iter().any(|declaration| {
-            declaration.kind() == "definition"
-                && declaration
-                    .linked_ir()
-                    .pointer("/result/member/name")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(|name| name.ends_with("Application"))
-                && declaration
-                    .linked_ir()
-                    .pointer("/body/kind")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("record")
-        }) {
+        let roots = module
+            .declarations()
+            .iter()
+            .filter(|declaration| {
+                declaration.kind() == "definition"
+                    && declaration
+                        .linked_ir()
+                        .pointer("/result/member/name")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|name| name.ends_with("Application"))
+                    && declaration
+                        .linked_ir()
+                        .pointer("/body/kind")
+                        .and_then(serde_json::Value::as_str)
+                        == Some("record")
+            })
+            .collect::<Vec<_>>();
+        if !roots.is_empty() {
+            server |= roots.iter().any(|declaration| {
+                declaration.linked_ir().pointer("/result/member/name")
+                    == Some(&serde_json::Value::from("ServerApplication"))
+            });
             paths.insert(Utf8PathBuf::from(module.source().path()));
         }
     }
-    match paths.len() {
-        0 => Ok(None),
-        1 => Ok(Some(Selection::Files(paths))),
-        _ => Err(PrismError::new(
+    if paths.len() > 1 {
+        return Err(PrismError::new(
             "PP2001",
             "a product source graph contains multiple application roots",
-        )),
+        ));
     }
+    if paths.is_empty() {
+        return Ok(None);
+    }
+    if server {
+        // A server application names its core root in a module it does not
+        // import. Select that module too, so the application is projected
+        // from the same sources a server project's own entrypoints give it.
+        paths.insert(server_core_module(snapshot)?);
+    }
+    Ok(Some(Selection::Files(paths)))
+}
+
+/// The source file that defines the core root of the snapshot's server application.
+fn server_core_module(snapshot: &lexlean::SemanticSnapshot) -> Result<Utf8PathBuf, PrismError> {
+    let application = crate::holo::application::project_application(snapshot)?
+        .and_then(|model| model.application);
+    let Some(crate::holo::model_document::Application::Server(application)) = application else {
+        return Err(PrismError::new(
+            "PP2001",
+            "server application root did not project as a server application",
+        ));
+    };
+    for module in snapshot.modules() {
+        for declaration in module.declarations() {
+            if format!("{}.{}", module.lean_module(), declaration.lean_name())
+                == application.core.root
+            {
+                return Ok(Utf8PathBuf::from(module.source().path()));
+            }
+        }
+    }
+    Err(PrismError::new(
+        "PP2001",
+        "server application core root is not defined",
+    ))
 }
 
 #[derive(Serialize)]

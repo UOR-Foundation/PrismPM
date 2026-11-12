@@ -96,23 +96,21 @@ fn bind_application_digest(root: &Path) {
 /// Bind every `applicationModelDigest` of `src/Release.lex.tex` to the model
 /// that `application` projects, expecting exactly `bindings` occurrences.
 fn bind_application_digest_of(root: &Path, application: &str, bindings: usize) {
-    let engine = Engine::load(&utf8(root.join("lexlean.toml")).unwrap()).unwrap();
-    let snapshot = engine
+    bind_application_digest_of_files(root, &[application], bindings);
+}
+
+/// As [`bind_application_digest_of`], for an application projected from
+/// several files: a server application and the module of its core root.
+fn bind_application_digest_of_files(root: &Path, files: &[&str], bindings: usize) {
+    let snapshot = Engine::load(&utf8(root.join("lexlean.toml")).unwrap())
+        .unwrap()
         .snapshot(LexCheckRequest {
-            selection: Selection::Files([Utf8PathBuf::from(application)].into()),
+            selection: Selection::Files(files.iter().map(Utf8PathBuf::from).collect()),
         })
         .unwrap();
-    // As `prepare` does: the application from its own file, its facet records
-    // and a server application's core root from the whole project.
-    let project = engine
-        .snapshot(LexCheckRequest {
-            selection: Selection::Entrypoints,
-        })
+    let application = crate::holo::application::project_application(&snapshot)
+        .unwrap()
         .unwrap();
-    let application =
-        crate::holo::application::project_application_with_facets(&snapshot, &project)
-            .unwrap()
-            .unwrap();
     let digest = format!(
         "sha256:{}",
         content_id(&encode_canonical(&application).unwrap())
@@ -377,7 +375,10 @@ fn echo_server_project() -> tempfile::TempDir {
 /// Add the Production modules and the release of `tests/host-effect-system`
 /// to `temporary`, select the release, and bind it to the application model
 /// that `application` projects.
-fn with_host_effect_release(temporary: tempfile::TempDir, application: &str) -> tempfile::TempDir {
+fn with_host_effect_release(
+    temporary: tempfile::TempDir,
+    application: &[&str],
+) -> tempfile::TempDir {
     let root = temporary.path();
     std::fs::create_dir_all(root.join("src/Production")).unwrap();
     for name in ["Core", "HostEffectSystem"] {
@@ -394,14 +395,17 @@ fn with_host_effect_release(temporary: tempfile::TempDir, application: &str) -> 
     copy_fixture_file(fixture.join("lexlean.toml"), root.join("lexlean.toml"));
     copy_stdlib_lexicon(root);
     relock(root);
-    bind_application_digest_of(root, application, 2);
+    bind_application_digest_of_files(root, application, 2);
     temporary
 }
 
 /// The mcp-loopback host-effect service of `tests/host-effect-system`, bound to
 /// the Echo Server, whose declared effects it lists.
 fn host_effect_system_project() -> tempfile::TempDir {
-    with_host_effect_release(echo_server_project(), "src/Application.lex.tex")
+    with_host_effect_release(
+        echo_server_project(),
+        &["src/Application.lex.tex", "src/Core.lex.tex"],
+    )
 }
 
 #[test]
