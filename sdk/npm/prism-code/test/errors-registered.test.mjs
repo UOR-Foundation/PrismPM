@@ -1,5 +1,5 @@
 // Every code raised in sdk/npm/prism-code/src and crates/prismpm/src against ERRORS.md and model/errors.toml (#448).
-// `xtask validate` gates the Rust side on every change. This also runs when the JavaScript side changes, and holds its unregistered codes to a written list.
+// `xtask validate` gates the Rust side on every change. This also runs when the JavaScript side changes, and fails on any code model/sdk-diagnostics.toml does not register.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -27,8 +27,10 @@ const modelCodes = new Set([...readFileSync(repo('model/errors.toml'), 'utf8').m
 const errorsMd = readFileSync(repo('ERRORS.md'), 'utf8');
 const documentedPP = new Set([...errorsMd.matchAll(/^## `(PP\d{4})`/gm)].map((match) => match[1]));
 
-/** A code counts as registered once ERRORS.md, generated from model/*.toml, lists it in any namespace. */
-const isRegistered = (code) => errorsMd.includes(`\`${code}\``);
+/** The rows of model/sdk-diagnostics.toml: each `code`, and the `class` it is the own code of, if any. */
+const sdkRows = [...readFileSync(repo('model/sdk-diagnostics.toml'), 'utf8').replace(/\r\n/g, '\n').matchAll(/^\[\[error\]\]\ncode = "([^"]+)"\n(?:class = "([^"]+)"\n)?/gm)].map((match) => ({ code: match[1], class: match[2] }));
+const sdkCodes = new Set(sdkRows.map((row) => row.code));
+const advice = 'Every code prism-code raises is a row of model/sdk-diagnostics.toml, owned by its module\'s capability; add the row and run `cargo xtask validate-model --write` to regenerate ERRORS.md.';
 
 const withoutComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
@@ -68,10 +70,25 @@ test('every PP code in sdk/npm/prism-code/src is registered', () => {
   for (const [code, file] of mentioned) assert.ok(modelCodes.has(code), `${file} names ${code}, which model/errors.toml does not register`);
 });
 
-test('the unregistered codes of the package are exactly the written list', () => {
-  const listed = JSON.parse(readFileSync(new URL('./fixtures/unregistered-codes.json', import.meta.url), 'utf8'));
-  const advice =
-    'A code the package raises is registered in model/*.toml and listed in ERRORS.md. Until #448 settles where, a new one joins test/fixtures/unregistered-codes.json, and a code that was registered or removed leaves it.';
-  assert.deepEqual(sorted(Object.values(errors.codes).filter((code) => !isRegistered(code))), sorted(listed.classCodes), advice);
-  assert.deepEqual(sorted([...raisedCodes()].filter((code) => !isRegistered(code))), sorted(listed.raisedCodes), advice);
+test('every code of an error class is registered with its class', () => {
+  const classes = Object.entries(errors.codes).map(([name, code]) => ({ code, class: name }));
+  assert.ok(classes.length > 0);
+  assert.deepEqual(sorted(classes.map((row) => `${row.code} ${row.class}`)), sorted(sdkRows.filter((row) => row.class).map((row) => `${row.code} ${row.class}`)), advice);
+});
+
+test('every code the package raises is registered, and every check code registered is raised', () => {
+  const all = [...raisedCodes()];
+  for (const code of all.filter((code) => /^PP\d{4}$/.test(code))) assert.ok(modelCodes.has(code), `prism-code raises ${code}, which model/errors.toml does not register`);
+  const raised = new Set(all.filter((code) => !/^PP\d{4}$/.test(code)));
+  for (const code of raised) {
+    assert.ok(!code.includes('*'), `${code} is built from a variable; raise each code as a literal, so that it can be registered`);
+    assert.ok(sdkCodes.has(code), `prism-code raises ${code}, which model/sdk-diagnostics.toml does not register. ${advice}`);
+  }
+  const checks = sdkRows.filter((row) => !row.class).map((row) => row.code);
+  assert.deepEqual(sorted(checks), sorted(raised), 'model/sdk-diagnostics.toml registers a code that prism-code no longer raises; remove its row.');
+});
+
+test('ERRORS.md lists every row of model/sdk-diagnostics.toml', () => {
+  assert.ok(sdkRows.length > 0);
+  for (const row of sdkRows) assert.ok(errorsMd.includes(`| \`${row.code}\` |`), `ERRORS.md has no row for ${row.code}; run cargo xtask validate-model --write`);
 });
