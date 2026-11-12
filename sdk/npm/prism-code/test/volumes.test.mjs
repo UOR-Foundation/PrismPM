@@ -10,6 +10,7 @@ import { CapabilityDeniedError, ProviderFailedError, ProviderNotFoundError, clas
 import { manifestProviders } from '../src/manifest.mjs';
 import { releaseProviders, resolveProviders } from '../src/providers.mjs';
 import { HOST_EFFECTS, attachVolume, createVolumes, refusalRecord } from '../src/volumes.mjs';
+import { createPrism } from '../src/index.mjs';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
 const windows = process.platform === 'win32';
@@ -382,4 +383,51 @@ test('no verb changes the capability file, and remove leaves the grant in place'
 
 test('without a runner, remove reports a refusal before it reports the missing runner', async () => {
   await refuses(createVolumes({ capabilities: caps(GRANT) }).remove('rates'), 'capabilities.providers', { outside: 'declaration' });
+});
+
+// containers.create({ volumes }) (#443): the volume goes through attachVolume and the refusal is kept on the container.
+
+const HOLO = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
+const P0 = Object.freeze({ policy: { minimum: 'P0' } });
+
+test('a container that asks for a volume is created with the typed refusal on its record, and never runs', async () => {
+  const prism = createPrism({ ...scope({ world: WITH_STORES }), warn: () => {} });
+  const container = await prism.containers.create(HOLO, '1\tadd\t1\t2', { ...P0, volumes: ['rates'] });
+  const created = await container.inspect();
+  assert.equal(created.volumes.length, 1);
+  assert.equal(created.volumes[0].name, 'rates');
+  assert.equal(created.volumes[0].attached, false);
+  assert.equal(created.volumes[0].refusal.check, 'capabilities.host-effects');
+  assert.deepEqual(created.volumes[0].refusal.details.dependsOn, HOST_EFFECTS);
+  // allowUnverified bypasses check and nothing else.
+  for (const options of [P0, { ...P0, allowUnverified: true }]) {
+    const run = await prism.containers.run(HOLO, '1\tadd\t1\t2', { ...options, volumes: ['rates'] });
+    assert.equal(run.exitCode, 2);
+    assert.ok(run.error instanceof CapabilityDeniedError);
+    assert.equal(run.error.check, 'capabilities.host-effects');
+    const record = await run.inspect();
+    assert.equal(record.state.startedAt, null, 'the guest never ran');
+    assert.equal(record.output, null);
+    assert.equal(record.state.error.name, 'CapabilityDeniedError');
+    assert.equal(record.verdict, null, 'the refusal comes before check');
+  }
+  await refuses(prism.containers.dispatch(HOLO, '1\tadd\t1\t2', { ...P0, volumes: ['rates'] }), 'capabilities.host-effects', { dependsOn: ['#216', '#217'] });
+});
+
+test('a container that asks for a host folder, a denied store or an undeclared one keeps that refusal instead', async () => {
+  const prism = createPrism({ ...scope({ world: WITH_STORES }), warn: () => {} });
+  const checks = async (volumes) => (await (await prism.containers.create(HOLO, '', { ...P0, volumes })).inspect()).volumes.map((row) => row.refusal.check);
+  assert.deepEqual(await checks(['/var/data']), ['capabilities.host-folder']);
+  assert.deepEqual(await checks(['./data:/data']), ['capabilities.host-folder']);
+  assert.deepEqual(await checks(['secrets']), ['capabilities.key-value-stores']);
+  assert.deepEqual(await checks(['rates', 'rates']), ['capabilities.host-effects'], 'a name asked twice is one volume');
+  // With no world in scope, the store is outside the image's declared world.
+  const bare = createPrism({ ...scope(), warn: () => {} });
+  const record = await (await bare.containers.create(HOLO, '', { ...P0, volumes: ['rates'] })).inspect();
+  assert.equal(record.volumes[0].refusal.details.outside, 'world');
+  for (const volumes of ['rates', [7], { rates: true }]) {
+    await assert.rejects(prism.containers.create(HOLO, '', { volumes }), { code: 'container.option' });
+  }
+  // No volumes asked for: the record says so, and nothing is attached.
+  assert.deepEqual((await (await prism.containers.create(HOLO, '', P0)).inspect()).volumes, []);
 });

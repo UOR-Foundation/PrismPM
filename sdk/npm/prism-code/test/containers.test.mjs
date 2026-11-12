@@ -13,6 +13,7 @@ import {
   experimental_verify,
   memoryContainerStore,
   CONTAINER_SCHEMA,
+  STOP_DEPENDS_ON,
   EXIT_CODES,
   ERROR_CLASSES,
   exitCodeFor,
@@ -386,6 +387,86 @@ test('allowUnverified runs a holo that fails check, warns on every start, and th
   assert.match(warnings[0], /^the holo failed check \(P0, policy default requires P2\): .*running it unverified$/);
   await container.start();
   assert.equal(warnings.length, 2);
+});
+
+test('the bypass is explicit and on the record: allowUnverified, when, why, and the warning given', async () => {
+  const warnings = [];
+  const { containers } = createPrism({ warn: (message) => warnings.push(message) });
+  const bypassed = await containers.run(fixture, ADD, { allowUnverified: true });
+  const record = await bypassed.inspect();
+  assert.equal(record.allowUnverified, true);
+  assert.equal(record.unverified.warning, warnings[0]);
+  assert.equal(record.unverified.code, 'verification_failed');
+  assert.ok(Date.parse(record.unverified.at) <= Date.parse(record.state.startedAt));
+  // A holo that passes runs gated, even with the flag: nothing was bypassed, and the record says that too.
+  const passed = await (await containers.run(fixture, ADD, { ...P0, allowUnverified: true })).inspect();
+  assert.equal(passed.allowUnverified, true);
+  assert.equal(passed.unverified, null);
+  const plain = await (await containers.run(fixture, ADD, P0)).inspect();
+  assert.equal(plain.allowUnverified, false);
+  assert.equal(plain.unverified, null);
+  // A refused run without the flag ran nothing, so it bypassed nothing.
+  const refused = await (await containers.run(fixture, ADD)).inspect();
+  assert.equal(refused.unverified, null);
+  assert.equal(refused.state.startedAt, null);
+  await assert.rejects(containers.create(fixture, ADD, { allowUnverified: 'yes' }), { code: 'container.option' });
+});
+
+test('containers.inspect, logs and start take an id or a unique prefix, as the container itself does', async () => {
+  const { containers } = quiet();
+  const created = await containers.create(fixture, ADD, P0);
+  assert.deepEqual(await containers.logs(created.id), new Uint8Array(0), 'no run, no output');
+  assert.deepEqual(await containers.inspect(created.id.slice(0, 12)), await created.inspect());
+  await containers.start(created.id);
+  assert.equal(new TextDecoder().decode(await containers.logs(created.id.slice(0, 12))), SUM);
+  assert.deepEqual(await containers.logs(created.id), await created.logs());
+  assert.equal((await containers.inspect(created.id)).state.status, 'exited');
+  await assert.rejects(containers.logs(created.id, { follow: true }), { code: 'container.option' });
+  await containers.remove(created.id);
+  await assert.rejects(containers.inspect(created.id), { code: 'container.missing' });
+  await assert.rejects(containers.logs(created.id), { code: 'container.missing' });
+  await assert.rejects(created.logs(), { code: 'container.missing' });
+});
+
+test('logs are served from the stored output, so a container read back from the file store has them', async () => {
+  const directory = join(scratch(), 'containers');
+  const app = { ...(await load(fixture)), dispatch: async () => Uint8Array.from([0xff, 0x00, 0xfe]) };
+  const first = createPrism({ store: fileContainerStore(directory), warn: () => {} });
+  const container = await first.containers.run(app, ADD, { allowUnverified: true });
+  const second = createPrism({ store: fileContainerStore(directory) });
+  assert.deepEqual(await second.containers.logs(container.id), Uint8Array.from([0xff, 0x00, 0xfe]));
+  assert.equal((await second.containers.inspect(container.id)).unverified.code, 'verification_failed', 'the bypass outlives the process');
+});
+
+test('stop is not yet: it raises container.stop naming #350, and a missing container is still container.missing', async () => {
+  const { containers } = quiet();
+  const container = await containers.run(fixture, ADD, P0);
+  for (const attempt of [containers.stop(container.id), container.stop()]) {
+    await assert.rejects(attempt, (error) => {
+      assert.ok(error instanceof PrismCodeError);
+      assert.equal(error.code, 'container.stop');
+      assert.deepEqual(error.details.dependsOn, ['#350']);
+      assert.match(error.message, /#350/);
+      return true;
+    });
+  }
+  assert.deepEqual(STOP_DEPENDS_ON, ['#350']);
+  await assert.rejects(containers.stop('ab'.repeat(32)), { code: 'container.missing' });
+});
+
+test('dispatch is a call: it returns the output, leaves no container, and a refused image rejects without running', async () => {
+  const { containers } = quiet();
+  assert.equal(new TextDecoder().decode(await containers.dispatch(fixture, ADD, P0)), SUM);
+  assert.deepEqual(await containers.list({ all: true }), []);
+  let ran = false;
+  const app = { ...(await load(fixture)), dispatch: async () => { ran = true; return new Uint8Array(0); } };
+  await assert.rejects(containers.dispatch(app, ADD), (error) => error instanceof VerificationError && error.verdict?.passed === false);
+  assert.equal(ran, false, 'a refused image never instantiates');
+  assert.deepEqual(await containers.list({ all: true }), []);
+  await assert.rejects(containers.dispatch(await throwing(new ReplayError('replayed wrong')), ADD, P0), ReplayError);
+  // rm: false keeps the container, as run does.
+  await containers.dispatch(fixture, ADD, { ...P0, rm: false });
+  assert.equal((await containers.list({ all: true })).length, 1);
 });
 
 test('an id that is not hex, or a prefix that names two, is not looked up as a path', async () => {

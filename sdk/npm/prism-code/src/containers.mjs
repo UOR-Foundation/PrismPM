@@ -17,8 +17,43 @@
 import { PrismError, VerificationError, errorFromVerdict, exitCodeFor, fail } from './errors.mjs';
 import { attestationBlocker } from './verify.mjs';
 import { ASSURANCE } from './vendor/verify.mjs';
+import { attachVolume, refusalRecord } from './volumes.mjs';
 
 export const CONTAINER_SCHEMA = 'prism/container/1';
+
+/** What `stop` depends on: a guest that can be interrupted (#350, M7). Until then a run is one call, and `stop` raises `container.stop`. */
+export const STOP_DEPENDS_ON = Object.freeze(['#350']);
+
+const stopUnavailable = (id) => fail('container.stop', `container ${id} cannot be stopped: a run is one call into the guest, and stopping it depends on #350`, { dependsOn: STOP_DEPENDS_ON });
+
+/** The volume names `create` takes: an array of strings, each attached through `volumes` (#445). */
+function volumeNames(volumes) {
+  if (volumes === undefined) return [];
+  if (!Array.isArray(volumes) || !volumes.every((name) => typeof name === 'string')) fail('container.option', 'volumes must be an array of volume names');
+  return [...new Set(volumes)];
+}
+
+/**
+ * Attach each volume, and return the first refusal with the record of every one.
+ * Every attach is refused until host effects land (#216, #217); a refusal that is
+ * not the volumes module's, such as an invalid capability file, is thrown.
+ */
+async function attachAll(scope, names) {
+  let first = null;
+  const rows = [];
+  for (const name of names) {
+    try {
+      await attachVolume(scope, name);
+      rows.push({ name, attached: true, refusal: null });
+    } catch (error) {
+      const refusal = refusalRecord(error);
+      if (refusal === null) throw error;
+      first ??= error;
+      rows.push({ name, attached: false, refusal: structuredClone(refusal) });
+    }
+  }
+  return { error: first, rows };
+}
 
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 const HEX_ID = /^[0-9a-f]{1,64}$/;
@@ -102,12 +137,13 @@ class Container {
   #warn;
   #forget;
   #emit;
+  #volumeScope;
   #output;
   #error = null;
   #inFlight = null;
   #removed = false;
 
-  constructor({ record, app = null, input = null, policy, allowUnverified = false, store, warn, forget, emit }) {
+  constructor({ record, app = null, input = null, policy, allowUnverified = false, store, warn, forget, emit, volumeScope = {} }) {
     this.#record = record;
     this.#app = app;
     this.#input = input;
@@ -117,6 +153,7 @@ class Container {
     this.#warn = warn;
     this.#forget = forget;
     this.#emit = emit;
+    this.#volumeScope = volumeScope;
     this.#output = decodeOutput(record.output);
   }
 
@@ -144,6 +181,19 @@ class Container {
     return this.#error;
   }
 
+  /** The output the guest returned, as `docker logs` serves it: from the record, so a container read back from its store has it too. Empty before any run. */
+  async logs(options) {
+    if (options !== undefined && (options === null || typeof options !== 'object' || Object.keys(options).length > 0)) fail('container.option', 'logs takes no options: a run returns one output, kept on the record');
+    if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
+    return decodeOutput(this.#record.output) ?? new Uint8Array(0);
+  }
+
+  /** Not yet: a run is one call into the guest, and interrupting it depends on #350. Raises `container.stop`. */
+  async stop() {
+    if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
+    stopUnavailable(this.id);
+  }
+
   /** The output as text, or null when the guest returned none. */
   text() {
     return this.#output === null ? null : new TextDecoder().decode(this.#output);
@@ -165,11 +215,21 @@ class Container {
   async #run() {
     if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
     if (this.#app === null) fail('container.state', `container ${this.id} was read back from its store, which does not keep its input; run the holo again instead`);
+    // A volume is refused before check runs, and allowUnverified does not bypass it.
+    if ((this.#record.volumes ?? []).length > 0) {
+      const attached = await attachAll(this.#volumeScope, this.#record.volumes.map((row) => row.name));
+      this.#record.volumes = attached.rows;
+      if (attached.error !== null) return this.#exit({ error: attached.error, startedAt: null });
+    }
     const { verdict, error } = await judge(this.#app, this.#policy);
     this.#record.verdict = verdict;
+    this.#record.unverified = null;
     if (error !== null) {
       if (!this.#allowUnverified) return this.#exit({ error, startedAt: null });
-      this.#warn(unverifiedWarning(verdict, error));
+      const warning = unverifiedWarning(verdict, error);
+      // The bypass is on the record, so whoever reads the container sees that it ran unverified, and why.
+      this.#record.unverified = { at: new Date().toISOString(), warning, code: error.code ?? null, check: error.check ?? null };
+      this.#warn(warning);
     }
     const startedAt = new Date().toISOString();
     this.#record.state = { status: 'running', exitCode: null, error: null, startedAt, finishedAt: null };
@@ -238,7 +298,7 @@ const utf8Encoder = new TextEncoder();
  * Docker's actions `create`, `start`, `die` and `destroy`; the client passes the
  * bus `system.events` reads (#446). An `onEvent` that throws does not stop a run.
  */
-export function createContainers({ load, store = memoryContainerStore(), warn = (message) => console.warn(`prism-code: ${message}`), onEvent = null }) {
+export function createContainers({ load, store = memoryContainerStore(), warn = (message) => console.warn(`prism-code: ${message}`), onEvent = null, volumes: volumeScope = {} }) {
   if (onEvent !== null && typeof onEvent !== 'function') fail('container.option', 'onEvent must be a function, or null');
   const live = new Map();
   const forget = (id) => live.delete(id);
@@ -257,9 +317,11 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
    * `docker create` fails on an image it cannot find.
    */
   async function create(image, input, options = {}) {
-    const { policy, allowUnverified = false, rm = false, ...loadOptions } = options;
+    const { policy, allowUnverified = false, rm = false, volumes, ...loadOptions } = options;
+    if (typeof allowUnverified !== 'boolean') fail('container.option', 'allowUnverified must be true or false');
     // A copy: a later `start` runs the input as it was given here.
     const bytes = inputBytes(input).slice();
+    const names = volumeNames(volumes);
     const app = typeof image?.dispatch === 'function' ? image : await load(image, { ...loadOptions, allowUnverified });
     const fingerprint = app.identities?.archiveFingerprint;
     const record = {
@@ -268,12 +330,17 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
       image: { name: app.name ?? null, kind: app.kind ?? null, digest: fingerprint ? `blake3:${fingerprint}` : null },
       created: new Date().toISOString(),
       rm,
+      allowUnverified,
+      // Each volume asked for, and the typed refusal that keeps it from the guest (#445).
+      volumes: (await attachAll(volumeScope, names)).rows,
       state: { status: 'created', exitCode: null, error: null, startedAt: null, finishedAt: null },
       verdict: null,
+      // Set when a start ran past a refusing check under allowUnverified: when, why, and the warning given.
+      unverified: null,
       output: null,
     };
     await store.put(record);
-    const container = new Container({ record, app, input: bytes, policy, allowUnverified, store, warn, forget, emit });
+    const container = new Container({ record, app, input: bytes, policy, allowUnverified, store, warn, forget, emit, volumeScope });
     live.set(record.id, container);
     emit('create', record);
     return container;
@@ -292,7 +359,7 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     if (ids.length > 1) fail('container.ambiguous', `${id} names ${ids.length} containers; give more of the id`);
     const known = live.get(ids[0]);
     if (known) return known;
-    const container = new Container({ record: await store.get(ids[0]), store, warn, forget, emit });
+    const container = new Container({ record: await store.get(ids[0]), store, warn, forget, emit, volumeScope });
     live.set(ids[0], container);
     return container;
   }
@@ -338,13 +405,28 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     return { containersDeleted, spaceReclaimed };
   }
 
+  /**
+   * Run the holo once and return what it returned, as a call: the container is
+   * removed on exit unless `rm: false`, and a failed run rejects with its typed
+   * error instead of resolving to an exit code. A refused image never runs.
+   */
+  async function dispatch(image, input, options = {}) {
+    const container = await run(image, input, { rm: true, ...options });
+    if (container.error !== null) throw container.error;
+    return container.output ?? new Uint8Array(0);
+  }
+
   return Object.freeze({
     run,
     create,
+    dispatch,
     get,
     list,
     prune,
     start: async (id) => (await get(id)).start(),
+    stop: async (id) => (await get(id)).stop(),
+    logs: async (id, options) => (await get(id)).logs(options),
+    inspect: async (id) => (await get(id)).inspect(),
     remove: async (id) => (await get(id)).remove(),
   });
 }

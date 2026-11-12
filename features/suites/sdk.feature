@@ -271,3 +271,11 @@ Feature: sdk
     When the suite runs every check against the shim
     Then the run passes with every gap declared, and the digests checks pass in full
     And the checks that pass are exactly the ones DK-42 lists, by feature
+
+
+  @DK-43 @build
+  Scenario: The prism.containers namespace of prism-code runs images as containers with Docker's states: run, create, start, dispatch, list, inspect, logs, remove and prune work by id or unique prefix, a holo that fails check exits without instantiating the guest, an allowUnverified bypass is recorded on the prism/container/1 record with its time, error and warning, logs are served from the stored output, a volume a container asks for goes through prism.volumes and its typed host-effects refusal is kept on the record before check runs, and stop raises container.stop naming #350.
+    Given a client from createPrism over a memory store and one over a file store, and a capability file with a store declared
+    When containers are created, started, dispatched, inspected, read for logs, stopped and removed, with and without allowUnverified and with a volume
+    Then a holo that fails check exits without the guest running, and an allowUnverified run records when it bypassed check and why
+    And a volume is refused with a typed host-effects error kept on the record, logs come from the stored output, and stop raises container.stop naming #350
