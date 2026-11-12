@@ -2774,8 +2774,13 @@ fn run_application(
         .collect::<BTreeSet<_>>();
     // Retain only separately attested inputs, not any generated product files.
     // Recompute containing-system projections just as the original build did.
+    // Design views and the OSCAL rendering of a threat model are projections of
+    // the checked snapshot, which `check` and this verify's own build rendered;
+    // the application regeneration does not produce them (#612).
     for path in &expected_artifacts {
         if path.starts_with("lexlean/")
+            || path.starts_with("design/")
+            || path.starts_with("oscal/")
             || path.starts_with("application/lexlean-build/")
             || matches!(
                 path.as_str(),
