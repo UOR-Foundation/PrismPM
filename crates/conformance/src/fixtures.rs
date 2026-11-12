@@ -254,10 +254,10 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 if case.command == "holo-noncanonical" {
                     let mut malformed = bytes;
                     malformed.insert(1, b' ');
-                    return prismpm::holo::canonical::decode_canonical(&malformed)
+                    return prismpm::holo::model_document::decode_canonical(&malformed)
                         .map(|_| Vec::new());
                 }
-                let mut holo = prismpm::holo::canonical::decode_canonical(&bytes)?;
+                let mut holo = prismpm::holo::model_document::decode_canonical(&bytes)?;
                 if case.command == "holo-dangling-edge" {
                     let count = holo.architecture.components.len() as u64;
                     holo.architecture

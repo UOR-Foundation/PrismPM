@@ -43,7 +43,7 @@ A history is the dispatches of one application in order with their recorded outc
 | Call | What it does |
 | --- | --- |
 | `readHistory(path)` | Reads and validates a history file. A file the schema rejects is a `ReplayError`. |
-| `writeHistory(path, history)` | Writes canonical JSON and one line feed, the bytes `prism-code history` writes. |
+| `writeHistory(path, history)` | Writes canonical JSON and one line feed, the bytes `prism-code record` writes. |
 | `recordHistory(app, run)` | Passes `run` a `dispatch` that records every outcome, refusals included, and resolves to the history. |
 | `assertReplays(app, histories)` | Replays against the build and rejects with `DeterminismViolationError` on a divergence. |
 | `referenceArchive(name)` | Calculator or Payment Approval with its committed history. |

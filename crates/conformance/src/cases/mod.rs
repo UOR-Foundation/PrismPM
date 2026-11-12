@@ -563,7 +563,7 @@ pub fn run_at(root: &Path, id: &str) {
             id,
             &[
                 ("sdk/npm/prism-code/test/errors-namespace.test.mjs", 8),
-                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 4),
+                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 6),
             ],
             "600000",
         ),
@@ -739,6 +739,13 @@ pub fn run_at(root: &Path, id: &str) {
             root,
             id,
             &[("sdk/npm/prism-code/test/system.test.mjs", 20)],
+            "600000",
+        ),
+        // The `prism-code system` and `auth` command groups of #446 and #447.
+        "DK-44" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/system-auth-cli.test.mjs", 16)],
             "600000",
         ),
         "DK-35" => verify_node_suite(
@@ -1469,20 +1476,14 @@ fn verify_sdk(id: &str) {
             let value = serde_json::json!({"schema":"prismpm/sdk-lock/2", "sdk_version":"0.3.0",
                 "sdk_image":format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{}", sha256(index.as_bytes())),
                 "sdk_index":index, "standards_lock":lock.value()["standards_lock"], "platforms":platforms});
-            let indexed = prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock/2",
-                value.clone(),
-            )
-            .unwrap();
+            let indexed =
+                prismpm::sdk::contract_from_value("prismpm/sdk-lock/2", value.clone()).unwrap();
             let migration = serde_json::json!({"schema":"prismpm/sdk-lock-migration/1",
                 "patch":[{"op":"test","path":"","value":lock.value()},
                     {"op":"replace","path":"","value":value}],
                 "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
-            prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock-migration/1",
-                migration.clone(),
-            )
-            .unwrap();
+            prismpm::sdk::contract_from_value("prismpm/sdk-lock-migration/1", migration.clone())
+                .unwrap();
             for mutation in 0..4 {
                 let mut rejected = migration.clone();
                 match mutation {
@@ -1491,7 +1492,7 @@ fn verify_sdk(id: &str) {
                     2 => rejected["patch"].as_array_mut().unwrap().reverse(),
                     _ => rejected["patch"][1]["path"] = serde_json::json!("/sdk_image"),
                 }
-                assert!(prismpm::contracts::CanonicalDocument::from_value(
+                assert!(prismpm::sdk::contract_from_value(
                     "prismpm/sdk-lock-migration/1",
                     rejected,
                 )
@@ -1500,18 +1501,14 @@ fn verify_sdk(id: &str) {
             let proposal = serde_json::json!({"schema":"prismpm/sdk-lock-update/2",
                 "changes":[], "proposed_lock":value,
                 "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
-            prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock-update/2",
-                proposal.clone(),
-            )
-            .unwrap();
+            prismpm::sdk::contract_from_value("prismpm/sdk-lock-update/2", proposal.clone())
+                .unwrap();
             let mut unreviewed = proposal;
             unreviewed["security_review"] = serde_json::json!("passed");
-            assert!(prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock-update/2",
-                unreviewed,
-            )
-            .is_err());
+            assert!(
+                prismpm::sdk::contract_from_value("prismpm/sdk-lock-update/2", unreviewed,)
+                    .is_err()
+            );
             for (position, platform) in ["linux/amd64", "linux/arm64"].into_iter().enumerate() {
                 prismpm::sdk::validate_running_inventory(
                     &indexed,
@@ -1528,19 +1525,11 @@ fn verify_sdk(id: &str) {
             }
             let mut missing = value.clone();
             missing["platforms"].as_array_mut().unwrap().pop();
-            assert!(prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock/2",
-                missing
-            )
-            .is_err());
+            assert!(prismpm::sdk::contract_from_value("prismpm/sdk-lock/2", missing).is_err());
             let mut swapped = value.clone();
             swapped["platforms"][0]["manifest_digest"] =
                 value["platforms"][1]["manifest_digest"].clone();
-            assert!(prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/sdk-lock/2",
-                swapped
-            )
-            .is_err());
+            assert!(prismpm::sdk::contract_from_value("prismpm/sdk-lock/2", swapped).is_err());
         }
         "DK-02" => {
             let lock = sdk_lock_value();
@@ -2155,11 +2144,8 @@ fn verify_browser_export(root: &Path) {
                 "tree_digest":tree_digest
             })
         );
-        let document = prismpm::contracts::CanonicalDocument::from_value(
-            "prismpm/browser-export/1",
-            receipt.clone(),
-        )
-        .unwrap();
+        let document =
+            prismpm::oci::contract_from_value("prismpm/browser-export/1", receipt.clone()).unwrap();
         assert_eq!(
             document.bytes(),
             prismpm::holo::canonical::encode_value(&receipt).unwrap()
@@ -3670,16 +3656,13 @@ fn verify_holo(root: &Path, id: &str) {
         }
         let value = json(&root.join("tests/data/text-model-document.json"));
         let document: prismpm::holo::ModelDocument = serde_json::from_value(value.clone()).unwrap();
-        let bytes = prismpm::holo::canonical::encode_canonical(&document).unwrap();
+        let bytes = prismpm::holo::model_document::encode_canonical(&document).unwrap();
         assert_eq!(
-            prismpm::holo::canonical::decode_canonical(&bytes).unwrap(),
+            prismpm::holo::model_document::decode_canonical(&bytes).unwrap(),
             document
         );
-        prismpm::contracts::CanonicalDocument::from_value(
-            "prismpm/model-document/2",
-            value.clone(),
-        )
-        .unwrap();
+        prismpm::model_contract::contract_from_value("prismpm/model-document/2", value.clone())
+            .unwrap();
         for (pointer, replacement, code) in [
             (
                 "/schema",
@@ -4243,13 +4226,13 @@ fn verify_security(root: &Path, id: &str) {
             assert_contains(root, "crates/prismpm/src/config.rs", &["ParentDir"]);
         }
         "SE-03" => {
-            let source = read(root, "crates/prismpm/src/verification.rs");
+            let source = read(root, "crates/prismpm/src/sdk/process.rs");
             assert!(source.contains("Command::new"));
             assert!(!source.contains("sh -c"));
         }
         "SE-04" => assert_contains(
             root,
-            "crates/prismpm/src/verification.rs",
+            "crates/prismpm/src/sdk/process.rs",
             &["env_clear", "LC_ALL", "LANG"],
         ),
         "SE-05" => assert_contains(

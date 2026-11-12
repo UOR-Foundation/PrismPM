@@ -68,7 +68,7 @@ allow-outbound-hosts = ["https://api.exchange.example"]
 A history is the recorded inputs and outputs of an instance. Your examples become the holo's first history. Every run records another. `replay` re-executes a history against the current build and fails on any divergence:
 
 ```bash
-prism replay examples/ --holo calculator.holo
+prism replay examples/ --image calculator.holo
 ```
 
 ```text

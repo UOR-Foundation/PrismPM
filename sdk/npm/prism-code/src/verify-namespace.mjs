@@ -44,6 +44,7 @@ function nodeOnly(member, load) {
 
 const checkModule = (member) => nodeOnly(member, () => import('./check.mjs'));
 const attestModule = (member) => nodeOnly(member, () => import('./attest.mjs'));
+const closureModule = (member) => nodeOnly(member, () => import('./verify-closure.mjs'));
 
 /**
  * Refuse `statements`, whose `envelope.verified` is the caller's own claim of a
@@ -150,6 +151,16 @@ export const verify = Object.freeze({
   format: async (verdict, path = undefined) => (await checkModule('format')).formatVerdict(verdict, path),
   /** What a verdict at P2 or above trusts the signer for, because no check can know it. Node only. */
   limits: async () => (await checkModule('limits')).LIMITS,
+  /**
+   * Judge what a pull fetched, before anything is written: the holo's bytes and
+   * the claims about them, its attestation subjects, the verdict under `policy`,
+   * and with a signer at least one passing bundle of the holo or the registry.
+   * `images.pull` gets its answer only from here. See `verifyPullClosure`. Node only.
+   *
+   * @param {{ holo: Uint8Array, manifestDigest: string, claims?: object, asked?: object, referrers?: Array<{ digest: string, line: Uint8Array }> }} closure
+   * @param {object} [options]
+   */
+  pullClosure: async (closure, options = undefined) => (await closureModule('pullClosure')).verifyPullClosure(closure, withoutEvidence(options) ?? {}),
   policy,
   attestations,
   replay,

@@ -2,7 +2,8 @@
 
 use crate::config::ProjectConfig;
 use crate::error::PrismError;
-use crate::holo::canonical::{content_id, encode_canonical, encode_value};
+use crate::holo::canonical::{content_id, encode_value};
+use crate::holo::model_document::encode_canonical;
 use crate::holo::model_document::ModelDocument;
 use crate::holo::projector::project_snapshot;
 use crate::holo::provenance::{BuildProvenance, Stamp};

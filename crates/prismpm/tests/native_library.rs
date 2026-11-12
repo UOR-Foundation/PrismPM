@@ -1,6 +1,7 @@
 //! Native-library projection is distinct from application or release acceptance.
 
-use prismpm::holo::canonical::{decode_canonical, encode_value};
+use prismpm::holo::canonical::encode_value;
+use prismpm::holo::model_document::decode_canonical;
 use serde_json::{json, Value};
 
 #[test]
@@ -199,7 +200,7 @@ fn explicit_native_library_roundtrips_without_an_application() {
     let model = decode_canonical(&bytes).expect("explicit native-library profile is supported");
     assert!(model.application.is_none());
     assert_eq!(
-        prismpm::holo::canonical::encode_canonical(&model).unwrap(),
+        prismpm::holo::model_document::encode_canonical(&model).unwrap(),
         bytes
     );
 }
@@ -282,7 +283,7 @@ fn native_library_schema_and_semantic_contract_reject_additive_fields() {
     let validator = jsonschema::validator_for(&schema).unwrap();
     let valid = document();
     assert!(validator.is_valid(&valid));
-    prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/3", valid.clone())
+    prismpm::model_contract::contract_from_value("prismpm/model-document/3", valid.clone())
         .unwrap();
     for pointer in ["", "/library", "/provenance"] {
         let mut bad = valid.clone();
@@ -293,8 +294,7 @@ fn native_library_schema_and_semantic_contract_reject_additive_fields() {
             .insert("unknown".to_owned(), json!(true));
         assert!(!validator.is_valid(&bad));
         assert!(
-            prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/3", bad)
-                .is_err()
+            prismpm::model_contract::contract_from_value("prismpm/model-document/3", bad).is_err()
         );
     }
     for field in valid["library"].as_object().unwrap().keys() {
@@ -340,12 +340,11 @@ fn acceptance() -> Value {
 
 #[test]
 fn native_library_evidence_requires_identical_ordered_exported_acceptance_roots() {
-    use prismpm::contracts::CanonicalDocument;
     for (id, valid) in [
         ("prismpm/library-build-binding/1", binding()),
         ("prismpm/library-acceptance/1", acceptance()),
     ] {
-        CanonicalDocument::from_value(id, valid.clone()).unwrap();
+        prismpm::contract_owners::from_value(id, valid.clone()).unwrap();
         for roots in [
             json!([]),
             json!([
@@ -364,7 +363,7 @@ fn native_library_evidence_requires_identical_ordered_exported_acceptance_roots(
         ] {
             let mut changed = valid.clone();
             changed["export_roots"] = roots;
-            assert!(CanonicalDocument::from_value(id, changed).is_err());
+            assert!(prismpm::contract_owners::from_value(id, changed).is_err());
         }
         for (field, replacement) in [
             ("scope", json!("production-release")),
@@ -373,7 +372,7 @@ fn native_library_evidence_requires_identical_ordered_exported_acceptance_roots(
         ] {
             let mut changed = valid.clone();
             changed[field] = replacement;
-            assert!(CanonicalDocument::from_value(id, changed).is_err());
+            assert!(prismpm::contract_owners::from_value(id, changed).is_err());
         }
     }
     let id = "prismpm/library-build-binding/1";
@@ -387,7 +386,7 @@ fn native_library_evidence_requires_identical_ordered_exported_acceptance_roots(
     ] {
         let mut changed = binding();
         changed["acceptance_roots"] = roots;
-        assert!(CanonicalDocument::from_value(id, changed).is_err());
+        assert!(prismpm::contract_owners::from_value(id, changed).is_err());
     }
     let id = "prismpm/library-acceptance/1";
     for (pointer, replacement) in [
@@ -404,7 +403,7 @@ fn native_library_evidence_requires_identical_ordered_exported_acceptance_roots(
         let mut changed = acceptance();
         *changed.pointer_mut(pointer).unwrap() = replacement;
         assert!(
-            CanonicalDocument::from_value(id, changed).is_err(),
+            prismpm::contract_owners::from_value(id, changed).is_err(),
             "{pointer}"
         );
     }

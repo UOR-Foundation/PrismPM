@@ -1459,7 +1459,7 @@ pub fn audit_tools_ci(root: &Path) -> Result<(), Fail> {
         .and_then(toml::Value::as_table)
         .ok_or("tools.lock has no verification-executables row")?;
     let verification_source =
-        std::fs::read_to_string(root.join("crates/prismpm/src/verification.rs"))?;
+        std::fs::read_to_string(root.join("crates/prismpm/src/sdk/process.rs"))?;
     for name in ["elan_proxy_sha256", "rustup_proxy_sha256", "timeout_sha256"] {
         let digest = verification
             .get(name)

@@ -514,7 +514,7 @@ statement = "Controller cleanup removes only the configured real output director
 id = "CT-12"
 suite = "controller"
 level = "build"
-statement = "The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes."
+statement = "The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises, the code of each error class and each check code of a PrismCodeError, is a row of model/sdk-diagnostics.toml owned by its module's capability, with no code left unregistered."
 
 [[id]]
 id = "CT-13"
@@ -1229,6 +1229,12 @@ id = "DK-42"
 suite = "sdk"
 level = "build"
 statement = "The Rust runtime runs @prism-code/conformance through its shim, prism-conformance-shim, which translates prism/conformance-shim/1 requests to the prismpm library's inspect and verify and judges nothing: every check of the suite runs, the digests checks pass in full, and each check the Rust runtime does not pass is named with its reason in crates/conformance/runtime/declaration.json, so a check that starts to pass or newly fails fails the run."
+
+[[id]]
+id = "DK-44"
+suite = "sdk"
+level = "build"
+statement = "The prism-code system and auth command groups are the CLI of prism.system and prism.auth: system info and version name the package, the holo format, the runtime and the toolchain and builder image the project's prismpm.lock pins, events replays and follows create, start, die and destroy from the container store with since, until and filters, df counts every record and prune removes exited containers only and asks first unless forced; auth login checks the credential with the registry before storing it where Docker would, refuses a password on the command line, and no password reaches stdout, stderr or an error in any spelling, and logout names an ambient token it cannot clear."
 
 [[id]]
 id = "OC-01"

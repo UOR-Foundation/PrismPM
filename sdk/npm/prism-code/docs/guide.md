@@ -500,9 +500,9 @@ code, `verdict` and `reasons` the whole result. Load and archive failures remain
 A history, `prism/history/1`, is the dispatches of one application in order, each with its recorded outcome. A holo's acceptance vectors are its first history, and `run --record` or a recorder takes another from live dispatches. A replay runs every event against a build and compares the outcomes byte for byte, so a build that changed what it answers fails, even when its own vectors changed with it.
 
 ```
-npx prism-code history app.holo --output app.history.json     # the acceptance vectors as a history
-npx prism-code replay app.history.json --holo app.holo        # exit 0 unchanged, 1 diverged, 2 could not replay
-npx prism-code replay histories/ --holo app.holo --statement replay.json
+npx prism-code record app.holo --output app.history.json     # the acceptance vectors as a recording
+npx prism-code replay app.history.json --image app.holo        # exit 0 unchanged, 1 diverged, 2 could not replay
+npx prism-code replay histories/ --image app.holo --statement replay.json
 npx prism-code run app.holo --record live.history.json        # every dispatch, as it happens
 ```
 
@@ -703,7 +703,7 @@ moves it, and a port in use is an error.
 ```
 npx prism-code dev
 npx prism-code dev path/to/project --policy policy.json --no-open
-npx prism-code dev --build "make holo" --holo out/app.holo
+npx prism-code dev --build "make holo" --image out/app.holo
 ```
 
 The Check tab shows the verdict `check` prints for the same holo, with its

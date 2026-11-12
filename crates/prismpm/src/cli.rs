@@ -7,9 +7,10 @@ use crate::controller::{
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
 use crate::holo::provenance::BuildProvenance;
-use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{error::ErrorKind, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 use serde_json::json;
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
@@ -693,6 +694,146 @@ fn write_line(mut stream: impl Write, bytes: &[u8]) -> Result<(), PrismError> {
         .map_err(|error| PrismError::new("PP9001", format!("write CLI output: {error}")))
 }
 
+/// One module group verb (#441): `prismpm <module> <verb>` runs `prismpm <command...>`.
+#[derive(Debug, serde::Deserialize)]
+struct GroupVerb {
+    module: String,
+    verb: String,
+    command: String,
+}
+
+/// The module groups, read from model/commands.toml, the one table both the
+/// model gate and this parser read.
+fn groups() -> &'static [GroupVerb] {
+    static GROUPS: std::sync::OnceLock<Vec<GroupVerb>> = std::sync::OnceLock::new();
+    GROUPS.get_or_init(|| {
+        #[derive(serde::Deserialize)]
+        struct Table {
+            #[serde(default)]
+            group: Vec<GroupVerb>,
+        }
+        toml::from_str::<Table>(include_str!("../model/commands.toml"))
+            .map(|table| table.group)
+            .unwrap_or_default()
+    })
+}
+
+/// The group modules in table order, each once.
+fn group_modules() -> Vec<&'static str> {
+    let mut modules: Vec<&str> = Vec::new();
+    for row in groups() {
+        if modules.last() != Some(&row.module.as_str()) {
+            modules.push(&row.module);
+        }
+    }
+    modules
+}
+
+/// The usage lines of every group, as `prismpm --help` and `prismpm <module>` print them.
+fn group_help(module: Option<&str>) -> String {
+    let mut lines = vec![if module.is_some() {
+        "Verbs:".to_owned()
+    } else {
+        "Module groups (the flat commands above stay as aliases):".to_owned()
+    }];
+    for row in groups()
+        .iter()
+        .filter(|row| module.is_none_or(|m| m == row.module))
+    {
+        let head = format!("  prismpm {} {}", row.module, row.verb);
+        lines.push(format!("{head:<44}same as prismpm {}", row.command));
+    }
+    lines.join("\n")
+}
+
+/// The index of the command word: the first argument after the program name
+/// that is not a global option or its value.
+fn command_index(args: &[OsString]) -> Option<usize> {
+    let mut index = 1;
+    while let Some(argument) = args.get(index) {
+        let text = argument.to_str()?;
+        match text {
+            "--json" => index += 1,
+            "-p" | "--project" | "--config" => index += 2,
+            _ if text.starts_with("--project=")
+                || text.starts_with("--config=")
+                || (text.starts_with("-p") && text.len() > 2) =>
+            {
+                index += 1
+            }
+            _ => return Some(index),
+        }
+    }
+    None
+}
+
+/// What the arguments ask of a module group.
+#[derive(Debug, PartialEq, Eq)]
+enum GroupRequest {
+    /// Not a group: parse the arguments as they are.
+    None,
+    /// The arguments with the group verb replaced by its command.
+    Expanded(Vec<OsString>),
+    /// `prismpm <module>` or `prismpm <module> --help`: print the module's verbs.
+    Help(String),
+    /// `prismpm <module> <unknown>`.
+    Unknown(String),
+}
+
+/// Resolve `prismpm <module> <verb> ...` to `prismpm <command> ...`. A word
+/// after the module that is not one of its verbs leaves a module that is also
+/// a command (`verify`) to that command.
+fn group_request(args: &[OsString]) -> GroupRequest {
+    let Some(index) = command_index(args) else {
+        return GroupRequest::None;
+    };
+    let Some(module) = args[index].to_str() else {
+        return GroupRequest::None;
+    };
+    let mut verbs = groups()
+        .iter()
+        .filter(|row| row.module == module)
+        .peekable();
+    if verbs.peek().is_none() {
+        return GroupRequest::None;
+    }
+    let next = args.get(index + 1).and_then(|word| word.to_str());
+    if let Some(row) = verbs.find(|row| Some(row.verb.as_str()) == next) {
+        let mut expanded = args[..index].to_vec();
+        expanded.extend(row.command.split(' ').map(OsString::from));
+        expanded.extend_from_slice(&args[index + 2..]);
+        return GroupRequest::Expanded(expanded);
+    }
+    let is_command = Cli::command()
+        .get_subcommands()
+        .any(|command| command.get_name() == module);
+    if is_command {
+        return GroupRequest::None;
+    }
+    let help = format!(
+        "Usage: prismpm {module} <VERB> [ARGS]...\n\n{}",
+        group_help(Some(module))
+    );
+    match next {
+        None | Some("-h" | "--help" | "help") => GroupRequest::Help(help),
+        Some(verb) => GroupRequest::Unknown(format!(
+            "error: unrecognized verb '{verb}' for 'prismpm {module}'\n\n{help}"
+        )),
+    }
+}
+
+/// Parse the arguments, with the module groups expanded and listed in the help.
+fn parse_cli(args: Vec<OsString>) -> Result<Cli, clap::Error> {
+    let args = match group_request(&args) {
+        GroupRequest::Expanded(expanded) => expanded,
+        _ => args,
+    };
+    let matches = Cli::command()
+        .after_help(group_help(None))
+        .try_get_matches_from(args)?;
+    Cli::from_arg_matches(&matches)
+}
+
 fn completion(shell: CompletionShell) -> Result<String, PrismError> {
     let command = Cli::command();
     let names = command
@@ -716,6 +857,12 @@ fn completion(shell: CompletionShell) -> Result<String, PrismError> {
             "PP9001",
             "executable commands disagree with model/commands.toml",
         ));
+    }
+    let mut names = names;
+    for module in group_modules() {
+        if !names.contains(&module) {
+            names.push(module);
+        }
     }
     let words = names.join(" ");
     Ok(match shell {
@@ -1605,7 +1752,29 @@ fn inspection_summary(inspection: &serde_json::Value) -> String {
 #[must_use]
 pub fn run() -> ExitCode {
     let machine_requested = std::env::args().any(|argument| argument == "--json");
-    let cli = match Cli::try_parse() {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    match group_request(&args) {
+        GroupRequest::Help(help) => {
+            let _ = write_line(std::io::stdout().lock(), help.as_bytes());
+            return ExitCode::SUCCESS;
+        }
+        GroupRequest::Unknown(message) => {
+            if machine_requested {
+                let first = message.lines().next().unwrap_or_default();
+                let diagnostic = PrismError::new("PP1001", first.trim_start_matches("error: "));
+                let envelope =
+                    json!({"diagnostic": diagnostic, "schema": "prismpm/error-result/1"});
+                let bytes = canonical(&envelope)
+                    .unwrap_or_else(|_| b"{\"schema\":\"prismpm/error-result/1\"}".to_vec());
+                let _ = write_line(std::io::stdout().lock(), &bytes);
+            } else {
+                let _ = write_line(std::io::stderr().lock(), message.as_bytes());
+            }
+            return ExitCode::from(2);
+        }
+        GroupRequest::None | GroupRequest::Expanded(_) => {}
+    }
+    let cli = match parse_cli(args) {
         Ok(cli) => cli,
         Err(error) => {
             if matches!(
@@ -1685,6 +1854,7 @@ pub fn run() -> ExitCode {
 mod tests {
     use super::{build_provenance, inspection_summary, Cli, Commands};
     use crate::holo::provenance::BuildProvenance;
+    use clap::CommandFactory;
     use clap::Parser;
 
     #[test]
@@ -2145,5 +2315,132 @@ mod tests {
         ])
         .is_err());
         assert!(Cli::try_parse_from(["prismpm", "verify-attestation"]).is_err());
+    }
+
+    fn group_args(arguments: &[&str]) -> Vec<std::ffi::OsString> {
+        arguments.iter().map(std::ffi::OsString::from).collect()
+    }
+
+    fn parse_group(arguments: &[&str]) -> Commands {
+        super::parse_cli(group_args(arguments)).unwrap().command
+    }
+
+    #[test]
+    fn every_group_is_a_module_and_runs_a_command() {
+        let modules: toml::Value = toml::from_str(include_str!("../model/modules.toml")).unwrap();
+        let modules = modules["module"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        let commands = Cli::command()
+            .get_subcommands()
+            .map(|command| command.get_name().to_owned())
+            .collect::<Vec<_>>();
+        assert!(
+            super::groups().len() >= 20,
+            "model/commands.toml has its groups"
+        );
+        for row in super::groups() {
+            assert!(
+                modules.contains(&row.module.as_str()),
+                "{} is a module",
+                row.module
+            );
+            let head = row.command.split(' ').next().unwrap();
+            assert!(
+                commands.iter().any(|name| name == head),
+                "{} is a command",
+                row.command
+            );
+            // The group verb expands to exactly its command and nothing else.
+            let super::GroupRequest::Expanded(expanded) =
+                super::group_request(&group_args(&["prismpm", &row.module, &row.verb, "x"]))
+            else {
+                panic!("{} {} is not expanded", row.module, row.verb);
+            };
+            let mut expected = vec!["prismpm"];
+            expected.extend(row.command.split(' '));
+            expected.push("x");
+            assert_eq!(expanded, group_args(&expected));
+        }
+    }
+
+    #[test]
+    fn group_verbs_run_their_flat_commands() {
+        assert!(matches!(
+            parse_group(&["prismpm", "images", "verify", "app.holo"]),
+            Commands::Check { holo: Some(_), .. }
+        ));
+        assert!(matches!(
+            parse_group(&[
+                "prismpm",
+                "--json",
+                "-p",
+                "dir",
+                "verify",
+                "attestation",
+                "app.holo"
+            ]),
+            Commands::VerifyAttestation { .. }
+        ));
+        assert!(matches!(
+            parse_group(&["prismpm", "--project=dir", "system", "lock", "check"]),
+            Commands::Lock {
+                command: Some(super::LockCommands::Check),
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_group(&["prismpm", "images", "inspect", "app.holo", "--json"]),
+            Commands::Inspect { .. }
+        ));
+        // The flat verbs stay, and `verify` alone is still the model verification.
+        assert!(matches!(
+            parse_group(&["prismpm", "verify"]),
+            Commands::Verify
+        ));
+        assert!(matches!(
+            parse_group(&["prismpm", "check", "app.holo"]),
+            Commands::Check { .. }
+        ));
+    }
+
+    #[test]
+    fn a_group_without_a_verb_prints_its_verbs() {
+        let request = super::group_request(&group_args(&["prismpm", "images"]));
+        let super::GroupRequest::Help(help) = request else {
+            panic!("{request:?}");
+        };
+        assert!(help.contains("prismpm images verify"));
+        assert!(help.contains("same as prismpm check"));
+        assert!(!help.contains("prismpm verify attestation"));
+        assert!(matches!(
+            super::group_request(&group_args(&["prismpm", "images", "--help"])),
+            super::GroupRequest::Help(_)
+        ));
+        assert!(matches!(
+            super::group_request(&group_args(&["prismpm", "images", "ls"])),
+            super::GroupRequest::Unknown(_)
+        ));
+        // `verify` is a command too, so an unknown word goes to that command.
+        assert_eq!(
+            super::group_request(&group_args(&["prismpm", "verify", "--help"])),
+            super::GroupRequest::None
+        );
+        let top = Cli::command()
+            .after_help(super::group_help(None))
+            .render_help()
+            .to_string();
+        assert!(top.contains("prismpm containers run"));
+    }
+
+    #[test]
+    fn completion_offers_the_group_modules() {
+        let script = super::completion(super::CompletionShell::Bash).unwrap();
+        for module in ["images", "containers", "system", "auth", "client"] {
+            assert!(script.contains(module), "{module}");
+        }
     }
 }
