@@ -92,7 +92,7 @@ function members(value, place, out) {
  * namespaces and methods, and the deprecated aliases, as `developer-surface.json`
  * holds it.
  */
-export function developerSurface({ usage, client, delegated = [], groups = [] }) {
+export function developerSurface({ usage, client, delegated = [], groups = [], moduleAliases = [] }) {
   // A module group's line, `prism-code <module> <verb>`, names the verb; the module is a namespace (#441).
   const lines = [...usage.matchAll(/^ {2}prism-code ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?/gm)];
   const grouped = lines.filter((m) => groups.includes(m[1]) && m[2] !== undefined);
@@ -105,6 +105,8 @@ export function developerSurface({ usage, client, delegated = [], groups = [] })
       ...verbs.map((name) => ({ kind: 'verb', place: `prism-code ${name}`, name })),
       ...groupVerbs.map((place) => ({ kind: 'verb', place: `prism-code ${place}`, name: place.split(' ')[1] })),
       ...flags.map((name) => ({ kind: 'flag', place: `--${name}`, name })),
+      // Docker's singular spelling of a module group, `prism-code image ls` (#347).
+      ...sorted(moduleAliases).map((name) => ({ kind: 'namespace', place: `prism-code ${name}`, name })),
       ...members(client, 'prism', []),
     ],
     aliases: ALIASES.map((alias) => ({ ...alias })),

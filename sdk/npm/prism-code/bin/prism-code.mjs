@@ -77,7 +77,7 @@ import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { manifestProviders } from '../src/manifest.mjs';
 import { canonicalJson } from '../src/archive.mjs';
 import { resolveAliases } from '../src/developer-view.mjs';
-import { GROUPS, TOP_LEVEL, groupUsage, groupVerb } from '../src/cli/index.mjs';
+import { GROUPS, MODULE_ALIASES, TOP_LEVEL, groupUsage, groupVerb, moduleOf } from '../src/cli/index.mjs';
 import { generate, WRITERS } from '../src/generate/index.mjs';
 import { check, readPolicy, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
 import { discover, errorHookMessages, listPlugins, pluginHelp, readMetadata, runPlugin } from '../src/plugins.mjs';
@@ -202,6 +202,7 @@ Usage:
                                                     (after Enter), Cursor's or VS Code's install link with the sentence
                                                     on the clipboard, or the Claude or ChatGPT prompt URL
 ${groupUsage()}
+Docker's singular spellings name the same groups: prism-code container ls, image ls, volume ls
   prism-code <plugin> [args]                        run prism-<plugin> from the PATH; a built-in verb always wins
   prism-code --version | --help
 
@@ -294,7 +295,7 @@ Options for open:     --dry-run                    print the files and commands;
 `;
 
 // The built-in verbs are the ones the usage text names and the delegated ones, so a new verb shadows a plugin of its name.
-const BUILTINS = new Set([...[...USAGE.matchAll(/^ {2}prism-code ([a-z][a-z-]*)/gm)].map((m) => m[1]), ...Object.keys(DELEGATED), ...Object.keys(TOP_LEVEL), 'help', 'version']);
+const BUILTINS = new Set([...[...USAGE.matchAll(/^ {2}prism-code ([a-z][a-z-]*)/gm)].map((m) => m[1]), ...Object.keys(DELEGATED), ...Object.keys(TOP_LEVEL), ...Object.keys(MODULE_ALIASES), 'help', 'version']);
 
 function usage(message) {
   if (message) process.stderr.write(`${message}\n\n`);
@@ -494,10 +495,14 @@ async function commandRm(positional) {
 async function commandInspect(positional, options) {
   if (positional.length !== 1) return usage('inspect takes one artifact');
   if (Object.hasOwn(options, 'format') && (typeof options.format !== 'string' || options.format === '')) return usage('--format takes a path, such as sections[0].digest.sha256');
-  const path = resolve(positional[0]);
-  const info = await stat(path).catch(() => null);
-  // A path wins; what is not a path may name a container (#348).
+  let path = resolve(positional[0]);
+  let info = await stat(path).catch(() => null);
+  // A path wins; what is not a path may name a container (#348), then a stored image (#347).
   const container = info ? null : await findContainer(positional[0]);
+  if (!info && !container) {
+    const stored = await imageOrPath(positional[0]);
+    if (stored !== positional[0]) [path, info] = [stored, await stat(stored)];
+  }
   if (!info && !container) throw new PrismCodeError('load.path', `${path} does not exist`);
   // A closure has no section table; it keeps the 0.2.0 summary.
   const closure = info?.isDirectory() ?? false;
@@ -707,8 +712,15 @@ async function commandRunOnce(path, input, options) {
   return container.exitCode;
 }
 
+/** A path, or the stored image a name, tag or id names (#347): `run calc:1` runs the image `pull` or `build` kept. */
+async function imageOrPath(argument) {
+  const { imageArgument } = await import('../src/push-pull-cli.mjs');
+  return imageArgument(argument, (path) => stat(path).then(() => true, () => false));
+}
+
 async function commandRun(positional, options) {
   if (positional.length < 1 || positional.length > 2) return usage('run takes one artifact and at most one input');
+  positional[0] = await imageOrPath(positional[0]);
   for (const name of ['capabilities', 'capability-set', 'policy', 'record']) {
     if (Object.hasOwn(options, name) && (typeof options[name] !== 'string' || options[name] === '')) return usage(`--${name} takes a value`);
   }
@@ -1127,7 +1139,9 @@ async function commandPlugin(command, args) {
 
 async function main(argv) {
   // A deprecated verb or flag becomes its new term here, with one warning each (#347).
-  const [command, ...rest] = resolveAliases(argv, (warning) => process.stderr.write(`${warning}\n`), (verb) => BUILTINS.has(verb) && !Object.hasOwn(DELEGATED, verb));
+  const [word, ...rest] = resolveAliases(argv, (warning) => process.stderr.write(`${warning}\n`), (verb) => BUILTINS.has(verb) && !Object.hasOwn(DELEGATED, verb));
+  // Docker's singular management commands name the plural groups: `image ls` is `images ls` (#347).
+  const command = moduleOf(word);
   if (!command || command === '--help' || command === '-h' || command === 'help') {
     process.stdout.write(command ? USAGE + pluginHelp(listPlugins({ builtins: BUILTINS })) : USAGE);
     return command ? 0 : 64;

@@ -23,10 +23,28 @@ import {
 } from './errors.mjs';
 import { parseReference } from './oci-reference.mjs';
 import { experimental_pull, experimental_push, shortDigest } from './push-pull.mjs';
-import { createImageStore, fileImageStore, imagesDirectory, localName, storedName } from './image-store.mjs';
+import { createImageStore, fileImageStore, imageFile, imagesDirectory, localName, storedName } from './image-store.mjs';
 
 /** The local image store of this machine, as `Prism.fromEnv()` keeps it; no container is consulted, since nothing here removes. */
 const localStore = async () => createImageStore({ backend: fileImageStore(imagesDirectory()) });
+
+/**
+ * What `run`, `inspect` and `push` read when they are given an image (#347): the path,
+ * when one exists there, else the file the local store keeps the image of that name,
+ * tag or id in, as `docker run calc:1` runs a stored image. The store checks the bytes
+ * against their digests first. Anything else comes back as given, so the caller's own
+ * error names it.
+ */
+export async function imageArgument(argument, exists) {
+  if (typeof argument !== 'string' || argument === '' || (await exists(resolve(argument)))) return argument;
+  try {
+    const image = await (await localStore()).get(argument);
+    return imageFile(imagesDirectory(), image.digest.slice('blake3:'.length));
+  } catch (error) {
+    if (error instanceof ReferenceInvalidError || (error instanceof PrismCodeError && /^image\.(missing|name)$/.test(error.code))) return argument;
+    throw error;
+  }
+}
 
 const PUSH_OPTIONS = ['store', 'key', 'keyless', 'no-attestations', 'signing-config', 'plain-http', 'json', 'tuf-mirror-url', 'tuf-root', 'tuf-cache'];
 const PULL_OPTIONS = ['store', 'policy', 'key', 'certificate-identity', 'certificate-identity-regexp', 'certificate-oidc-issuer', 'type', 'trusted-root', 'entries', 'timestamps', 'plain-http', 'json', 'tuf-mirror-url', 'tuf-root', 'tuf-cache'];

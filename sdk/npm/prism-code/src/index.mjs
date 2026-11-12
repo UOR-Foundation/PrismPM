@@ -14,7 +14,7 @@ import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptanc
 import { isSessionContract, openSession, runSessionAcceptance, runStep } from './session.mjs';
 import { parseCapabilities, grantOf, DEFAULT_SET } from './capabilities.mjs';
 import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
-import { CapabilityDeniedError, DigestMismatchError, PrismCodeError, fail } from './errors.mjs';
+import { CapabilityDeniedError, DigestMismatchError, PrismCodeError, ReferenceInvalidError, fail } from './errors.mjs';
 import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
 import { acceptanceHistory, experimental_recorder, experimental_replay } from './replay.mjs';
@@ -518,7 +518,6 @@ export function createPrism(options = {}) {
   const events = options.events ?? createEventBus();
   // One volume scope for `volumes` and for the volumes a container asks for (#445), so both refuse alike.
   const volumeScope = { capabilities, ...(capabilitySet === undefined ? {} : { set: capabilitySet }), world, policy, ...(declarations === undefined ? {} : { declarations }) };
-  const containers = createContainers({ load, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit, volumes: volumeScope });
   const networks = createNetworks({ store: capabilityStore ?? memoryCapabilityStore(capabilities), policy: { effects: policy?.effects ?? null, capabilities: policy?.capabilities ?? null } });
   const volumes = createVolumes({ ...volumeScope, runner });
   if (docker !== null && typeof docker !== 'function') fail('client.option', 'docker must be a function that builds the Docker invocation, or null');
@@ -528,6 +527,18 @@ export function createPrism(options = {}) {
     return { digest: record.image.digest, running: record.state.status === 'running' };
   }));
   const images = lazyImages({ docker, references, ...(spawn === undefined ? {} : { spawn }), ...(imageStore === undefined ? {} : { store: imageStore }) });
+  // A name the image store keeps opens that image, as `docker run calc:latest` does (#347); a path that exists wins.
+  const loadImage = async (source, loadOptions) => {
+    if (typeof source === 'string' && !(isNode() && (await (await import('./node.mjs')).pathExists(source)))) {
+      const image = await images.get(source).catch((error) => {
+        if (error instanceof ReferenceInvalidError || /^image(s)?\.(missing|name|unavailable)$/.test(error?.code ?? '')) return null;
+        throw error;
+      });
+      if (image !== null) return load(image.bytes, loadOptions);
+    }
+    return load(source, loadOptions);
+  };
+  const containers = createContainers({ load: loadImage, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit, volumes: volumeScope });
   const system = createSystem({ containers, events, readLock, images });
   return Object.freeze({ images, containers, networks, volumes, system, auth, errors: errorsNamespace, verify: verifyNamespace });
 }
