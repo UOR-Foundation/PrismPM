@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { generateKeyPairSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -319,17 +319,36 @@ test('nothing reaches stdout or stderr, even from a helper that prints the secre
 test('the namespace is what #440 names: it logs in, holds stores and identities, and has no trust decision to make', () => {
   assert.deepEqual(Object.keys(auth).sort(), ['identities', 'inspect', 'login', 'logout', 'stores']);
   assert.deepEqual(Object.keys(auth.stores).sort(), ['get', 'list']);
-  assert.deepEqual(Object.keys(auth.identities).sort(), ['fromKey', 'keyless']);
+  assert.deepEqual(Object.keys(auth.identities).sort(), ['from', 'fromKey', 'keyless']);
   assert.deepEqual(Object.keys(auth.identities.fromKey(keys().privateKey)).sort(), ['keyId', 'kind', 'publicKey', 'sign']);
   assert.deepEqual(Object.keys(auth.identities.keyless()).sort(), ['ambient', 'kind', 'sign']);
   for (const frozen of [auth, auth.stores, auth.identities]) assert.ok(Object.isFrozen(frozen));
 });
 
-test('it depends only on errors and its own code: attest.mjs is loaded for signStatement and nothing else', () => {
+test('it depends only on errors and its own code: oci-auth.mjs and signing.mjs', () => {
   const source = readFileSync(here('../src/auth.mjs'), 'utf8');
   const imported = [...source.matchAll(/^import .* from '([^']+)';$/gm)].map((match) => match[1]).sort();
-  assert.deepEqual(imported, ['./errors.mjs', './oci-auth.mjs', 'node:crypto']);
-  assert.deepEqual([...source.matchAll(/(?:const|let) (\{[^}]*\}) = await import\('([^']+)'\)/g)].map((match) => [match[1], match[2]]), [['{ signStatement }', './attest.mjs']]);
-  const owned = readFileSync(here('../src/oci-auth.mjs'), 'utf8');
-  assert.deepEqual([...owned.matchAll(/^import .* from '(\.[^']+)';$/gm)].map((match) => match[1]), ['./errors.mjs']);
+  assert.deepEqual(imported, ['./errors.mjs', './oci-auth.mjs', './signing.mjs', 'node:crypto']);
+  assert.deepEqual([...source.matchAll(/await import\('([^']+)'\)/g)], []);
+  for (const file of ['oci-auth.mjs', 'signing.mjs']) {
+    const owned = readFileSync(here(`../src/${file}`), 'utf8');
+    assert.deepEqual([...owned.matchAll(/^import .* from '(\.[^']+)';$/gm)].map((match) => match[1]), ['./errors.mjs'], file);
+  }
+});
+
+test('every signature in prism-code is made through an auth identity: only auth.mjs imports signing.mjs', () => {
+  const src = here('../src');
+  const importers = readdirSync(src).filter((file) => file.endsWith('.mjs') && /from '\.\/signing\.mjs'|import\('\.\/signing\.mjs'\)/.test(readFileSync(join(src, file), 'utf8')));
+  assert.deepEqual(importers, ['auth.mjs']);
+});
+
+test('identities.from turns the flat signer options attest and push take into one identity', () => {
+  const { privateKey } = keys();
+  assert.equal(auth.identities.from({ key: privateKey }).kind, 'key');
+  assert.equal(auth.identities.from({ key: privateKey }).keyId, auth.identities.fromKey(privateKey).keyId);
+  const keyless = auth.identities.from({ identityToken: 'a.b.c' });
+  assert.equal(keyless.kind, 'keyless');
+  assert.equal(keyless.ambient, false);
+  assert.equal(auth.identities.from({}).ambient, true);
+  assert.equal(auth.identities.from(undefined).kind, 'keyless');
 });

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,11 @@ import { allChecks, loadScenarios, renderMatrix, sameMatrix, RESULTS_SCHEMA } fr
 
 const BIN = fileURLToPath(new URL('../bin/prism-conformance.mjs', import.meta.url));
 const COMPLIANCE = fileURLToPath(new URL('../../../../COMPLIANCE.md', import.meta.url));
+const JS_SHIM = fileURLToPath(new URL('../../prism-code/conformance/shim.mjs', import.meta.url));
+// runtimes.json registers the Rust shim at this path. The suite job in npm-conformance.yml builds it before these tests;
+// where it is not built, a test that runs every registered runtime cannot run, and says why.
+const RUST_SHIM = fileURLToPath(new URL('../../../../target/debug/prism-conformance-shim', import.meta.url));
+const everyRuntime = existsSync(RUST_SHIM) ? {} : { skip: 'the Rust shim is not built: cargo build -p repo-conformance --bin prism-conformance-shim' };
 
 const features = [
   {
@@ -85,7 +90,7 @@ test('line endings do not make the file stale, and any other difference does', (
 
 const cli = (...args) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8' });
 
-test('the committed COMPLIANCE.md is what the suite generates today, and it names all three runtimes', () => {
+test('the committed COMPLIANCE.md is what the suite generates today, and it names all three runtimes', everyRuntime, () => {
   const check = cli('matrix', '--check');
   assert.equal(check.status, 0, check.stdout + check.stderr);
   const text = readFileSync(COMPLIANCE, 'utf8').replace(/\r\n/g, '\n');
@@ -94,7 +99,7 @@ test('the committed COMPLIANCE.md is what the suite generates today, and it name
   for (const check of allChecks(loadScenarios())) assert.ok(text.includes(`\`${check.id}\``), check.id);
 });
 
-test('a hand edit of COMPLIANCE.md is stale, says how to fix it, and --write repairs it', () => {
+test('a hand edit of COMPLIANCE.md is stale, says how to fix it, and --write repairs it', everyRuntime, () => {
   const dir = mkdtempSync(join(tmpdir(), 'prism-conformance-matrix-'));
   const output = join(dir, 'COMPLIANCE.md');
   writeFileSync(output, readFileSync(COMPLIANCE, 'utf8').replace('| JavaScript |', '| JS, by hand |'));
@@ -106,12 +111,16 @@ test('a hand edit of COMPLIANCE.md is stale, says how to fix it, and --write rep
   assert.equal(cli('matrix', '--check', '--output', output).status, 0);
 });
 
-test('--results reads saved runs, and a registered runtime with no results is an error, not a blank column', () => {
+test('--results reads saved runs, and a registered runtime with no results is an error, not a blank column', everyRuntime, () => {
   const dir = mkdtempSync(join(tmpdir(), 'prism-conformance-results-'));
   const missing = cli('matrix', '--results', dir);
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /js has a shim .* a registered runtime cannot go unmeasured/);
   assert.equal(cli('run', '--runtime', 'js', '--out', join(dir, 'js.json')).status, 0);
+  const rustMissing = cli('matrix', '--results', dir);
+  assert.equal(rustMissing.status, 2);
+  assert.match(rustMissing.stderr, /rust has a shim .* a registered runtime cannot go unmeasured/);
+  assert.equal(cli('run', '--runtime', 'rust', '--out', join(dir, 'rust.json')).status, 0);
   const check = cli('matrix', '--check', '--results', dir);
   assert.equal(check.status, 0, check.stderr);
   assert.equal(cli('matrix', '--write', '--check').status, 64);
@@ -120,6 +129,8 @@ test('--results reads saved runs, and a registered runtime with no results is an
 test('partial results cannot reach the matrix through the CLI', () => {
   const dir = mkdtempSync(join(tmpdir(), 'prism-conformance-partial-'));
   assert.equal(cli('run', '--runtime', 'js', '--only', 'load.refuse.empty', '--out', join(dir, 'js.json')).status, 0);
+  // Any shim gives a partial run; the JavaScript one stands in for Rust here, so this needs no build.
+  assert.equal(cli('run', '--runtime', 'rust', '--only', 'load.refuse.empty', '--out', join(dir, 'rust.json'), '--', process.execPath, JS_SHIM).status, 0);
   const refused = cli('matrix', '--results', dir);
   assert.equal(refused.status, 2);
   assert.match(refused.stderr, /partial run/);

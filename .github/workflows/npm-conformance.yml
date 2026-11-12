@@ -8,7 +8,9 @@ name: npm conformance
 #
 # A runtime joins by adding its shim to sdk/npm/conformance/runtimes.json and a
 # step to the suite job that writes results/<name>.json; `matrix --check` refuses
-# a registered runtime with no results.
+# a registered runtime with no results. The Rust shim (DK-42) is built once, in
+# the suite job, which is also where the unit tests that run every registered
+# runtime run; the OS matrix skips those three and says why.
 
 on:
   pull_request:
@@ -22,6 +24,12 @@ on:
       - sdk/npm/spec/schemas/verdict/**
       - sdk/npm/spec/test/json-schema.mjs
       - docs/adr/015-dual-digests.md
+      # The Rust runtime's shim and what it calls.
+      - crates/conformance/runtime/**
+      - crates/conformance/src/bin/prism-conformance-shim.rs
+      - crates/prismpm/src/inspect/**
+      - Cargo.lock
+      - rust-toolchain.toml
       - COMPLIANCE.md
       - .github/workflows/npm-conformance.yml
   push:
@@ -35,6 +43,12 @@ on:
       - sdk/npm/spec/schemas/verdict/**
       - sdk/npm/spec/test/json-schema.mjs
       - docs/adr/015-dual-digests.md
+      # The Rust runtime's shim and what it calls.
+      - crates/conformance/runtime/**
+      - crates/conformance/src/bin/prism-conformance-shim.rs
+      - crates/prismpm/src/inspect/**
+      - Cargo.lock
+      - rust-toolchain.toml
       - COMPLIANCE.md
       - .github/workflows/npm-conformance.yml
 
@@ -93,9 +107,9 @@ jobs:
           rm pack.json
 
   suite:
-    name: prism-code passes, and COMPLIANCE.md is current
+    name: prism-code and the Rust shim pass, and COMPLIANCE.md is current
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -103,13 +117,21 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
-      - name: Run the suite against the JavaScript runtime
+      # rust-toolchain.toml pins the toolchain; rustup installs it on first use.
+      - name: Build the Rust runtime's shim
+        run: cargo build --locked -p repo-conformance --bin prism-conformance-shim
+      - name: Unit tests that run every registered runtime
+        working-directory: sdk/npm/conformance
+        run: node --test test/matrix.test.mjs
+      - name: Run the suite against the JavaScript and Rust runtimes
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p target/conformance/results
           node sdk/npm/conformance/bin/prism-conformance.mjs run --runtime js \
             --out target/conformance/results/js.json | tee target/conformance/js.txt
+          node sdk/npm/conformance/bin/prism-conformance.mjs run --runtime rust \
+            --out target/conformance/results/rust.json | tee target/conformance/rust.txt
       - name: Regenerate the matrix from those results
         run: node sdk/npm/conformance/bin/prism-conformance.mjs matrix --results target/conformance/results --write --output target/conformance/COMPLIANCE.md
       - name: Publish the matrix and the results with this run
@@ -127,8 +149,10 @@ jobs:
           if [ -f target/conformance/COMPLIANCE.md ]; then
             sed -n '/^## Features/,/^## Checks/p' target/conformance/COMPLIANCE.md | sed '$d' >> "$GITHUB_STEP_SUMMARY"
           fi
-          if [ -f target/conformance/js.txt ]; then
-            tail -n 2 target/conformance/js.txt >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for runtime in js rust; do
+            if [ -f "target/conformance/$runtime.txt" ]; then
+              tail -n 2 "target/conformance/$runtime.txt" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
       - name: The committed COMPLIANCE.md is the one the suite just generated
         run: node sdk/npm/conformance/bin/prism-conformance.mjs matrix --results target/conformance/results --check
