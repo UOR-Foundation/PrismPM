@@ -28,7 +28,7 @@ const errorsMd = readFileSync(repo('ERRORS.md'), 'utf8');
 const documentedPP = new Set([...errorsMd.matchAll(/^## `(PP\d{4})`/gm)].map((match) => match[1]));
 
 /** The rows of model/sdk-diagnostics.toml: each `code`, and the `class` it is the own code of, if any. */
-const sdkRows = [...readFileSync(repo('model/sdk-diagnostics.toml'), 'utf8').matchAll(/^\[\[error\]\]\ncode = "([^"]+)"\n(?:class = "([^"]+)"\n)?/gm)].map((match) => ({ code: match[1], class: match[2] }));
+const sdkRows = [...readFileSync(repo('model/sdk-diagnostics.toml'), 'utf8').replace(/\r\n/g, '\n').matchAll(/^\[\[error\]\]\ncode = "([^"]+)"\n(?:class = "([^"]+)"\n)?/gm)].map((match) => ({ code: match[1], class: match[2] }));
 const sdkCodes = new Set(sdkRows.map((row) => row.code));
 const advice = 'Every code prism-code raises is a row of model/sdk-diagnostics.toml, owned by its module\'s capability; add the row and run `cargo xtask validate-model --write` to regenerate ERRORS.md.';
 
