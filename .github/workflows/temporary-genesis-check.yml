@@ -1,0 +1,57 @@
+name: Temporary release genesis source qualification
+on:
+  push:
+    branches: ['diagnostic/release-genesis-616-check']
+permissions:
+  contents: read
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d1d0b925d6abf59a9ac0fe3f54d42edc884e4c62
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-devcontainer-runner
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Check actual construction and complete original DK-33 source owner
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
+        with:
+          push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          runCmd: |
+            set -euo pipefail
+            test "$(git rev-parse HEAD)" = d1d0b925d6abf59a9ac0fe3f54d42edc884e4c62
+            test -z "$(git status --porcelain --untracked-files=no)"
+            out="$PWD/.prism/account-genesis-qualification"
+            mkdir -p "$out"
+            git rev-parse HEAD > "$out/source.txt"
+            git rev-parse HEAD^{tree} > "$out/source-tree.txt"
+            retain() {
+              result=$?
+              trap - EXIT
+              set +e
+              git status --porcelain --untracked-files=no > "$out/final-source-status.txt"
+              find /tmp -maxdepth 1 -type d \( -name 'prismpm-account-genesis-*' -o -name 'prismpm-compiler-owner-*' \) -printf '%f\0' | sort -z > "$out/products.list0"
+              tar -C /tmp --null -T "$out/products.list0" -czf "$out/retained-products.tar.gz"
+              archive_status=$?
+              (cd "$out" && sha256sum source.txt source-tree.txt final-source-status.txt products.list0 retained-products.tar.gz *.log > SHA256SUMS)
+              checksum_status=$?
+              if [ "$result" = 0 ] && [ "$archive_status" != 0 ]; then result=$archive_status; fi
+              if [ "$result" = 0 ] && [ "$checksum_status" != 0 ]; then result=$checksum_status; fi
+              exit "$result"
+            }
+            trap retain EXIT
+            node sdk/generate-account-genesis.mjs check 2>&1 | tee "$out/construction-check.log"
+            cargo test --locked --offline -p repo-conformance --test conformance conformance_dk_33 -- --exact --nocapture 2>&1 | tee "$out/dk33.log"
+            test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Preserve original focused source results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-genesis-source-check-${{ github.run_id }}
+          path: .prism/account-genesis-qualification/
+          if-no-files-found: error
+          retention-days: 30
