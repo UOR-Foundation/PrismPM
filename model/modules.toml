@@ -364,6 +364,11 @@ module = "verify"
 path = "sdk/npm/prism-code/src/check.mjs"
 module = "verify"
 
+# The `prism-code <module> <verb>` groups: the CLI composes the modules, as the client does.
+[[owner]]
+path = "sdk/npm/prism-code/src/cli/"
+module = "client"
+
 [[owner]]
 path = "sdk/npm/prism-code/src/closure.mjs"
 module = "images"
