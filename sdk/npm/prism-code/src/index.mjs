@@ -462,9 +462,11 @@ export function createPrism(options = {}) {
   if (unknown.length > 0) fail('client.option', `createPrism has no option ${unknown.join(', ')}; it takes ${CLIENT_OPTIONS.join(', ')}`);
   const { store, warn, capabilities = null, capabilityStore, capabilitySet, policy = null, world = null, declarations, runner = null, docker = null, spawn, readLock = null, auth = NO_AUTH } = options;
   const events = options.events ?? createEventBus();
-  const containers = createContainers({ load, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit });
+  // One volume scope for `volumes` and for the volumes a container asks for (#445), so both refuse alike.
+  const volumeScope = { capabilities, ...(capabilitySet === undefined ? {} : { set: capabilitySet }), world, policy, ...(declarations === undefined ? {} : { declarations }) };
+  const containers = createContainers({ load, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit, volumes: volumeScope });
   const networks = createNetworks({ store: capabilityStore ?? memoryCapabilityStore(capabilities), policy: { effects: policy?.effects ?? null, capabilities: policy?.capabilities ?? null } });
-  const volumes = createVolumes({ capabilities, ...(capabilitySet === undefined ? {} : { set: capabilitySet }), world, policy, ...(declarations === undefined ? {} : { declarations }), runner });
+  const volumes = createVolumes({ ...volumeScope, runner });
   if (docker !== null && typeof docker !== 'function') fail('client.option', 'docker must be a function that builds the Docker invocation, or null');
   const images = lazyImages({ docker, ...(spawn === undefined ? {} : { spawn }) });
   const system = createSystem({ containers, events, readLock });

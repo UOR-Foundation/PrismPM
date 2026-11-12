@@ -16,8 +16,9 @@ import * as auth from './auth.mjs';
 import * as containers from './containers.mjs';
 import * as images from './images.mjs';
 import * as system from './system.mjs';
+import * as volumes from './volumes.mjs';
 
-const FILES = Object.freeze({ containers, images, system, auth });
+const FILES = Object.freeze({ containers, images, system, auth, volumes });
 
 const entry = (verb) => (typeof verb === 'function' ? Object.freeze({ run: verb }) : verb);
 

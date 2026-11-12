@@ -1231,6 +1231,12 @@ level = "build"
 statement = "The Rust runtime runs @prism-code/conformance through its shim, prism-conformance-shim, which translates prism/conformance-shim/1 requests to the prismpm library's inspect and verify and judges nothing: every check of the suite runs, the digests checks pass in full, and each check the Rust runtime does not pass is named with its reason in crates/conformance/runtime/declaration.json, so a check that starts to pass or newly fails fails the run."
 
 [[id]]
+id = "DK-43"
+suite = "sdk"
+level = "build"
+statement = "The prism.containers namespace of prism-code runs images as containers with Docker's states: run, create, start, dispatch, list, inspect, logs, remove and prune work by id or unique prefix, a holo that fails check exits without instantiating the guest, an allowUnverified bypass is recorded on the prism/container/1 record with its time, error and warning, logs are served from the stored output, a volume a container asks for goes through prism.volumes and its typed host-effects refusal is kept on the record before check runs, and stop waits for #350, which builds it."
+
+[[id]]
 id = "DK-44"
 suite = "sdk"
 level = "build"

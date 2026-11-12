@@ -272,6 +272,14 @@ Feature: sdk
     Then the run passes with every gap declared, and the digests checks pass in full
     And the checks that pass are exactly the ones DK-42 lists, by feature
 
+
+  @DK-43 @build
+  Scenario: The prism.containers namespace of prism-code runs images as containers with Docker's states: run, create, start, dispatch, list, inspect, logs, remove and prune work by id or unique prefix, a holo that fails check exits without instantiating the guest, an allowUnverified bypass is recorded on the prism/container/1 record with its time, error and warning, logs are served from the stored output, a volume a container asks for goes through prism.volumes and its typed host-effects refusal is kept on the record before check runs, and stop waits for #350, which builds it.
+    Given a client from createPrism over a memory store and one over a file store, and a capability file with a store declared
+    When containers are created, started, dispatched, inspected, read for logs and removed, with and without allowUnverified and with a volume
+    Then a holo that fails check exits without the guest running, and an allowUnverified run records when it bypassed check and why
+    And a volume is refused with a typed host-effects error kept on the record, and logs come from the stored output
+
   @DK-44 @build
   Scenario: The prism-code system and auth command groups are the CLI of prism.system and prism.auth: system info and version name the package, the holo format, the runtime and the toolchain and builder image the project's prismpm.lock pins, events replays and follows create, start, die and destroy from the container store with since, until and filters, df counts every record and prune removes exited containers only and asks first unless forced; auth login checks the credential with the registry before storing it where Docker would, refuses a password on the command line, and no password reaches stdout, stderr or an error in any spelling, and logout names an ambient token it cannot clear.
     Given a PRISM_HOME with containers, a project with a prismpm.lock, a Docker config folder and an in-process registry
