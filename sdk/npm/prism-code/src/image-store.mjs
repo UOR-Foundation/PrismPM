@@ -68,6 +68,17 @@ export function localName(text) {
   return `${reference.repository}:${reference.tag}`;
 }
 
+/**
+ * The local name a pulled image is kept under, from its parsed reference: the name it
+ * was pulled by, with its tag. One pinned to a digest, or a `dir://` layout by path, is
+ * kept untagged, as `docker pull name@digest` keeps it.
+ */
+export function storedName(reference) {
+  if (reference.digest !== null || reference.fingerprint !== null || reference.tag === null) return null;
+  const name = reference.kind === 'registry' ? `${reference.registry}/${reference.repository}` : reference.repository;
+  return typeof name === 'string' ? `${name}:${reference.tag}` : null;
+}
+
 /** The decision for one case, `{ outcome, code }`, from the table: the facts in the table's order, as bits. */
 export function decide(verb, facts) {
   const key = (IMAGE_STORE_RULES.facts[verb] ?? []).map((fact) => (facts[fact] === true ? '1' : '0')).join('');

@@ -405,7 +405,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|asset| asset.path.as_str())
         .collect::<Vec<_>>();
-    if attachment.entry != "index.html" || paths != ["app.css", "app.js", "index.html"] {
+    // Closure v2 (#612) may attach the Hologram brand files beside the page.
+    const BRAND: [&str; 10] = [
+        "Archivo-SemiBold.woff2",
+        "Geist-Medium.woff2",
+        "Geist-Regular.woff2",
+        "Geist-SemiBold.woff2",
+        "GeistMono-Regular.woff2",
+        "OFL-Archivo.txt",
+        "OFL-Geist.txt",
+        "icon-512.png",
+        "icon.svg",
+        "manifest.webmanifest",
+    ];
+    let mut closure_v2 = ["app.css", "app.js", "index.html"]
+        .into_iter()
+        .chain(BRAND)
+        .collect::<Vec<_>>();
+    closure_v2.sort_unstable();
+    if attachment.entry != "index.html"
+        || (paths != ["app.css", "app.js", "index.html"] && paths != closure_v2)
+    {
         return Err("attached portable View asset closure/order is not canonical".into());
     }
 

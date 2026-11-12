@@ -25,6 +25,9 @@ const hostDocker = (request) => hostDockerArguments({ ...request, probe: false }
 import { createImages, images, IMAGE_BUILD_SCHEMA, IMAGE_INSPECTION_SCHEMA, IMAGE_PULL_SCHEMA, IMAGE_PUSH_SCHEMA } from '../src/images-namespace.mjs';
 import { startRegistry } from './support/registry.mjs';
 
+// A CLI pull keeps what it pulled in the local image store (#349); this suite's stays in a scratch folder.
+process.env.PRISM_IMAGES ??= (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'prism-images-store-'));
+
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const fixture = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
 const plain = new Uint8Array(readFileSync(fixture));

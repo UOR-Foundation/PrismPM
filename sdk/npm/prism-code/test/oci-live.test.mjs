@@ -17,6 +17,9 @@ import { experimental_attest } from '../src/attest.mjs';
 import { PullVerificationError } from '../src/errors.mjs';
 import { experimental_pull, experimental_push } from '../src/push-pull.mjs';
 
+// A CLI pull keeps what it pulled in the local image store (#349); this suite's stays in a scratch folder.
+process.env.PRISM_IMAGES ??= (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'prism-images-store-'));
+
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const fixture = new Uint8Array(readFileSync(new URL('../fixtures/Calculator.holo', import.meta.url)));
 const PROOF = 'https://uor.foundation/prism/proof/v1';

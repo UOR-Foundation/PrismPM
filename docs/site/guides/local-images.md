@@ -39,6 +39,18 @@ You can name an image by a tag, by its `blake3:` digest, or by an id prefix of f
 - An image that a container references is not deleted unless you pass `force`. While a container that references it is running, it is not deleted even with `force`.
 - If you remove by digest an image that has more than one tag, the call is refused unless you pass `force`.
 
+## From the command line
+
+The CLI uses the same store. `prism-code pull` keeps each image it verified, and `prism-code push <reference>` with no holo sends the stored image of that name. `prism-code images` alone lists the store, and `prism-code tag` and `prism-code rmi` are Docker's spellings of `images tag` and `images rm`:
+
+```bash
+prism-code images ls                      # REPOSITORY, TAG, IMAGE ID, CREATED, SIZE
+prism-code images tag calc:1 ghcr.io/acme/calc:1
+prism-code push ghcr.io/acme/calc:1
+prism-code images rm calc:1               # --force removes an image a stopped container references
+prism-code images prune --all
+```
+
 ## Garbage collection
 
 `prism.images.prune()` removes untagged images that no container references, as `docker image prune` does. `prune({ all: true })` also removes tagged images that no container references. `prism.system.prune()` first removes exited containers, then does the same for images, so an image a container still references survives. A created container can therefore always start. `prism.system.df()` reports each image's size and whether a container holds it. Images that no container holds are reclaimable.

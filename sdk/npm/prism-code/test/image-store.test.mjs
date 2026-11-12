@@ -2,6 +2,7 @@
 // names, remove and prune decided by the store model's table, and a referenced image never collected.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -217,4 +218,43 @@ test('on one client a container holds its image: remove refuses, prune keeps it,
   const done = await prism.system.prune({ all: true });
   assert.deepEqual([done.containersDeleted, done.imagesDeleted], [[container.id], [CALCULATOR]]);
   assert.deepEqual(await prism.images.list(), []);
+});
+
+// the CLI: prism-code images ls|tag|rm|prune, Docker's images, tag and rmi, and pull and push through the store
+
+const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
+
+test('the CLI keeps a pulled image, lists, tags, removes and prunes it, and pushes a stored image by its name', async () => {
+  const images = fresh();
+  const cwd = fresh();
+  const layout = fresh();
+  const { mkdirSync } = await import('node:fs');
+  mkdirSync(cwd, { recursive: true });
+  await createImages().push('calc:1', { source: calculator, store: layout });
+  const cli = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', env: { ...process.env, PRISM_IMAGES: images, PRISM_HOME: join(cwd, 'home') } });
+  writeFileSync(join(cwd, 'p0.json'), JSON.stringify({ name: 'p0', minimum: 'P0' }));
+  const pulled = cli('pull', 'calc:1', 'out.holo', '--store', layout, '--policy', 'p0.json');
+  assert.equal(pulled.status, 0, pulled.stderr);
+  const listed = cli('images');
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^REPOSITORY +TAG +IMAGE ID +CREATED +SIZE\ncalc +1 +8408e0895572 +/);
+  assert.equal(cli('tag', 'calc:1', 'ghcr.io/acme/calc:2').status, 0);
+  const json = JSON.parse(cli('images', 'ls', '--json').stdout);
+  assert.deepEqual(json.map((image) => [image.digest, image.tags]), [[CALCULATOR, ['calc:1', 'ghcr.io/acme/calc:2']]]);
+  // The stored image goes out by its name alone.
+  const target = fresh();
+  const pushed = cli('push', 'calc:1', '--store', target);
+  assert.equal(pushed.status, 0, pushed.stderr);
+  assert.match(pushed.stdout, new RegExp(`fingerprint: ${CALCULATOR}`));
+  assert.deepEqual([cli('rmi', 'ghcr.io/acme/calc:2').stdout], ['Untagged: ghcr.io/acme/calc:2\n']);
+  const missing = cli('rmi', 'nope:1');
+  assert.equal(missing.status === 0, false);
+  assert.match(missing.stderr, /^image\.missing: no such image: nope:1/);
+  assert.equal(cli('images', 'rm', 'calc:1').stdout, `Untagged: calc:1\nDeleted: ${CALCULATOR}\n`);
+  assert.equal(cli('images', 'prune', '--all').stdout, 'Total reclaimed space: 0B\n');
+  assert.equal(cli('images', '--bogus').status, 64);
+  assert.equal(cli('images', 'tag', 'only-one').status, 64);
+  // A module verb after `images` is still the group verb, and `images --help` the group's help.
+  assert.match(cli('images', '--help').stdout, /prism-code images ls /);
+  assert.equal(cli('images', 'inspect', fixturePath, '--json').status, 0);
 });

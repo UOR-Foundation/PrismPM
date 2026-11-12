@@ -804,7 +804,7 @@ pub fn run_at(root: &Path, id: &str) {
         "OC-12" => node_suite::verify_exact(
             root,
             id,
-            &[("sdk/npm/prism-code/test/image-store.test.mjs", 11)],
+            &[("sdk/npm/prism-code/test/image-store.test.mjs", 12)],
             "600000",
         ),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),

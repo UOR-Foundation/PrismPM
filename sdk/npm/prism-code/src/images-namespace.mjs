@@ -36,7 +36,7 @@ import { asBytes, parseArchive } from './archive.mjs';
 import { readAttestations } from './attestations.mjs';
 import { blake3Hex } from './blake3.mjs';
 import { fail, PrismError, ReferenceInvalidError } from './errors.mjs';
-import { createImageStore, localName } from './image-store.mjs';
+import { createImageStore, localName, storedName } from './image-store.mjs';
 import { inspect as inspectHolo } from './inspect.mjs';
 import { parseReference } from './oci-reference.mjs';
 import { sha256Hex } from './sha256.mjs';
@@ -53,18 +53,6 @@ const PULL_OPTIONS = [...REGISTRY_OPTIONS, ...SIGNER_OPTIONS, 'output', 'policy'
 const PUSH_OPTIONS = [...REGISTRY_OPTIONS, ...TUF_OPTIONS, 'source', 'key', 'keyless', 'noAttestations', 'signingConfig', 'identityToken', 'onProgress'];
 const VERIFY_OPTIONS = [...SIGNER_OPTIONS, 'policy', 'capabilities', 'replay', 'env'];
 const BUILD_OPTIONS = ['path', 'tag', 'file', 'locked', 'update', 'release', 'env'];
-
-/**
- * The local name a pull keeps its image under: the name it was pulled by, with its tag.
- * A pull pinned to a digest, or from a `dir://` layout by path, names no tag, and the
- * image is kept untagged, as `docker pull name@digest` keeps it.
- */
-function pulledName(text, store) {
-  const reference = parseReference(text, store === undefined ? {} : { store });
-  if (reference.digest !== null || reference.fingerprint !== null || reference.tag === null) return null;
-  const name = reference.kind === 'registry' ? `${reference.registry}/${reference.repository}` : reference.repository;
-  return typeof name === 'string' ? `${name}:${reference.tag}` : null;
-}
 
 /** A tag `build` was given that is also a local name, or none. A release reference that is not one stays the builder's. */
 function builtName(tag) {
@@ -425,7 +413,7 @@ export function createImages({ spawn, docker = null, store, references } = {}) {
     const text = named(repository, tag);
     const pulled = await experimental_pull(text, { ...rest, ...(maxSize === undefined ? {} : { maxHoloBytes: maxSize }) });
     // Only a verified image reaches the store: `experimental_pull` has refused anything else by now.
-    const name = pulledName(text, options.store);
+    const name = storedName(parseReference(text, options.store === undefined ? {} : { store: options.store }));
     const stored = await local.add(pulled.holo, { tags: name === null ? [] : [name] });
     return {
       schema: IMAGE_PULL_SCHEMA,
