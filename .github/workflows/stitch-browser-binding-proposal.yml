@@ -24,7 +24,6 @@ jobs:
           image=ghcr.io/uor-foundation/prismpm-sdk@sha256:454d1746503d62be3b9837268c4183b216ea8872e79e47d0ab694e0704a54b79
           docker pull --platform linux/amd64 "$image"
           mkdir "$RUNNER_TEMP/binding-evidence"
-          sudo chown -R 1000:1000 "$GITHUB_WORKSPACE" "$RUNNER_TEMP/binding-evidence"
           cat >> crates/prismpm/src/controller/release_tests.rs <<'RS'
           #[test]
           #[ignore = "isolated binding proposal writer, never an acceptance check"]
@@ -54,6 +53,7 @@ jobs:
               std::fs::write(repository().join("tests/browser-system/Release.lex.tex"), source).unwrap();
           }
           RS
+          sudo chown -R 1000:1000 "$GITHUB_WORKSPACE" "$RUNNER_TEMP/binding-evidence"
           docker run --rm --platform linux/amd64 --user 1000:1000 --network none --cap-drop ALL \
             --security-opt no-new-privileges --env CARGO_NET_OFFLINE=true --env CARGO_BUILD_JOBS=2 \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/work" \
@@ -64,6 +64,7 @@ jobs:
               cargo test --locked --offline -p prismpm --lib browser_system_source_selection_and_requirements_fail_closed -- --nocapture --test-threads=1 > /evidence/regression.log 2>&1
               cargo test --locked --offline -p prismpm --lib browser_system_refuses_a_command_line_component_without_a_modeled_command_line -- --nocapture --test-threads=1 >> /evidence/regression.log 2>&1
             '
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/binding-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/binding-evidence/source.txt"
           printf '%s\n' "$image" > "$RUNNER_TEMP/binding-evidence/diagnostic-image.txt"
           (cd "$RUNNER_TEMP/binding-evidence" && sha256sum Release.lex.tex model.prism.json check.stdout.json > SHA256SUMS)
