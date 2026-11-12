@@ -603,13 +603,19 @@ export interface Application {
     readonly within: boolean | null;
     readonly pure: boolean | null;
     readonly effects: ReadonlyArray<'clock' | 'random' | 'socket' | 'filesystem' | 'unknown'> | null;
+    /** True for the session world `hologram:guest/core-wasm@2` (#629): steps are taken on `open()`, and `dispatch` is refused. */
+    readonly session: boolean;
   };
-  /** Run one request through the guest on a fresh instance; bytes in, bytes out. */
+  /** The acceptance of a session world as ordered sessions of steps (#629); empty for a stateless world. */
+  sessions: SessionVector[][];
+  /** A new session on a fresh instance (#629). Throws `session.unsupported` for a stateless world. */
+  open(): Promise<Session>;
+  /** Run one request through the guest on a fresh instance; bytes in, bytes out. Rejects with `session.required` for a session world. */
   dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
-  /** Replay every acceptance vector, comparing bytes. */
+  /** Replay every acceptance vector, or every step of every acceptance session, comparing bytes. */
   acceptance(): Promise<AcceptanceResult>;
-  /** The acceptance vectors as a history, this application's first. Rejects with `replay.history` when it carries none. */
-  history(): Promise<History>;
+  /** The acceptance vectors as a history, this application's first: `prism/history/2` for a session world. Rejects with `replay.history` when it carries none. */
+  history(): Promise<History | SessionHistory>;
   /** Experimental. Record dispatches as they run. */
   experimental_recorder(): Recorder;
   /** Experimental. Re-execute histories against this build; see `experimental_replay`. */
@@ -729,13 +735,61 @@ export interface History {
   events: HistoryEvent[];
 }
 
+/** One step of a session history: the request and the responses it returned, lowercase hex. */
+export interface SessionHistoryStep {
+  request: string;
+  responses: string[];
+}
+
+/** A history of sessions, `prism/history/2` (#629): each session's steps, and the failure that ended it, if any. */
+export interface SessionHistory {
+  schema: 'prism/history/2';
+  application: string | null;
+  recordedFrom?: { guest: DigestSet; model: DigestSet };
+  sessions: { steps: SessionHistoryStep[]; failure?: { request: string; error: string } }[];
+}
+
+/** One acceptance step of a session world. */
+export interface SessionVector {
+  request: Uint8Array;
+  responses: Uint8Array[];
+}
+
+/** A session of the session world (#629). One instance; every failure ends it. */
+export interface Session {
+  /** Take one step. Resolves to its responses in order. Rejects with `session.closed` once ended, `session.busy` while a step runs. */
+  dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array[]>;
+  /** Take one step and yield its responses one at a time, after the step has run. */
+  stream(request: Uint8Array | ArrayBuffer): AsyncIterable<Uint8Array>;
+  close(): void;
+  readonly closed: boolean;
+  readonly steps: number;
+}
+
+export declare const SESSION_CONTRACT: 'hologram:guest/core-wasm@2';
+export declare const SESSION_HISTORY_SCHEMA: 'prism/history/2';
+/** The records of a history in order: the events of `/1`, or every step and failure of every session of `/2`. */
+export function historyEvents(history: History | SessionHistory): (HistoryEvent | SessionHistoryStep | { request: string; error: string })[];
+/** Decode the responses frame of one step from guest memory; throws `core.response` when it is malformed or over a bound. */
+export function decodeResponses(buffer: ArrayBuffer, offset: number, length: number, limits?: { response?: number; responseCount?: number }): Uint8Array[];
+/** Run one step on a session instance and return copies of its responses. */
+export function runStep(instance: WebAssembly.Instance, request: Uint8Array, limits?: { response?: number; responseCount?: number }): Uint8Array[];
+/** A session over one instance, from its parts. */
+export function openSession(parts: {
+  instantiate: () => WebAssembly.Instance | Promise<WebAssembly.Instance>;
+  step: (instance: WebAssembly.Instance, request: Uint8Array) => Uint8Array[] | Promise<Uint8Array[]>;
+  check?: (request: Uint8Array) => void;
+}): Promise<Session>;
+/** Run acceptance sessions, each on a fresh session, comparing every step's responses. */
+export function runSessionAcceptance(sessions: SessionVector[][], open: () => Promise<Session>): Promise<AcceptanceResult>;
+
 /** A history as text, UTF-8 bytes or a parsed value. */
-export type HistorySource = string | Uint8Array | ArrayBuffer | History;
+export type HistorySource = string | Uint8Array | ArrayBuffer | History | SessionHistory;
 
 export declare const HISTORY_SCHEMA: 'prism/history/1';
 export declare const REPLAY_PREDICATE_TYPE: 'https://uor.foundation/prism/replay/v1';
 /** Read a history. Rejects with `ReplayError` (`replay.history`) for anything the schema rejects. */
-export function parseHistory(source: HistorySource): History;
+export function parseHistory(source: HistorySource): History | SessionHistory;
 /** The bytes both digests of a history cover: its canonical JSON, with no trailing newline. */
 export function historyBytes(history: HistorySource): Uint8Array;
 /** Both digests of a history, as `prism/replay/v1` names it. */
@@ -743,13 +797,15 @@ export function historyDigest(history: HistorySource): Promise<DigestSet>;
 /** A history as a file: canonical JSON and one LF. */
 export function historyJson(history: HistorySource): string;
 /** The acceptance vectors of an application as a history. */
-export function acceptanceHistory(app: Application): Promise<History>;
+export function acceptanceHistory(app: Application): Promise<History | SessionHistory>;
 
 export interface Recorder {
   /** Behaves as `app.dispatch` does, a refusal included, and records the outcome. */
   dispatch(request: Uint8Array | ArrayBuffer): Promise<Uint8Array>;
+  /** For a session world: a new session whose steps are recorded (#629). */
+  open?(): Promise<Session>;
   /** What has finished, in call order. Rejects with `replay.history` when nothing has. */
-  history(): Promise<History>;
+  history(): Promise<History | SessionHistory>;
   /** How many dispatches have finished. */
   events(): number;
 }
@@ -1087,7 +1143,7 @@ export function decodeHoloview(bytes: Uint8Array): View;
 export function encodeHoloview(view: View): Uint8Array;
 
 /** Compile the guest and link its imports against `grant` (default: nothing granted, so any import throws `CapabilityDeniedError`). */
-export function compileGuest(wasm: Uint8Array, grant?: CapabilityGrant): Promise<WebAssembly.Module>;
+export function compileGuest(wasm: Uint8Array, grant?: CapabilityGrant, contract?: 'hologram:guest/core-wasm@1' | 'hologram:guest/core-wasm@2'): Promise<WebAssembly.Module>;
 export function runGuest(module: WebAssembly.Module, request: Uint8Array, limits?: Partial<Limits>): Uint8Array;
 export function runAcceptance(vectors: Vector[], dispatch: (request: Uint8Array) => Uint8Array | Promise<Uint8Array>): Promise<AcceptanceResult>;
 

@@ -824,6 +824,26 @@ capability = "CT-12"
 statement = "A replay could not be carried out or its statement failed."
 
 [[error]]
+code = "session.busy"
+capability = "HO-45"
+statement = "A step was started on a session while another step of the same session was still running; steps of one session are taken in order, and the session stays open."
+
+[[error]]
+code = "session.closed"
+capability = "HO-45"
+statement = "A step was started on a session that was closed or that a failed step ended; nothing ran, and a new session must be opened."
+
+[[error]]
+code = "session.required"
+capability = "HO-45"
+statement = "dispatch was called on an application whose guest is the session world hologram:guest/core-wasm@2; its steps are taken on a session opened with open()."
+
+[[error]]
+code = "session.unsupported"
+capability = "HO-45"
+statement = "open was called on an application whose guest is the stateless world hologram:guest/core-wasm@1, which has no sessions."
+
+[[error]]
 code = "setup.agent"
 capability = "DK-41"
 statement = "setup was asked for an agent it does not know."

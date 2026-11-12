@@ -3825,6 +3825,47 @@ it observes to be the retained `server` record (`PP6003`). It writes nothing to 
 project or the release. A release of anything but a server application is
 refused with `PP6101`.
 
+### 12.16 The session world
+
+HO-44 owns the guest contract `hologram:guest/core-wasm@2`, stated by
+`sdk/npm/spec/worlds/core-wasm-2.wit` and its row in `WORLDS`; the `@1` row, its
+file and every existing guest are unchanged. A `@2` guest is an import-free
+wasm32 core module exporting exactly `memory`, `holo_alloc(i32)->i32` and
+`holo_step(i32,i32)->i64`, with one unshared memory of the declared maximum and
+no start function. One instance is one session. Its state starts empty, stays
+inside the instance and is never read or written by the host.
+
+The model's session root is a monomorphic `Bytes -> Bytes` definition, rendered
+by `prod_codegen::generate_module` exactly as for `@1`. The guest package
+(`prismpm::session_guest`, target schema `prismpm/core-wasm-session-target/1`)
+composes that rendering with a fixed shim rendered from the declared request,
+state, response, response-count, page and stack bounds alone; no application
+behavior is generated or written outside the model. All integers of the frames
+are big-endian `u32`. The shim calls the root with the turn (state length, state,
+request) and requires the answer to be the next state's length and bytes, the
+response count and each response's length and bytes, with no trailing byte; a
+state, a response or a count over its declaration, a malformed answer, a checked
+failure of the root and a step over a region `holo_alloc` did not reserve trap.
+It returns the responses (count, then each length and bytes) and keeps the
+state. `holo_alloc` discards the previous step's responses. After every step the
+shim moves the state and the responses to the start of its heap and releases
+every other allocation, so the memory a step uses, and any trap, is a function
+of its state and request. Bounds whose turn or answer do not fit a 32-bit length
+or the declared memory, and a root that is not `Bytes -> Bytes`, are refused
+with `PP5101`.
+
+HO-45 owns the runtime. `prism-code` runs a `@2` guest only as sessions
+(`open`, then ordered steps returning zero or more responses); every failure
+ends the session. The history of a session world is `prism/history/2`
+(`sdk/npm/spec/schemas/history/history-v2.schema.json`): ordered sessions, each
+its steps with their responses and the failure that ended it, if any. Replay
+re-executes each session on a fresh instance and compares every outcome; a
+divergence is `replay.divergence` (`PP5701`) and a history of the other world is
+refused with `replay.history`. `prism/replay/v1` is unchanged and counts steps
+and failures as events. A holo format revision that admits a `@2` guest, the
+profile that declares the bounds and the Rust CLI's replay of `/2` histories are
+specified with the binary application profile of issue 630.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is

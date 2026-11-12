@@ -162,17 +162,21 @@ function referenceGuest() {
  * The archive with another guest module, every fingerprint recomputed: the label
  * in the manifest, the directory and the provenance, the directory's byte length,
  * the application kappa, the table and the footer. Only the guest is wrong.
+ * With `contract`, the directory and the provenance also name that guest
+ * contract. The manifest suffix is a constant of the format and the model
+ * document has its own schema, so both keep naming @1.
  */
-function withGuest(wasm) {
+function withGuest(wasm, contract = null) {
   const bytes = reference();
   const rows = rowsOf(bytes);
   const oldLabel = dec.decode(rows[GUEST].body.subarray(0, LABEL));
   const newLabel = `blake3:${hex(blake3(wasm))}`;
+  const named = (text) => (contract === null ? text : text.replaceAll(CORE_WASM_1, contract));
   rows[GUEST].body = concat([enc.encode(newLabel), wasm]);
   rows[0].body = enc.encode(dec.decode(rows[0].body).replace(oldLabel, newLabel));
   const editJson = (body, edit) => {
     const nameLength = body[0] | (body[1] << 8);
-    const json = JSON.parse(dec.decode(body.subarray(2 + nameLength)));
+    const json = JSON.parse(named(dec.decode(body.subarray(2 + nameLength))));
     edit(json);
     return concat([body.subarray(0, 2 + nameLength), enc.encode(JSON.stringify(json))]);
   };
@@ -211,6 +215,10 @@ function mutateGuest(edit) {
 }
 
 const name = (text) => concat([leb(enc.encode(text).length), enc.encode(text)]);
+
+const CORE_WASM_1 = 'hologram:guest/core-wasm@1';
+/** A guest of the session world (#629): the session ABI probe of prism-code, the generated shim around a test entry. */
+const SESSION_PROBE = here('../corpus/session-probe.wasm');
 
 /**
  * Every archive by name. A name is part of the suite's contract: scenarios refer
@@ -285,6 +293,10 @@ export const ARCHIVES = Object.freeze({
       const payload = concat([Uint8Array.of(1), name('env'), name('host'), Uint8Array.of(1, 0x70, 0, 0)]);
       sections.splice(at(1) + 1, 0, { id: 2, payload });
     }),
+
+  // A guest of the session world hologram:guest/core-wasm@2 (#629), named as such by the directory and the
+  // provenance. The manifest suffix and the model document keep @1 until a format revision admits the session world (#630).
+  'session-world': () => withGuest(new Uint8Array(readFileSync(SESSION_PROBE)), 'hologram:guest/core-wasm@2'),
 
   // The attestation section.
   'unsigned-p3-claim': () => assemble([...rowsOf(reference()), attestationRow()]),

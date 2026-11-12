@@ -289,3 +289,23 @@ Feature: holo
     Then the binding sees request_begin then request_end once for each, in order
     And request_begin carries the request's number and body, and request_end the same number, the request body and the answer body
     And a binding that overrides neither compiles and serves unchanged
+
+  @HO-44 @build
+  Scenario: The session world is a new contract whose guest is the model's root inside a generated shim that keeps the state, checks every declared bound and compacts its arena after every step.
+    Given the session world row and its WIT file
+    And a model whose session root is Bytes -> Bytes and declared session bounds
+    When the session guest package is generated
+    Then it is a function of the IR and the bounds alone, and exports exactly memory, holo_alloc and holo_step
+    And the shim traps on a state, a response, a response count or a trailing byte over the declaration
+    And bounds that cannot be generated and an entry that is not Bytes -> Bytes are refused with PP5101
+    And the @1 row and its file are unchanged
+
+  @HO-45 @build
+  Scenario: prism-code runs a session-world guest as sessions and replays prism/history/2 histories of them.
+    Given a holo whose guest is the session world
+    When a session takes three steps
+    Then each step sees the state the previous steps left and returns its responses in order
+    And a failed step ends the session and a later step fails session.closed
+    And dispatch on the application fails session.required
+    And a recorded prism/history/2 history replays without divergence, and a changed response is one DeterminismViolationError
+    And a history of the other world fails replay.history

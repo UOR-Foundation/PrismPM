@@ -11,6 +11,7 @@ import { parseArchive, resolveArchive, asBytes } from './archive.mjs';
 import { attestationSection, readAttestations } from './attestations.mjs';
 import { decodeHoloview } from './view.mjs';
 import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptance } from './core.mjs';
+import { isSessionContract, openSession, runSessionAcceptance, runStep } from './session.mjs';
 import { parseCapabilities, grantOf, DEFAULT_SET } from './capabilities.mjs';
 import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
 import { CapabilityDeniedError, DigestMismatchError, PrismCodeError, fail } from './errors.mjs';
@@ -69,6 +70,8 @@ export {
 export { experimental_verify, experimental_createClient, MINIMUM_LEVEL_ENV } from './verify.mjs';
 export {
   HISTORY_SCHEMA,
+  SESSION_HISTORY_SCHEMA,
+  historyEvents,
   REPLAY_PREDICATE_TYPE,
   parseHistory,
   historyBytes,
@@ -82,6 +85,7 @@ export { CONTAINER_SCHEMA, memoryContainerStore } from './containers.mjs';
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';
+export { SESSION_CONTRACT, decodeResponses, openSession, runStep, runSessionAcceptance } from './session.mjs';
 export { MIDDLEWARE_STEPS } from './middleware.mjs';
 export { experimental_tracing } from './tracing.mjs';
 export { parseCapabilities, grantOf, CAPABILITIES_SCHEMA, CAPABILITY_KINDS, DEFAULT_SET } from './capabilities.mjs';
@@ -142,6 +146,29 @@ function vectorsOf(application) {
   return list.map((v) => ({ request: Uint8Array.from(v.request), response: Uint8Array.from(v.response) }));
 }
 
+/**
+ * The bounds of a session guest (#629): the request is the allocation bound,
+ * and the session member of the application declares the rest.
+ */
+function sessionLimitsOf(application) {
+  const session = application.session ?? {};
+  return {
+    request: application.request_maximum,
+    guestAllocation: application.request_maximum,
+    response: session.response_maximum,
+    responseCount: session.response_count_maximum,
+    state: session.state_maximum,
+  };
+}
+
+/** The acceptance of a session guest: ordered sessions of `{ request, responses }` steps (#629). */
+function sessionsOf(application) {
+  const list = Array.isArray(application.acceptance_sessions) ? application.acceptance_sessions : [];
+  return list.map((steps) =>
+    steps.map((s) => ({ request: Uint8Array.from(s.request), responses: s.responses.map((r) => Uint8Array.from(r)) })),
+  );
+}
+
 function profileOf(modelDocument) {
   return modelDocument.application?.profile ?? modelDocument.schema ?? null;
 }
@@ -189,7 +216,7 @@ function grantFor({ capabilities = null, capabilitySet = DEFAULT_SET } = {}) {
  */
 function worldWithinGrant(directory, grant) {
   const contract = directory?.layers?.find((l) => l.kind === 'wasm')?.contract ?? null;
-  if (contract === null) return Object.freeze({ contract: null, within: null, pure: null, effects: null });
+  if (contract === null) return Object.freeze({ contract: null, within: null, pure: null, effects: null, session: false });
   const result = worldPolicy(contract, grant.members);
   if (result.known && !result.within) {
     throw new CapabilityDeniedError(`the world ${contract} exceeds the granted capabilities: ${result.problems.join('; ')}`, {
@@ -197,7 +224,14 @@ function worldWithinGrant(directory, grant) {
       details: { contract, problems: result.problems, set: grant.set },
     });
   }
-  return Object.freeze({ contract, within: result.within, pure: result.pure, effects: result.effects === null ? null : Object.freeze([...result.effects]) });
+  return Object.freeze({
+    contract,
+    within: result.within,
+    pure: result.pure,
+    effects: result.effects === null ? null : Object.freeze([...result.effects]),
+    /** True for the session world (#629): `open()` takes steps, `dispatch` is refused. */
+    session: isSessionContract(contract),
+  });
 }
 
 /**
@@ -214,9 +248,10 @@ export async function loadArchive(source, options = {}) {
   const application = modelDocument.application ?? fail('archive.model', 'model document has no application');
   const capabilities = grantFor(options);
   const world = worldWithinGrant(resolved.directory, capabilities);
-  const module = await compileGuest(resolved.guest.content, capabilities);
-  const limits = limitsOf(application);
-  const vectors = vectorsOf(application);
+  const module = await compileGuest(resolved.guest.content, capabilities, world.contract ?? undefined);
+  const limits = world.session ? sessionLimitsOf(application) : limitsOf(application);
+  const vectors = world.session ? [] : vectorsOf(application);
+  const sessions = world.session ? sessionsOf(application) : [];
   const view = decodeHoloview(resolved.view.content);
   let metadata = null;
   if (parsed.metadata) {
@@ -231,11 +266,25 @@ export async function loadArchive(source, options = {}) {
   let app = null;
   const step = stepper(middleware, () => app);
   const dispatch = async (input) => {
+    if (world.session) fail('session.required', `the world ${world.contract} keeps state across steps; open a session with app.open() and dispatch on it`);
     const request = asBytes(input);
     checkRequest(request, limits);
     const instance = await step('instantiate', (args) => instantiateGuest(args.module, args.imports), { module, imports: {} });
     const response = await step('dispatch', (args) => runInstance(args.instance, args.request), { request, instance });
     return step('record', (args) => args.response, { request, response });
+  };
+  /** A new session on a fresh instance (#629). Each step runs the middleware `dispatch` and `record` steps. */
+  const open = () => {
+    if (!world.session) fail('session.unsupported', `the world ${world.contract} is stateless; it has no sessions, so dispatch on the application`);
+    return openSession({
+      instantiate: () => step('instantiate', (args) => instantiateGuest(args.module, args.imports), { module, imports: {} }),
+      check: (request) => checkRequest(request, limits),
+      step: async (instance, input) => {
+        const request = asBytes(input);
+        const responses = await step('dispatch', (args) => runStep(args.instance, args.request, limits), { request, instance });
+        return step('record', (args) => args.response, { request, response: responses });
+      },
+    });
   };
   let inspection = null;
   app = Object.freeze({
@@ -256,9 +305,12 @@ export async function loadArchive(source, options = {}) {
     capabilities,
     /** The declared world against the grant, checked before the guest compiled (#283): contract, within, pure, effects. */
     world,
+    /** The acceptance of a session world, as ordered sessions of steps (#629); empty for a stateless world. */
+    sessions,
     dispatch,
+    open,
     attestations: () => readAttestations(parsed),
-    acceptance: () => runAcceptance(vectors, dispatch),
+    acceptance: () => (world.session ? runSessionAcceptance(sessions, open) : runAcceptance(vectors, dispatch)),
     /** What the holo says about itself, read from the section table; the guest is not run. */
     inspect: () => (inspection ??= inspect(parsed.bytes)),
     /**

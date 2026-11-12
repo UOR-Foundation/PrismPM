@@ -24,6 +24,7 @@ mod scoped_administration;
 mod server_host;
 mod server_serving;
 mod server_verification;
+mod session_world;
 mod text_cli;
 mod threat_model;
 mod workbench;
@@ -550,6 +551,13 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-41" => server_verification::verify_build_bound(root),
         "HO-42" => server_verification::verify_release_replay(root),
         "HO-43" => server_serving::verify_request_hooks(root),
+        "HO-44" => session_world::verify_generator(root),
+        "HO-45" => node_suite::verify_exact(
+            root,
+            id,
+            &[("sdk/npm/prism-code/test/session.test.mjs", 18)],
+            "600000",
+        ),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {

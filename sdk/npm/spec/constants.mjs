@@ -96,6 +96,19 @@ export const CORE_WASM = freeze({
 });
 
 /**
+ * The Core-Wasm session contract (issue #629, docs/proposals/629-session-world.md).
+ * One instance is one session: the state stays inside the guest and each
+ * `holo_step` answers one request with zero or more responses.
+ */
+export const CORE_WASM_SESSION = freeze({
+  CONTRACT: 'hologram:guest/core-wasm@2',
+  EXPORTS: freeze(['holo_alloc', 'holo_step', 'memory']),
+  ALLOCATOR: 'holo_alloc',
+  ENTRY: 'holo_step',
+  WORLD: 'worlds/core-wasm-2.wit',
+});
+
+/**
  * The worlds a guest can target, by guest contract (issue #278,
  * docs/proposals/278-wit-world.md). A holo declares its world by naming its
  * contract; the world's hash is a function of that name through this table.
@@ -122,6 +135,22 @@ export const WORLDS = freeze({
     exports: freeze([
       freeze({ name: 'holo_alloc', kind: 'func', params: freeze(['i32']), results: freeze(['i32']) }),
       freeze({ name: 'holo_run', kind: 'func', params: freeze(['i32', 'i32']), results: freeze(['i64']) }),
+      freeze({ name: 'memory', kind: 'memory' }),
+    ]),
+  }),
+  [CORE_WASM_SESSION.CONTRACT]: freeze({
+    version: 1,
+    package: 'hologram:guest@2.0.0',
+    world: 'core-wasm',
+    file: CORE_WASM_SESSION.WORLD,
+    digest: freeze({
+      blake3: '2e286db1e21243c244f807d7bbf21f158bac0f5c413d4e46007de7dbe9204a4d',
+      sha256: 'e5ee38e4f472f7616a291c83c17f272078cdf114e0106e39d71590aa1ac960f4',
+    }),
+    imports: freeze([]),
+    exports: freeze([
+      freeze({ name: 'holo_alloc', kind: 'func', params: freeze(['i32']), results: freeze(['i32']) }),
+      freeze({ name: 'holo_step', kind: 'func', params: freeze(['i32', 'i32']), results: freeze(['i64']) }),
       freeze({ name: 'memory', kind: 'memory' }),
     ]),
   }),
