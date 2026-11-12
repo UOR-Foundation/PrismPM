@@ -745,7 +745,7 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-44" => node_suite::verify_exact(
             root,
             id,
-            &[("sdk/npm/prism-code/test/system-auth-cli.test.mjs", 15)],
+            &[("sdk/npm/prism-code/test/system-auth-cli.test.mjs", 16)],
             "600000",
         ),
         "DK-35" => verify_node_suite(

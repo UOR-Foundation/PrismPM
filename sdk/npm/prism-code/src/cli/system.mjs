@@ -43,6 +43,7 @@ export function context(io = {}) {
     cwd: io.cwd ?? process.cwd(),
     env,
     pollMs: io.pollMs ?? EVENTS_POLL_MS,
+    signal: io.signal ?? null,
     prism: io.prism ?? Prism.fromEnv({ env, warn: () => {} }),
   };
 }
@@ -132,7 +133,7 @@ async function events(argv, io) {
   for (const action of wanted.action ?? []) if (!EVENT_ACTIONS.includes(action)) throw new UsageError(`--filter action= takes one of ${EVENT_ACTIONS.join(', ')}`);
   let sequence = 0;
   const emit = (event) => {
-    if (since !== undefined ? event.timeMs < since : event.timeMs < now) return;
+    if (since !== undefined && event.timeMs < since) return;
     if (until !== undefined && event.timeMs > until) return;
     if (wanted.action && !wanted.action.has(event.action)) return;
     if (wanted.id && ![...wanted.id].some((id) => event.id.startsWith(id))) return;
@@ -141,18 +142,20 @@ async function events(argv, io) {
   };
   let seen = await snapshot(io.prism);
   const shown = new Set();
-  const show = (records) => {
+  const show = (records, quiet = false) => {
     const fresh = [...records.values()].flatMap(recordEvents).filter((e) => !shown.has(`${e.id} ${e.action} ${e.timeMs}`));
     for (const e of fresh.sort((a, b) => a.timeMs - b.timeMs)) {
       shown.add(`${e.id} ${e.action} ${e.timeMs}`);
-      emit(e);
+      if (!quiet) emit(e);
     }
   };
-  show(seen);
-  // Follow the store until --until, or until interrupted.
-  let stop = false;
+  // Without --since only what happens from now on is new, as with `docker events`.
+  show(seen, since === undefined);
+  // Follow the store until --until, or until interrupted (Ctrl-C, or `io.signal`).
+  let stop = io.signal?.aborted === true;
   const interrupt = () => (stop = true);
   process.once('SIGINT', interrupt);
+  io.signal?.addEventListener?.('abort', interrupt, { once: true });
   try {
     while (!stop && (until === undefined || Date.now() <= until)) {
       await new Promise((r) => setTimeout(r, until === undefined ? io.pollMs : Math.max(0, Math.min(io.pollMs, until - Date.now()))));

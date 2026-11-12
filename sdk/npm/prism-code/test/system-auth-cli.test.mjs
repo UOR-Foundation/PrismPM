@@ -180,18 +180,28 @@ test('system events replays create, start and die from the store in order, with 
   }
 });
 
-test('system events follows the store until --until, and reports a removed container as destroy', async () => {
+test('system events follows the store until stopped, and reports a removed container as destroy', async () => {
   const { env, prism, exited } = await home();
-  const until = String((Date.now() + 1500) / 1000);
-  const following = call(systemCli, 'events', ['--until', until, '--json'], { env, pollMs: 50 });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  const stop = new AbortController();
+  const following = call(systemCli, 'events', ['--json'], { env, pollMs: 20, signal: stop.signal });
   const later = await prism.containers.run(fixture, ADD, P0);
   await (await prism.containers.get(exited)).remove();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  stop.abort();
   const { code, out } = await following;
   assert.equal(code, 0);
   const seen = out.trim().split('\n').map((line) => JSON.parse(line));
   assert.deepEqual(seen.filter((e) => e.id === later.id).map((e) => e.action), ['create', 'start', 'die']);
   assert.deepEqual(seen.filter((e) => e.id === exited).map((e) => e.action), ['destroy']);
+});
+
+test('system events ends at an --until still ahead of it', async () => {
+  const { env } = await home();
+  const started = Date.now();
+  const { code, out } = await call(systemCli, 'events', ['--until', String((Date.now() + 300) / 1000)], { env, pollMs: 20 });
+  assert.equal(code, 0);
+  assert.equal(out, '');
+  assert.ok(Date.now() - started >= 250);
 });
 
 test('times are ISO 8601, Unix seconds or a duration ago', () => {
