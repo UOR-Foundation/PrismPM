@@ -1,6 +1,41 @@
 spec = "prismpm/sdk-diagnostics/1"
 
 [[error]]
+code = "image.ambiguous"
+capability = "OC-12"
+statement = "An image id prefix names more than one stored image; nothing was read or changed."
+
+[[error]]
+code = "image.corrupt"
+capability = "OC-12"
+statement = "The bytes the local image store keeps for an image no longer match its digests, or are missing; they are never served."
+
+[[error]]
+code = "image.in-use"
+capability = "OC-12"
+statement = "prism.images.remove would delete an image a container references; it is refused unless forced, and always while that container runs."
+
+[[error]]
+code = "image.missing"
+capability = "OC-12"
+statement = "The local image store holds no image under that name, digest or id prefix."
+
+[[error]]
+code = "image.name"
+capability = "OC-12"
+statement = "An image name is not [registry/]repository[:tag], or pins a digest where a tag is a name."
+
+[[error]]
+code = "image.store"
+capability = "OC-12"
+statement = "The local image store cannot be read or written, or its index is not prism/image-store/1; nothing changed."
+
+[[error]]
+code = "image.tagged"
+capability = "OC-12"
+statement = "prism.images.remove named by digest an image that has more than one tag; it is refused unless forced."
+
+[[error]]
 code = "networks.exists"
 capability = "DK-39"
 statement = "prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again."

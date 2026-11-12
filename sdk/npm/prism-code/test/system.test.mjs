@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPrism, load, memoryContainerStore, MODULES, prism as defaultPrism } from '../src/index.mjs';
 import { Prism, fileContainerStore } from '../src/node.mjs';
-import { createEventBus, createSystem, EVENT_ACTIONS, EVENT_HISTORY, IMAGE_STORE, SYSTEM_DF_SCHEMA, SYSTEM_EVENT_SCHEMA, SYSTEM_INFO_SCHEMA, SYSTEM_PRUNE_SCHEMA, SYSTEM_VERSION_SCHEMA } from '../src/system.mjs';
+import { createEventBus, createSystem, EVENT_ACTIONS, EVENT_HISTORY, SYSTEM_DF_SCHEMA, SYSTEM_EVENT_SCHEMA, SYSTEM_INFO_SCHEMA, SYSTEM_PRUNE_SCHEMA, SYSTEM_VERSION_SCHEMA } from '../src/system.mjs';
 import { VERSION } from '../src/version.mjs';
 import { FORMAT_REVISION } from '../src/vendor/spec/constants.mjs';
 import { errors } from '../src/errors-namespace.mjs';
@@ -113,7 +113,7 @@ test('version names this package, the holo format it reads and its runtime, and 
   await assert.rejects(system.version({ verbose: true }), { code: 'system.option' });
 });
 
-test('info counts containers by state, and says images wait for the local store', async () => {
+test('info counts containers by state and the images in the local store', async () => {
   const prism = quiet();
   const { app, release } = await held();
   await prism.containers.create(fixture, ADD, P0);
@@ -123,8 +123,7 @@ test('info counts containers by state, and says images wait for the local store'
   const info = await prism.system.info();
   assert.equal(info.schema, SYSTEM_INFO_SCHEMA);
   assert.deepEqual(info.containers, { total: 3, created: 1, running: 1, exited: 1 });
-  assert.deepEqual([info.images, info.lock, info.events, info.dependsOn], [null, null, true, { images: IMAGE_STORE }]);
-  assert.deepEqual(IMAGE_STORE, ['#349']);
+  assert.deepEqual([info.images, info.lock, info.events], [0, null, true]);
   release(new TextEncoder().encode('1\tok\t42'));
   await started;
 });
@@ -139,7 +138,7 @@ test('a lock that pins no immutable builder is refused, as build refuses it', as
 
 // system.df and system.prune
 
-test('df reports each record and what prune would reclaim, and no image usage', async () => {
+test('df reports each record and what prune would reclaim, and an empty image store', async () => {
   const prism = quiet();
   const kept = await prism.containers.create(fixture, ADD, P0);
   const done = await prism.containers.run(fixture, ADD, P0);
@@ -156,11 +155,11 @@ test('df reports each record and what prune would reclaim, and no image usage', 
       { id: done.id, image: (await done.inspect()).image.digest, status: 'exited', size: await size(done) },
     ],
   });
-  assert.deepEqual([df.images, df.dependsOn], [null, { images: ['#349'] }]);
+  assert.deepEqual(df.images, { total: 0, active: 0, size: 0, reclaimable: 0, location: null, rows: [] });
   await assert.rejects(prism.system.df({ all: true }), { code: 'system.option' });
 });
 
-test('prune removes exited containers only, keeps created and running ones, and removes no image', async () => {
+test('prune removes exited containers only and keeps created and running ones', async () => {
   const prism = quiet();
   const { app, release } = await held();
   const created = await prism.containers.create(fixture, ADD, P0);
@@ -169,7 +168,7 @@ test('prune removes exited containers only, keeps created and running ones, and 
   const exited = await prism.containers.run(fixture, ADD, P0);
   const record = await exited.inspect();
   const pruned = await prism.system.prune();
-  assert.deepEqual(pruned, { schema: SYSTEM_PRUNE_SCHEMA, containersDeleted: [exited.id], imagesDeleted: [], spaceReclaimed: new TextEncoder().encode(JSON.stringify(record)).length, dependsOn: { images: ['#349'] } });
+  assert.deepEqual(pruned, { schema: SYSTEM_PRUNE_SCHEMA, containersDeleted: [exited.id], imagesDeleted: [], spaceReclaimed: new TextEncoder().encode(JSON.stringify(record)).length });
   await assert.rejects(prism.containers.get(exited.id), { code: 'container.missing' });
   assert.deepEqual((await prism.containers.list({ all: true })).map((container) => container.id).sort(), [created.id, running.id].sort());
   // The image a container references is still there: a created container starts from it.

@@ -1294,7 +1294,13 @@ statement = "Private publication context linkage projects a unique source-owned 
 id = "OC-11"
 suite = "oci"
 level = "build"
-statement = "The prism.images namespace of prism-code exposes build, pull, push, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, an option a verb does not have is refused, and list, tag and remove stay absent until the local image store exists."
+statement = "The prism.images namespace of prism-code exposes build, pull, push, list, get, tag, remove, prune, inspect and verify in developer-view terms over the code that already does the work: pull refuses a failing image before writing a byte, verify returns the verdict of check, credentials come only from Docker's configuration, and an option a verb does not have is refused."
+
+[[id]]
+id = "OC-12"
+suite = "oci"
+level = "build"
+statement = "The local image store of prism-code keeps each image once under its BLAKE3 digest with tags as names, build and pull write into it and push reads from it, its bytes are hashed again on every read, and remove and prune follow the store model's decision table: an image a container references is never removed without force or while it runs, and prune removes only images no container references."
 
 [[id]]
 id = "LC-01"

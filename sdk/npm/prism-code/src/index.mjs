@@ -393,7 +393,7 @@ export async function load(source, options = {}) {
 /** The nine modules of #440, in the order the client exposes them. */
 export const MODULES = Object.freeze(['client', 'images', 'containers', 'networks', 'volumes', 'system', 'auth', 'errors', 'verify']);
 
-const CLIENT_OPTIONS = ['store', 'warn', 'capabilities', 'capabilityStore', 'capabilitySet', 'policy', 'world', 'declarations', 'runner', 'docker', 'spawn', 'readLock', 'auth', 'events'];
+const CLIENT_OPTIONS = ['store', 'warn', 'capabilities', 'capabilityStore', 'capabilitySet', 'policy', 'world', 'declarations', 'runner', 'docker', 'spawn', 'readLock', 'auth', 'events', 'imageStore'];
 
 /** A capability file kept in memory, which `prism.networks` reads and writes when no store is given. */
 export function memoryCapabilityStore(initial = null) {
@@ -406,7 +406,7 @@ export function memoryCapabilityStore(initial = null) {
   });
 }
 
-const IMAGE_VERBS = Object.freeze(['build', 'pull', 'push', 'inspect', 'verify']);
+const IMAGE_VERBS = Object.freeze(['build', 'pull', 'push', 'list', 'get', 'tag', 'remove', 'prune', 'inspect', 'verify', 'usage']);
 
 /**
  * `prism.images`, loaded on first use. It reads files and registries, so a bundler
@@ -446,7 +446,9 @@ const NO_AUTH = Object.freeze({
  *   overrides `capabilities` there. `capabilitySet`, `world`, `policy`,
  *   `declarations` and `runner` are `createVolumes`'s. `policy` also bounds `networks`.
  * - `images`: `docker` builds the Docker invocation for `build`, and `spawn` runs it.
- *   Without `docker`, `build` raises `PP5008` and the other verbs work.
+ *   Without `docker`, `build` raises `PP5008` and the other verbs work. `imageStore`
+ *   is the local image store's backend, in memory unless given; the images a
+ *   container record references are held there, so `remove` and `prune` keep them.
  * - `system`: `readLock(path)` returns a project's `prismpm.lock`, for `info` and
  *   `version`; `events` is the bus containers report to, a new one unless given.
  * - `auth`: a namespace from `createAuth`. It needs Node, so without one every verb
@@ -460,14 +462,19 @@ export function createPrism(options = {}) {
   if (prototype !== Object.prototype && prototype !== null) fail('client.option', 'createPrism options must be a plain object');
   const unknown = Object.keys(options).filter((name) => !CLIENT_OPTIONS.includes(name));
   if (unknown.length > 0) fail('client.option', `createPrism has no option ${unknown.join(', ')}; it takes ${CLIENT_OPTIONS.join(', ')}`);
-  const { store, warn, capabilities = null, capabilityStore, capabilitySet, policy = null, world = null, declarations, runner = null, docker = null, spawn, readLock = null, auth = NO_AUTH } = options;
+  const { store, warn, capabilities = null, capabilityStore, capabilitySet, policy = null, world = null, declarations, runner = null, docker = null, spawn, readLock = null, auth = NO_AUTH, imageStore } = options;
   const events = options.events ?? createEventBus();
   const containers = createContainers({ load, ...(store === undefined ? {} : { store }), ...(warn === undefined ? {} : { warn }), onEvent: events.emit });
   const networks = createNetworks({ store: capabilityStore ?? memoryCapabilityStore(capabilities), policy: { effects: policy?.effects ?? null, capabilities: policy?.capabilities ?? null } });
   const volumes = createVolumes({ capabilities, ...(capabilitySet === undefined ? {} : { set: capabilitySet }), world, policy, ...(declarations === undefined ? {} : { declarations }), runner });
   if (docker !== null && typeof docker !== 'function') fail('client.option', 'docker must be a function that builds the Docker invocation, or null');
-  const images = lazyImages({ docker, ...(spawn === undefined ? {} : { spawn }) });
-  const system = createSystem({ containers, events, readLock });
+  // What holds an image is a container record that names it; `images` may not import `containers`, so it is told.
+  const references = async () => Promise.all((await containers.list({ all: true })).map(async (container) => {
+    const record = await container.inspect();
+    return { digest: record.image.digest, running: record.state.status === 'running' };
+  }));
+  const images = lazyImages({ docker, references, ...(spawn === undefined ? {} : { spawn }), ...(imageStore === undefined ? {} : { store: imageStore }) });
+  const system = createSystem({ containers, events, readLock, images });
   return Object.freeze({ images, containers, networks, volumes, system, auth, errors: errorsNamespace, verify: verifyNamespace });
 }
 

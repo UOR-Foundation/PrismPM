@@ -915,6 +915,13 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 
 | Code | Owner | Meaning |
 |---|---|---|
+| `image.ambiguous` | `OC-12` | An image id prefix names more than one stored image; nothing was read or changed. |
+| `image.corrupt` | `OC-12` | The bytes the local image store keeps for an image no longer match its digests, or are missing; they are never served. |
+| `image.in-use` | `OC-12` | prism.images.remove would delete an image a container references; it is refused unless forced, and always while that container runs. |
+| `image.missing` | `OC-12` | The local image store holds no image under that name, digest or id prefix. |
+| `image.name` | `OC-12` | An image name is not [registry/]repository[:tag], or pins a digest where a tag is a name. |
+| `image.store` | `OC-12` | The local image store cannot be read or written, or its index is not prism/image-store/1; nothing changed. |
+| `image.tagged` | `OC-12` | prism.images.remove named by digest an image that has more than one tag; it is refused unless forced. |
 | `networks.exists` | `DK-39` | prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again. |
 | `networks.not-found` | `DK-39` | The capability file has no network of that name: no set with an outbound-hosts member. |
 | `networks.option` | `DK-39` | prism.networks was given an option it does not have, or a policy of the wrong shape; a Docker network option is refused and never ignored. |

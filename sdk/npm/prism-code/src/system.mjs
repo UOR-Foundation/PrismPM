@@ -16,14 +16,17 @@
  * - `readLock(path)` returns the text of `<path>/prismpm.lock`, or null when there
  *   is none. `client` passes it in Node. In a browser there is none, and `info`
  *   reports no toolchain.
+ * - `images` is the images namespace of the same client, whose local store `df`
+ *   measures and `prune` collects (#349). Without it, or where it is unavailable
+ *   (a browser), `df` and `info` report no images and `prune` removes none.
  *
  * Where Prism differs from Docker:
  *
  * - `info` and `version` also report the toolchain and builder image the lock pins,
  *   which are what a build's verdict depends on.
- * - There is no local image store yet (#349), so `df` reports no image usage and
- *   `prune` removes no image. It removes exited containers only, so it never
- *   removes an image that a container still references.
+ * - `prune` removes exited containers first, then untagged images that no
+ *   remaining container references. An image a container references is never
+ *   pruned, as `docker system prune` keeps it.
  *
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
@@ -37,9 +40,6 @@ export const SYSTEM_VERSION_SCHEMA = 'prism/system-version/1';
 export const SYSTEM_DF_SCHEMA = 'prism/system-df/1';
 export const SYSTEM_PRUNE_SCHEMA = 'prism/system-prune/1';
 export const SYSTEM_EVENT_SCHEMA = 'prism/system-event/1';
-
-/** What `df` and `prune` cannot reach until the local image store exists. */
-export const IMAGE_STORE = Object.freeze(['#349']);
 
 /** Docker's container actions, the ones a Prism container has. A container never pauses, and a guest has no process to `exec` into. */
 export const EVENT_ACTIONS = Object.freeze(['create', 'start', 'die', 'destroy']);
@@ -165,10 +165,22 @@ const sizeOf = (record) => utf8.encode(JSON.stringify(record)).length;
  *
  * @param {{ containers: { list: Function, prune: Function }, events?: ReturnType<typeof createEventBus> | null, readLock?: ((path: string) => Promise<string | null> | string | null) | null }} dependencies
  */
-export function createSystem({ containers, events = null, readLock = null } = {}) {
+export function createSystem({ containers, events = null, readLock = null, images = null } = {}) {
   if (typeof containers?.list !== 'function' || typeof containers?.prune !== 'function') fail('system.option', 'prism.system needs the containers namespace of the same client');
   if (events !== null && typeof events?.subscribe !== 'function') fail('system.option', 'events must be the bus from createEventBus, or null');
   if (readLock !== null && typeof readLock !== 'function') fail('system.option', 'readLock must be a function, or null');
+  if (images !== null && (typeof images?.usage !== 'function' || typeof images?.prune !== 'function')) fail('system.option', 'images must be the images namespace of the same client, or null');
+
+  /** The image store's usage, or null where this client has none: a browser leaves the store out. */
+  const imageUsage = async () => {
+    if (images === null) return null;
+    try {
+      return await images.usage();
+    } catch (error) {
+      if (error?.code === 'images.unavailable') return null;
+      throw error;
+    }
+  };
 
   const lockAt = async (path) => {
     if (path === undefined) return null;
@@ -208,18 +220,19 @@ export function createSystem({ containers, events = null, readLock = null } = {}
       formatRevision: FORMAT_REVISION,
       runtime: runtime(),
       containers: { total: states.created + states.running + states.exited, ...states },
-      images: null,
+      images: (await imageUsage())?.rows.length ?? null,
       lock,
       events: events !== null,
-      dependsOn: { images: IMAGE_STORE },
     };
   }
 
-  /** docker-py's `df`: what each container record takes in its store. Images are null until the local store exists (#349). */
+  /** docker-py's `df`: what each container record and each stored image takes. An image a container references is active; the rest is reclaimable. */
   async function df(options = {}) {
     allow('df', options, []);
     const rows = (await records()).map((record) => ({ id: record.id, image: record.image.digest, status: record.state.status, size: sizeOf(record) }));
     const reclaimable = rows.filter((row) => row.status === 'exited');
+    const usage = await imageUsage();
+    const sum = (list) => list.reduce((total, row) => total + row.size, 0);
     return {
       schema: SYSTEM_DF_SCHEMA,
       containers: {
@@ -229,21 +242,33 @@ export function createSystem({ containers, events = null, readLock = null } = {}
         reclaimable: reclaimable.reduce((sum, row) => sum + row.size, 0),
         rows,
       },
-      images: null,
-      dependsOn: { images: IMAGE_STORE },
+      images:
+        usage === null
+          ? null
+          : {
+              total: usage.rows.length,
+              active: usage.rows.filter((row) => row.containers > 0).length,
+              size: sum(usage.rows),
+              reclaimable: sum(usage.rows.filter((row) => row.containers === 0)),
+              location: usage.location,
+              rows: usage.rows,
+            },
     };
   }
 
   /**
    * docker-py's `prune`, for what Prism stores: exited containers, optionally only those
-   * that finished before `until`. Created and running ones are kept. No image is removed,
-   * so none that a container references can be.
+   * that finished before `until`, then the images no remaining container references:
+   * untagged ones, or with `all` tagged ones too, as `docker system prune [-a]`.
+   * Created and running containers are kept, and so are the images they reference.
    */
   async function prune(options = {}) {
-    allow('prune', options, ['until']);
+    allow('prune', options, ['until', 'all']);
     const until = instant('prune', 'until', options.until);
+    if (options.all !== undefined && typeof options.all !== 'boolean') fail('system.option', 'system.prune option all must be true or false');
     const { containersDeleted, spaceReclaimed } = await containers.prune(until === undefined ? {} : { until });
-    return { schema: SYSTEM_PRUNE_SCHEMA, containersDeleted, imagesDeleted: [], spaceReclaimed, dependsOn: { images: IMAGE_STORE } };
+    const collected = (await imageUsage()) === null ? { imagesDeleted: [], spaceReclaimed: 0 } : await images.prune({ all: options.all ?? false });
+    return { schema: SYSTEM_PRUNE_SCHEMA, containersDeleted, imagesDeleted: collected.imagesDeleted, spaceReclaimed: spaceReclaimed + collected.spaceReclaimed };
   }
 
   /**
