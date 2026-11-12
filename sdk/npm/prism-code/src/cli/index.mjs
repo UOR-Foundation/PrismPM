@@ -14,8 +14,9 @@
  */
 import * as containers from './containers.mjs';
 import * as images from './images.mjs';
+import * as volumes from './volumes.mjs';
 
-const FILES = Object.freeze({ containers, images });
+const FILES = Object.freeze({ containers, images, volumes });
 
 const entry = (verb) => (typeof verb === 'function' ? Object.freeze({ run: verb }) : verb);
 

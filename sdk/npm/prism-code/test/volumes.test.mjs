@@ -431,3 +431,48 @@ test('a container that asks for a host folder, a denied store or an undeclared o
   // No volumes asked for: the record says so, and nothing is attached.
   assert.deepEqual((await (await prism.containers.create(HOLO, '', P0)).inspect()).volumes, []);
 });
+
+// `prism-code volumes create|ls|inspect|rm` (#445), over a project's prism.toml.
+
+test('the volumes CLI group lists, inspects, creates and removes the declared stores of a project, and refuses a host folder', () => {
+  const root = mkdtempSync(join(tmpdir(), 'prism-volumes-cli-'));
+  const dir = join(root, 'project');
+  const path = join(root, 'path');
+  mkdirSync(dir);
+  mkdirSync(path);
+  const kv = fileURLToPath(new URL('../bin/prism-provider-kv.mjs', import.meta.url));
+  if (windows) writeFileSync(join(path, 'prism-provider-kv.cmd'), `@"${process.execPath}" "${kv}" %*\r\n`);
+  else {
+    writeFileSync(join(path, 'prism-provider-kv'), `#!/bin/sh\nexec "${process.execPath}" "${kv}" "$@"\n`);
+    chmodSync(join(path, 'prism-provider-kv'), 0o755);
+  }
+  writeFileSync(join(dir, 'prism.toml'), '[application]\nname = "exchange"\nversion = "0.1.0"\n\n[capabilities]\nallow-key-value-stores = ["rates"]\nallow-providers = ["kv"]\nallow-variables = ["rates_store"]\n\n[capabilities.rates]\nprovider = { type = "kv", options = { set = ["base=EUR"] } }\n');
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH')), PATH: [path, dirname(process.execPath)].join(delimiter), PRISM_CODE_NO_HOOKS: '1' };
+  const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
+  const cli = (...args) => {
+    const result = spawnSync(process.execPath, [bin, 'volumes', ...args, '--project', dir], { encoding: 'utf8', env });
+    return { code: result.status, out: result.stdout, err: result.stderr };
+  };
+
+  const ls = cli('ls', '--json');
+  assert.equal(ls.code, 0, ls.err);
+  assert.deepEqual(JSON.parse(ls.out).map((volume) => [volume.name, volume.provider, volume.guest.access]), [['rates', 'kv', false]]);
+  const inspected = cli('inspect', 'rates');
+  assert.equal(inspected.code, 0, inspected.err);
+  assert.match(inspected.out, /^rates {2}provider kv {2}set default {2}guest access: no \(needs #216, #217\)$/m);
+  const created = cli('create', 'rates', '--json');
+  assert.equal(created.code, 0, created.err);
+  const volume = JSON.parse(created.out);
+  assert.deepEqual(volume.variables, ['RATES_STORE']);
+  assert.ok(!('env' in volume), 'variable values never reach stdout');
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, '.prism', 'kv', 'exchange', 'rates.json'), 'utf8')), { base: 'EUR' });
+  const removed = cli('rm', 'rates');
+  assert.equal(removed.code, 0, removed.err);
+  assert.equal(existsSync(join(dir, '.prism', 'kv', 'exchange', 'rates.json')), false);
+
+  const folder = cli('create', '/var/data');
+  assert.equal(folder.code, 2);
+  assert.match(folder.err, /^capability_denied: .*host folder/m);
+  assert.equal(cli('inspect').code, 64, 'a missing name is usage');
+  assert.equal(cli('ls', '--force').code, 64, 'an option Docker takes is refused, not ignored');
+});

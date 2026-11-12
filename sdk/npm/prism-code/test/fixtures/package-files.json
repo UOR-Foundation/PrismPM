@@ -35,6 +35,7 @@
   "src/cli/containers.mjs",
   "src/cli/images.mjs",
   "src/cli/index.mjs",
+  "src/cli/volumes.mjs",
   "src/closure.mjs",
   "src/containers.mjs",
   "src/core.mjs",

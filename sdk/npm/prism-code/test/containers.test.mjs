@@ -677,3 +677,49 @@ test('usage: exit 64', () => {
   assert.match(rm.err, /--rm needs an input/);
   assert.equal(cli(['rm']).code, 64);
 });
+
+test('the containers CLI group: create prints the id, ps, logs and inspect read the record, rm removes it', () => {
+  const policy = policyFile();
+  const ran = cli(['containers', 'run', fixture, ADD, '--policy', policy]);
+  assert.equal(ran.code, 0, ran.err);
+  assert.equal(ran.out, SUM);
+  const id = ran.err.match(/^container ([0-9a-f]{64}) exited 0$/m)?.[1];
+  assert.ok(id, ran.err);
+  const created = cli(['containers', 'create', fixture, ADD, '--policy', policy], ran.home);
+  assert.equal(created.code, 0, created.err);
+  const fresh = created.out.trim();
+  assert.match(fresh, /^[0-9a-f]{64}$/);
+
+  const running = cli(['containers', 'ps', '--json'], ran.home);
+  assert.deepEqual(JSON.parse(running.out), [], 'nothing is running');
+  const all = cli(['containers', 'ps', '-a'], ran.home);
+  assert.equal(all.code, 0, all.err);
+  assert.match(all.out, new RegExp(`^${id.slice(0, 12)} +Calculator +exited +0 `, 'm'));
+  assert.match(all.out, new RegExp(`^${fresh.slice(0, 12)} +Calculator +created +- `, 'm'));
+
+  const logs = cli(['containers', 'logs', id.slice(0, 12)], ran.home);
+  assert.equal(logs.code, 0, logs.err);
+  assert.equal(logs.out, SUM);
+  assert.equal(cli(['containers', 'logs', fresh], ran.home).out, '', 'no run, no output');
+  assert.equal(JSON.parse(cli(['containers', 'inspect', id, '--json'], ran.home).out).id, id);
+
+  // The store never keeps the input, so another process cannot start what this one created.
+  const start = cli(['containers', 'start', fresh], ran.home);
+  assert.equal(start.code, 2);
+  assert.match(start.err, /^container\.state: /m);
+  assert.equal(cli(['containers', 'stop', id], ran.home).code, 64, 'stop waits for #350');
+
+  assert.equal(cli(['containers', 'rm', id, fresh], ran.home).code, 0);
+  assert.deepEqual(stored(ran.home), []);
+  assert.equal(cli(['containers', 'logs'], ran.home).code, 64);
+  assert.equal(cli(['containers', 'ps', '--filter', 'x'], ran.home).code, 64);
+  assert.equal(cli(['containers', 'create', fixture], ran.home).code, 64);
+});
+
+test('containers create --volume keeps the refusal on the record, and the run never starts', () => {
+  const created = cli(['containers', 'create', fixture, ADD, '--policy', policyFile(), '--volume', 'rates']);
+  assert.equal(created.code, 0, created.err);
+  const record = JSON.parse(cli(['inspect', created.out.trim(), '--json'], created.home).out);
+  assert.equal(record.volumes[0].name, 'rates');
+  assert.equal(record.volumes[0].refusal.name, 'CapabilityDeniedError');
+});

@@ -138,8 +138,23 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code containers create",
+      "name": "create"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code containers inspect",
       "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers logs",
+      "name": "logs"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers ps",
+      "name": "ps"
     },
     {
       "kind": "verb",
@@ -150,6 +165,11 @@
       "kind": "verb",
       "place": "prism-code containers run",
       "name": "run"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers start",
+      "name": "start"
     },
     {
       "kind": "verb",
@@ -175,6 +195,26 @@
       "kind": "verb",
       "place": "prism-code images verify",
       "name": "verify"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes create",
+      "name": "create"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes ls",
+      "name": "ls"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes rm",
+      "name": "rm"
     },
     {
       "kind": "flag",
@@ -525,6 +565,11 @@
       "kind": "flag",
       "place": "--version",
       "name": "version"
+    },
+    {
+      "kind": "flag",
+      "place": "--volume",
+      "name": "volume"
     },
     {
       "kind": "flag",
