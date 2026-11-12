@@ -17,8 +17,12 @@ pub struct SdkDiagnostics {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SdkDiagnostic {
-    /// Exact code, `<module>.<name>`, carried by the error.
+    /// Exact code carried by the error: `<module>.<name>` on a `PrismCodeError`,
+    /// or the snake_case code of an error class.
     pub code: String,
+    /// The error class whose own code this is, such as `SigningError`; absent on a check code.
+    #[serde(default)]
+    pub class: Option<String>,
     /// Owning conformance id.
     pub capability: String,
     /// Normative failure meaning.
@@ -39,15 +43,29 @@ impl SdkDiagnostics {
             ));
         }
         for row in &self.error {
-            let well_formed = row.code.split_once('.').is_some_and(|(module, name)| {
-                let word = |text: &str| {
-                    !text.is_empty() && text.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
-                };
-                word(module) && word(name)
-            });
+            let word = |text: &str, joiner: u8| {
+                !text.is_empty()
+                    && text.bytes().all(|b| b.is_ascii_lowercase() || b == joiner)
+                    && !text.starts_with(joiner as char)
+                    && !text.ends_with(joiner as char)
+            };
+            let well_formed = match &row.class {
+                // A class code is one snake_case word, owned by a class named `<Name>Error`.
+                Some(class) => {
+                    word(&row.code, b'_')
+                        && class.len() > "Error".len()
+                        && class.ends_with("Error")
+                        && class.starts_with(|c: char| c.is_ascii_uppercase())
+                        && class.bytes().all(|b| b.is_ascii_alphanumeric())
+                }
+                None => row
+                    .code
+                    .split_once('.')
+                    .is_some_and(|(module, name)| word(module, b'-') && word(name, b'-')),
+            };
             if !well_formed || row.statement.trim().is_empty() || !is_registered(&row.capability) {
                 return Err(ModelError::Inconsistent(format!(
-                    "SDK diagnostic {} needs a <module>.<name> code, a statement and a registered capability",
+                    "SDK diagnostic {} needs a <module>.<name> code (or a snake_case code with its class), a statement and a registered capability",
                     row.code
                 )));
             }
@@ -67,6 +85,7 @@ mod tests {
                 .iter()
                 .map(|code| SdkDiagnostic {
                     code: (*code).to_string(),
+                    class: None,
                     capability: "DK-39".to_string(),
                     statement: "A meaning.".to_string(),
                 })
@@ -96,6 +115,18 @@ mod tests {
             assert!(register(&[code]).check(known).is_err(), "{code}");
         }
         assert!(register(&["networks.exists"]).check(|_| false).is_err());
+        let class = |code: &str, class: &str| {
+            let mut one = register(&[code]);
+            one.error[0].class = Some(class.to_string());
+            one.check(known).is_ok()
+        };
+        assert!(class("signing_failed", "SigningError"));
+        assert!(!class("signing_failed", "Signing"));
+        assert!(!class("signing_failed", "signingError"));
+        assert!(!class("signing-failed", "SigningError"));
+        assert!(!class("_signing", "SigningError"));
+        assert!(!class("networks.exists", "SigningError"));
+        assert!(register(&["signing_failed"]).check(known).is_err());
         let mut wrong = register(&["networks.exists"]);
         wrong.spec = "prismpm/sdk-diagnostics/2".to_string();
         assert!(wrong.check(known).is_err());

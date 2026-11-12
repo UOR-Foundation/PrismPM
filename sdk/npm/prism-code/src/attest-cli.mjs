@@ -8,7 +8,8 @@ import { readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismCodeError, VerificationError } from './errors.mjs';
 import { canonicalJson } from './archive.mjs';
-import { experimental_attest, experimental_signStatements, experimental_verifyAttestations } from './attest.mjs';
+import { experimental_verifyAttestations } from './attest.mjs';
+import { experimental_attest, experimental_signStatements } from './attest-write.mjs';
 
 const present = (options, name) => typeof options[name] === 'string' && options[name] !== '';
 const path = (options, name) => (present(options, name) ? resolve(options[name]) : undefined);
