@@ -228,13 +228,18 @@ pub fn render_errors(model: &Model) -> String {
         let _ = writeln!(w, "| {} | `{}` |", row.byte, row.name);
     }
     let _ = writeln!(w, "\n## Prism SDK module diagnostics\n");
-    let _ = writeln!(w, "Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modules raise, in a namespace separate from the CLI PP codes.\n");
-    let _ = writeln!(w, "| Code | Owner | Meaning |\n|---|---|---|");
+    let _ = writeln!(w, "Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modules raise, in a namespace separate from the CLI PP codes: the `code` of a `PrismCodeError`, `<module>.<name>`, and the snake_case code of each error class, named beside it. Every code prism-code raises is a row here.\n");
+    let _ = writeln!(w, "| Code | Class | Owner | Meaning |\n|---|---|---|---|");
     for row in &model.sdk_diagnostics.error {
+        let class = row
+            .class
+            .as_deref()
+            .map(|class| format!("`{class}`"))
+            .unwrap_or_default();
         let _ = writeln!(
             w,
-            "| `{}` | `{}` | {} |",
-            row.code, row.capability, row.statement
+            "| `{}` | {} | `{}` | {} |",
+            row.code, class, row.capability, row.statement
         );
     }
     out

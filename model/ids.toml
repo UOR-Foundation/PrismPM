@@ -514,7 +514,7 @@ statement = "Controller cleanup removes only the configured real output director
 id = "CT-12"
 suite = "controller"
 level = "build"
-statement = "The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises is registered or named on the committed list of unregistered codes."
+statement = "The prism.errors namespace holds the same error classes and functions as the prism-code exports, their stable codes and the constants of @prism-code/spec, imports no other Prism module, and every code prism-code raises, the code of each error class and each check code of a PrismCodeError, is a row of model/sdk-diagnostics.toml owned by its module's capability, with no code left unregistered."
 
 [[id]]
 id = "CT-13"
