@@ -76,7 +76,8 @@
     "replay.recorder.round-trip": "The Rust runtime has no replay operation yet (#298).",
     "replay.statement.written": "The Rust runtime has no replay operation yet (#298).",
     "world.load.refuses-wrong-exports": "The Rust runtime has no load operation yet (#298).",
-    "world.reference.loaded": "The Rust runtime has no load operation yet (#298)."
+    "world.reference.loaded": "The Rust runtime has no load operation yet (#298).",
+    "world.session.loaded": "The Rust runtime has no load operation yet (#298)."
   },
   "notApplicable": {}
 }

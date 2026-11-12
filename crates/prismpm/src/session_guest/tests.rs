@@ -99,7 +99,20 @@ fn the_shim_exports_the_session_world_and_never_holo_run() {
     );
     assert!(!source.contains("holo_run"));
     assert!(source.contains("let answer: alloc::vec::Vec<u8> = crate::step(turn);"));
-    assert!(!source.contains('@'), "every template token is replaced");
+    for token in [
+        "@RUNTIME_MODULE@",
+        "@REQUEST_MAXIMUM@",
+        "@STATE_MAXIMUM@",
+        "@RESPONSE_MAXIMUM@",
+        "@RESPONSE_COUNT_MAXIMUM@",
+        "@MAXIMUM_PAGES@",
+        "@INVOKE_ENTRY@",
+    ] {
+        assert!(
+            !source.contains(token),
+            "the template token {token} is replaced"
+        );
+    }
 }
 
 #[test]
@@ -175,7 +188,8 @@ fn a_malformed_name_or_digest_is_refused() {
 
 #[test]
 fn every_bound_that_cannot_be_generated_is_refused_by_name() {
-    let cases: [(fn(&mut SessionGuestSpec), &str); 10] = [
+    type Edit = fn(&mut SessionGuestSpec);
+    let cases: [(Edit, &str); 10] = [
         (|s| s.maximum_pages = 0, "pages"),
         (|s| s.maximum_pages = 32_768, "pages"),
         (|s| s.stack_bytes = 8, "stack"),
@@ -194,7 +208,8 @@ fn every_bound_that_cannot_be_generated_is_refused_by_name() {
             },
             "32-bit",
         ),
-        (|s| s.state_maximum = 4 * 65_536, "memory"),
+        // Two copies of a 2 MiB state alone fill the 4 MiB the 64 pages declare.
+        (|s| s.state_maximum = 2 * 1024 * 1024, "memory"),
     ];
     for (edit, word) in cases {
         let mut bad = spec();

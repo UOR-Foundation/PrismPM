@@ -69,7 +69,7 @@ impl SessionGuestSpec {
             ));
         }
         if self.stack_bytes == 0
-            || self.stack_bytes % 16 != 0
+            || !self.stack_bytes.is_multiple_of(16)
             || u64::from(self.stack_bytes) >= memory
         {
             return Some(format!(
