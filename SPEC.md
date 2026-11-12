@@ -1779,13 +1779,22 @@ It cannot see which address a process binds, which is why the address is held
 by the contract, the validator and the projection. The projection set is the
 Compose project and SPDX, both validated by their locked oracles.
 
-This profile does not claim that the declared effects equal the host protocol
-of the selected application: the server application model that issue 216
-provides is not part of the model document yet, so the digest binding is the
-only application binding. It adds no OCI product release, source-free replay
-or deployment lifecycle for `system-model/3`, and it does not claim service
-readiness. SY-09's source fixture binds an application model that is not a
-server application and says so.
+The release binds its application twice. The digest binding names the
+selected application model, and the effect binding holds the system to that
+application's host protocol: the selected application must be a
+`prismpm/server-application/1` model, and the set of effects the system lists
+must equal the set of effect names its host protocol declares. A browser or
+text application, an effect the application never declares and a declared
+effect the system omits are each `PP2101`, refused by `check` before any build,
+even when the system's model and manifest agree with each other. SY-09's source
+fixture binds the Echo Server example, whose host protocol declares
+`tool.calls` and `echo.stamp`.
+
+The comparison is by effect name. It does not compare request, result or
+failure shapes, which belong to the server application alone, and it does not
+claim that the listed listener is the address the application serves. This
+profile adds no OCI product release, source-free replay or deployment lifecycle
+for `system-model/3`, and it does not claim service readiness.
 
 ### 11.1 Ordered mandatory control coverage
 
@@ -4449,7 +4458,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
 | `SY-07` | `system` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. | §11 |
 | `SY-08` | `system` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. | §11 |
-| `SY-09` | `system` | Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. | §11 |
+| `SY-09` | `system` | Host-effect service system releases declare exactly the effects their selected server application declares, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's. | §11 |
 | `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
 | `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
 | `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |

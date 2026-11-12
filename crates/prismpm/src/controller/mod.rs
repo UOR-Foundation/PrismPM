@@ -634,6 +634,9 @@ impl Controller {
             if system.schema() == "prismpm/system-model/2" {
                 crate::system::browser::validate_application(system.value(), &model)?;
             }
+            if system.schema() == "prismpm/system-model/3" {
+                crate::system::host_effect::validate_application(system.value(), &model)?;
+            }
         }
         let entities = count_entities(&model)?;
         if entities > config.limits.max_entities {

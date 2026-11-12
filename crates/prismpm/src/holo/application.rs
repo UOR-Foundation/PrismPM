@@ -770,7 +770,11 @@ pub fn project_application_with_facets(
     }
     if member_name(declaration) == Some("ServerApplication") {
         let server = super::server_application::project(&definitions, module, declaration)?;
-        super::server_application::validate_roots(&server, snapshot)?;
+        // The core root lives in its own module, which the application does
+        // not import. Under a system release the application snapshot holds
+        // only the application's file, so the root is resolved in the whole
+        // checked project; without one, the two snapshots are the same.
+        super::server_application::validate_roots(&server, facet_snapshot)?;
         return projected_document(
             snapshot,
             facet_snapshot,
