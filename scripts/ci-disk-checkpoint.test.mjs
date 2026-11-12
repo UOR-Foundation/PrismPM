@@ -81,7 +81,7 @@ test('hostile collector output is filtered to bounded labels and numbers', async
 test('workflow keeps complete pinned gate and brackets it with best-effort checkpoints', () => {
   const text = readFileSync(new URL('../.github/workflows/vv.yml', import.meta.url), 'utf8');
   const start = text.indexOf('      - name: Start disk checkpoints');
-  const gate = text.indexOf('      - name: Run the complete pinned devcontainer gate');
+  const gate = text.indexOf('      - name: Run this part in the pinned devcontainer');
   const stop = text.indexOf('      - name: Stop disk checkpoints');
   assert.ok(start >= 0 && start < gate && gate < stop);
   assert.match(text.slice(start, gate), /continue-on-error: true/);

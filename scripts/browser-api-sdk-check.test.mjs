@@ -5,7 +5,6 @@ import {tmpdir} from 'node:os';
 import {dirname,join,relative,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {test} from 'node:test';
-import {workspaceVersion} from './workspace-version.mjs';
 import {capture,verifySource,verifyImage,verifyTap,verifyFileCompletions,runSuites,runStandaloneSuites,sourceRoots,suites,fallbackSuites,standaloneSuites} from './browser-api-sdk-check.mjs';
 import * as browserGate from './browser-api-sdk-check.mjs';
 
@@ -307,7 +306,7 @@ function source(root){
 function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{
  'org.opencontainers.image.revision':revision,
  'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM',
- 'org.opencontainers.image.version':workspaceVersion(),
+ 'org.opencontainers.image.version':/^version = "([^"]+)"$/m.exec(sdkSource('Cargo.toml').split('[workspace.package]')[1])[1],
 }}}];}
 
 test('current SDK source closure binds helper, compiler, suite and every selected byte',async t=>{

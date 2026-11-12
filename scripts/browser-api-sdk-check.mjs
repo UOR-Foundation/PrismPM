@@ -8,7 +8,6 @@ import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
 import {executeOwnedSdkCommand} from './sdk-command-owner.mjs';
-import {workspaceVersion} from './workspace-version.mjs';
 
 export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','features/suites/stdlib.feature','features/suites/holo.feature','model','language',
@@ -153,6 +152,11 @@ export function verifyModules(root,installed){
  }
 }
 
+// The [workspace.package] version of the checked-out Cargo.toml (the same
+// rule as scripts/workspace-version.mjs, read here so the frozen private
+// prerequisite closure keeps its exact registered module set).
+const workspaceVersion=()=>{const manifest=readFileSync(new URL('../Cargo.toml',import.meta.url),'utf8');const section=manifest.slice(manifest.indexOf('[workspace.package]'));const version=/^version = "([^"]+)"$/m.exec(section.split(/\n\[/)[0])?.[1];assert.ok(version,'workspace version');return version;};
+
 export function verifyImage(value,image,architecture,revision){
  assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
  assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
@@ -166,7 +170,6 @@ export function verifyImage(value,image,architecture,revision){
  assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
  assert.equal(config.Config.Labels['org.opencontainers.image.version'],workspaceVersion());
 }
-
 
 export function verifyTap(tap,minimum){
  assert.equal(typeof tap,'string');assert.ok(Number.isSafeInteger(minimum)&&minimum>0);
