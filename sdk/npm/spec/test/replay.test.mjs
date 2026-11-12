@@ -128,11 +128,27 @@ test('the ReplayPredicateV1 type and the schema declare the same members', () =>
 test('the HistoryV1 type and the schema declare the same members', () => {
   const source = readFileSync(here('../types/history.d.ts'), 'utf8')
     .replace(/\/\*\*[\s\S]*?\*\//g, '')
-    .replace(/^\s+[a-z]+\?: never;$/gm, '');
+    .replace(/^\s+[a-z]+\?: never;$/gm, '')
+    // The session history (#629) follows in the same file; it has its own test below.
+    .split('export interface HistorySessionStep')[0];
   const declared = new Set([...source.matchAll(/^\s+([A-Za-z]+\??):/gm)].map((m) => m[1]));
   const walked = new Set();
   const history = schema(HISTORY_SCHEMA);
   for (const [name] of Object.entries(history.properties)) walked.add(history.required.includes(name) ? name : `${name}?`);
   for (const variant of history.properties.events.items.oneOf) for (const name of Object.keys(variant.properties)) walked.add(name);
+  assert.deepEqual(declared, walked);
+});
+
+test('the HistoryV2 types and the schema declare the same members (#629)', () => {
+  const source = readFileSync(here('../types/history.d.ts'), 'utf8')
+    .replace(/\/\*\*[\s\S]*?\*\//g, '')
+    .split('export interface HistorySessionStep')[1];
+  const declared = new Set([...`export interface HistorySessionStep${source}`.matchAll(/^\s+([A-Za-z]+\??):/gm)].map((m) => m[1]));
+  const walked = new Set();
+  const optional = (object, name) => ((object.required ?? []).includes(name) ? name : `${name}?`);
+  const history = schema('schemas/history/history-v2.schema.json');
+  for (const object of [history, history.$defs.Session, history.$defs.Step, history.$defs.Failure]) {
+    for (const name of Object.keys(object.properties)) walked.add(optional(object, name));
+  }
   assert.deepEqual(declared, walked);
 });
