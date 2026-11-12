@@ -8,7 +8,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Prism } from '../src/node.mjs';
+import { fileImageStore, imagesDirectory, Prism } from '../src/node.mjs';
+import { createImageStore } from '../src/image-store.mjs';
 import { RegistryAuthError } from '../src/errors.mjs';
 import { VERSION } from '../src/version.mjs';
 import { FORMAT_REVISION } from '../src/vendor/spec/constants.mjs';
@@ -113,7 +114,7 @@ test('system version and info name the package, the holo format, the runtime and
   const info = await call(systemCli, 'info', ['--project', project], { env });
   assert.equal(info.code, 0, info.err);
   assert.match(info.out, /^Containers: +2 \(1 created, 0 running, 1 exited\)$/m);
-  assert.match(info.out, /^Images: +no local image store yet \(#349\)$/m);
+  assert.match(info.out, /^Images: +0$/m);
   assert.match(info.out, /^Builder image: +ghcr\.io/m);
   const json = JSON.parse((await call(systemCli, 'info', ['--project', project, '--json'], { env })).out);
   assert.equal(json.schema, 'prism/system-info/1');
@@ -132,10 +133,10 @@ test('system df counts every record, and lists them with --verbose', async () =>
   assert.equal(report.containers.total, 2);
   assert.equal(report.containers.active, 1);
   assert.ok(report.containers.reclaimable > 0 && report.containers.reclaimable < report.containers.size);
-  assert.equal(report.images, null);
+  assert.deepEqual({ ...report.images, location: undefined }, { total: 0, active: 0, size: 0, reclaimable: 0, location: undefined, rows: [] });
   const human = await call(systemCli, 'df', ['-v'], { env });
   assert.match(human.out, /^Containers +2 +1 +/m);
-  assert.match(human.out, /^Images .*#349/m);
+  assert.match(human.out, /^Images +0 +0 +0B +0B$/m);
   for (const id of [exited, created]) assert.match(human.out, new RegExp(`^${id} `, 'm'));
 });
 
@@ -155,6 +156,22 @@ test('system prune asks first, refuses without a terminal, and with --force remo
   assert.match(pruned.out, /^Total reclaimed space: \d/m);
   assert.deepEqual((await prism.containers.list({ all: true })).map((c) => c.id), [created]);
   assert.equal((await call(systemCli, 'prune', ['-f', '--filter', 'since=1'], { env })).code, 64);
+});
+
+test('system df and prune count the local image store; prune --all removes every image no container references (#349)', async () => {
+  const { env } = await home();
+  const store = createImageStore({ backend: fileImageStore(imagesDirectory(env)) });
+  await store.add(new Uint8Array(readFileSync(fixture)), { tags: ['calc:1'] });
+  const held = JSON.parse((await call(systemCli, 'df', ['--json'], { env })).out).images;
+  assert.equal(held.total, 1);
+  assert.equal(held.active, 1, 'both containers run the Calculator holo');
+  assert.equal(held.reclaimable, 0);
+  assert.match((await call(systemCli, 'df', ['-v'], { env })).out, /^[0-9a-f]{12} +calc:1 +\S+ +2$/m);
+  assert.match((await call(systemCli, 'info', [], { env })).out, /^Images: +1$/m);
+  const pruned = JSON.parse((await call(systemCli, 'prune', ['-f', '-a', '--json'], { env })).out);
+  assert.equal(pruned.containersDeleted.length, 1);
+  assert.deepEqual(pruned.imagesDeleted, [], 'the created container still references the image');
+  assert.equal(JSON.parse((await call(systemCli, 'df', ['--json'], { env })).out).images.total, 1);
 });
 
 test('system events replays create, start and die from the store in order, with filters', async () => {
