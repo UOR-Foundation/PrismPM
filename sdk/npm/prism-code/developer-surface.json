@@ -137,6 +137,46 @@
       "name": "verify-attestation"
     },
     {
+      "kind": "verb",
+      "place": "prism-code containers inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers rm",
+      "name": "rm"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers run",
+      "name": "run"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images build",
+      "name": "build"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images pull",
+      "name": "pull"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images push",
+      "name": "push"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code images verify",
+      "name": "verify"
+    },
+    {
       "kind": "flag",
       "place": "--agent",
       "name": "agent"

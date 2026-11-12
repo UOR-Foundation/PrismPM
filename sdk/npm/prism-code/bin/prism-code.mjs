@@ -77,6 +77,7 @@ import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { manifestProviders } from '../src/manifest.mjs';
 import { canonicalJson } from '../src/archive.mjs';
 import { resolveAliases } from '../src/developer-view.mjs';
+import { GROUPS, TOP_LEVEL, groupUsage, groupVerb } from '../src/cli/index.mjs';
 import { generate, WRITERS } from '../src/generate/index.mjs';
 import { check, readPolicy, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
 import { discover, errorHookMessages, listPlugins, pluginHelp, readMetadata, runPlugin } from '../src/plugins.mjs';
@@ -198,6 +199,7 @@ Usage:
                                                     hand the sentence to the agent: a terminal running claude or codex
                                                     (after Enter), Cursor's or VS Code's install link with the sentence
                                                     on the clipboard, or the Claude or ChatGPT prompt URL
+${groupUsage()}
   prism-code <plugin> [args]                        run prism-<plugin> from the PATH; a built-in verb always wins
   prism-code --version | --help
 
@@ -290,7 +292,7 @@ Options for open:     --dry-run                    print the files and commands;
 `;
 
 // The built-in verbs are the ones the usage text names and the delegated ones, so a new verb shadows a plugin of its name.
-const BUILTINS = new Set([...[...USAGE.matchAll(/^ {2}prism-code ([a-z][a-z-]*)/gm)].map((m) => m[1]), ...Object.keys(DELEGATED), 'help', 'version']);
+const BUILTINS = new Set([...[...USAGE.matchAll(/^ {2}prism-code ([a-z][a-z-]*)/gm)].map((m) => m[1]), ...Object.keys(DELEGATED), ...Object.keys(TOP_LEVEL), 'help', 'version']);
 
 function usage(message) {
   if (message) process.stderr.write(`${message}\n\n`);
@@ -1131,6 +1133,13 @@ async function main(argv) {
   if (command === '--version' || command === '-v' || command === 'version') {
     process.stdout.write(`${version}\n`);
     return 0;
+  }
+  // `prism-code <module> <verb>` (#441): a module's verb, or the flat verb it names.
+  if (Object.hasOwn(TOP_LEVEL, command)) return main([...TOP_LEVEL[command], ...rest]);
+  const group = groupVerb(command, rest);
+  if (group !== null) return group.verb.run ? group.verb.run(rest.slice(1)) : main([group.verb.flat, ...rest.slice(1)]);
+  if (Object.hasOwn(GROUPS, command) && !rest.includes('--help') && !rest.includes('-h')) {
+    return usage(`${command} takes one of ${Object.keys(GROUPS[command]).join(', ')}`);
   }
   // `--help` after a built-in verb prints that verb's usage and never reaches Docker or a lockfile.
   const own = rest.includes('--') ? rest.slice(0, rest.indexOf('--')) : rest;
