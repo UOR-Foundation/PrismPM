@@ -12,10 +12,12 @@
  * module is one of its verbs, so a flat verb that shares a module's name
  * (`verify`) keeps working.
  */
+import * as auth from './auth.mjs';
 import * as containers from './containers.mjs';
 import * as images from './images.mjs';
+import * as system from './system.mjs';
 
-const FILES = Object.freeze({ containers, images });
+const FILES = Object.freeze({ containers, images, system, auth });
 
 const entry = (verb) => (typeof verb === 'function' ? Object.freeze({ run: verb }) : verb);
 

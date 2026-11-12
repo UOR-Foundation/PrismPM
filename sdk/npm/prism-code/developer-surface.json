@@ -63,6 +63,16 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code login",
+      "name": "login"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code logout",
+      "name": "logout"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code manifest",
       "name": "manifest"
     },
@@ -138,6 +148,16 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code auth login",
+      "name": "login"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code auth logout",
+      "name": "logout"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code containers inspect",
       "name": "inspect"
     },
@@ -195,6 +215,31 @@
       "kind": "verb",
       "place": "prism-code images verify",
       "name": "verify"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code system df",
+      "name": "df"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code system events",
+      "name": "events"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code system info",
+      "name": "info"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code system prune",
+      "name": "prune"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code system version",
+      "name": "version"
     },
     {
       "kind": "flag",
@@ -290,6 +335,11 @@
       "kind": "flag",
       "place": "--entries",
       "name": "entries"
+    },
+    {
+      "kind": "flag",
+      "place": "--filter",
+      "name": "filter"
     },
     {
       "kind": "flag",
@@ -408,6 +458,11 @@
     },
     {
       "kind": "flag",
+      "place": "--password-stdin",
+      "name": "password-stdin"
+    },
+    {
+      "kind": "flag",
       "place": "--plain-http",
       "name": "plain-http"
     },
@@ -483,6 +538,11 @@
     },
     {
       "kind": "flag",
+      "place": "--since",
+      "name": "since"
+    },
+    {
+      "kind": "flag",
       "place": "--statement",
       "name": "statement"
     },
@@ -543,8 +603,23 @@
     },
     {
       "kind": "flag",
+      "place": "--until",
+      "name": "until"
+    },
+    {
+      "kind": "flag",
       "place": "--update",
       "name": "update"
+    },
+    {
+      "kind": "flag",
+      "place": "--username",
+      "name": "username"
+    },
+    {
+      "kind": "flag",
+      "place": "--verbose",
+      "name": "verbose"
     },
     {
       "kind": "flag",

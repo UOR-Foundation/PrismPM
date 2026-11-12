@@ -85,6 +85,10 @@ path = "crates/prismpm/src/config.rs"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/contract_owners.rs"
+module = "client"
+
+[[owner]]
 path = "crates/prismpm/src/contracts.rs"
 module = "errors"
 
@@ -185,6 +189,10 @@ path = "crates/prismpm/src/main.rs"
 module = "client"
 
 [[owner]]
+path = "crates/prismpm/src/model_contract.rs"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/oci.rs"
 module = "images"
 
@@ -198,6 +206,10 @@ module = "containers"
 
 [[owner]]
 path = "crates/prismpm/src/process_resources.rs"
+module = "verify"
+
+[[owner]]
+path = "crates/prismpm/src/reference.rs"
 module = "verify"
 
 [[owner]]
@@ -622,69 +634,9 @@ path = "sdk/npm/verify/"
 module = "verify"
 
 [[pending]]
-from = "crates/prismpm/src/authority.rs"
-to = "crates/prismpm/src/oci.rs"
-cut = "Reference syntax moves to verify"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/acceptance.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/exporter.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/holo/library.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/holo/validate.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/oci.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/release_verification.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/contracts.rs"
-to = "crates/prismpm/src/sdk.rs"
-cut = "Semantic checks move to their owners"
-
-[[pending]]
-from = "crates/prismpm/src/holo/canonical.rs"
-to = "crates/prismpm/src/holo/model_document.rs"
-cut = "encode_canonical and decode_canonical leave errors"
-
-[[pending]]
-from = "crates/prismpm/src/holo/canonical.rs"
-to = "crates/prismpm/src/holo/validate.rs"
-cut = "encode_canonical and decode_canonical leave errors"
-
-[[pending]]
 from = "crates/prismpm/src/replay/mod.rs"
 to = "crates/prismpm/src/verification.rs"
 cut = "Process helpers move to verify"
-
-[[pending]]
-from = "crates/prismpm/src/sdk.rs"
-to = "crates/prismpm/src/oci.rs"
-cut = "Reference syntax moves to verify"
-
-[[pending]]
-from = "crates/prismpm/src/sdk.rs"
-to = "crates/prismpm/src/supply_chain.rs"
-cut = "SDK bindings and advisory disposition move to verify"
 
 [[pending]]
 from = "crates/prismpm/src/sdk.rs"
@@ -698,7 +650,6 @@ members = [
     "application_build",
     "authority",
     "browser_oracle",
-    "contracts",
     "controller",
     "deployment",
     "exporter",
@@ -712,5 +663,4 @@ members = [
     "system",
     "text_cli",
     "verification",
-    "workbench",
 ]

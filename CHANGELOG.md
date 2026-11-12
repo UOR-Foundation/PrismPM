@@ -56,6 +56,9 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - The OSCAL structural validator is bound through `standards.lock` as the `oscal-1.1.0-structural` oracle, the `oscal` profile of `prismpm oracle` (#209, SPEC §10.1). Acceptance is JSON structural validity only, not control implementation or whole-standard conformance.
 
 ### Breaking Changes
+
+- `prismpm::holo::canonical::{encode_canonical, decode_canonical}` moved to `prismpm::holo::model_document`, since they validate the model document and the canonical value codec stays in `errors` (#448).
+- `CanonicalDocument::parse` and `from_value` refuse the 19 contracts whose semantic checks belong to another module (SDK locks, acceptance records, browser receipts, native-library evidence, model documents) with PP9001. Parse them with the owner's `parse_contract`/`contract_from_value` (for example `prismpm::sdk::contract_from_value`), or with `prismpm::contract_owners::{parse, from_value}` when you hold only the id. The checks themselves are unchanged (#448, #449).
 - `prism-code check` without a holo is removed (#584). It was the 0.2.0 spelling of `build --check`, announced as removed in 0.4.0 but still running through 0.7.2 with a warning that named that version. It is now a usage error (exit 64) that names `prism-code build --check`. Migration: replace `prism-code check [args]` with `prism-code build --check [args]`.
 - `prismpm export-browser` and `verify-browser-publication` return `prismpm/browser-export/2` and `prismpm/browser-publication-integrity/2`, whose file lists hold exactly closure v1 (six files) or closure v2 (sixteen). Releases built now export sixteen files, so a consumer that pins the six-file closure or a `/1` receipt, such as a Pages publication contract, must move to closure v2. The `/1` contracts stay registered.
 - A plain `prismpm build` of an application now needs a `prismpm/sdk-lock/2` or `/3` lock, because the provenance statement is derived from it (#268). An absent or `/1` lock is refused with `PP3018` before compiling; bind the SDK with `prismpm update --toolchain <digest-ref>`, migrate the lock, or pass `--no-provenance`.
@@ -66,6 +69,8 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
 ### Other Changes
+
+- Module cuts for the nine modules (#448, #449): each contract's semantic check moved from `contracts` to the module that owns it, the SDK advisory disposition moved from `supply_chain` to `sdk/advisory.rs` (verify), and OCI reference syntax moved from `oci` to `reference.rs` (verify). `oci` and `supply_chain` re-export what moved. `cargo xtask check-modules` now holds 3 pending cuts instead of 15, and `contracts` and `workbench` have left the old cycle.
 - The spec digest in `prismpm/sdk-lock/3` covers `intent.md` in place of the `intent/` directory reserved by #264, and the lock gains an optional `authoring` record. A lock with that record needs an SDK image built from this change.
 
 ## [0.4.0] - 2026-10-27
