@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      LEXLEAN_SOURCE_SHA: e0b74b81e6f49c83596a957d232c8383a5db1a25
+      LEXLEAN_SOURCE_SHA: bc71b33f9a4ce7f5582c337b5752a7ba9eb49706
       CARGO_INCREMENTAL: "0"
       CARGO_NET_OFFLINE: "true"
       CARGO_HOME: ${{ github.workspace }}/target/m0-locked-cargo-inputs
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: UOR-Foundation/LexLean
-          ref: e0b74b81e6f49c83596a957d232c8383a5db1a25
+          ref: bc71b33f9a4ce7f5582c337b5752a7ba9eb49706
           path: _m0/lexlean
           fetch-depth: 1
           persist-credentials: false
@@ -112,7 +112,7 @@ jobs:
             exec > target/m0-reconciliation-diagnostics/generation-step.log 2>&1
             just codegen
             just fixtures-write
-            just golden-write "M0 issue #5: reconcile reviewed LexLean PR68 e0b74b81e6f49c83596a957d232c8383a5db1a25"
+            just golden-write "Admit accepted LexLean PR466 native reconstruction repair bc71b33f9a4ce7f5582c337b5752a7ba9eb49706"
             just stdlib-package-write
             stage="$(mktemp -d)"
             cp -a stdlib/generated/package "$stage/stdlib"
@@ -215,6 +215,11 @@ jobs:
           fi
           if git rev-parse HEAD > "$diagnostics/prismpm-source.txt" 2> "$diagnostics/git-errors.log"; then
             git status --short > "$diagnostics/worktree-status.txt"
+            # Preserve exact partial writer bytes for diagnosis without claiming
+            # the successful-prefix proposal or complete closure is accepted.
+            git add -N -- .
+            git diff --binary HEAD > "$diagnostics/partial-reconciliation.patch"
+            sha256sum "$diagnostics/partial-reconciliation.patch" > "$diagnostics/PARTIAL-SHA256SUMS"
           fi
       - name: Upload diagnostic-only partial preparation
         if: always()

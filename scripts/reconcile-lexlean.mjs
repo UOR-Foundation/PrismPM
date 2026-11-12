@@ -7,7 +7,7 @@ import {dirname, join, relative, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
-// The LexLean package version this repository selects (the v0.4.0 tag).
+// The selected LexLean package format version; the caller binds an exact clean revision.
 export const LEXLEAN_VERSION='0.4.0';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
