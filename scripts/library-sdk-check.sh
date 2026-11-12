@@ -33,11 +33,13 @@ container=''
 overlay_scripts=''
 overlay_sdk=''
 cleanup() {
+  local failed=0
   if test -n "$container"; then docker container rm --force "$container" >/dev/null 2>&1 || true; fi
-  if test -n "$overlay_scripts"; then docker volume rm "$overlay_scripts" >/dev/null; fi
-  if test -n "$overlay_sdk"; then docker volume rm "$overlay_sdk" >/dev/null; fi
-  chmod -R u+rwX -- "$sdk_work"
-  rm -r -- "$sdk_work"
+  if test -n "$overlay_scripts"; then docker volume rm "$overlay_scripts" >/dev/null || failed=1; fi
+  if test -n "$overlay_sdk"; then docker volume rm "$overlay_sdk" >/dev/null || failed=1; fi
+  chmod -R u+rwX -- "$sdk_work" || failed=1
+  rm -r -- "$sdk_work" || failed=1
+  return "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT

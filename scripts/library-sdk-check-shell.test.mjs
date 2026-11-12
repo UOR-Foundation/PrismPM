@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {chmodSync,copyFileSync,cpSync,existsSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
+import {chmodSync,copyFileSync,cpSync,existsSync,linkSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -97,7 +97,7 @@ async function execute(context){
   const result=await bounded('bash',[join(context.root,'scripts/library-sdk-check.sh'),image,revision],{env:context.env,timeout:120000,maxBuffer:1024*1024});
   assert.equal(result.error,undefined,'shell transport must complete within its resource bounds');assert.equal(result.signal,null,'shell transport must exit without a signal');
   const calls=readFileSync(context.env.RECORDED_CALLS,'utf8').trim().split('\n').map(JSON.parse);
-  const retainedPath=join(context.root,'target/library-sdk-evidence/linux-'+(process.arch==='x64'?'amd64':'arm64'));
+  const retainedPath=join(context.env.PRISMPM_QUALIFY_SOURCE||context.root,'target/library-sdk-evidence/linux-'+(process.arch==='x64'?'amd64':'arm64'));
   let retained;
   if(existsSync(join(retainedPath,'evidence.json'))) {
     retained=JSON.parse(readFileSync(join(retainedPath,'evidence.json')));
@@ -176,6 +176,7 @@ function overlayInputs(t){
  assert.ok(before.some(row=>row.path==='sdk/empty'&&row.kind==='directory'));
  assert.throws(()=>captureOverlay(root,{installed:true}),/root-owned|immutable/);
  writeFileSync(join(root,'sdk','check.mjs'),'substituted');assert.notDeepEqual(captureOverlay(root),before);
+ linkSync(join(root,'scripts','owner.py'),join(root,'scripts','hardlink'));assert.throws(()=>captureOverlay(root),/singly-linked/);rmSync(join(root,'scripts','hardlink'));
  symlinkSync('owner.py',join(root,'scripts','alias'));assert.throws(()=>captureOverlay(root),/alias refused/);rmSync(join(root,'scripts','alias'));
  if(process.getuid()!==0)assert.throws(()=>stageOverlay(root,root+'-output'),/construction must run as root/);
 }
