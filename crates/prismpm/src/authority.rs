@@ -1535,7 +1535,7 @@ fn locked_sdk_image(root: &Path) -> Result<String, PrismError> {
     let image = lock["sdk_image"]
         .as_str()
         .ok_or_else(|| PrismError::new("PP5403", "SDK lock omits sdk_image"))?;
-    crate::oci::validate_reference(image, true).map_err(|_| {
+    crate::reference::validate_reference(image, true).map_err(|_| {
         PrismError::new(
             "PP5403",
             "external oracle SDK image is not selected by immutable digest",
@@ -3045,7 +3045,7 @@ mod tests {
     fn docker_sandbox_spdx_uses_locked_sdk_schema_for_project_validation() {
         let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
             .expect("PRISMPM_TEST_SDK_IMAGE must be an exact locally available image digest");
-        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        crate::reference::validate_reference(&sdk_image, true).unwrap();
         let root = tempfile::tempdir().unwrap();
         let standards = resolved_lock().unwrap();
         std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
@@ -3108,7 +3108,7 @@ mod tests {
     #[test]
     fn host_effect_system_compose_passes_the_locked_oracle() {
         let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE").unwrap();
-        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        crate::reference::validate_reference(&sdk_image, true).unwrap();
         let root = tempfile::tempdir().unwrap();
         let standards = resolved_lock().unwrap();
         std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
@@ -3152,7 +3152,7 @@ mod tests {
     #[test]
     fn docker_sandbox_compose_checks_secret_references_without_credentials() {
         let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE").unwrap();
-        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        crate::reference::validate_reference(&sdk_image, true).unwrap();
         let root = tempfile::tempdir().unwrap();
         let standards = resolved_lock().unwrap();
         std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
@@ -3195,7 +3195,8 @@ mod tests {
     fn docker_sandbox_executes_all_locked_external_oracle_corpora() {
         let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
             .expect("PRISMPM_TEST_SDK_IMAGE must be an exact locally available image digest");
-        crate::oci::validate_reference(&sdk_image, true).expect("immutable SDK image reference");
+        crate::reference::validate_reference(&sdk_image, true)
+            .expect("immutable SDK image reference");
         let root = tempfile::tempdir().unwrap();
         let standards = resolved_lock().unwrap();
         std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();

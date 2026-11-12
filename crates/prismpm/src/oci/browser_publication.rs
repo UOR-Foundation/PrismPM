@@ -306,7 +306,7 @@ fn verify_capture(
         "tree_digest":sha(&encode_value(&json!(rows))?),
         "url":url, "files":rows, "requests":7, "redirects":0
     });
-    CanonicalDocument::from_value("prismpm/browser-publication-integrity/2", result.clone())?;
+    crate::oci::contract_from_value("prismpm/browser-publication-integrity/2", result.clone())?;
     transport.fetch(
         url,
         files
