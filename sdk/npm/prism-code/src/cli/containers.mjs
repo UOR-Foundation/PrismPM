@@ -75,7 +75,8 @@ export const verbs = Object.freeze({
     usage: '<container>',
     summary: 'the output the run returned, from its record',
   }),
-  ps: Object.freeze({ run: ps, usage: '[--all] [--json]', summary: 'running containers, or every one with --all' }),
+  ls: Object.freeze({ run: ps, usage: '[-a|--all] [--json]', summary: 'the same as prism-code ps' }),
+  ps: Object.freeze({ run: ps, usage: '[-a|--all] [--json]', summary: 'running containers, or every one with --all' }),
   rm: Object.freeze({ flat: 'rm', usage: '<container>...', summary: 'the same as prism-code rm' }),
   run: Object.freeze({ flat: 'run', usage: '<app.holo> <input> ...', summary: 'the same as prism-code run' }),
   start: Object.freeze({
@@ -89,3 +90,6 @@ export const verbs = Object.freeze({
     summary: 'run a created container in this process; the store never keeps the input',
   }),
 });
+
+/** Docker's top-level words: `ps` is `containers ps`, `logs` is `containers logs`. */
+export const aliases = Object.freeze({ ps: 'ps', logs: 'logs' });

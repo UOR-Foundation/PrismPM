@@ -474,15 +474,20 @@ export function createImages({ spawn, docker = null, store, references } = {}) {
    * What an image says about itself, read from its layer table. The guest is not run.
    * Integrity is reported in `verification`, not thrown, so a damaged image can still be looked at.
    *
-   * @param {Uint8Array | ArrayBuffer | ArrayBufferView | Blob | string | URL} image the image's bytes, a Blob, a path or a file URL
+   * @param {Uint8Array | ArrayBuffer | ArrayBufferView | Blob | string | URL} image the image's bytes, a Blob, a path, a file URL or a name the local store keeps
    * @returns {Promise<object>} `prism/image-inspection/1`
    */
   async function inspect(image) {
     let source = await sourceOf(image);
     if (typeof source === 'string') {
-      const { readFile } = await import('node:fs/promises');
+      const { readFile, stat } = await import('node:fs/promises');
       const path = source;
-      source = await readFile(path).catch((cause) => {
+      // A name the local store keeps is that image, as `docker image inspect calc:latest` (#347); a path that exists wins.
+      const kept = await stat(path).then(() => null, () => local.get(path).catch((error) => {
+        if (error instanceof ReferenceInvalidError || /^image\.(missing|name)$/.test(error?.code ?? '')) return null;
+        throw error;
+      }));
+      source = kept?.bytes ?? await readFile(path).catch((cause) => {
         if (cause.code === 'EISDIR') fail('inspect.kind', `${path} is a directory; inspect reads a .holo archive, and a closure has no section table`);
         return fail('load.path', `${path} cannot be read: ${cause.code ?? cause.message}`);
       });
