@@ -1,0 +1,47 @@
+name: Temporary release genesis proposal
+on:
+  push:
+    branches: ['diagnostic/release-genesis-616-proposal']
+permissions:
+  contents: read
+jobs:
+  proposal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 4c55d359069f17cf4bc7a44aea9ca73f07fcddd7
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-devcontainer-runner
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Generate original unaccepted construction proposal
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
+        with:
+          push: never
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          runCmd: |
+            set -euo pipefail
+            test "$(git rev-parse HEAD)" = 4c55d359069f17cf4bc7a44aea9ca73f07fcddd7
+            test -z "$(git status --porcelain --untracked-files=no)"
+            out="$PWD/.prism/account-genesis-proposal"
+            mkdir -p "$out"
+            git rev-parse HEAD > "$out/source.txt"
+            git rev-parse HEAD^{tree} > "$out/source-tree.txt"
+            node sdk/generate-account-genesis.mjs proposal /tmp/prismpm-release-genesis-proposal-4c55 'Review genuine release/v0.4 account-genesis construction after LexLean native reconstruction repair #616; not SDK acceptance.' 2>&1 | tee "$out/proposal.log"
+            tar -C /tmp/prismpm-release-genesis-proposal-4c55 -czf "$out/proposal.tar.gz" .
+            cp /tmp/prismpm-release-genesis-proposal-4c55/account-genesis-binding.mjs "$out/account-genesis-binding.mjs"
+            cp /tmp/prismpm-release-genesis-proposal-4c55/proposal.json "$out/proposal.json"
+            cmp sdk/browser/account-genesis.wasm /tmp/prismpm-release-genesis-proposal-4c55/account-genesis.wasm
+            test -z "$(git status --porcelain --untracked-files=no)"
+            cd "$out"
+            sha256sum proposal.tar.gz account-genesis-binding.mjs proposal.json proposal.log source.txt source-tree.txt > SHA256SUMS
+      - name: Preserve complete original proposal and provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-genesis-proposal-${{ github.run_id }}
+          path: .prism/account-genesis-proposal/
+          if-no-files-found: error
+          retention-days: 30
