@@ -12,10 +12,11 @@ const ENTRY: &str = "PrismQualifiedDefinitions.QualifiedDefinitions.dispatch";
 /// The exporter's name for a definition its last component does not identify:
 /// `__prod_q`, then the length and text of each component (SPEC §7).
 fn qualified(name: &str) -> String {
-    name.split('.').fold("__prod_q".to_owned(), |mut out, part| {
-        out.push_str(&format!("_{}_{part}", part.chars().count()));
-        out
-    })
+    name.split('.')
+        .fold("__prod_q".to_owned(), |mut out, part| {
+            out.push_str(&format!("_{}_{part}", part.chars().count()));
+            out
+        })
 }
 
 fn names(module: &prod_ir::Module) -> Vec<&str> {
