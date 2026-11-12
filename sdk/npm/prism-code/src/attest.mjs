@@ -1,14 +1,15 @@
 /**
- * `attest` and `verify-attestation`: sign an in-toto statement into a holo's
- * attestation section and check it again (issue #272, design in
- * `docs/proposals/272-attest-verify.md`).
+ * `verify-attestation`: check the in-toto statements of a holo's attestation
+ * section, or one Sigstore bundle, against a signer policy (issue #272, design
+ * in `docs/proposals/272-attest-verify.md`). This is the `verify` module's half
+ * of attestation; writing a statement is `attest-write.mjs` (`images`) and
+ * signing it is an `auth` identity (`signing.mjs`).
  *
- * Node only. The signing and the DSSE, certificate and log checks belong to the
- * official `sigstore` packages (`@sigstore/sign`, `@sigstore/verify`,
- * `@sigstore/tuf`); this module only builds the statement, picks the key or the
- * keyless signer, applies the identity policy and maps every refusal to a typed
- * error. The packages are optional dependencies and load on first use, so the
- * rest of `prism-code` keeps working, and stays browser-safe, without them.
+ * Node only. The DSSE, certificate and log checks belong to the official
+ * `sigstore` packages (`@sigstore/verify`, `@sigstore/tuf`); this module only
+ * applies the identity policy and maps every refusal to a typed error. The
+ * packages are optional dependencies and load on first use, so the rest of
+ * `prism-code` keeps working, and stays browser-safe, without them.
  *
  * What runs on a verify, in order, for each bundle of the requested type:
  *   1. every statement subject is a content blob of this holo, both digests equal;
@@ -21,20 +22,15 @@
  * Experimental until the v0.6 freeze, hence the `experimental_` prefix.
  */
 import { readFile } from 'node:fs/promises';
-import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, KeyObject } from 'node:crypto';
-import { SigningError, SignatureInvalidError, IdentityMismatchError, TransparencyError, SubjectMismatchError, AttestationNotFoundError, TrustRootError, VerificationError, PrismError } from './errors.mjs';
-import { parseArchive, resolveArchive, asBytes, canonicalJson } from './archive.mjs';
+import { createHash, createPublicKey, KeyObject } from 'node:crypto';
+import { SignatureInvalidError, IdentityMismatchError, TransparencyError, SubjectMismatchError, AttestationNotFoundError, TrustRootError, VerificationError, PrismError } from './errors.mjs';
+import { parseArchive, asBytes } from './archive.mjs';
 import { blake3Hex } from './blake3.mjs';
-import { readAttestations, appendAttestations, stripAttestations, STATEMENT_TYPE, DSSE_PAYLOAD_TYPE } from './attestations.mjs';
+import { readAttestations } from './attestations.mjs';
 import { verifyTransparency } from './vendor/verify.mjs';
 
 /** The Fulcio-issued certificates of GitHub Actions workflows name this issuer. */
 export const GITHUB_ACTIONS_ISSUER = 'https://token.actions.githubusercontent.com';
-
-const SIGNING_CONFIG_TARGET = 'signing_config.v0.2.json';
-const ROLES = ['guest', 'view', 'model', 'capabilities'];
-const encoder = new TextEncoder();
-const URI = /^[A-Za-z][A-Za-z0-9+.-]*:\S+$/;
 
 let loaded = null;
 
@@ -42,18 +38,12 @@ let loaded = null;
 async function sigstore() {
   loaded ??= (async () => {
     try {
-      const [sign, verify, tuf, bundle, specs] = await Promise.all([
-        import('@sigstore/sign'),
-        import('@sigstore/verify'),
-        import('@sigstore/tuf'),
-        import('@sigstore/bundle'),
-        import('@sigstore/protobuf-specs'),
-      ]);
-      return { sign, verify, tuf, bundle, specs };
+      const [verify, tuf, bundle, specs] = await Promise.all([import('@sigstore/verify'), import('@sigstore/tuf'), import('@sigstore/bundle'), import('@sigstore/protobuf-specs')]);
+      return { verify, tuf, bundle, specs };
     } catch (cause) {
       loaded = null;
       throw new PrismError(
-        'attest and verify-attestation need the sigstore packages (@sigstore/sign, @sigstore/verify, @sigstore/tuf, @sigstore/bundle, @sigstore/protobuf-specs), which are optional dependencies of prism-code and need Node 22.22.2 or newer: ' +
+        'verify-attestation needs the sigstore packages (@sigstore/verify, @sigstore/tuf, @sigstore/bundle, @sigstore/protobuf-specs), which are optional dependencies of prism-code and need Node 22.22.2 or newer: ' +
           cause.message,
         { code: 'attest.unavailable', cause },
       );
@@ -68,23 +58,11 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function holoBytes(source) {
+/** A holo's bytes from bytes, a path, or an opened holo. */
+export async function holoBytes(source) {
   if (source && typeof source === 'object' && source.kind === 'holo' && source.archive?.bytes) return source.archive.bytes;
   if (typeof source === 'string') return new Uint8Array(await readFile(source));
   return asBytes(source);
-}
-
-function keyId(publicKey) {
-  return createHash('sha256').update(publicKey.export({ type: 'spki', format: 'der' })).digest('hex');
-}
-
-function privateKeyOf(key) {
-  try {
-    if (key instanceof KeyObject) return key;
-    return createPrivateKey(key);
-  } catch (cause) {
-    throw new SigningError(`the signing key cannot be read: ${cause.message}; expected an unencrypted PKCS#8 or SEC1 PEM`, { check: 'sign.key', cause });
-  }
 }
 
 function publicKeyOf(key) {
@@ -95,70 +73,7 @@ function publicKeyOf(key) {
     throw new VerificationError(`the verification key cannot be read: ${cause.message}; expected a PEM public key`, { check: 'policy.invalid', cause });
   }
 }
-
-function predicateOf(predicate) {
-  let value = predicate;
-  if (value instanceof Uint8Array || typeof value === 'string') {
-    try {
-      value = JSON.parse(typeof value === 'string' ? value : new TextDecoder('utf-8', { fatal: true }).decode(value));
-    } catch (cause) {
-      throw new SigningError(`the predicate is not JSON: ${cause.message}`, { check: 'sign.predicate', cause });
-    }
-  }
-  if (value === undefined || value === null) throw new SigningError('a predicate is required', { check: 'sign.predicate' });
-  return value;
-}
-
-/**
- * The subjects of a statement, as `{ name, digest: { sha256, blake3 } }` over
- * content blobs of the holo. A request is a role (`guest`, `view`, `model`,
- * `capabilities`), a blob label (`blake3:<hex>`), or `name=<role or label>`.
- * Without a request the subject is the guest, which is what the proof and
- * provenance predicates describe (#266, #268).
- */
-export function resolveSubjects(parsed, requests = []) {
-  const wanted = requests.length === 0 ? ['guest'] : requests;
-  let roles = null;
-  const subjects = wanted.map((request) => {
-    if (typeof request !== 'string' || request === '') throw new SigningError('a subject is a role or a blob label', { check: 'sign.subject' });
-    const eq = request.indexOf('=');
-    const name = eq > 0 ? request.slice(0, eq) : null;
-    const target = eq > 0 ? request.slice(eq + 1) : request;
-    let label;
-    if (ROLES.includes(target)) {
-      roles ??= resolveArchive(parsed).identities;
-      label = roles[`${target}Kappa`];
-    } else if (/^blake3:[0-9a-f]{64}$/.test(target)) label = target;
-    else throw new SigningError(`subject ${JSON.stringify(request)} is neither a role (${ROLES.join(', ')}) nor a blake3 label`, { check: 'sign.subject' });
-    const blob = parsed.blobs.find((b) => b.label === label);
-    if (!blob) throw new SigningError(`subject ${label} is not a content blob of this holo`, { check: 'sign.subject' });
-    return { name: name ?? (ROLES.includes(target) ? target : label), digest: { sha256: sha256Hex(blob.content), blake3: blake3Hex(blob.content) } };
-  });
-  if (new Set(subjects.map((s) => s.name)).size !== subjects.length) throw new SigningError('two subjects have the same name', { check: 'sign.subject' });
-  return subjects;
-}
-
-/** The in-toto Statement v1 bytes that get signed. */
-export function buildStatement(parsed, { type, predicate, subjects }) {
-  if (typeof type !== 'string' || !URI.test(type)) throw new SigningError('the predicate type must be a URI, such as https://slsa.dev/provenance/v1', { check: 'sign.predicate' });
-  const statement = { _type: STATEMENT_TYPE, subject: resolveSubjects(parsed, subjects), predicateType: type, predicate: predicateOf(predicate) };
-  return { statement, bytes: encoder.encode(JSON.stringify(statement)) };
-}
-
-async function keyedBuilder(m, key) {
-  const privateKey = privateKeyOf(key);
-  const publicKey = createPublicKey(privateKey);
-  const hint = keyId(publicKey);
-  const pem = publicKey.export({ type: 'spki', format: 'pem' });
-  // Ed25519 signs the message itself; every other scheme signs its SHA-256 digest.
-  const digest = privateKey.asymmetricKeyType === 'ed25519' ? null : 'sha256';
-  const signer = {
-    sign: async (data) => ({ signature: cryptoSign(digest, data, privateKey), key: { $case: 'publicKey', publicKey: pem, hint } }),
-  };
-  return new m.sign.DSSEBundleBuilder({ signer, witnesses: [] });
-}
-
-async function readJsonFile(path, what, Error = SigningError, check = 'sign.config') {
+async function readJsonFile(path, what, Error, check) {
   try {
     return JSON.parse(await readFile(path, 'utf8'));
   } catch (cause) {
@@ -172,190 +87,6 @@ function tufOptions(options) {
   if (options.tufRoot) out.rootPath = options.tufRoot;
   if (options.tufCache) out.cachePath = options.tufCache;
   return out;
-}
-
-// sigstore's default is 5 s. A log entry can take longer than that to answer after it is stored, and the
-// client then sends the same request again, which the log refuses as a duplicate.
-const KEYLESS_FETCH = Object.freeze({ timeout: 30_000, retry: Object.freeze({ retries: 2 }) });
-
-/**
- * The log already holds this exact entry. Only a re-sent request can do that, because each signature is new:
- * an earlier attempt was stored, and its answer was lost or was a 5xx. `bundleBuilderFromSigningConfig` does
- * not expose `fetchOnConflict`, which would read that entry back.
- */
-const isLogConflict = (error) => error?.code === 'TLOG_CREATE_ENTRY_ERROR' && error.cause?.statusCode === 409;
-
-/**
- * The text with each token replaced, whole and part by part, because a service may quote only a JWT's payload.
- * `@sigstore/sign` writes a token it cannot parse into its own message, and that message is printed.
- */
-function withoutTokens(text, tokens) {
-  const parts = tokens.flatMap((token) => [token, ...token.split('.').filter((part) => part.length >= 8)]);
-  return parts.reduce((out, part) => out.split(part).join('[redacted]'), text);
-}
-
-async function keylessBuilder(m, options, tokens) {
-  let signingConfig = options.signingConfig;
-  try {
-    if (typeof signingConfig === 'string') signingConfig = await readJsonFile(signingConfig, 'the signing configuration');
-    if (!signingConfig) {
-      const tuf = await m.tuf.initTUF(tufOptions(options));
-      signingConfig = JSON.parse(await tuf.getTarget(SIGNING_CONFIG_TARGET));
-    }
-    signingConfig = m.specs.SigningConfig.fromJSON(signingConfig);
-    const source = options.identityToken ? { getToken: async () => options.identityToken } : new m.sign.CIContextProvider('sigstore');
-    // Every token passes here, whichever source it came from, so a failure can be cleaned of it.
-    const identityProvider = {
-      getToken: async () => {
-        const token = await source.getToken();
-        tokens.push(String(token));
-        return token;
-      },
-    };
-    return m.sign.bundleBuilderFromSigningConfig({ signingConfig, identityProvider, bundleType: 'dsseEnvelope', fetchOptions: KEYLESS_FETCH });
-  } catch (cause) {
-    if (cause instanceof SigningError) throw cause;
-    throw new SigningError(`the Sigstore signing configuration is unavailable or unusable:${cause.message}`, { check: 'sign.config', cause });
-  }
-}
-
-/**
- * Sign statement bytes into a Sigstore bundle v0.3, with `key` or keyless. The
- * bundle's JSON is returned; nothing else is written. `attest` stores it in the
- * holo, and `push` (#292) stores it as a referrer.
- *
- * @param {Uint8Array} bytes the in-toto Statement v1 exactly as it is to be signed
- * @param {{ key?: string | KeyObject, identityToken?: string, signingConfig?: object | string, tufMirrorUrl?: string, tufRoot?: string, tufCache?: string }} options
- * @returns {Promise<object>}
- */
-export async function signStatement(bytes, options = {}) {
-  const m = await sigstore();
-  const tokens = [];
-  const builder = options.key !== undefined ? await keyedBuilder(m, options.key) : await keylessBuilder(m, options, tokens);
-  try {
-    const artifact = { data: Buffer.from(bytes), type: DSSE_PAYLOAD_TYPE };
-    const signed = await builder.create(artifact).catch((error) => {
-      if (isLogConflict(error)) return builder.create(artifact);
-      throw error;
-    });
-    const bundle = m.bundle.bundleToJSON(signed);
-    // A DSSE verifier skips a signature whose keyid is not its own, and cosign's is not this hash, so a keyed bundle with one
-    // verifies nowhere but here. The keyid is not signed, and the hint in the verification material still names the key.
-    if (options.key !== undefined) for (const signature of bundle.dsseEnvelope.signatures) signature.keyid = '';
-    return bundle;
-  } catch (cause) {
-    if (cause instanceof PrismError) throw cause;
-    const message = withoutTokens(cause?.message ?? String(cause), tokens);
-    // The CI identity provider rejects with a plain string; sigstore's own errors carry a code.
-    const identity = typeof cause === 'string' || /^IDENTITY_TOKEN/.test(cause?.code ?? '');
-    throw new SigningError(
-      typeof cause === 'string' || cause?.code === 'IDENTITY_TOKEN_READ_ERROR'
-        ? `no OIDC identity token is available: set SIGSTORE_ID_TOKEN, pass identityToken, or run in GitHub Actions with id-token: write (${message})`
-        : identity
-          ? `the OIDC identity token cannot be used: ${message}`
-          : `signing failed: ${message}`,
-      // Once a token was read, the original error may hold it anywhere, so it is not passed on.
-      { check: identity ? 'sign.identity' : 'sign.service', cause: tokens.length === 0 ? cause : undefined },
-    );
-  }
-}
-
-/**
- * Sign a statement about a holo and return the holo with the bundle appended to
- * its attestation section. The input holo is not modified.
- *
- * With `key`, the statement is signed by that private key (PEM or KeyObject)
- * and no network is used. Without it the signing is keyless: an OIDC identity
- * token (`identityToken`, else GitHub Actions or `SIGSTORE_ID_TOKEN`) is
- * exchanged for a Fulcio certificate, and the Rekor v2 entry and RFC 3161
- * timestamp of the signing configuration (`signingConfig`, else the public
- * instance's, from TUF) are embedded in the bundle. If the log refuses the entry
- * as a duplicate of a re-sent request, the statement is signed once more, which
- * makes a new entry; the first one stays in the log, unused.
- *
- * @param {Uint8Array | ArrayBuffer | string | object} source the holo as bytes, a path, or an opened holo
- * @param {{ type: string, predicate: unknown, subjects?: string[], key?: string | KeyObject, identityToken?: string, signingConfig?: object | string, tufMirrorUrl?: string, tufRoot?: string, tufCache?: string }} options
- * @returns {Promise<{ holo: Uint8Array, bundle: object, statement: object, attestations: number }>} `attestations` counts the bundles now in the holo
- */
-export async function experimental_attest(source, options) {
-  if (!isObject(options)) throw new SigningError('attest takes an options object with a type and a predicate', { check: 'sign.predicate' });
-  const parsed = parseArchive(await holoBytes(source));
-  const { statement, bytes } = buildStatement(parsed, options);
-  const bundle = await signStatement(bytes, options);
-  const holo = appendAttestations(parsed, [bundle]);
-  return { holo, bundle, statement, attestations: readAttestations(holo).length };
-}
-
-/**
- * A whole statement someone else wrote, such as the proof statement
- * `prismpm verify` writes (#266): an in-toto Statement v1 whose every subject
- * is a content blob of this holo with both digests equal. Returns the bytes
- * to sign, its canonical JSON.
- */
-function statementBytes(parsed, statement) {
-  let value = statement;
-  if (value instanceof Uint8Array || typeof value === 'string') {
-    try {
-      value = JSON.parse(typeof value === 'string' ? value : new TextDecoder('utf-8', { fatal: true }).decode(value));
-    } catch (cause) {
-      throw new SigningError(`the statement is not JSON: ${cause.message}`, { check: 'sign.statement', cause });
-    }
-  }
-  if (!isObject(value) || value._type !== STATEMENT_TYPE) throw new SigningError(`the statement's _type is not ${STATEMENT_TYPE}`, { check: 'sign.statement' });
-  if (typeof value.predicateType !== 'string' || !URI.test(value.predicateType)) throw new SigningError('the statement has no predicateType URI', { check: 'sign.statement' });
-  if (!Array.isArray(value.subject) || value.subject.length === 0) throw new SigningError('the statement has no subject', { check: 'sign.statement' });
-  for (const subject of value.subject) {
-    const blob = parsed.blobs.find((b) => b.label === `blake3:${subject?.digest?.blake3}`);
-    if (!blob || sha256Hex(blob.content) !== subject.digest.sha256) {
-      throw new SubjectMismatchError(`subject ${JSON.stringify(subject?.name)} is not a content blob of this holo with both digests equal`, { check: 'sign.subject' });
-    }
-  }
-  return { statement: value, bytes: encoder.encode(canonicalJson(value)) };
-}
-
-/**
- * Sign statements that are already written, and return the holo that carries
- * them signed (#582). This is how a build on a CI runner turns what
- * `prismpm build` and `prismpm verify` wrote into evidence a checker accepts:
- *
- *   - `unsigned: true` signs each unsigned placeholder in the holo, such as
- *     the provenance statement `prismpm build` writes (#268), and puts the
- *     signed bundle in its place. The signed payload is the placeholder's,
- *     byte for byte.
- *   - `statements` are whole statements to add, such as the proof statement
- *     of the verified directory. Each is signed as canonical JSON.
- *
- * The signer options are `experimental_attest`'s. The input holo is not
- * modified. Resolves to `{ holo, signed, attestations }`, where `signed` lists
- * `{ statement, bundle }` in signing order.
- *
- * @param {Uint8Array | ArrayBuffer | string | object} source the holo as bytes, a path, or an opened holo
- * @param {{ unsigned?: boolean, statements?: Array<object | string | Uint8Array>, key?: string | KeyObject, identityToken?: string, signingConfig?: object | string, tufMirrorUrl?: string, tufRoot?: string, tufCache?: string }} options
- * @returns {Promise<{ holo: Uint8Array, signed: Array<{ statement: object, bundle: object }>, attestations: number }>}
- */
-export async function experimental_signStatements(source, options) {
-  if (!isObject(options)) throw new SigningError('signStatements takes an options object', { check: 'sign.statement' });
-  const statements = options.statements ?? [];
-  if (!Array.isArray(statements)) throw new SigningError('statements is an array of statements', { check: 'sign.statement' });
-  const parsed = parseArchive(await holoBytes(source));
-  const added = statements.map((statement) => statementBytes(parsed, statement));
-  const present = readAttestations(parsed);
-  const placeholders = options.unsigned === true ? present.filter((a) => !a.signed) : [];
-  if (added.length === 0 && placeholders.length === 0) {
-    throw new SigningError(options.unsigned === true ? 'the holo has no unsigned statement, and no statement was given' : 'nothing to sign: pass statements, or unsigned: true', { check: 'sign.statement' });
-  }
-  const signed = [];
-  const replaced = new Map();
-  for (const attestation of placeholders) {
-    const bytes = Buffer.from(attestation.envelope.payload, 'base64');
-    const bundle = await signStatement(bytes, options);
-    replaced.set(attestation.index, bundle);
-    signed.push({ statement: attestation.statement, bundle });
-  }
-  for (const { statement, bytes } of added) signed.push({ statement, bundle: await signStatement(bytes, options) });
-  const lines = [...present.map((a) => replaced.get(a.index) ?? a.bytes), ...signed.slice(placeholders.length).map((s) => s.bundle)];
-  const holo = appendAttestations(stripAttestations(parsed), lines);
-  return { holo, signed, attestations: readAttestations(holo).length };
 }
 
 // ---------------------------------------------------------------------------

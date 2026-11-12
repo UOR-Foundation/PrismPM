@@ -206,7 +206,7 @@ test('the CLI: exit 0 passed, 1 failed, 2 cannot run, 64 bad usage, and --out wr
 
   assert.equal(cli('run', '--runtime', 'other', '--', process.execPath, FAKE, 'wrong-contract').status, 2);
   assert.equal(cli('run', '--runtime', 'nobody').status, 64);
-  assert.equal(cli('run', '--runtime', 'rust').status, 64, 'rust has no shim yet');
+  assert.equal(cli('run', '--runtime', 'python').status, 64, 'python has no shim yet');
   assert.equal(cli('run').status, 64);
   assert.equal(cli('nonsense').status, 64);
   assert.equal(cli('--unknown').status, 64);

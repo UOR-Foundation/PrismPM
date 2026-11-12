@@ -1,7 +1,9 @@
 /**
  * `prism.auth`: who you are (issue #447, the `auth` module of #440). Registry
  * logins and credential stores over `oci-auth.mjs`, and the identities that sign
- * attestations over `signStatement` in `attest.mjs`. Node only.
+ * attestations over `signing.mjs`. Node only. Every signature in prism-code is
+ * made through an identity of this module: `attest`, `signStatements` and `push`
+ * ask `identities.from` for one.
  *
  * Nothing this module returns, throws or logs holds a secret. A password goes
  * into a store and stays there, and `push` and `pull` read it from that store
@@ -10,14 +12,14 @@
  *
  * It decides nothing about trust. An identity signs; whether that signer is
  * acceptable is for `verify` to say. It may depend only on `errors`: `oci-auth`
- * is its own code, and `attest.mjs` is loaded for its signing part only, until
- * that file is split (#440, phase 3).
+ * and `signing` are its own code.
  *
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
 import { createHash, createPrivateKey, createPublicKey, KeyObject } from 'node:crypto';
 import { PrismError, RegistryAuthError, RegistryError, SigningError } from './errors.mjs';
 import { describeCredential, eraseCredential, listStores, storeCredential, storeForRegistry } from './oci-auth.mjs';
+import { signStatement } from './signing.mjs';
 
 const DOCKER_HUB = 'docker.io';
 const REGISTRY_NAME = /^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?|\[[0-9A-Fa-f:]+\])(?::[0-9]+)?$/;
@@ -37,8 +39,11 @@ function redactor(secrets) {
   return (text) => forms.reduce((out, form) => out.split(form).join(REDACTED), text);
 }
 
-/** Make an error safe to hand out, in place, so its class, `code` and `check` stay. A `cause` may hold anything, so it goes. */
-function scrub(error, secrets) {
+/**
+ * Make an error safe to hand out, in place, so its class, `code` and `check` stay. A `cause` may hold anything, so it goes,
+ * unless `keepCause` says no secret was in play, which is how a keyless failure before any token was read stays explainable.
+ */
+function scrub(error, secrets, keepCause = false) {
   const redact = redactor(secrets);
   const deep = (value) => {
     if (typeof value === 'string') return redact(value);
@@ -46,7 +51,7 @@ function scrub(error, secrets) {
     if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, member]) => [redact(key), deep(member)]));
     return value;
   };
-  delete error.cause;
+  if (!keepCause) delete error.cause;
   error.message = redact(error.message);
   if (typeof error.stack === 'string') error.stack = redact(error.stack);
   for (const member of ['details', 'reasons', 'verdict']) {
@@ -85,7 +90,7 @@ function keyIdentity(key) {
     kind: 'key',
     keyId: createHash('sha256').update(publicKey.export({ type: 'spki', format: 'der' })).digest('hex'),
     publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
-    sign: (statement) => signWith(statement, { key: privateKey }, []),
+    sign: (statement) => signWith(statement, { key: privateKey }, typeof key === 'string' ? [key] : [], false),
   });
 }
 
@@ -95,17 +100,29 @@ function keylessIdentity(options) {
   return Object.freeze({
     kind: 'keyless',
     ambient: identityToken === undefined,
-    sign: (statement) => signWith(statement, { identityToken, signingConfig, tufMirrorUrl, tufRoot, tufCache }, [identityToken]),
+    sign: (statement) => signWith(statement, { identityToken, signingConfig, tufMirrorUrl, tufRoot, tufCache }, [identityToken], true),
   });
 }
 
-async function signWith(statement, options, secrets) {
+/**
+ * The identity a set of signer options names: `key` is a private key, and
+ * without one the signing is keyless with `identityToken`, `signingConfig` and
+ * the TUF options. This is the one place a flat options object, as `attest` and
+ * `push` take it, becomes a signer.
+ */
+function identityFrom(options) {
+  const { key, ...keyless } = options ?? {};
+  return key !== undefined ? keyIdentity(key) : keylessIdentity(keyless);
+}
+
+async function signWith(statement, options, secrets, keyless) {
   if (!(statement instanceof Uint8Array)) throw new SigningError('sign takes the bytes of an in-toto statement', { check: 'sign.predicate' });
-  const { signStatement } = await import('./attest.mjs');
   try {
     return await signStatement(statement, options);
   } catch (error) {
-    throw scrub(error, [...secrets, ...AMBIENT_TOKENS.map((name) => process.env[name])]);
+    const all = [...secrets, ...AMBIENT_TOKENS.map((name) => process.env[name])].filter((s) => typeof s === 'string' && s !== '');
+    // `signStatement` drops the cause itself once it has read a token; with no secret anywhere, the cause explains the failure.
+    throw scrub(error, all, keyless && all.length === 0);
   }
 }
 
@@ -195,6 +212,8 @@ export function createAuth(options = {}) {
        * `SIGSTORE_ID_TOKEN` or GitHub Actions, and not from `env`, because `@sigstore/sign` reads it there.
        */
       keyless: keylessIdentity,
+      /** `fromKey(options.key)` when there is a key, else `keyless(options)`: the signer options `attest` and `push` take. */
+      from: identityFrom,
     }),
   });
 }

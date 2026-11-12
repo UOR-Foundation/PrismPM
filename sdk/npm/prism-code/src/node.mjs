@@ -262,7 +262,8 @@ function fromEnv(options = {}) {
 export const Prism = Object.freeze({ fromEnv, create: createPrism });
 
 // Signing and checking attestations (#272). The sigstore packages they need are optional and load on first use.
-export { experimental_attest, experimental_signStatements, experimental_verifyAttestations, experimental_verifyBundle, GITHUB_ACTIONS_ISSUER } from './attest.mjs';
+export { experimental_verifyAttestations, experimental_verifyBundle, GITHUB_ACTIONS_ISSUER } from './attest.mjs';
+export { experimental_attest, experimental_signStatements } from './attest-write.mjs';
 
 // Moving holos to and from a registry or a local store (#292).
 export { experimental_push, experimental_pull, openEndpoint, MAX_HOLO_BYTES, PUSH_SCHEMA, PULL_SCHEMA } from './push-pull.mjs';

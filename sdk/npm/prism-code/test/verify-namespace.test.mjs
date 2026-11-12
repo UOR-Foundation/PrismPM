@@ -44,7 +44,7 @@ async function outcome(call) {
 }
 
 test('the namespace holds exactly these members, frozen all the way down', () => {
-  assert.deepEqual(Object.keys(verify).sort(), ['attestations', 'check', 'format', 'limits', 'policy', 'replay', 'verdict']);
+  assert.deepEqual(Object.keys(verify).sort(), ['attestations', 'check', 'format', 'limits', 'policy', 'pullClosure', 'replay', 'verdict']);
   assert.deepEqual(Object.keys(verify.policy).sort(), ['evaluate', 'input', 'levels', 'minimumLevelEnv', 'names', 'parse', 'read', 'resolve']);
   assert.deepEqual(Object.keys(verify.attestations).sort(), ['read', 'strip', 'verify', 'verifyBundle']);
   assert.deepEqual(Object.keys(verify.replay).sort(), ['acceptance', 'digest', 'historySchema', 'json', 'parse', 'predicateType', 'record', 'run']);
@@ -236,12 +236,12 @@ test('at load the module needs no Node and reaches only what docs/proposals/440-
     'version.mjs',
   ]);
   for (const [name, { eager }] of graph) assert.deepEqual(eager.filter((s) => !s.startsWith('.')), [], `${name} imports nothing outside the package at load`);
-  assert.deepEqual(graph.get('verify-namespace.mjs').lazy.sort(), ['./attest.mjs', './check.mjs'], 'the Node-only half loads on first use');
+  assert.deepEqual(graph.get('verify-namespace.mjs').lazy.sort(), ['./attest.mjs', './check.mjs', './verify-closure.mjs'], 'the Node-only half loads on first use');
 });
 
-test('on first use it adds only check.mjs and attest.mjs, whose own imports stay within the same set', () => {
-  const allowed = new Set([...closure(here('../src/verify-namespace.mjs')).keys(), 'check.mjs', 'attest.mjs']);
-  for (const entry of ['../src/check.mjs', '../src/attest.mjs']) {
+test('on first use it adds only check.mjs, attest.mjs and verify-closure.mjs, whose own imports stay within the same set', () => {
+  const allowed = new Set([...closure(here('../src/verify-namespace.mjs')).keys(), 'check.mjs', 'attest.mjs', 'verify-closure.mjs']);
+  for (const entry of ['../src/check.mjs', '../src/attest.mjs', '../src/verify-closure.mjs']) {
     for (const [name, { eager }] of closure(here(entry))) {
       assert.ok(allowed.has(name), `${entry} reaches ${name}`);
       assert.deepEqual(eager.filter((s) => !s.startsWith('.') && !s.startsWith('node:')), [], `${name} imports no package at load`);
@@ -252,4 +252,21 @@ test('on first use it adds only check.mjs and attest.mjs, whose own imports stay
 test('adding the namespace leaves the package export map as it was: it is reachable only through #441', () => {
   const { exports: map } = JSON.parse(readFileSync(here('../package.json'), 'utf8'));
   assert.deepEqual(Object.keys(map), ['.', './node', './browser', './init', './canonical', './package.json']);
+});
+
+test('pullClosure is the verdict pull gets: it refuses claims that do not hold, and passes a closure that does', async () => {
+  const holo = calculator;
+  const manifestDigest = `sha256:${'0'.repeat(64)}`;
+  const passed = await verify.pullClosure({ holo, manifestDigest, referrers: [] }, none);
+  assert.equal(passed.verdict.passed, true);
+  assert.equal(passed.signers, null);
+  assert.match(passed.fingerprint, /^blake3:[0-9a-f]{64}$/);
+  const asked = await outcome(() => verify.pullClosure({ holo, manifestDigest, asked: { fingerprint: `blake3:${'1'.repeat(64)}` } }));
+  assert.deepEqual(asked, { refused: 'digest.fingerprint', name: 'DigestMismatchError' });
+  const claimed = await outcome(() => verify.pullClosure({ holo, manifestDigest, claims: { blake3: '2'.repeat(64) } }));
+  assert.deepEqual(claimed, { refused: 'digest.annotation', name: 'DigestMismatchError' });
+  const broken = holo.slice();
+  broken[broken.length - 1] ^= 0xff;
+  assert.equal((await outcome(() => verify.pullClosure({ holo: broken, manifestDigest }))).refused, 'pull.archive');
+  assert.equal((await outcome(() => verify.pullClosure({ holo, manifestDigest }, { statements: [] }))).refused, 'policy.invalid');
 });
