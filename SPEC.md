@@ -3825,6 +3825,47 @@ it observes to be the retained `server` record (`PP6003`). It writes nothing to 
 project or the release. A release of anything but a server application is
 refused with `PP6101`.
 
+### 12.16 The session world
+
+HO-44 owns the guest contract `hologram:guest/core-wasm@2`, stated by
+`sdk/npm/spec/worlds/core-wasm-2.wit` and its row in `WORLDS`; the `@1` row, its
+file and every existing guest are unchanged. A `@2` guest is an import-free
+wasm32 core module exporting exactly `memory`, `holo_alloc(i32)->i32` and
+`holo_step(i32,i32)->i64`, with one unshared memory of the declared maximum and
+no start function. One instance is one session. Its state starts empty, stays
+inside the instance and is never read or written by the host.
+
+The model's session root is a monomorphic `Bytes -> Bytes` definition, rendered
+by `prod_codegen::generate_module` exactly as for `@1`. The guest package
+(`prismpm::session_guest`, target schema `prismpm/core-wasm-session-target/1`)
+composes that rendering with a fixed shim rendered from the declared request,
+state, response, response-count, page and stack bounds alone; no application
+behavior is generated or written outside the model. All integers of the frames
+are big-endian `u32`. The shim calls the root with the turn (state length, state,
+request) and requires the answer to be the next state's length and bytes, the
+response count and each response's length and bytes, with no trailing byte; a
+state, a response or a count over its declaration, a malformed answer, a checked
+failure of the root and a step over a region `holo_alloc` did not reserve trap.
+It returns the responses (count, then each length and bytes) and keeps the
+state. `holo_alloc` discards the previous step's responses. After every step the
+shim moves the state and the responses to the start of its heap and releases
+every other allocation, so the memory a step uses, and any trap, is a function
+of its state and request. Bounds whose turn or answer do not fit a 32-bit length
+or the declared memory, and a root that is not `Bytes -> Bytes`, are refused
+with `PP5101`.
+
+HO-45 owns the runtime. `prism-code` runs a `@2` guest only as sessions
+(`open`, then ordered steps returning zero or more responses); every failure
+ends the session. The history of a session world is `prism/history/2`
+(`sdk/npm/spec/schemas/history/history-v2.schema.json`): ordered sessions, each
+its steps with their responses and the failure that ended it, if any. Replay
+re-executes each session on a fresh instance and compares every outcome; a
+divergence is `replay.divergence` (`PP5701`) and a history of the other world is
+refused with `replay.history`. `prism/replay/v1` is unchanged and counts steps
+and failures as events. A holo format revision that admits a `@2` guest, the
+profile that declares the bounds and the Rust CLI's replay of `/2` histories are
+specified with the binary application profile of issue 630.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -4360,6 +4401,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-41` | `holo` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. | §3 |
 | `HO-42` | `holo` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. | §3 |
 | `HO-43` | `holo` | The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request: request_begin before the core runs with the request's number in the process and its body, request_end after the answer is written with the same number, the request body and the answer body, including a request the adapter or the core refuses; the number pairs each end with its begin when requests on other connections interleave; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged. | §3 |
+| `HO-44` | `holo` | The session world hologram:guest/core-wasm@2 is a new contract with its own WIT file and registry row, import-free, exporting exactly memory, holo_alloc and holo_step; its guest package is generated from the model's Bytes -> Bytes root as rendered by prod-codegen and a fixed shim rendered from the declared request, state, response, response-count, page and stack bounds alone; the shim keeps the state inside the instance, traps on a state, response, response count or trailing byte over its declaration and on a step over a region holo_alloc did not reserve, and compacts its arena after every step so the memory a step uses is a function of its state and request; bounds that cannot be generated and an entry that is not Bytes -> Bytes are refused with PP5101, and the @1 row and file are unchanged. | §3 |
+| `HO-45` | `holo` | prism-code runs a session-world guest as sessions: one instance per session with an empty first state, steps in order returning zero or more responses through dispatch and stream, every failure ending the session, session.closed for a later step, session.busy for a concurrent step, session.required for dispatch on the application and session.unsupported for open on a stateless one; acceptance sessions are compared step by step; prism/history/2 records sessions as steps and the failure that ended them, and replay re-executes each on a fresh session, reporting every divergence as a DeterminismViolationError and refusing a history of the other world with replay.history. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

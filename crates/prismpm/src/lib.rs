@@ -46,6 +46,7 @@ pub mod sdk;
 pub mod server_build;
 pub mod server_host;
 pub mod server_release;
+pub mod session_guest;
 pub use verification::server as server_verification;
 pub mod supply_chain;
 pub mod system;

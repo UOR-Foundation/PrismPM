@@ -214,6 +214,14 @@
       "archive": "reference",
       "env": { "PRISM_MINIMUM_LEVEL": "high" },
       "expect": { "ok": false, "error": { "code": "verification_failed", "check": "policy.invalid" } }
+    },
+    {
+      "id": "verify.session-world.documents",
+      "title": "Format revision 2026-10-23 admits only the @1 guest contract in its documents, so an archive naming the session world fails holo.documents and withholds P1 until a revision admits it (#629, #630).",
+      "op": "verify",
+      "archive": "session-world",
+      "input": { "policy": { "minimum": "P1" } },
+      "expect": { "ok": true, "result": { "passed": false, "reasons": { "$contains": [{ "check": "holo.documents", "withholds": "P1" }] } } }
     }
   ]
 }

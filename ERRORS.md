@@ -1075,6 +1075,10 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `remote.timeout` |  | `DK-41` | The run of the remote build did not end in time; it goes on, and --ref picks it up later. |
 | `remote.workflow` |  | `DK-41` | The commit holds no build workflow, so no remote build can start. |
 | `replay_failed` | `ReplayError` | `CT-12` | A replay could not be carried out or its statement failed. |
+| `session.busy` |  | `HO-45` | A step was started on a session while another step of the same session was still running; steps of one session are taken in order, and the session stays open. |
+| `session.closed` |  | `HO-45` | A step was started on a session that was closed or that a failed step ended; nothing ran, and a new session must be opened. |
+| `session.required` |  | `HO-45` | dispatch was called on an application whose guest is the session world hologram:guest/core-wasm@2; its steps are taken on a session opened with open(). |
+| `session.unsupported` |  | `HO-45` | open was called on an application whose guest is the stateless world hologram:guest/core-wasm@1, which has no sessions. |
 | `setup.agent` |  | `DK-41` | setup was asked for an agent it does not know. |
 | `setup.command` |  | `DK-41` | A setup step's command failed. |
 | `signature_invalid` | `SignatureInvalidError` | `CT-12` | The attestation's signature does not verify. |

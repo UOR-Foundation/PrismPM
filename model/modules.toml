@@ -249,6 +249,14 @@ path = "crates/prismpm/src/server_release.rs"
 module = "images"
 
 [[owner]]
+path = "crates/prismpm/src/session_guest.rs"
+module = "images"
+
+[[owner]]
+path = "crates/prismpm/src/session_guest/"
+module = "images"
+
+[[owner]]
 path = "crates/prismpm/src/supply_chain.rs"
 module = "images"
 
@@ -552,6 +560,10 @@ module = "verify"
 [[owner]]
 path = "sdk/npm/prism-code/src/replay.mjs"
 module = "verify"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/session.mjs"
+module = "containers"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/setup-cli.mjs"

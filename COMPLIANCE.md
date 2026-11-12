@@ -22,8 +22,8 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Typed errors (`errors`) | 8 | + | - | N/A |
 | Load a holo (`load`) | 21 | + | - | N/A |
 | Histories and replay (`replay`) | 5 | + | - | N/A |
-| Verify a holo (`verify`) | 24 | + | + | N/A |
-| The world contract (`world`) | 16 | + | - | N/A |
+| Verify a holo (`verify`) | 25 | + | + | N/A |
+| The world contract (`world`) | 17 | + | - | N/A |
 
 ## Checks
 
@@ -190,6 +190,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.env.sets-minimum` | PRISM_MINIMUM_LEVEL sets the minimum when the call names none. | + | + | N/A |
 | `verify.env.call-wins` | A minimum named by the call replaces PRISM_MINIMUM_LEVEL. | + | + | N/A |
 | `verify.env.invalid` | A PRISM_MINIMUM_LEVEL that names no level is an invalid policy. | + | + | N/A |
+| `verify.session-world.documents` | Format revision 2026-10-23 admits only the @1 guest contract in its documents, so an archive naming the session world fails holo.documents and withholds P1 until a revision admits it (#629, #630). | + | + | N/A |
 
 ### The world contract
 
@@ -211,6 +212,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `world.pin.invalid` | A world pin that is not hex is an invalid policy. | + | + | N/A |
 | `world.effects.pure-passes` | A pure world passes a policy that allows no effects. | + | + | N/A |
 | `world.effects.invalid` | An effect nobody defined is an invalid policy. | + | + | N/A |
+| `world.session.loaded` | A guest of the session world hologram:guest/core-wasm@2 loads as that world: pure and within an empty grant, because it imports nothing (#629). | + | - | N/A |
 
 ## Expected failures
 
@@ -292,3 +294,4 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Rust | `replay.statement.written` | The Rust runtime has no replay operation yet (#298). |
 | Rust | `world.reference.loaded` | The Rust runtime has no load operation yet (#298). |
 | Rust | `world.load.refuses-wrong-exports` | The Rust runtime has no load operation yet (#298). |
+| Rust | `world.session.loaded` | The Rust runtime has no load operation yet (#298). |

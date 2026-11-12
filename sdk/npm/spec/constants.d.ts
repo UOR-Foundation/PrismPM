@@ -9,9 +9,11 @@ import type {
   ExtensionName,
   FormatRevision,
   FormatRevisionIdentifiers,
+  GuestContract,
   HoloviewLimits,
   SectionKind,
   SectionKindCode,
+  SessionContract,
   World,
 } from './types/holo.js';
 
@@ -59,8 +61,17 @@ export declare const CORE_WASM: Readonly<{
   WORLD: 'worlds/core-wasm.wit';
 }>;
 
-/** The WIT world of each guest contract (issue #278). */
-export declare const WORLDS: Readonly<Record<CoreWasmContract, World>>;
+/** The Core-Wasm session contract (issue #629). */
+export declare const CORE_WASM_SESSION: Readonly<{
+  CONTRACT: SessionContract;
+  EXPORTS: readonly ['holo_alloc', 'holo_step', 'memory'];
+  ALLOCATOR: 'holo_alloc';
+  ENTRY: 'holo_step';
+  WORLD: 'worlds/core-wasm-2.wit';
+}>;
+
+/** The WIT world of each guest contract (issues #278, #629). */
+export declare const WORLDS: Readonly<Record<GuestContract, World>>;
 
 export declare const HOLOVIEW: Readonly<HoloviewLimits>;
 
