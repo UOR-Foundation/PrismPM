@@ -35,7 +35,7 @@
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
- *   prism-code setup [--agent <id>] [--pull] [--dry-run] add the UOR MCP server to every agent here, register holo:// (experimental)
+ *   prism-code setup [--agent <id>] [--hosted] [--pull] [--dry-run] add the local Prism server to every agent here, register holo:// (experimental)
  *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
  *                                                     hand the sentence to the agent the link names (experimental)
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
@@ -178,14 +178,15 @@ Usage:
                                                     the axiom set Lean observes for every definition and theorem, in one
                                                     pass, beside the set the source declares; --write sets each axioms
                                                     member to the observed set and formats the project (experimental)
-  prism-code setup [--agent <id>] [--local] [--pull] [--image <ref>] [--agents-only] [--machine-only] [--json] [--dry-run]
+  prism-code setup [--agent <id>] [--hosted] [--local] [--pull] [--image <ref>] [--agents-only] [--machine-only] [--json] [--dry-run]
                                                     get this machine ready, no Docker needed: check Node and the GitHub
                                                     sign-in, keep sources LF (--local also finds Docker, also inside WSL,
                                                     notes the SDK image the lockfile pins and creates its cache volume);
-                                                    then add the UOR MCP server (lexlean, https://mcp.uor.foundation/)
-                                                    to every agent found here: Claude Code, Codex, Cursor, VS Code; say
-                                                    how for Claude Desktop; add the local Prism server (prism, the mcp
-                                                    verb below) beside it, Claude Desktop included; install the Prism
+                                                    then add the local Prism server (prism, the mcp verb below) to every
+                                                    agent found here: Claude Code, Codex, Cursor, VS Code, Claude Desktop;
+                                                    with --hosted also add the UOR MCP server (lexlean,
+                                                    https://mcp.uor.foundation/, stores models unlisted, not privately);
+                                                    install the Prism
                                                     skill; register the holo:// handler; remember the agent; print the
                                                     next steps. Run it as npx prism-code@latest setup
   prism-code mcp [--project <dir>]                  the Prism MCP server on stdio (experimental): the agent drafts the spec
@@ -262,6 +263,8 @@ Options for export:   --out <dir>                  a new directory name in the p
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 Options for setup:    --agent <id>                 configure only this agent and make it the preferred one: claude-code,
                                                    codex, cursor, vscode, claude-desktop, claude, chatgpt
+                      --hosted                     also add the hosted lexlean server, which stores models unlisted, not
+                                                   privately; without it every proof runs on this machine
                       --local                      also ready local builds: Docker (also inside WSL), the image, its cache;
                                                    without it setup needs no Docker, and apps build on GitHub Actions
                       --image <ref>                the SDK image to pull and cache, NAME@sha256:DIGEST; default the one

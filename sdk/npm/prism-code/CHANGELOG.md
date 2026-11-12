@@ -10,6 +10,11 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Breaking Changes
 
+- `setup` adds the hosted lexlean server (`https://mcp.uor.foundation/`) to agents only with `--hosted`. Without it, each agent gets the local Prism server and nothing else; an entry already there is left as it is.
+- A proof may rest only on `propext`, `Quot.sound` and `Classical.choice`. The guided path used to record whatever axiom set Lean observed and prove again, so a proof resting on `sorryAx` or `Lean.ofReduceBool` (native_decide) passed; it is now refused, naming the declaration and the axiom.
+- `init --sdk-image` relocks the template's LexLean project with the image's own compiler before `prismpm update`, so a template lock older than the image no longer fails with `LLC0102`. Every bind run has `--network none`. `prismpm update --toolchain` still reads the image's index from its registry, so binding is not yet fully offline.
+- The build result says where Lean proved the model (this machine, the hosted verifier or the GitHub gate), and claims nothing when no proof of the model is recorded. Acceptance vectors are reported as tested, never as verified.
+
 - One canonical path for every app. `build --unstable-author` and `check <holo> --unstable-author`, where an agent wrote the model, are removed; `build --unstable-author` now exits 64 with `unknown option --unstable-author`. An app comes from one `prism/spec/1` spec through the guided path.
 - Nothing is sent to the hosted verifier unless asked. `verify --lean` and `build --check` run in the SDK image on this machine and use the hosted verifier only with `--hosted`; with no lockfile they exit 64 and name `--hosted`. The guided path proves locally unless `PRISM_CODE_TIER=hosted`, and builds locally unless the caller names a repository or `remote: github`.
 - An integrity failure fails every policy, P0 included. `check` adds the reason `policy.integrity` and exits 1 for a damaged holo whatever the policy's minimum; `run-policy.json` with `minimum: P0` no longer passes one.

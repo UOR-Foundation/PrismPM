@@ -324,9 +324,21 @@ fn unix_millis() -> i64 {
         })
 }
 
-/// Now, as UTC RFC 3339 without fractions: when a statement says it was made.
+/// When a statement says it was made, as UTC RFC 3339 without fractions:
+/// `SOURCE_DATE_EPOCH` (seconds since 1970) when it is set, as reproducible
+/// builds name the time, so the same inputs give the same statement bytes;
+/// otherwise now.
 pub(crate) fn now_utc() -> String {
-    whole_seconds(unix_millis())
+    statement_time(std::env::var("SOURCE_DATE_EPOCH").ok().as_deref())
+}
+
+/// The statement time for a `SOURCE_DATE_EPOCH` value: its seconds when it is a
+/// whole number of seconds, else now.
+pub(crate) fn statement_time(source_date_epoch: Option<&str>) -> String {
+    match source_date_epoch.map(str::trim).and_then(|s| s.parse::<i64>().ok()) {
+        Some(seconds) if seconds >= 0 => whole_seconds(seconds.saturating_mul(1000)),
+        _ => whole_seconds(unix_millis()),
+    }
 }
 
 /// UTC RFC 3339 without fractions, as the predicate schema requires.

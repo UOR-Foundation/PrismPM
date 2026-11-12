@@ -244,3 +244,15 @@ fn the_local_wire_constants_equal_their_owners() {
         crate::inspect::verdict::PROVENANCE_PREDICATE
     );
 }
+
+// Planted defect G3: the statement time is the clock unless SOURCE_DATE_EPOCH names it,
+// so two runs with the same inputs and the same SOURCE_DATE_EPOCH give the same bytes.
+#[test]
+fn source_date_epoch_fixes_the_statement_time() {
+    assert_eq!(super::statement_time(Some("0")), "1970-01-01T00:00:00Z");
+    assert_eq!(super::statement_time(Some("1700000000")), "2023-11-14T22:13:20Z");
+    assert_eq!(super::statement_time(Some(" 86400 ")), "1970-01-02T00:00:00Z");
+    for unset in [None, Some(""), Some("-1"), Some("soon")] {
+        assert_ne!(super::statement_time(unset), "1970-01-01T00:00:00Z", "{unset:?} reads the clock");
+    }
+}
