@@ -25,7 +25,8 @@ import {
   stripAttestations,
   blake3Hex,
 } from '../src/index.mjs';
-import { experimental_attest as attest, experimental_signStatements as signStatements, experimental_verifyAttestations as verifyAttestations, experimental_verifyBundle as verifyBundle, GITHUB_ACTIONS_ISSUER } from '../src/attest.mjs';
+import { experimental_verifyAttestations as verifyAttestations, experimental_verifyBundle as verifyBundle, GITHUB_ACTIONS_ISSUER } from '../src/attest.mjs';
+import { experimental_attest as attest, experimental_signStatements as signStatements } from '../src/attest-write.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const holo = new Uint8Array(readFileSync(here('../fixtures/Calculator.holo')));

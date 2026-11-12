@@ -15,6 +15,10 @@ validate:
 check-modules:
     cargo run --package xtask -- check-modules
 
+# Check the prism-code surface against the developer view's glossary (#347)
+check-developer-view:
+    cargo run --package xtask -- check-developer-view
+
 # Run conformance test suite by category (contracts, core, holo-stdlib, desktop-browser, system-oci, verification-schemas, or all)
 conformance category="all":
     cargo run --package xtask -- conformance {{category}}

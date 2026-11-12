@@ -8,9 +8,9 @@
  *                                                     one run as a container (#348): print its output and exit with its code
  *   prism-code rm <container>...                      remove containers
  *   prism-code vectors <app.holo | closure-dir>       replay the acceptance vectors
- *   prism-code history <app.holo | closure-dir> [--output <file>]
- *                                                     write the acceptance vectors as a history
- *   prism-code replay <history | dir>... --holo <app.holo> [--statement <file>] [--json]
+ *   prism-code record <app.holo | closure-dir> [--output <file>]
+ *                                                     write the acceptance vectors as a recording
+ *   prism-code replay <recording | dir>... --image <app.holo> [--statement <file>] [--json]
  *                                                     re-execute histories against a build; a divergence exits 1
  *   prism-code init [<dir>] [--name N] [--template T] [--sdk-image REF] [--force]
  *                                                     scaffold a project; with --sdk-image, bind it (standards.lock, prismpm.lock)
@@ -30,7 +30,7 @@
  *   prism-code generate <app.holo> --out <dir>        write bindings and a typed client from the world
  *   prism-code check <app.holo> [--policy <file>] [--json]
  *                                                     judge the holo against a policy and print its verdict
- *   prism-code dev [<dir>] [--port N] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+ *   prism-code dev [<dir>] [--port N] [--no-open] [--policy <file>] [--build <command>] [--image <path>]
  *                                                     watch the project, rebuild and re-check on every change, serve the local studio
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
@@ -76,6 +76,7 @@ import { ASSURANCE } from '../src/vendor/verify.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { manifestProviders } from '../src/manifest.mjs';
 import { canonicalJson } from '../src/archive.mjs';
+import { resolveAliases } from '../src/developer-view.mjs';
 import { generate, WRITERS } from '../src/generate/index.mjs';
 import { check, readPolicy, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
 import { discover, errorHookMessages, listPlugins, pluginHelp, readMetadata, runPlugin } from '../src/plugins.mjs';
@@ -98,10 +99,10 @@ Usage:
   prism-code vectors <app.holo | closure-dir> [--allow-unverified]
                                                     replay every acceptance vector through the guest; an altered
                                                     holo is refused, and with --allow-unverified exits 1 after replaying
-  prism-code history <app.holo | closure-dir> [--output <file>]
-                                                    write the acceptance vectors as a history, the holo's first
-  prism-code replay <history | dir>... --holo <app.holo | closure-dir> [--statement <file>] [--json]
-                                                    re-execute histories against this build and compare every
+  prism-code record <app.holo | closure-dir> [--output <file>]
+                                                    write the acceptance vectors as a recording, the holo's first
+  prism-code replay <recording | dir>... --image <app.holo | closure-dir> [--statement <file>] [--json]
+                                                    re-execute recordings against this build and compare every
                                                     outcome: exit 0 unchanged, 1 diverged, 2 could not replay
   prism-code init [<dir>] [--name <name>] [--template <name>] [--sdk-image <ref>] [--force]
                                                     scaffold a project: prism.toml, a language-1.2 model and its
@@ -141,7 +142,7 @@ Usage:
   prism-code check <app.holo> [--policy <file>] [--json]
                                                     judge the holo against a policy and print its verdict:
                                                     exit 0 passed, 1 failed, 2 no verdict
-  prism-code dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+  prism-code dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--image <path>]
                                                     watch the project, rebuild and re-check on every change, and
                                                     serve the local studio at http://localhost:4100: tabs Check, Replay
   prism-code push <app.holo | dir://store:tag> <reference> [--key <private.pem> | --keyless] [--store <dir>]
@@ -210,12 +211,12 @@ Options for verify-attestation:
                       --trusted-root <file>        pin a trusted_root.json; default is the public instance's, fetched over TUF
                       --entries <n>, --timestamps <n>
                                                    least verified log entries and timestamps: 1 and 1 keyless, 0 and 0 with --key
-Options for replay:   --holo <path>                the build to replay against
+Options for replay:   --image <path>               the build to replay against
                       --statement <file>           write the prism/replay/v1 statement there, also when it diverged
                       --json                       the result as one canonical JSON object
-Options for history:  --output <file>              write there instead of stdout
+Options for record:   --output <file>              write there instead of stdout
 Options for run:      --policy <file>              the policy check judges the holo by, as for check
-                      --record <file>              write every dispatch to this history file as it happens
+                      --record <file>              write every dispatch to this recording as it happens
                       --allow-unverified           run a holo that fails check, or a closure; prints a warning, never the default
                       --capabilities <file>        a prism/capabilities/1 file; without one the holo is granted nothing
                       --capability-set <name>      the set to apply, default "default"
@@ -255,7 +256,7 @@ Options for dev:      --port <n>                   the studio's port, default 41
                       --no-open                    do not open the studio in a browser
                       --policy <file>              the policy the Check tab judges by, a file or a shipped name, as for check; an edit to a file re-checks
                       --build <command>            the build, in a shell; default [model].build of prism.toml, then prism-code build --update
-                      --holo <path>                the file the build writes; default the one the build reports
+                      --image <path>               the file the build writes; default the one the build reports
 Options for providers: --target <browser|node>     merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the result as canonical JSON, with the values; text output never prints one
 Options for build --unstable-author:
@@ -336,7 +337,7 @@ const VALUE_OPTIONS = [
   'author-timeout',
   'author-max-tokens',
   'max-iterations',
-  'holo',
+  'image',
   'statement',
   'record',
   'replay',
@@ -400,15 +401,15 @@ async function commandVectors(positional, options) {
   return result.failed.length === 0 && result.total > 0 && app.identities.verified ? 0 : 1;
 }
 
-async function commandHistory(positional, options) {
-  if (positional.length !== 1) return usage('history takes one artifact');
+async function commandRecord(positional, options) {
+  if (positional.length !== 1) return usage('record takes one artifact');
   if (Object.hasOwn(options, 'output') && (typeof options.output !== 'string' || options.output === '')) return usage('--output takes a file');
   const app = await open(positional[0], options);
   await writeHistory(await app.history(), options.output);
   return 0;
 }
 
-const REPLAY_OPTIONS = ['holo', 'statement', 'json', 'model', 'capabilities', 'capability-set'];
+const REPLAY_OPTIONS = ['image', 'statement', 'json', 'model', 'capabilities', 'capability-set'];
 
 /** Exit 0 unchanged, 1 diverged, 2 could not replay, as for `check`. */
 async function commandReplay(positional, options) {
@@ -416,11 +417,11 @@ async function commandReplay(positional, options) {
   if (unknown) return usage(`replay has no option --${unknown}`);
   const bad = missingValue(options);
   if (bad) return usage(`--${bad} takes a value`);
-  if (positional.length === 0) return usage('replay takes at least one history');
-  if (!options.holo) return usage('replay takes --holo <app.holo>, the build to replay against');
+  if (positional.length === 0) return usage('replay takes at least one recording');
+  if (!options.image) return usage('replay takes --image <app.holo>, the build to replay against');
   let run;
   try {
-    run = await replayFiles(await open(options.holo, options), positional, options.statement);
+    run = await replayFiles(await open(options.image, options), positional, options.statement);
   } catch (error) {
     if (!(error instanceof PrismError)) throw error;
     process.stderr.write(`could not replay: ${error.check ?? error.code}: ${error.message}\n`);
@@ -1121,7 +1122,8 @@ async function commandPlugin(command, args) {
 }
 
 async function main(argv) {
-  const [command, ...rest] = argv;
+  // A deprecated verb or flag becomes its new term here, with one warning each (#347).
+  const [command, ...rest] = resolveAliases(argv, (warning) => process.stderr.write(`${warning}\n`), (verb) => BUILTINS.has(verb) && !Object.hasOwn(DELEGATED, verb));
   if (!command || command === '--help' || command === '-h' || command === 'help') {
     process.stdout.write(command ? USAGE + pluginHelp(listPlugins({ builtins: BUILTINS })) : USAGE);
     return command ? 0 : 64;
@@ -1144,8 +1146,8 @@ async function main(argv) {
   switch (command) {
     case 'vectors':
       return commandVectors(positional, options);
-    case 'history':
-      return commandHistory(positional, options);
+    case 'record':
+      return commandRecord(positional, options);
     case 'replay':
       return commandReplay(positional, options);
     case 'inspect':
