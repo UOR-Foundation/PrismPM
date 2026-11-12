@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPairSync } from 'node:crypto';
 import { parseArchive, resolveArchive, appendAttestations } from '../src/index.mjs';
-import { experimental_attest, signStatement } from '../src/attest.mjs';
+import { experimental_attest } from '../src/attest-write.mjs';
+import { signStatement } from '../src/signing.mjs';
 import { formatVerdict, titleOf, LIMITS, EXIT } from '../src/check.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));

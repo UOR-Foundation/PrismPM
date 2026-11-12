@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalJson, parseArchive, resolveArchive } from '../src/archive.mjs';
 import { appendAttestations, BUNDLE_MEDIA_TYPE, readAttestations } from '../src/attestations.mjs';
-import { experimental_attest } from '../src/attest.mjs';
+import { experimental_attest } from '../src/attest-write.mjs';
 import { blake3Hex } from '../src/blake3.mjs';
 import { check } from '../src/check.mjs';
 import { DigestMismatchError, ManifestNotFoundError, PullVerificationError, RegistryError, SubjectMismatchError, VerificationError } from '../src/errors.mjs';

@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { experimental_attest } from '../src/attest.mjs';
+import { experimental_attest } from '../src/attest-write.mjs';
 import { parseArchive, resolveArchive } from '../src/archive.mjs';
 import { check } from '../src/check.mjs';
 import { PullVerificationError } from '../src/errors.mjs';
