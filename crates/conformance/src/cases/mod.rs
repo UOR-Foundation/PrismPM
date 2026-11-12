@@ -4219,13 +4219,13 @@ fn verify_security(root: &Path, id: &str) {
             assert_contains(root, "crates/prismpm/src/config.rs", &["ParentDir"]);
         }
         "SE-03" => {
-            let source = read(root, "crates/prismpm/src/verification.rs");
+            let source = read(root, "crates/prismpm/src/sdk/process.rs");
             assert!(source.contains("Command::new"));
             assert!(!source.contains("sh -c"));
         }
         "SE-04" => assert_contains(
             root,
-            "crates/prismpm/src/verification.rs",
+            "crates/prismpm/src/sdk/process.rs",
             &["env_clear", "LC_ALL", "LANG"],
         ),
         "SE-05" => assert_contains(

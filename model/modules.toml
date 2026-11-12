@@ -629,23 +629,11 @@ module = "errors"
 path = "sdk/npm/verify/"
 module = "verify"
 
-[[pending]]
-from = "crates/prismpm/src/replay/mod.rs"
-to = "crates/prismpm/src/verification.rs"
-cut = "Process helpers move to verify"
-
-[[pending]]
-from = "crates/prismpm/src/sdk.rs"
-to = "crates/prismpm/src/verification.rs"
-cut = "Process helpers move to verify"
-
 # One member per line, so that removing one merges cleanly.
 [legacy_cycle]
 members = [
     "acceptance",
     "application_build",
-    "authority",
-    "browser_oracle",
     "controller",
     "deployment",
     "exporter",
