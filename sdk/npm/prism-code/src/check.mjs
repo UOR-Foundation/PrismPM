@@ -119,12 +119,13 @@ async function readReplay(path) {
 function withoutIntegrity(verdict, { footer, fingerprint }) {
   const { RANK } = ASSURANCE;
   const message = `The footer ${footer} does not equal the BLAKE3 of everything before it, ${fingerprint}.`;
-  const kept = verdict.reasons.filter((r) => r.check !== 'policy.level');
+  const kept = verdict.reasons.filter((r) => r.check !== 'policy.level' && r.check !== 'policy.integrity');
   const reasons = [{ check: 'holo.integrity', withholds: 'P1', message }, ...kept];
   const level = 'P0';
-  let passed = !kept.some((r) => r.withholds === null);
+  // An integrity failure fails every policy, P0 included.
+  const passed = false;
+  reasons.push({ check: 'policy.integrity', withholds: null, message: 'The holo is damaged, and an integrity failure fails every policy, whatever its minimum.' });
   if (RANK[level] < RANK[verdict.policy.minimum]) {
-    passed = false;
     reasons.push({ check: 'policy.level', code: 'PP5601', withholds: null, message: `The level is ${level}; the policy requires ${verdict.policy.minimum} or above.` });
   }
   return { level, passed, reasons };

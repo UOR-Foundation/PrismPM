@@ -35,7 +35,6 @@
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
- *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
  *   prism-code setup [--agent <id>] [--pull] [--dry-run] add the UOR MCP server to every agent here, register holo:// (experimental)
  *   prism-code open <holo://build?agent=<id>&q=<sentence>> [--dry-run]
  *                                                     hand the sentence to the agent the link names (experimental)
@@ -156,10 +155,9 @@ Usage:
                                                     a verified holo is also kept in the local image store
   prism-code build --check [--hosted | --local] [args]
                                                     validate the model, write nothing: prismpm check in the SDK image
-                                                    the nearest prismpm.lock pins, when the image is here and so is a
-                                                    prismpm.toml (or --local); else prism.toml here and lexlean check on
-                                                    the hosted verifier: syntax and types, not proofs (verify --lean
-                                                    proves), and it says what it skipped
+                                                    the nearest prismpm.lock pins, on this machine. Only --hosted sends
+                                                    src/ to the hosted verifier for lexlean check (stored unlisted, not
+                                                    private): syntax and types, not proofs, and it says what it skipped
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code build --remote github [--repo <owner/name>] [--ref <commit>] [--timeout <s>] [--allow-dirty] [--policy <file>] [--json]
                                                     the repository's own GitHub Actions builds one commit (pushed to
@@ -167,15 +165,11 @@ Usage:
                                                     what comes back: the commit, the digests, the signed provenance, the
                                                     verdict and every vector, before anything lands under .prism/build/.
                                                     No Docker here. Token: GITHUB_TOKEN, GH_TOKEN or gh (experimental)
-  prism-code build --unstable-author [--check] [--no-cache] [--project <dir>]
-                                                    experimental: an agent writes model/ from examples/, intent.md
-                                                    and types/, then the proof and the examples gate the build;
-                                                    an unchanged spec never calls the agent
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
   prism-code verify --lean [--hosted | --local] [--project <dir>] [--all] [args]
                                                     lexlean verify on the project's LexLean project: every theorem through
                                                     Lean and leanchecker with its exact axioms, and nothing after; about a
-                                                    minute. In the SDK image when it is here (or --local), else on the
+                                                    minute, in the SDK image on this machine. Only --hosted uses the
                                                     hosted verifier, which sends src/ (stored unlisted: not searchable, but
                                                     readable by anyone with the draft's ID), passes only
                                                     when every entrypoint is verified, and writes .lexlean/hosted/ (experimental)
@@ -238,9 +232,6 @@ Options for check:    --policy <file>              a Rego file (.rego), the name
                       --certificate-oidc-issuer <url>, and pin --trusted-root <file>. Without a signer a signed
                                                    holo is P0: the provenance statement supports P1, the proof statement P2
                       --json                       the verdict as one canonical JSON object
-                      --unstable-author            also prove the holo came from this project's spec
-                      --project <dir>              with --unstable-author, the project; default the current directory
-                      --reference <holo>           with --unstable-author, compare Core-Wasm, acceptance and the other sections
                       check takes a holo; the model check is build --check
 Options for push:     --key <private.pem>          sign a statement naming the manifest, per predicate in the holo, for cosign verify-attestation
                       --keyless                    the same with an OIDC token, as attest does; --signing-config for a private instance
@@ -264,12 +255,6 @@ Options for dev:      --port <n>                   the studio's port, default 41
                       --image <path>               the file the build writes; default the one the build reports
 Options for providers: --target <browser|node>     merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the result as canonical JSON, with the values; text output never prints one
-Options for build --unstable-author:
-                      --author-command <path>      the agent process; default the bundled adapter, which needs @anthropic-ai/sdk
-                      --author-model <id>          the model id to pin in prismpm.lock; default the lock's, then claude-opus-5-5
-                      --author-timeout <seconds>   per attempt, default 600
-                      --author-max-tokens <n>      stop after this many tokens across attempts, default 2000000
-                      --max-iterations <n>         attempts before the build fails, default 10
 Options for export:   --out <dir>                  a new directory name in the project, default export
                       --tar <file>                 a new <name>.tar in the project instead of a directory
                       --project <dir>              the project holding .prism/oci, default the current directory
@@ -336,12 +321,6 @@ const VALUE_OPTIONS = [
   'capability-set',
   'policy',
   'target',
-  'reference',
-  'author-command',
-  'author-model',
-  'author-timeout',
-  'author-max-tokens',
-  'max-iterations',
   'image',
   'statement',
   'record',
@@ -581,7 +560,7 @@ async function commandTransfer(verb, positional, options) {
   return verb === 'push' ? cli.runPush(positional, options, usage) : cli.runPull(positional, options, usage);
 }
 
-const CHECK_OPTIONS = ['policy', 'replay', 'json', 'key', 'certificate-identity', 'certificate-identity-regexp', 'certificate-oidc-issuer', 'trusted-root', 'unstable-author', 'project', 'reference'];
+const CHECK_OPTIONS = ['policy', 'replay', 'json', 'key', 'certificate-identity', 'certificate-identity-regexp', 'certificate-oidc-issuer', 'trusted-root'];
 
 /** True when `check` was given a holo, a path ending in `.holo` or a file; otherwise it is the deprecated `build --check`. */
 function namesHolo(positional) {
@@ -626,24 +605,15 @@ async function commandCheck(positional, options) {
   if (Object.hasOwn(options, 'policy') && (typeof options.policy !== 'string' || options.policy === '')) return usage('--policy takes a file');
   if (Object.hasOwn(options, 'replay') && (typeof options.replay !== 'string' || options.replay === '')) return usage('--replay takes a file');
   if (positional.length !== 1) return usage('check takes one holo');
-  if (!options['unstable-author'] && (options.project !== undefined || options.reference !== undefined)) return usage('--project and --reference need --unstable-author');
   let verdict;
-  let authoring = null;
   try {
     verdict = await check(positional[0], { policy: options.policy, replay: options.replay, signer: await signerOf(options) });
-    if (options['unstable-author']) {
-      const { runAuthorCheck } = await import('../src/author/cli.mjs');
-      authoring = await runAuthorCheck(positional[0], options);
-    }
   } catch (error) {
     if (!(error instanceof PrismError)) throw error;
     process.stderr.write(`no verdict: ${error.check ?? error.code}: ${error.message}\n`);
     return CHECK_EXIT.NO_VERDICT;
   }
-  if (options.json && authoring) process.stdout.write(`{"authoring":${authoring.json},"verdict":${verdictJson(verdict).trimEnd()}}\n`);
-  else process.stdout.write(options.json ? verdictJson(verdict) : formatVerdict(verdict, positional[0]));
-  if (!options.json && authoring) process.stdout.write(authoring.text);
-  if (authoring && !authoring.passed) return CHECK_EXIT.FAILED;
+  process.stdout.write(options.json ? verdictJson(verdict) : formatVerdict(verdict, positional[0]));
   return exitCodeOf(verdict);
 }
 
@@ -971,21 +941,29 @@ function findLock(cwd) {
   }
 }
 
-/** Why a tier runs hosted, as its first line says. */
+/** Why a tier runs hosted, as its first line says. Only `--hosted` sends a project anywhere. */
 const HOSTED_WHY = {
   asked: '--hosted asked for it',
-  'no-lock': 'there is no prismpm.lock here or above',
-  'no-image': 'the SDK image is not on this machine',
-  'no-project': 'prismpm check needs a prismpm.toml here, and this is a LexLean project',
 };
 
 /**
- * Where a LexLean tier runs: `--local` in the image, `--hosted` on the UOR MCP
- * server; with neither, in the image when the nearest lockfile's image is on this
- * machine and `needs` (a file the local tier reads) is here, else hosted, with
- * `why` one of HOSTED_WHY. Returns `{ where, image, rest, forced, why }` or `{ problem }`.
+ * Refuse a local tier with no lockfile to name its image, and name the opt-in
+ * to the hosted verifier. Prism never falls back to it on its own. Exit 64, as
+ * a missing lockfile always has.
  */
-function tierRoute(cwd, args, { needs = null } = {}) {
+function localUnavailable(verb) {
+  process.stderr.write(`prismpm.lock not found here or above. ${verb} runs on this machine, in the SDK image the lockfile pins; Prism does not send your project anywhere on its own. Pass --hosted to use the hosted verifier, which stores src/ unlisted, not privately.\n`);
+  return 64;
+}
+
+/**
+ * Where a LexLean tier runs: in the image on this machine, unless `--hosted`
+ * sends it to the UOR MCP server. With neither flag it is local; a missing
+ * image is pulled or reported by the local tier itself, and `missing` says
+ * there is no lockfile, so the caller refuses instead of sending the project
+ * away. Returns `{ where, image, rest, forced, why, missing }` or `{ problem }`.
+ */
+function tierRoute(cwd, args) {
   const local = args.includes('--local');
   const hosted = args.includes('--hosted');
   if (local && hosted) return { problem: '--local and --hosted name opposite places; give one' };
@@ -994,10 +972,7 @@ function tierRoute(cwd, args, { needs = null } = {}) {
   const image = lock ? sdkImageFromLock(readFileSync(lock.path, 'utf8')) : null;
   if (local) return { where: 'local', image, rest, forced: true };
   if (hosted) return { where: 'hosted', image, rest, forced: true, why: 'asked' };
-  if (image === null) return { where: 'hosted', image, rest, forced: false, why: 'no-lock' };
-  if (!hostImagePresent({ image })) return { where: 'hosted', image, rest, forced: false, why: 'no-image' };
-  if (needs && !existsSync(resolve(cwd, needs))) return { where: 'hosted', image, rest, forced: false, why: 'no-project' };
-  return { where: 'local', image, rest, forced: false };
+  return { where: 'local', image, rest, forced: false, missing: image === null };
 }
 
 /** What a hosted tier tells the user about the files it sends. */
@@ -1035,13 +1010,8 @@ async function commandLean(args) {
   const { explicit, rest } = taken;
   const all = rest.includes('--all');
   const unknown = rest.filter((a) => a !== '--all');
-  // lexlean's own flags mean the local tier, unless the caller asked for the hosted one.
-  if (route.where === 'hosted' && unknown.length > 0 && !route.forced) route.where = 'local';
   if (route.where === 'local') {
-    if (route.image === null) {
-      process.stderr.write('prismpm.lock not found here or above\n');
-      return 64;
-    }
+    if (route.missing) return localUnavailable('verify --lean');
     const dir = lexleanProjectDir(cwd, await modelSource(cwd), explicit);
     return commandDelegate('verify', ['--project', lexleanProjectArgument(cwd, dir), ...rest], { program: 'lexlean', image: route.image });
   }
@@ -1070,12 +1040,11 @@ async function commandLean(args) {
 /** T0 of the tiers: `prismpm check` in the image, or, with no image, the manifest here and `lexlean check` of the draft's files hosted. */
 async function commandTierCheck(args) {
   const cwd = process.cwd();
-  const route = tierRoute(cwd, args, { needs: 'prismpm.toml' });
+  const route = tierRoute(cwd, args);
   if (route.problem) return usage(route.problem);
   const taken = takeProject(route.rest);
   if (taken.problem) return usage(taken.problem);
-  // prismpm check's own flags mean the local tier, unless the caller asked for the hosted one.
-  if (route.where === 'local' || (taken.rest.length > 0 && !route.forced)) return commandDelegate('check', route.rest, { image: route.image });
+  if (route.where === 'local') return route.missing ? localUnavailable('build --check') : commandDelegate('check', route.rest, { image: route.image });
   if (taken.rest.length > 0) return usage(`the hosted check takes only --project, not ${taken.rest.join(' ')}; run prismpm check's own flags in the image with --local`);
   let failed = false;
   if (existsSync(resolve(cwd, 'prism.toml'))) {
@@ -1104,10 +1073,7 @@ async function commandTierCheck(args) {
       failed = true;
     }
   }
-  const skipped = {
-    'no-lock': 'there is no prismpm.lock here or above to check',
-    'no-project': 'it reads a prismpm.toml, and this LexLean project has none; the lockfile and its SDK pins are checked by the build',
-  }[route.why] ?? 'the lockfile and its SDK pins are checked only in the image; --local runs it there, and pulls the image first if it is missing';
+  const skipped = 'the lockfile and its SDK pins are checked only in the image; run without --hosted to check them there';
   process.stdout.write(`skipped  prismpm check: ${skipped}\n`);
   return failed ? 1 : 0;
 }
@@ -1225,14 +1191,8 @@ async function main(argv) {
       return usage('check takes a holo; the model check is prism-code build --check, which runs prismpm check (the spelling without a holo was removed, #584)');
     case 'build':
       if (options.remote !== undefined) return commandRemoteBuild(positional, options);
-      if (rest.includes('--unstable-author')) {
-        const { runAuthorBuild } = await import('../src/author/cli.mjs');
-        const outcome = await runAuthorBuild({ positional, options }, usage);
-        if (typeof outcome === 'number') return outcome;
-        // A project with no spec files builds as it does without the flag.
-        const flags = rest.filter((a) => a !== '--unstable-author');
-        return flags.includes('--check') ? commandDelegate('check', flags.filter((a) => a !== '--check')) : commandDelegate('build', flags);
-      }
+      // An app comes from one prism/spec/1 spec through the guided path; no agent writes the model (the author route was removed).
+      if (rest.includes('--unstable-author')) return usage('unknown option --unstable-author: an agent may not write the model. Write a prism/spec/1 spec and build it through the guided path, prism-code mcp');
       if (rest.includes('--check')) return commandTierCheck(rest.filter((a) => a !== '--check'));
       return commandDelegate('build', rest);
     case 'verify':

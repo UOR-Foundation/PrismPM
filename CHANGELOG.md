@@ -58,6 +58,7 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - The OSCAL structural validator is bound through `standards.lock` as the `oscal-1.1.0-structural` oracle, the `oscal` profile of `prismpm oracle` (#209, SPEC §10.1). Acceptance is JSON structural validity only, not control implementation or whole-standard conformance.
 
 ### Breaking Changes
+- An integrity failure fails every policy, P0 included. The Rust verdict, `@prism-code/verify` and `prism-code check` add the reason `policy.integrity` with no level withheld whenever `holo.integrity` fails, so a damaged holo never passes a policy whose minimum is P0. The verdict golden `calculator.tampered-guest.json` gains the reason.
 
 - `prismpm::holo::canonical::{encode_canonical, decode_canonical}` moved to `prismpm::holo::model_document`, since they validate the model document and the canonical value codec stays in `errors` (#448).
 - `CanonicalDocument::parse` and `from_value` refuse the 19 contracts whose semantic checks belong to another module (SDK locks, acceptance records, browser receipts, native-library evidence, model documents) with PP9001. Parse them with the owner's `parse_contract`/`contract_from_value` (for example `prismpm::sdk::contract_from_value`), or with `prismpm::contract_owners::{parse, from_value}` when you hold only the id. The checks themselves are unchanged (#448, #449).

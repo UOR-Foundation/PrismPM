@@ -265,7 +265,7 @@ fn a_tampered_guest_blob_fails_holo_integrity_twice_and_drops_to_p0() {
         [
             &["holo.integrity", "holo.integrity"][..],
             &STATEMENTS[..],
-            &["policy.level"]
+            &["policy.integrity", "policy.level"]
         ]
         .concat()
     );
@@ -279,8 +279,12 @@ fn a_tampered_guest_blob_fails_holo_integrity_twice_and_drops_to_p0() {
         "Section 4 is labelled {GUEST_LABEL} but its content hashes to blake3:"
     )));
     assert_eq!(verdict.reasons[0].withholds, Some(Level::P1));
-    // P0 asks only that check could read the file, so a policy of P0 accepts even a damaged holo.
-    assert!(verify(&bytes, &p0()).unwrap().passed);
+    // Planted defect G7: an integrity failure fails every policy, so even a policy of P0 refuses a damaged holo.
+    assert!(!verify(&bytes, &p0()).unwrap().passed);
+    assert!(verdict
+        .reasons
+        .iter()
+        .any(|r| r.check == "policy.integrity" && r.withholds.is_none()));
 }
 
 #[test]
@@ -290,7 +294,12 @@ fn a_resealed_footer_does_not_hide_a_changed_blob() {
     let verdict = verify(&bytes, &Policy::default()).unwrap();
     assert_eq!(
         checks(&verdict),
-        [&["holo.integrity"][..], &STATEMENTS[..], &["policy.level"]].concat()
+        [
+            &["holo.integrity"][..],
+            &STATEMENTS[..],
+            &["policy.integrity", "policy.level"],
+        ]
+        .concat()
     );
     assert!(verdict.reasons[0]
         .message

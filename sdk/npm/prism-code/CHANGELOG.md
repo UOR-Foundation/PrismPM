@@ -10,6 +10,11 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Breaking Changes
 
+- One canonical path for every app. `build --unstable-author` and `check <holo> --unstable-author`, where an agent wrote the model, are removed; `build --unstable-author` now exits 64 with `unknown option --unstable-author`. An app comes from one `prism/spec/1` spec through the guided path.
+- Nothing is sent to the hosted verifier unless asked. `verify --lean` and `build --check` run in the SDK image on this machine and use the hosted verifier only with `--hosted`; with no lockfile they exit 64 and name `--hosted`. The guided path proves locally unless `PRISM_CODE_TIER=hosted`, and builds locally unless the caller names a repository or `remote: github`.
+- An integrity failure fails every policy, P0 included. `check` adds the reason `policy.integrity` and exits 1 for a damaged holo whatever the policy's minimum; `run-policy.json` with `minimum: P0` no longer passes one.
+- The spec is never altered. Text that the model or its documents cannot carry as written is refused as `text.character`, `text.length` or `text.space`, naming the character, its code point and its JSON path, instead of being stripped, collapsed or cut.
+
 - The developer view's glossary (#346, #347) renames two spellings of the command line, each kept as a deprecated alias through 0.8 that prints one warning naming the new term and is removed in 0.9.0:
 
   | Was | Now | Why |

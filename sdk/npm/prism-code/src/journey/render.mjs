@@ -22,7 +22,12 @@ const camel = (word) => {
   return p[0].toLowerCase() + p.slice(1);
 };
 const hex = (text) => `0x${Buffer.from(typeof text === 'string' ? new TextEncoder().encode(text) : text).toString('hex')}`;
-const quote = (text) => `"${String(text).replace(/[^\x20-\x7e]/g, '').replace(/["\\]/g, '')}"`;
+/** A LexLean string literal. Text is refused, never altered: validateSpec admits only printable ASCII without a quote or a backslash here. */
+const quote = (text) => {
+  const t = String(text);
+  if (/[^ -~]|["\\]/.test(t)) throw new Error(`render refuses ${JSON.stringify(t)}: a LexLean string here carries printable ASCII without a quote or a backslash`);
+  return `"${t}"`;
+};
 
 /** Every identifier the model uses, derived once so the model, the vectors and SPEC.md agree. */
 export function names(spec) {
@@ -221,7 +226,7 @@ export function declarations(spec, n = names(spec)) {
     'application',
     [],
     'Foundation.View.Text.V1.Model::TextApplication',
-    `(record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := ${quote(stem(spec.title))}, cargoName := ${quote(`prism-${spec.name}`)}, cargoVersion := "0.1.0", cargoDescription := ${quote(spec.purpose.slice(0, 200) || spec.title)}, cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons ${quote(root)} (nil String)), acceptanceVectors := ${vectorList}, entryRoot := ${quote(root)}, coreContract := "hologram:guest/core-wasm@1", requestMaximum := (${limits.requestMaximum} : UInt32), responseMaximum := (${limits.responseMaximum} : UInt32), guestAllocationMaximum := (${limits.guestAllocationMaximum} : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := ${view}})`,
+    `(record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := ${quote(stem(spec.title))}, cargoName := ${quote(`prism-${spec.name}`)}, cargoVersion := "0.1.0", cargoDescription := ${quote(spec.purpose || spec.title)}, cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons ${quote(root)} (nil String)), acceptanceVectors := ${vectorList}, entryRoot := ${quote(root)}, coreContract := "hologram:guest/core-wasm@1", requestMaximum := (${limits.requestMaximum} : UInt32), responseMaximum := (${limits.responseMaximum} : UInt32), guestAllocationMaximum := (${limits.guestAllocationMaximum} : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := ${view}})`,
   );
 
   return out;

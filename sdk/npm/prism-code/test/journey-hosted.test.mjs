@@ -59,6 +59,8 @@ test('where the proof runs: PRISM_CODE_TIER chooses, and a diagnostic of the hos
   const { dir, session } = app();
   assert.equal(proveWhere(dir, session, { env: { PRISM_CODE_TIER: 'hosted' } }), 'hosted');
   assert.equal(proveWhere(dir, session, { env: { PRISM_CODE_TIER: 'local' } }), 'local');
+  // Planted defect G9: nothing set, no Docker and no image here. The proof stays local and never goes hosted on its own.
+  assert.equal(proveWhere(dir, session, { env: {} }), 'local');
   assert.deepEqual(fromHosted({ code: 'LLV7002', severity: 'error', message: 'm', primary: { path: 'src/A.lex.tex', line_start: 77, column_start: 1 } }), { severity: 'error', code: 'LLV7002', message: 'm', span: { file: 'src/A.lex.tex', line: 77, column: 1 } });
   assert.equal(fromHosted({ code: 'X', message: 'm' }).span, null);
   assert.equal(isWarning(fromHosted(WARNING)), true, 'Lean warnings arrive as LLV7002 errors and are not failures');
@@ -128,16 +130,12 @@ function provedApp() {
   return { dir, session };
 }
 
-test('the build goes where it can: the local image when it is here, else GitHub when signed in, else local; remote and PRISM_CODE_TIER choose', () => {
+test('the build is local unless the caller asks for GitHub: no token, image or Docker state moves it (G9)', () => {
   const { dir, session } = provedApp();
-  const where = (opts) => buildWhere(dir, session, { env: {}, docker: () => ({}), image: () => false, github: () => false, ...opts });
-  assert.equal(where({ image: () => true }), 'local', 'Docker and the image are here');
-  assert.equal(where({ github: () => true }), 'github', 'no image, signed in to GitHub');
-  assert.equal(where({ docker: () => ({ error: 'no docker' }), github: () => true }), 'github', 'no Docker, signed in');
-  assert.equal(where({}), 'local', 'neither: local, which downloads the image');
-  assert.equal(where({ remote: 'local', github: () => true }), 'local');
-  assert.equal(where({ remote: 'github', image: () => true }), 'github');
-  assert.equal(where({ env: { PRISM_CODE_TIER: 'local' }, github: () => true }), 'local');
+  assert.equal(buildWhere(dir, session, {}), 'local');
+  assert.equal(buildWhere(dir, session, { remote: 'local' }), 'local');
+  assert.equal(buildWhere(dir, session, { remote: 'github' }), 'github');
+  assert.equal(buildWhere(dir, session, { env: { GITHUB_TOKEN: 'x' } }), 'local', 'a GitHub token alone never sends the build away');
 });
 
 /** Stand-ins for every step of a GitHub build that would touch GitHub; `calls` records them. */

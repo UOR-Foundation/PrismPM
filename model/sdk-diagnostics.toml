@@ -127,36 +127,6 @@ capability = "SE-09"
 statement = "prism.auth reads and writes Docker's credential stores, which this build of prism-code leaves out; use it in Node."
 
 [[error]]
-code = "author.agent"
-capability = "DK-41"
-statement = "The agent that drafts the model could not start, exited with an error, or gave an answer that is not JSON, is too large, or does not answer the spec's sentences one to one; nothing is compiled."
-
-[[error]]
-code = "author.example"
-capability = "DK-41"
-statement = "An example of the spec is missing, is not a .json file, or holds hex that is not lowercase."
-
-[[error]]
-code = "author.intent"
-capability = "DK-41"
-statement = "An intent sentence of the spec breaks the sentence rules: one sentence per line, ending with a period, with exactly one of always, never or only."
-
-[[error]]
-code = "author.model"
-capability = "DK-41"
-statement = "The generated model directory changed after it was generated from the spec, or has no sidecar record, so it is not regenerated over."
-
-[[error]]
-code = "author.spec"
-capability = "DK-41"
-statement = "The spec directory is not a plain directory of regular files, or exceeds the file count or byte limit."
-
-[[error]]
-code = "author.types"
-capability = "DK-41"
-statement = "A types file of the spec is not TypeScript (.ts), JSON Schema (.json) or Pydantic (.py)."
-
-[[error]]
 code = "axioms.probe"
 capability = "DK-41"
 statement = "Lean refused the axiom probe, said nothing about a declaration, or left no audit records."
@@ -462,24 +432,9 @@ capability = "OC-11"
 statement = "load or images.push was given a source that is not bytes, a Blob, a path or a URL; until the local image store (#349) a pushed image comes as options.source."
 
 [[error]]
-code = "lock.changed"
-capability = "DK-41"
-statement = "prismpm.lock changed while the build was running, so the build is not recorded; rerun it."
-
-[[error]]
 code = "lock.image"
 capability = "OC-11"
 statement = "prismpm.lock does not select an immutable SDK image, or the image named is not immutable."
-
-[[error]]
-code = "lock.invalid"
-capability = "DK-41"
-statement = "prismpm.lock is not JSON."
-
-[[error]]
-code = "lock.missing"
-capability = "DK-41"
-statement = "The project has no prismpm.lock; bind an SDK first with prism-code init --sdk-image."
 
 [[error]]
 code = "manifest.env"

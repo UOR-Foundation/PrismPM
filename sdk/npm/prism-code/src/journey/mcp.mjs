@@ -115,18 +115,18 @@ const TOOLS = [
   },
   {
     name: 'prism_prove',
-    description: 'Write the LexLean model and ask Lean to prove every property: in the SDK image when it is on this machine, else on the hosted verifier at https://mcp.uor.foundation/, which receives the files under prism/src/ and stores them unlisted (not searchable, but readable by anyone with its draft ID). Takes one to five minutes. Returns state running while it works; call again to keep waiting.',
+    description: 'Write the LexLean model and ask Lean to prove every property, in the SDK image on this machine. Nothing is sent anywhere: the hosted verifier at https://mcp.uor.foundation/ is used only when the user sets PRISM_CODE_TIER=hosted, and it stores the files under prism/src/ unlisted, not privately. Takes one to five minutes. Returns state running while it works; call again to keep waiting.',
     inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' } }, additionalProperties: false },
   },
   {
     name: 'prism_build',
-    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. Where it builds is chosen for the user: in the SDK image when it is on this machine, else on GitHub Actions when the user is signed in to GitHub (no Docker here; this machine verifies what comes back), else in the SDK image after downloading it (about 5.5 GB). A GitHub build of an app with no repository returns needs "repository" and a suggested name: ask the user to approve creating that public repository, then call again with repository set. Prism creates it from UOR-Foundation/template, so the app gets the template\'s frame, page and gate; writes the app, its claims, tests and page into it; pushes; and once the gate and the page pass, returns the live GitHub Pages URL, after checking the live holo here. A GitHub build takes ten to fifteen minutes. Returns state running while it works; call again to keep waiting.',
+    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. It builds in the SDK image on this machine, downloading it first if it is missing (about 5.5 GB). It builds on GitHub Actions only when the user asks for it by naming a repository (remote github): ask the user before doing so, since the app then lives in a public repository. Prism creates it from UOR-Foundation/template, so the app gets the template\'s frame, page and gate; writes the app, its claims, tests and page into it; pushes; and once the gate and the page pass, returns the live GitHub Pages URL, after checking the live holo here. A GitHub build takes ten to fifteen minutes. Returns state running while it works; call again to keep waiting.',
     inputSchema: {
       type: 'object',
       properties: {
         wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' },
         overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' },
-        remote: { type: 'string', enum: ['github', 'local'], description: 'Where to build, when the user asks for one: github (the repository\'s Actions) or local (the SDK image). Omit to let Prism choose.' },
+        remote: { type: 'string', enum: ['github', 'local'], description: 'Where to build, when the user asks for one: github (the repository\'s Actions) or local (the SDK image). Omit to build locally.' },
         repository: { type: 'string', description: 'owner/name of the GitHub repository to create for the app, only after the user approved it.' },
       },
       additionalProperties: false,
