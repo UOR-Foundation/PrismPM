@@ -563,7 +563,7 @@ pub fn run_at(root: &Path, id: &str) {
             id,
             &[
                 ("sdk/npm/prism-code/test/errors-namespace.test.mjs", 8),
-                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 4),
+                ("sdk/npm/prism-code/test/errors-registered.test.mjs", 6),
             ],
             "600000",
         ),
