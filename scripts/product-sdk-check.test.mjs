@@ -143,7 +143,7 @@ test('actual deadline kills descendant process group and cannot hang on retained
  const before=Date.now();await assert.rejects(()=>command(process.execPath,['-e',source,pidFile],{timeout:1000}),/timed out/);
  assert(Date.now()-before<5000,'deadline must not wait for descendant pipe closure');
  const pid=Number(readFileSync(pidFile,'utf8'));assert(Number.isSafeInteger(pid)&&pid>1);
- const state=()=>{try{return readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1][0];}catch(error){if(error.code==='ENOENT')return null;throw error;}};
+ const state=()=>{try{return readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1][0];}catch(error){if(error.code==='ENOENT'||error.code==='ESRCH')return null;throw error;}};
  t.after(()=>{if(!['Z',null].includes(state()))try{process.kill(pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}});
  for(let attempt=0;attempt<30&&!['Z',null].includes(state());attempt++)await new Promise(resolve=>setTimeout(resolve,10));
  assert(['Z',null].includes(state()),'timed-out descendant must not remain executing');

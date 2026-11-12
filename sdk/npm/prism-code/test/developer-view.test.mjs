@@ -9,6 +9,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPrism } from '../src/index.mjs';
 import { DELEGATED } from '../src/docker.mjs';
+import { GROUPS } from '../src/cli/index.mjs';
 import { ALIASES, SURFACE_SCHEMA, aliasWarning, developerSurface, resolveAliases } from '../src/developer-view.mjs';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
@@ -21,7 +22,7 @@ const help = () => {
   return r.stdout;
 };
 
-const surface = () => developerSurface({ usage: help(), client: createPrism(), delegated: Object.keys(DELEGATED) });
+const surface = () => developerSurface({ usage: help(), client: createPrism(), delegated: Object.keys(DELEGATED), groups: Object.keys(GROUPS) });
 
 test('developer-surface.json is the CLI help, the delegated verbs and the client, as the glossary check reads them', () => {
   const text = `${JSON.stringify(surface(), null, 2)}\n`;
