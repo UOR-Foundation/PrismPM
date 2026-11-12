@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {capture} from './library-sdk-check.mjs';
 import {lockFixture,resultFixture,qualificationFixture} from './library-sdk-fixture.mjs';
+import {captureOverlay,stageOverlay} from '../sdk/qualification-overlay.mjs';
 import {historicalLock,migrationChecks,expectedMigrationProcesses} from '../sdk/migration-qualification.mjs';
 
 const source=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -22,6 +23,8 @@ const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\\n')
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
 const id='c'.repeat(64);
 if(args[0]==='pull')process.exit(0);
+if(args[0]==='volume'&&args[1]==='create'){console.log((earlier.filter(row=>row[0]==='volume'&&row[1]==='create').length===0?'d':'e').repeat(64));process.exit(0);}
+if(args[0]==='volume'&&args[1]==='rm')process.exit(0);
 if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linux',Architecture:process.arch==='x64'?'amd64':'arm64',RepoDigests:[process.env.RECORDED_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.RECORDED_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.4.0'}}}]));process.exit(0);}
 if(args[0]==='container'&&args[1]==='create'){console.log(id);process.exit(0);}
 if(args[0]==='container'&&args[1]==='cp'){
@@ -35,6 +38,7 @@ if(args[0]==='container'&&args[1]==='cp'){
 }
 if(args[0]==='container'&&args[1]==='start'){
  const created=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1);
+ if(created.includes('stage')){import(require('node:url').pathToFileURL(path.join(root,'sdk/qualification-overlay.mjs')).href).then(module=>{console.log(process.env.RECORDED_OVERLAY_OUTPUT===undefined?JSON.stringify(module.captureOverlay(root)):process.env.RECORDED_OVERLAY_OUTPUT);process.exit(Number(process.env.RECORDED_OVERLAY_STATUS||0));});return;}
  if(created.includes('acquire-lock')){process.stdout.write(process.env.RECORDED_LOCK_OUTPUT===undefined?fs.readFileSync(process.env.RECORDED_ACQUISITION):process.env.RECORDED_LOCK_OUTPUT);process.exit(Number(process.env.RECORDED_START_STATUS||0));}
  if(created.includes('sdk/exporter-seed-custody.integration.mjs')){process.stdout.write(process.env.RECORDED_CUSTODY_OUTPUT===undefined?'{"scope":"filesystem-custody-only","checks":6,"status":"passed"}':process.env.RECORDED_CUSTODY_OUTPUT);process.exit(Number(process.env.RECORDED_CUSTODY_STATUS||0));}
  if(!fs.readFileSync(0).equals(fs.readFileSync(process.env.RECORDED_LOCK)))process.exit(66);
@@ -107,16 +111,31 @@ async function accepted(context){
  assert.equal(retained.schema,'prismpm/sdk-native-metadata-evidence/1');assert.equal(retained.scope,'original-native-gate-inputs-only');
  assert.equal(retained.source_revision,revision);assert.equal(retained.sdk_image,image);
  assert.deepEqual(retained.files.map(row=>row.path),['acquisition.json','compiler.json','custody.json','image.json','inventory.json','result.json','source.json','standards.lock']);
- const created=calls.filter(row=>row[0]==='container'&&row[1]==='create');assert.equal(created.length,5);
+ const created=calls.filter(row=>row[0]==='container'&&row[1]==='create');
+ if(context.env.PRISMPM_QUALIFY_SOURCE){
+  assert.equal(created.length,6);
+  const stage=created.shift();
+  for(const arg of ['--read-only','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges'])assert.ok(stage.includes(arg));
+  assert.equal(stage[stage.indexOf('--user')+1],'0:0');
+  assert.equal(stage[stage.indexOf('--entrypoint')+1],'node');
+  assert.deepEqual(stage.slice(-3),['stage','/run/prismpm-harness','/run/prismpm-overlay']);
+  for(const name of ['scripts','sdk'])assert.ok(stage.includes('type=bind,source='+context.root+'/'+name+',target=/run/prismpm-harness/'+name+',readonly'));
+  for(const phase of created.slice(1)){
+   for(const [name,id] of [['scripts','d'],['sdk','e']])assert.ok(phase.includes('type=volume,source='+id.repeat(64)+',target=/opt/prismpm/share/conformance-root/'+name+',volume-nocopy,readonly'));
+   assert.ok(!phase.some(arg=>arg.startsWith('type=bind,source='+context.root+'/')),'consumer cannot bind the runner-owned harness');
+  }
+  assert.deepEqual(calls.filter(row=>row[0]==='volume'&&row[1]==='rm').map(row=>row[2]),['d'.repeat(64),'e'.repeat(64)]);
+ }
+ assert.equal(created.length,5);
  const online=created[1];for(const arg of ['--read-only','--network','bridge','--cap-drop','ALL','--security-opt','no-new-privileges','--memory','512m','--pids-limit','128','DOCKER_CONFIG=/run/prismpm-registry-auth'])assert.ok(online.includes(arg),arg);
  assert.deepEqual(online.slice(-4),[image,'scripts/library-sdk-check.mjs','acquire-lock',image]);
  assert.equal(online[online.indexOf('--entrypoint')+1],'node');
  assert.equal(online[online.indexOf('--user')+1],process.getuid()+':'+process.getgid());
  const mount=online.indexOf('--mount');
- if(mount>=0)assert.equal(online[mount+1],'type=bind,source='+context.env.DOCKER_CONFIG+',target=/run/prismpm-registry-auth,readonly');
+ if(mount>=0&&!context.env.PRISMPM_QUALIFY_SOURCE)assert.equal(online[mount+1],'type=bind,source='+context.env.DOCKER_CONFIG+',target=/run/prismpm-registry-auth,readonly');
  assert.ok(!online.includes('PRISMPM_EPHEMERAL_HOME=1'));
  const compiler=created[2],custody=created[3];
- for(const phase of [compiler,custody]){for(const arg of ['--read-only','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges'])assert.ok(phase.includes(arg));assert.equal(phase[phase.indexOf('--entrypoint')+1],'node');assert.ok(!phase.includes('--mount')&&!phase.includes('--volume'));}
+ for(const phase of [compiler,custody]){for(const arg of ['--read-only','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges'])assert.ok(phase.includes(arg));assert.equal(phase[phase.indexOf('--entrypoint')+1],'node');if(!context.env.PRISMPM_QUALIFY_SOURCE)assert.ok(!phase.includes('--mount')&&!phase.includes('--volume'));}
  assert.equal(compiler[compiler.indexOf('--user')+1],'1000:1000');
  assert.ok(compiler.includes('/tmp:rw,exec,nosuid,nodev,size=768m')&&compiler.includes('/work:rw,exec,nosuid,nodev,size=2g,mode=1777'));
  assert.deepEqual(compiler.slice(-4),[image,'sdk/exporter-qualification.mjs','run',image]);
@@ -124,11 +143,11 @@ async function accepted(context){
  assert.ok(custody.includes('/opt/prismpm-custody:rw,noexec,nosuid,nodev,size=16m,mode=0700'));
  assert.deepEqual(custody.slice(-2),[image,'sdk/exporter-seed-custody.integration.mjs']);
  const runtime=created[4];for(const arg of ['--interactive','--read-only','--network','none','--user','1000:1000','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','CARGO_NET_OFFLINE=true','CARGO_TARGET_DIR=/tmp/prismpm-library-target'])assert.ok(runtime.includes(arg),arg);
- assert.ok(!runtime.includes('--mount')&&!runtime.includes('--volume')&&!runtime.includes('--entrypoint'));
+ assert.ok(!runtime.includes('--entrypoint'));if(!context.env.PRISMPM_QUALIFY_SOURCE)assert.ok(!runtime.includes('--mount')&&!runtime.includes('--volume'));
  assert.deepEqual(runtime.slice(-5),[image,'node','scripts/library-sdk-check.mjs','run',image]);
  const start=calls.findIndex(row=>row[0]==='container'&&row[1]==='start');assert.ok(start>=0,'runtime must actually start');
  const inspected=calls.findIndex(row=>row[0]==='container'&&row[1]==='inspect');assert.ok(inspected>start,'runtime exit must be inspected after execution');
- const starts=calls.flatMap((row,index)=>row[0]==='container'&&row[1]==='start'?[index]:[]);assert.equal(starts.length,4);
+ const starts=calls.flatMap((row,index)=>row[0]==='container'&&row[1]==='start'?[index]:[]);if(context.env.PRISMPM_QUALIFY_SOURCE)starts.shift();assert.equal(starts.length,4);
  for(const index of starts)assert.equal(calls[index+1][1],'inspect');
  for(const index of [1,3])assert.ok(calls[starts[index]].includes('--interactive'));
  assert.ok(calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].endsWith('/scripts/library-sdk-check.test.mjs')));
@@ -142,8 +161,27 @@ async function cases(tasks){
  const outcomes=await Promise.allSettled(Array.from({length:2},async()=>{while(next<tasks.length){const run=tasks[next++];await run();}}));
  for(const outcome of outcomes)if(outcome.status==='rejected')throw outcome.reason;
 }
+function overlayFixture(t){
+ const context=fixture(t);context.env.PRISMPM_QUALIFY_SOURCE=join(context.work,'candidate');
+ cpSync(context.root,context.env.PRISMPM_QUALIFY_SOURCE,{recursive:true,verbatimSymlinks:true});return context;
+}
+function overlayInputs(t){
+ const root=mkdtempSync(join(tmpdir(),'prismpm-overlay-unit-'));
+ t.after(()=>{chmodSync(join(root,'scripts'),0o755);rmSync(root,{recursive:true,force:true});});
+ mkdirSync(join(root,'scripts'));mkdirSync(join(root,'sdk'));mkdirSync(join(root,'sdk','empty'));
+ writeFileSync(join(root,'scripts','owner.py'),'source');writeFileSync(join(root,'sdk','check.mjs'),'checks');
+ chmodSync(join(root,'scripts','owner.py'),0o775);
+ const before=captureOverlay(root);assert.equal(before.find(row=>row.path==='scripts/owner.py').mode,0o555);
+ assert.equal(before.find(row=>row.path==='sdk/check.mjs').mode,0o444);
+ assert.ok(before.some(row=>row.path==='sdk/empty'&&row.kind==='directory'));
+ assert.throws(()=>captureOverlay(root,{installed:true}),/root-owned|immutable/);
+ writeFileSync(join(root,'sdk','check.mjs'),'substituted');assert.notDeepEqual(captureOverlay(root),before);
+ symlinkSync('owner.py',join(root,'scripts','alias'));assert.throws(()=>captureOverlay(root),/alias refused/);rmSync(join(root,'scripts','alias'));
+ if(process.getuid()!==0)assert.throws(()=>stageOverlay(root,root+'-output'),/construction must run as root/);
+}
 test('real shell invokes the confined Docker sequence and inspects actual terminal status',async t=>{
- const tasks=[()=>accepted(fixture(t)),()=>{const context=fixture(t);mkdirSync(context.env.DOCKER_CONFIG);return accepted(context);}];
+ overlayInputs(t);
+ const tasks=[()=>accepted(overlayFixture(t)),()=>accepted(fixture(t)),()=>{const context=fixture(t);mkdirSync(context.env.DOCKER_CONFIG);return accepted(context);}];
  for(const [field,outputs] of [
   ...['RECORDED_START_STATUS','RECORDED_RUNTIME_STATUS','RECORDED_EXIT_STATUS','RECORDED_COMPILER_STATUS','RECORDED_CUSTODY_STATUS'].map(field=>[field,['7']]),
   ['RECORDED_LOCK_OUTPUT',['', '{}',sdk.bytes.toString()+'\n']],
@@ -167,6 +205,12 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
    const value=JSON.parse(readFileSync(path));mutate(value);writeFileSync(path,JSON.stringify(value));
    const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);
   });
+ for(const [field,value] of [['RECORDED_OVERLAY_STATUS','7'],['RECORDED_OVERLAY_OUTPUT','[]']])tasks.push(async()=>{
+  const context=overlayFixture(t);context.env[field]=value;const {result,calls}=await execute(context);
+  assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);
+  assert.ok(!calls.some(row=>row.includes('acquire-lock')),'invalid overlay cannot reach acquisition');
+  assert.equal(calls.filter(row=>row[0]==='volume'&&row[1]==='rm').length,2,'both staging volumes must be retired');
+ });
  await cases(tasks);
 });
 

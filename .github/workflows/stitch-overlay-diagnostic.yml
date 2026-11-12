@@ -1,0 +1,122 @@
+name: Diagnose candidate overlay custody
+on:
+  push:
+    branches: [work/stitch-qualification-overlay]
+    paths: [.github/workflows/stitch-overlay-diagnostic.yml]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: stitch-overlay-diagnostic
+  cancel-in-progress: false
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-c
+          ref: 3a2ddaed32e54205fe373c8176686f66cc048f4b
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: qualified-product-cli-sdk-amd64
+          path: .captured
+          run-id: 43208575445
+          github-token: ${{ github.token }}
+      - name: Reproduce runner ownership refusal and verify exact staged custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=ghcr.io/uor-foundation/prismpm-sdk@sha256:454d1746503d62be3b9837268c4183b216ea8872e79e47d0ab694e0704a54b79
+          mkdir "$RUNNER_TEMP/overlay-evidence"
+          docker pull --platform linux/${{ matrix.arch }} "$image"
+          cat > "$RUNNER_TEMP/overlay-probe.mjs" <<'JS'
+          import assert from 'node:assert/strict';
+          import {createHash} from 'node:crypto';
+          import {lstatSync,readFileSync,writeFileSync} from 'node:fs';
+          import {validateCapturedLock} from '/opt/prismpm/share/conformance-root/scripts/library-sdk-check.mjs';
+          import {captureInstalledCustody,verifyCustody} from '/opt/prismpm/share/conformance-root/scripts/installed-exporter-concurrency.mjs';
+          import {compilerRevision} from '/opt/prismpm/share/conformance-root/sdk/inventory-metadata.mjs';
+          import {captureOverlay} from '/opt/prismpm/share/conformance-root/sdk/qualification-overlay.mjs';
+          const root='/opt/prismpm/share/conformance-root',owner=root+'/scripts/portable-oracle-process-owner.py';
+          const [mode,image]=process.argv.slice(2),platform={x64:'amd64',arm64:'arm64'}[process.arch];
+          const binding=validateCapturedLock(readFileSync(0),image,platform,readFileSync(root+'/standards.lock'),readFileSync('/opt/prismpm/share/inventory.json'));
+          const identity={compiler_revision:compilerRevision(readFileSync(root+'/model/dependencies.toml','utf8')),
+            archive_sha256:createHash('sha256').update(readFileSync(root+'/vendor/lean4-prod/lean.tar')).digest('hex'),
+            toolchain:readFileSync(root+'/lean-toolchain','utf8').trim(),platform:'linux/'+platform};
+          const paths=['/','/opt','/opt/prismpm','/opt/prismpm/share',root,root+'/scripts',owner];
+          const members=paths.map(path=>{const stat=lstatSync(path);return {path,uid:stat.uid,gid:stat.gid,mode:(stat.mode&0o777).toString(8)};});
+          console.log(JSON.stringify({mode,platform,members}));
+          if(mode==='raw'){
+            const first=members.find(row=>row.uid!==0||(parseInt(row.mode,8)&0o022)!==0);
+            assert.equal(first.path,root+'/scripts');assert.notEqual(first.uid,0);
+            assert.throws(()=>captureInstalledCustody(binding,identity),/mutable installed compiler member/);
+            console.log(JSON.stringify({mode,first_rejected:first,unchanged_custody:'rejected'}));
+          }else{
+            assert.equal(mode,'staged');
+            const before=captureInstalledCustody(binding,identity);verifyCustody(before,binding,identity);
+            assert.throws(()=>writeFileSync(owner,'unaccepted'),error=>['EROFS','EACCES'].includes(error.code));
+            assert.deepEqual(captureInstalledCustody(binding,identity),before);
+            writeFileSync('/tmp/overlay-captured.json',JSON.stringify(captureOverlay(root,{installed:true}))+'\n');
+            console.log(JSON.stringify({mode,unchanged_custody:'passed',external_readback:'passed',consumer_write:'refused',custody_sha256:before.sha256}));
+          }
+          JS
+          raw_mount=(--mount "type=bind,source=$GITHUB_WORKSPACE/root-a/scripts,target=/opt/prismpm/share/conformance-root/scripts,readonly"
+            --mount "type=bind,source=$GITHUB_WORKSPACE/root-a/sdk,target=/opt/prismpm/share/conformance-root/sdk,readonly")
+          common=(--rm --interactive --entrypoint node --user 1000:1000 --read-only --network none --cap-drop ALL
+            --security-opt no-new-privileges --memory 1g --pids-limit 128 --tmpfs /tmp:rw,nosuid,nodev,size=128m
+            --mount "type=bind,source=$RUNNER_TEMP/overlay-probe.mjs,target=/probe.mjs,readonly")
+          docker run "${common[@]}" "${raw_mount[@]}" "$image" /probe.mjs raw "$image" \
+            < .captured/prismpm.lock | tee "$RUNNER_TEMP/overlay-evidence/raw.jsonl"
+          scripts=$(docker volume create)
+          sdk=$(docker volume create)
+          trap 'docker volume rm "$scripts" "$sdk" >/dev/null' EXIT
+          node root-a/sdk/qualification-overlay.mjs capture root-a > "$RUNNER_TEMP/overlay-evidence/source.json"
+          docker run --rm --entrypoint node --user 0:0 --read-only --network none --cap-drop ALL \
+            --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/root-a/scripts,target=/run/prismpm-harness/scripts,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/root-a/sdk,target=/run/prismpm-harness/sdk,readonly" \
+            --mount "type=volume,source=$scripts,target=/run/prismpm-overlay/scripts,volume-nocopy" \
+            --mount "type=volume,source=$sdk,target=/run/prismpm-overlay/sdk,volume-nocopy" \
+            "$image" /run/prismpm-harness/sdk/qualification-overlay.mjs stage /run/prismpm-harness /run/prismpm-overlay \
+            > "$RUNNER_TEMP/overlay-evidence/staged.json"
+          cmp "$RUNNER_TEMP/overlay-evidence/source.json" "$RUNNER_TEMP/overlay-evidence/staged.json"
+          staged_mount=(--mount "type=volume,source=$scripts,target=/opt/prismpm/share/conformance-root/scripts,volume-nocopy,readonly"
+            --mount "type=volume,source=$sdk,target=/opt/prismpm/share/conformance-root/sdk,volume-nocopy,readonly")
+          docker run "${common[@]}" "${staged_mount[@]}" "$image" /probe.mjs staged "$image" \
+            < .captured/prismpm.lock | tee "$RUNNER_TEMP/overlay-evidence/staged-custody.jsonl"
+          node root-a/sdk/qualification-overlay.mjs capture root-a > "$RUNNER_TEMP/overlay-evidence/after.json"
+          cmp "$RUNNER_TEMP/overlay-evidence/source.json" "$RUNNER_TEMP/overlay-evidence/after.json"
+          git -C root-a rev-parse HEAD > "$RUNNER_TEMP/overlay-evidence/harness-source.txt"
+          printf '%s\n' "$image" > "$RUNNER_TEMP/overlay-evidence/diagnostic-image.txt"
+      - name: Run the unchanged full native-library acceptance sequence
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRISMPM_QUALIFY_SOURCE="$GITHUB_WORKSPACE/root-c" bash root-a/scripts/library-sdk-check.sh \
+            ghcr.io/uor-foundation/prismpm-sdk@sha256:454d1746503d62be3b9837268c4183b216ea8872e79e47d0ab694e0704a54b79 \
+            3a2ddaed32e54205fe373c8176686f66cc048f4b > "$RUNNER_TEMP/overlay-evidence/full-library.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: candidate-overlay-${{ matrix.arch }}
+          path: ${{ runner.temp }}/overlay-evidence/
+          if-no-files-found: error
+          retention-days: 14
