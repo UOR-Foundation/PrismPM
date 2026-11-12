@@ -22,34 +22,32 @@ import {
 
 // curl exit statuses that indicate a transient network condition: resolve (6),
 // connect (7), partial transfer (18), timeout (28), TLS connect (35), empty
-// reply (52), send (55), receive (56). Anything else, including HTTP errors
-// and every integrity failure, is final on the first attempt.
+// reply (52), send (55), receive (56). HTTP failures require a separately
+// captured transient response code; integrity failures are never retried.
 export const TRANSIENT_CURL_STATUS = new Set([6, 7, 18, 28, 35, 52, 55, 56]);
+const TRANSIENT_HTTP_STATUS = new Set(['408', '429', '500', '502', '503', '504']);
 
-// `--fail` turns every HTTP error into curl status 22, so a 404 and a snapshot
-// mirror's passing 503 look alike. The HTTP status curl writes out tells them
-// apart; these are the ones curl's own --retry treats as transient.
-export const TRANSIENT_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
-
-export function isTransient(error) {
-  if (TRANSIENT_CURL_STATUS.has(error?.status)) return true;
-  const written = String(error?.stdout ?? '');
-  return (
-    error?.status === 22 &&
-    /^[0-9]{3}$/.test(written) &&
-    TRANSIENT_HTTP_STATUS.has(Number(written))
-  );
+function transientDownload(error) {
+  return TRANSIENT_CURL_STATUS.has(error?.status) ||
+    (error?.status === 22 && TRANSIENT_HTTP_STATUS.has(error.stdout?.toString()));
 }
+
+// snapshot.debian.org answers bursts of parallel CI builds with 503 for longer
+// than a few seconds (rehearsals 41872713783 and 42070834717). Six attempts
+// with a 10 s doubling backoff wait at most 10+20+40+80+160 s = 310 s in total;
+// every attempt keeps its own time, size and digest limits.
+export const DOWNLOAD_ATTEMPTS = 6;
+export const DOWNLOAD_DELAY_MS = 10000;
 
 const pause = (milliseconds) =>
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 
 // Run one download at most `attempts` times with doubling backoff, retrying
-// only transient failures. Retrying never relaxes verification: the caller
-// checks the digest of whatever the successful attempt produced.
+// only transient transport or HTTP failures. Retrying never relaxes verification: the
+// caller checks the digest of whatever the successful attempt produced.
 export function withTransientRetry(
   download,
-  { attempts = 4, delay = 2000, sleep = pause } = {},
+  { attempts = DOWNLOAD_ATTEMPTS, delay = DOWNLOAD_DELAY_MS, sleep = pause } = {},
 ) {
   assert(
     Number.isInteger(attempts) && attempts >= 1,
@@ -59,10 +57,12 @@ export function withTransientRetry(
     try {
       return download();
     } catch (error) {
-      if (attempt >= attempts || !isTransient(error)) throw error;
-      const http = error.status === 22 ? ` (HTTP ${error.stdout})` : '';
+      if (attempt >= attempts || !transientDownload(error))
+        throw error;
       process.stderr.write(
-        `download failed with curl status ${error.status}${http}; retry ${attempt}/${attempts - 1}\n`,
+        `download failed with curl status ${error.status}` +
+          (error.status === 22 ? ` (HTTP ${error.stdout})` : '') +
+          `; retry ${attempt}/${attempts - 1}\n`,
       );
       sleep(delay * 2 ** (attempt - 1));
     }
@@ -132,21 +132,17 @@ export function installRuntime(destination = RUNTIME, cache = null) {
               '--location',
               '--silent',
               '--show-error',
+              '--write-out',
+              '%{http_code}',
               '--max-time',
               '300',
               '--max-filesize',
               '67108864',
-              '--write-out',
-              '%{http_code}',
               authority.url,
               '--output',
               archive,
             ],
-            {
-              timeout: 310000,
-              stdio: ['ignore', 'pipe', 'inherit'],
-              encoding: 'utf8',
-            },
+            { timeout: 310000, stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 1024 },
           ),
         );
       checkedFile(archive, authority.sha256);

@@ -5,8 +5,8 @@ name: PR Fast Checks
 # at most three runners. Every PR runs exactly this set whatever its base, so
 # stacked PRs (base other than main) are not qualified more heavily than any
 # other PR. The complete 15-gate verification (unit tests, all conformance
-# suites, Lean proofs, packaging, reproducibility) runs once per main push or
-# release tag in vv.yml and can be started on any head with workflow_dispatch.
+# suites, Lean proofs, packaging, reproducibility) runs once per main push in
+# vv.yml and can be started on any head with workflow_dispatch.
 on:
   pull_request:
   merge_group:

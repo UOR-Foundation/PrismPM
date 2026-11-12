@@ -93,6 +93,16 @@ function imageStages(recipe) {
   return stages;
 }
 
+test('downloaded tool archives install root-owned, never with the archive owner', () => {
+  // GNU tar as root restores the archive's numeric owner (uid 1001 for Node.js
+  // and several release tarballs). Installed compiler custody requires every
+  // member, /usr/local/bin and node included, to be root-owned.
+  const dockerfile = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const extractions = [...dockerfile.matchAll(/tar --extract[^\n]*--directory \/usr\/local[^\n]*/g)].map(match => match[0]);
+  assert.equal(extractions.length, 6);
+  for (const line of extractions) assert(line.startsWith('tar --extract --no-same-owner '), line);
+});
+
 test('read-only helper copies retain searchable SDK ancestors for unprivileged consumers', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const check = text => {
@@ -846,7 +856,7 @@ else throw Error('unexpected caller invocation');\n`;
   writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec '${process.execPath}' '${join(bin, 'node-shim.mjs')}' "$@"\n`, { mode: 0o755 });
   const output = join(f.work, 'github-output');
   const environment = { ...env(), GITHUB_SHA: f.revision, GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM',
-    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
+    RUNNER_TEMP: f.work, GITHUB_OUTPUT: output, ARCH: 'amd64', ARCHITECTURE: 'amd64', PLATFORM: 'linux/amd64',
     TARGET: 'runtime', DOCKERFILE: 'sdk/Dockerfile', REPOSITORY: 'fixture-registry.invalid/sdk', VERSION: '0.3.0' };
   return { record, output, run: (script, cwd = f.source) => spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
     cwd, env: environment, encoding: 'utf8', timeout: 180000, maxBuffer: 1024 * 1024 }) };
@@ -871,7 +881,8 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     .split('\n  archive=')[0].split('\narchive=')[0];
   const rows = [
     ['candidate', runBlock(candidate, '      - name: Build the production image recipe'), 'runtime', 'type=oci,'],
-    ['release', runBlock(release, '      - id: build'), 'runtime', 'type=registry,'],
+    // The platform job builds every image; the SDK row is the wrapper caller.
+    ['release', runBlock(release, '      - id: build').replace(/^(?!sdk )[a-z-]+ sdk(?:\/runtime)?\/Dockerfile .*\n/gm, ''), 'runtime', 'type=registry,'],
     ['native', native, 'cli-archive', 'type=local,'],
     ['local-vv', local, 'runtime', null],
   ];
@@ -897,7 +908,10 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
       assert.match(secondTag, /^prismpm-vv-sdk:gate-[0-9]+-[0-9]+$/);
       assert.notEqual(secondTag, firstTag, 'separate sessions must not share a mutable SDK tag');
     }
-    if (name === 'release') assert.equal(readFileSync(transport.output, 'utf8'), `digest=sha256:${'a'.repeat(64)}\n`);
+    if (name === 'release') {
+      assert.equal(readFileSync(join(f.work, 'image-platforms/sdk-amd64.digest'), 'utf8'), `sha256:${'a'.repeat(64)}\n`);
+      rmSync(join(f.work, 'image-platforms'), {recursive: true});
+    }
     rmSync(transport.record);
     // A successful skipped command is not a successful test of the caller.
     const skipped = transport.run(`if false; then\n${command}\nfi`);
@@ -908,11 +922,14 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     assert.notEqual(changed, command, name);
     assert.notEqual(transport.run(changed).status, 0); assert(!existsSync(transport.record));
   }
-  // Execute the unchanged build portion of the real two-root workflow loop.
+  // Execute the unchanged build portion of the real rebuild script in both of
+  // the roots the workflow gives it: root-b always, root-a on a failed comparison.
   const full = runBlock(release.slice(release.indexOf('  reproducibility:')), '      - shell: bash');
-  const start = full.indexOf('for root in root-a root-b; do');
-  const end = full.indexOf('\n  mkdir "$root.oci"', start); assert(start >= 0 && end > start);
-  const loop = full.slice(start, end) + '\ndone\n';
+  assert(full.includes('\nbash root-a/scripts/release-rebuild.sh root-b\n'));
+  const rebuild = readFileSync(new URL('./release-rebuild.sh', import.meta.url), 'utf8');
+  const start = rebuild.indexOf('context=()\n');
+  const end = rebuild.indexOf('\nmkdir "$root.oci"', start); assert(start >= 0 && end > start);
+  const loop = 'for root in root-a root-b; do\n' + rebuild.slice(start, end) + '\ndone\n';
   cpSync(f.source, join(f.work, 'root-a'), { recursive: true, verbatimSymlinks: true });
   cpSync(f.source, join(f.work, 'root-b'), { recursive: true, verbatimSymlinks: true });
   const result = transport.run(loop, f.work); assert.equal(result.status, 0, result.stderr);

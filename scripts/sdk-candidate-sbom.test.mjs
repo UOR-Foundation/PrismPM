@@ -30,7 +30,7 @@ function fixture(sbom = rawSpdx()) {
   return {candidate, child, sbom, record, manifest};
 }
 
-function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main', event) {
+function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/release/v0.4', event) {
   const config = encode({architecture, os: 'linux', config: {Labels: {
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
@@ -49,8 +49,8 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
 }
 
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
-  for (const [ref, event] of [['refs/heads/main', 'workflow_dispatch'],
-    ['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
+  for (const [ref, event] of [['refs/heads/release/v0.4', 'workflow_dispatch'],
+    ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
     for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
       for (const architecture of ['amd64', 'arm64']) {
         const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref, event);
@@ -75,8 +75,7 @@ test('release transport has exact repository/ref/signer policies without pretend
   }
   const {record, manifest, options, sbom} = releaseFixture();
   for (const bad of [{...options, repository: 'registry.attacker.test/sdk'}, {...options, ref: 'refs/heads/feature'},
-    {...options, event: 'push'}, {...options, event: 'pull_request'},
-    {...options, ref: 'refs/heads/release/v0.4', event: 'push|workflow_dispatch'},
+    {...options, event: 'pull_request'}, {...options, event: 'push|workflow_dispatch'},
     {...options, ref: 'refs/tags/v0.4.0', event: 'workflow_dispatch'}, {...options, event: null},
     {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.3.0'}]) {
     assert.throws(() => artifactManifest(record, bad));
