@@ -78,7 +78,7 @@ export {
   experimental_recorder,
   experimental_replay,
 } from './replay.mjs';
-export { CONTAINER_SCHEMA, STOP_DEPENDS_ON, memoryContainerStore } from './containers.mjs';
+export { CONTAINER_SCHEMA, memoryContainerStore } from './containers.mjs';
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';

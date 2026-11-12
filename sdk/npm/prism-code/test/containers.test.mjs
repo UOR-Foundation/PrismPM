@@ -13,7 +13,6 @@ import {
   experimental_verify,
   memoryContainerStore,
   CONTAINER_SCHEMA,
-  STOP_DEPENDS_ON,
   EXIT_CODES,
   ERROR_CLASSES,
   exitCodeFor,
@@ -436,22 +435,6 @@ test('logs are served from the stored output, so a container read back from the 
   const second = createPrism({ store: fileContainerStore(directory) });
   assert.deepEqual(await second.containers.logs(container.id), Uint8Array.from([0xff, 0x00, 0xfe]));
   assert.equal((await second.containers.inspect(container.id)).unverified.code, 'verification_failed', 'the bypass outlives the process');
-});
-
-test('stop is not yet: it raises container.stop naming #350, and a missing container is still container.missing', async () => {
-  const { containers } = quiet();
-  const container = await containers.run(fixture, ADD, P0);
-  for (const attempt of [containers.stop(container.id), container.stop()]) {
-    await assert.rejects(attempt, (error) => {
-      assert.ok(error instanceof PrismCodeError);
-      assert.equal(error.code, 'container.stop');
-      assert.deepEqual(error.details.dependsOn, ['#350']);
-      assert.match(error.message, /#350/);
-      return true;
-    });
-  }
-  assert.deepEqual(STOP_DEPENDS_ON, ['#350']);
-  await assert.rejects(containers.stop('ab'.repeat(32)), { code: 'container.missing' });
 });
 
 test('dispatch is a call: it returns the output, leaves no container, and a refused image rejects without running', async () => {

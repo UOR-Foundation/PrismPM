@@ -21,11 +21,6 @@ import { attachVolume, refusalRecord } from './volumes.mjs';
 
 export const CONTAINER_SCHEMA = 'prism/container/1';
 
-/** What `stop` depends on: a guest that can be interrupted (#350, M7). Until then a run is one call, and `stop` raises `container.stop`. */
-export const STOP_DEPENDS_ON = Object.freeze(['#350']);
-
-const stopUnavailable = (id) => fail('container.stop', `container ${id} cannot be stopped: a run is one call into the guest, and stopping it depends on #350`, { dependsOn: STOP_DEPENDS_ON });
-
 /** The volume names `create` takes: an array of strings, each attached through `volumes` (#445). */
 function volumeNames(volumes) {
   if (volumes === undefined) return [];
@@ -186,12 +181,6 @@ class Container {
     if (options !== undefined && (options === null || typeof options !== 'object' || Object.keys(options).length > 0)) fail('container.option', 'logs takes no options: a run returns one output, kept on the record');
     if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
     return decodeOutput(this.#record.output) ?? new Uint8Array(0);
-  }
-
-  /** Not yet: a run is one call into the guest, and interrupting it depends on #350. Raises `container.stop`. */
-  async stop() {
-    if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
-    stopUnavailable(this.id);
   }
 
   /** The output as text, or null when the guest returned none. */
@@ -424,7 +413,6 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     list,
     prune,
     start: async (id) => (await get(id)).start(),
-    stop: async (id) => (await get(id)).stop(),
     logs: async (id, options) => (await get(id)).logs(options),
     inspect: async (id) => (await get(id)).inspect(),
     remove: async (id) => (await get(id)).remove(),

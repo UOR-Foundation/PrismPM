@@ -1,11 +1,6 @@
 spec = "prismpm/sdk-diagnostics/1"
 
 [[error]]
-code = "container.stop"
-capability = "DK-43"
-statement = "prism.containers.stop was called: a run is one call into the guest, which cannot be interrupted until #350 lands, so nothing was stopped and details.dependsOn names #350."
-
-[[error]]
 code = "networks.exists"
 capability = "DK-39"
 statement = "prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again."

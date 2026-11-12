@@ -226,12 +226,7 @@ export interface Container {
   remove(): Promise<void>;
   /** The output, from the record, as `docker logs`; empty before any run. Takes no options. */
   logs(): Promise<Uint8Array>;
-  /** Not yet: raises `container.stop`, whose `details.dependsOn` is `STOP_DEPENDS_ON` (#350). */
-  stop(): Promise<never>;
 }
-
-/** Experimental. What `stop` depends on (#350). */
-export const STOP_DEPENDS_ON: readonly ['#350'];
 
 /** Experimental. A refusal of `prism.volumes`, as plain JSON (`refusalRecord`). */
 export interface VolumeRefusal {
@@ -306,8 +301,6 @@ export interface Containers {
   /** Run once and return the output, as a call: the container is removed on exit unless `rm: false`, and a failed run rejects with its typed error. */
   dispatch(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Uint8Array>;
   start(id: string): Promise<Container>;
-  /** Raises `container.stop` naming #350. */
-  stop(id: string): Promise<never>;
   logs(id: string): Promise<Uint8Array>;
   inspect(id: string): Promise<ContainerRecord>;
   /** The container with this id or unique id prefix. Rejects with `container.missing` or `container.ambiguous`. */

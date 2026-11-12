@@ -915,7 +915,6 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 
 | Code | Owner | Meaning |
 |---|---|---|
-| `container.stop` | `DK-43` | prism.containers.stop was called: a run is one call into the guest, which cannot be interrupted until #350 lands, so nothing was stopped and details.dependsOn names #350. |
 | `networks.exists` | `DK-39` | prism.networks.create named a network the capability file already holds; a grant is never widened by creating it again. |
 | `networks.not-found` | `DK-39` | The capability file has no network of that name: no set with an outbound-hosts member. |
 | `networks.option` | `DK-39` | prism.networks was given an option it does not have, or a policy of the wrong shape; a Docker network option is refused and never ignored. |

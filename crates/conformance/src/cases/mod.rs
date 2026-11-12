@@ -738,7 +738,7 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-43" => node_suite::verify_exact(
             root,
             id,
-            &[("sdk/npm/prism-code/test/containers.test.mjs", 42)],
+            &[("sdk/npm/prism-code/test/containers.test.mjs", 41)],
             "600000",
         ),
         // The `system` module and the client of #440.
