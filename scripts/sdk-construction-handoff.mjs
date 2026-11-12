@@ -27,8 +27,10 @@ const workflowProfiles=new Map([
  // Current source-reviewed candidate workflow: the nine jobs above, with a
  // first build step that frees runner disk. Keep historical profiles above
  // immutable; a new workflow is admitted only by this exact digest.
- ['sha256:c3a7bbea1e3cce7e9e221fde00137ba05c11b7016e5ff500778b4efc50f02cff',9]
- ['sha256:38c670e9eac9245ce6f0b95d0dee1ced113e8258efa46849c70fc29c2b767b09',9]
+ ['sha256:c3a7bbea1e3cce7e9e221fde00137ba05c11b7016e5ff500778b4efc50f02cff',9],
+ ['sha256:38c670e9eac9245ce6f0b95d0dee1ced113e8258efa46849c70fc29c2b767b09',9],
+ // main after the v0.4.0 merge: main's disk step plus the release line's changes.
+ ['sha256:bbeb1f661d17524b5273f24b8fee2b16494b118d32f1fb13e66760477e9fa24b',9]
 ]);
 const authorities=new WeakMap(),metadata=new WeakMap();
 const sha=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');

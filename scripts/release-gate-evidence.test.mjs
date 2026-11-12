@@ -447,7 +447,7 @@ test('original files reject symbolic links, hardlinks and parent aliases before 
 function workflowContract(value) {
   const source = value.jobs['source-vv'].steps.find(step => step.with?.runCmd);
   assert.equal(source.if, undefined); assert.equal(source['continue-on-error'], undefined);
-  assert.equal(source.with.runCmd, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
+  assert.equal(source.with.runCmd, "set -euo pipefail\nexport PRISMPM_TEST_SDK_IMAGE='${{ steps.sdk.outputs.image }}'\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
   assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
   assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
