@@ -125,3 +125,38 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `verify-browser-publication` | `never` | `true` | `prismpm/browser-publication-integrity/2` |
 | `verify-release` | `never` | `true` | `prismpm/signature-closure-result/1` |
 | `verify-signature` | `verified-local-evidence` | `true` | `prismpm/signature-result/1` |
+
+## Command groups
+
+`prismpm <module> <verb>` runs the command beside it, with the same arguments, output and result schema (#441). The groups are named after the nine modules of `model/modules.toml`; the flat commands stay as aliases. A module that is also a command (`verify`) is a group only when the next word is one of its verbs.
+
+| Group verb | Command |
+| --- | --- |
+| `prismpm auth attest` | `prismpm attest` |
+| `prismpm auth sign` | `prismpm sign` |
+| `prismpm auth sign-evidence` | `prismpm sign-evidence` |
+| `prismpm client completion` | `prismpm completion` |
+| `prismpm client generate` | `prismpm generate` |
+| `prismpm client template` | `prismpm template` |
+| `prismpm containers run` | `prismpm run` |
+| `prismpm containers status` | `prismpm status` |
+| `prismpm images build` | `prismpm build` |
+| `prismpm images export-browser` | `prismpm export-browser` |
+| `prismpm images inspect` | `prismpm inspect` |
+| `prismpm images pull` | `prismpm pull` |
+| `prismpm images push` | `prismpm push` |
+| `prismpm images verify` | `prismpm check` |
+| `prismpm system authority` | `prismpm authority` |
+| `prismpm system clean` | `prismpm clean` |
+| `prismpm system fetch` | `prismpm fetch` |
+| `prismpm system lock` | `prismpm lock` |
+| `prismpm system update` | `prismpm update` |
+| `prismpm verify acceptance` | `prismpm replay-acceptance` |
+| `prismpm verify attestation` | `prismpm verify-attestation` |
+| `prismpm verify browser-publication` | `prismpm verify-browser-publication` |
+| `prismpm verify check` | `prismpm check` |
+| `prismpm verify conformance` | `prismpm conformance` |
+| `prismpm verify model` | `prismpm verify` |
+| `prismpm verify release` | `prismpm verify-release` |
+| `prismpm verify replay` | `prismpm replay` |
+| `prismpm verify signature` | `prismpm verify-signature` |

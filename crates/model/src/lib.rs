@@ -509,6 +509,26 @@ mod tests {
     use super::Model;
 
     #[test]
+    fn command_groups_run_registered_commands_in_order() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        model.commands.check().expect("the committed groups hold");
+        assert!(!model.commands.group.is_empty());
+        let planted = |edit: fn(&mut super::Commands)| {
+            let mut commands = model.commands.clone();
+            edit(&mut commands);
+            commands.check().is_err()
+        };
+        assert!(planted(|c| c.group[0].command = "nonexistent".into()));
+        assert!(planted(|c| c.group[0].verb = "Upper".into()));
+        assert!(planted(|c| c.group[0].module = "-x".into()));
+        assert!(planted(|c| c.group.swap(0, 1)));
+        assert!(planted(|c| {
+            let first = c.group[0].clone();
+            c.group.insert(0, first);
+        }));
+    }
+
+    #[test]
     fn control_coverage_counts_are_separate_and_fixed() {
         let model = Model::load_from_repo_root().expect("load repository model");
         model
