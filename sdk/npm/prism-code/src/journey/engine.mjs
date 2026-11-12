@@ -11,7 +11,7 @@ import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
 import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
-import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, forbiddenAxioms, forbiddenMessage, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
 import { TEMPLATE_REPOSITORY, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
@@ -101,6 +101,8 @@ export async function prove(dir, session, { log = () => {}, overwrite = false, w
     const diagnostics = parseDiagnostics(run.output);
     const failed = steps(run.output).find((s) => s.code !== 0);
     const fixes = axiomViolations(diagnostics);
+    // Planted defect G5: an observed sorryAx or Lean.ofReduceBool is refused, never recorded as the expected set.
+    if (forbiddenAxioms(fixes).length) return { ok: false, message: forbiddenMessage(forbiddenAxioms(fixes)) };
     if (fixes.length && diagnostics.every((d) => d.code === 'LLV7005')) {
       for (const f of fixes) session.axioms[f.name] = f.axioms;
       continue;
@@ -180,6 +182,7 @@ async function proveHosted(dir, session, { log, client, gaps }) {
     }
     const diagnostics = outcome.diagnostics.map(fromHosted);
     const fixes = axiomViolations(diagnostics);
+    if (forbiddenAxioms(fixes).length) return { ok: false, message: forbiddenMessage(forbiddenAxioms(fixes)) };
     if (fixes.length && diagnostics.filter((d) => !isWarning(d)).every((d) => d.code === 'LLV7005')) {
       for (const f of fixes) session.axioms[f.name] = f.axioms;
       continue;
@@ -212,7 +215,8 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps 
       if (!failing.includes(property)) failing.push(property);
     } else if (d.code === 'LLV7005') {
       const fix = axiomViolations([d])[0];
-      if (fix) session.axioms[fix.name] = fix.axioms;
+      if (fix && fix.forbidden.length === 0) session.axioms[fix.name] = fix.axioms;
+      else if (fix) other.push(d);
     } else other.push(d);
   }
   session.status.properties = Object.fromEntries(spec.properties.map((p) => [p.id, failing.includes(p) ? 'failing' : 'unknown']));
@@ -443,6 +447,19 @@ async function buildFromTemplate(dir, session, { log, repository, clone, create 
   return built(dir, session, holo, seconds, { where: 'github', repository, live, run: runs['pages.yml'].html_url, gate: runs['bootstrap.yml'].html_url, fingerprint: null, signer: `the pages workflow of ${repository}` });
 }
 
+/**
+ * Where Lean checked the proofs of what was built, said plainly: proved names
+ * only a run the kernel finished, and says where it ran. The acceptance
+ * vectors are tested, never proved.
+ */
+export function proofSentence(session, proof) {
+  if (proof.where === 'github') return 'Lean checked every property in the GitHub build gate, not on this machine.';
+  const proved = session.status.proved;
+  if (!proved || proved.modelSha !== session.status.modelSha) return 'No proof of this model is recorded, so nothing about its rules is proved.';
+  if (proved.where === 'hosted') return 'Lean proved every property on the hosted verifier, not on this machine; that proof is trusted, not local.';
+  return 'Lean proved every property on this machine (lexlean verify --all) before the build.';
+}
+
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
 async function built(dir, session, holo, seconds, proof) {
   const app = await fromFile(holo);
@@ -470,12 +487,12 @@ async function built(dir, session, holo, seconds, proof) {
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: ok
-      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built in ${seconds} s${where}. ${proofSentence(session, proof)} Tested: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
       : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
-      note: 'The run policy accepts P0. The proofs were checked when the app was built, but the holo does not carry them: it holds no signed proof statement, so `prism-code check` under the default policy (P2) reports P0 and fails (#582).',
+      note: `The run policy accepts P0. ${proofSentence(session, proof)} The holo does not carry that proof: it holds no signed proof statement, so \`prism-code check\` under the default policy (P2) reports P0 and fails (#582).`,
     },
   };
 }

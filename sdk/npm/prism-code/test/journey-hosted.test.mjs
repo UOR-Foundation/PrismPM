@@ -103,6 +103,22 @@ test('a wrong axiom set is corrected and proved again; a Lean warning beside it 
   assert.equal(session.axioms.decide, '[propext]');
 });
 
+// Planted defect G5: a proof that rests on sorryAx, on Lean.ofReduceBool (native_decide) or on any axiom
+// outside Lean's standard three is refused. Before, the observed set was recorded and the proof run again.
+for (const axiom of ['sorryAx', 'Lean.ofReduceBool', 'Classical.em_axiom']) {
+  test(`planted: an observed ${axiom} is refused, never recorded as the expected axiom set`, async () => {
+    const { dir, session } = app();
+    const d = { code: 'LLV7005', severity: 'error', message: `\`PrismPaymentApproval.PaymentApproval.inv001Holds\` violates its exact axiom policy: observed [propext, ${axiom}]`, primary: { path: 'src/PaymentApproval.lex.tex', line_start: 10 } };
+    const { verifies, client } = server([failed([d]), verified()]);
+    const r = await prove(dir, session, { where: 'hosted', client });
+    assert.equal(r.ok, false);
+    assert.equal(verifies.length, 1, 'no second round');
+    assert.match(r.message, new RegExp(`inv001Holds rests on ${axiom.replace('.', '\.')}`));
+    assert.equal(session.axioms.inv001Holds, undefined);
+    assert.equal(session.status.proved, undefined);
+  });
+}
+
 test('planted: Lean refusing a property marks that property failing, found by the line the verifier names', async () => {
   const { dir, session } = app();
   writeApp(dir, session);
@@ -255,7 +271,8 @@ test('a new app becomes a template instance: created from the template, written 
   assert.deepEqual(calls, ['create octo/prism-payment-approval', 'push prism-payment-approval', 'wait pages.yml bootstrap.yml', 'fetch https://octo.github.io/prism-payment-approval/']);
   assert.equal(r.ok, true, r.message);
   assert.equal(r.live, 'https://octo.github.io/prism-payment-approval/');
-  assert.match(r.message, /^Live at https:\/\/octo\.github\.io\/prism-payment-approval\/\. Built and verified/);
+  assert.match(r.message, /^Live at https:\/\/octo\.github\.io\/prism-payment-approval\/\. Built in \d+ s on GitHub Actions/);
+  assert.match(r.message, /Lean checked every property in the GitHub build gate, not on this machine\. Tested: \d+ of \d+ acceptance vectors pass/);
   const clone = join(root, 'prism-payment-approval');
   assert.deepEqual(session.status.repository, { full: 'octo/prism-payment-approval', created: true, template: true, clone, live: r.live });
   assert.equal(existsSync(join(clone, 'app/src/Contract.lex.tex')), false, 'the template\'s example is replaced');
@@ -309,4 +326,15 @@ test('a pinned template file is refused when its bytes do not have the pinned di
   await assert.rejects(fetchPinned('README.md', { fetch }), /not a pinned template file/);
   const { dir, session } = provedApp();
   await assert.rejects(readyForGitHub({ root: join(dir, '..'), dir, session, fetch }), /not the pinned/);
+});
+
+// Planted defect B1 message: "proved" names only a run the kernel finished, and where it ran.
+test('the build says where Lean proved the model, and claims nothing when no proof of this model is recorded', async () => {
+  const { proofSentence } = await import('../src/journey/engine.mjs');
+  const session = (proved) => ({ status: { modelSha: 'm', proved } });
+  assert.match(proofSentence(session({ modelSha: 'm', where: 'local' }), { where: 'local' }), /on this machine \(lexlean verify --all\)/);
+  assert.match(proofSentence(session({ modelSha: 'm', where: 'hosted' }), { where: 'local' }), /hosted verifier, not on this machine; that proof is trusted, not local/);
+  assert.match(proofSentence(session(undefined), { where: 'local' }), /nothing about its rules is proved/);
+  assert.match(proofSentence(session({ modelSha: 'older', where: 'local' }), { where: 'local' }), /nothing about its rules is proved/, 'a proof of another model does not count');
+  assert.match(proofSentence(session(undefined), { where: 'github' }), /GitHub build gate, not on this machine/);
 });

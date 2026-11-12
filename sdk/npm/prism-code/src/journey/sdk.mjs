@@ -143,10 +143,26 @@ export function axiomViolations(diagnostics) {
     .filter((d) => d.code === 'LLV7005')
     .map((d) => {
       const m = /`([^`]+)` violates its exact axiom policy: observed (\[[^\]]*\])/.exec(d.message);
-      return m ? { name: m[1].split('.').pop(), axioms: m[2] } : null;
+      if (!m) return null;
+      const observed = m[2].slice(1, -1).split(',').map((a) => a.trim()).filter(Boolean);
+      return { name: m[1].split('.').pop(), axioms: m[2], forbidden: observed.filter((a) => !ALLOWED_AXIOMS.includes(a)) };
     })
     .filter(Boolean);
 }
+
+/**
+ * The only axioms a proof may rest on: Lean's standard three. An observed set
+ * becomes a declaration's exact policy only when it stays inside these;
+ * `sorryAx` (a missing proof), `Lean.ofReduceBool` (native_decide, which
+ * trusts compiled code) or any other axiom fails the proof instead.
+ */
+export const ALLOWED_AXIOMS = Object.freeze(['propext', 'Quot.sound', 'Classical.choice']);
+
+/** Each fix whose observed axioms leave the allowed three, as `name rests on axiom`; empty when every fix may be recorded. */
+export const forbiddenAxioms = (fixes) => fixes.flatMap((f) => f.forbidden.map((a) => `${f.name} rests on ${a}`));
+
+/** The refusal for axioms outside the allowed three. */
+export const forbiddenMessage = (lines) => `Lean observed an axiom outside ${ALLOWED_AXIOMS.join(', ')}: ${lines.join('; ')}. A proof that rests on sorryAx, Lean.ofReduceBool (native_decide) or another axiom is not a proof, so Prism refuses it rather than record it.`;
 
 const STEP = (name, command) => `echo "@@step ${name}"; ${command} 2>&1; code=$?; echo "@@exit ${name} $code"; [ $code -eq 0 ] || exit $code`;
 
