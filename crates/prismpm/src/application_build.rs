@@ -562,9 +562,7 @@ fn with_brand_closure(
                 .iter_mut()
                 .find(|projection| projection["target"] == "browser-wasm-bindgen")
         })
-        .ok_or_else(|| {
-            PrismError::new("PP5203", "view manifest has no browser projection")
-        })?;
+        .ok_or_else(|| PrismError::new("PP5203", "view manifest has no browser projection"))?;
     projection["files"] = serde_json::Value::Array(
         generated
             .browser_assets
