@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,10 +11,12 @@ import { allChecks, loadScenarios, renderMatrix, sameMatrix, RESULTS_SCHEMA } fr
 const BIN = fileURLToPath(new URL('../bin/prism-conformance.mjs', import.meta.url));
 const COMPLIANCE = fileURLToPath(new URL('../../../../COMPLIANCE.md', import.meta.url));
 const JS_SHIM = fileURLToPath(new URL('../../prism-code/conformance/shim.mjs', import.meta.url));
-// runtimes.json registers the Rust shim at this path. The suite job in npm-conformance.yml builds it before these tests;
-// where it is not built, a test that runs every registered runtime cannot run, and says why.
+// The Rust column comes from the shim runtimes.json registers, or from the results the npm-conformance suite job
+// placed for this exact Rust input identity (its receipt). Where neither is here, a test that needs every
+// registered runtime cannot run, and says why.
 const RUST_SHIM = fileURLToPath(new URL('../../../../target/debug/prism-conformance-shim', import.meta.url));
-const everyRuntime = existsSync(RUST_SHIM) ? {} : { skip: 'the Rust shim is not built: cargo build -p repo-conformance --bin prism-conformance-shim' };
+const RUST_RESULTS = fileURLToPath(new URL('../../../../target/conformance/results/rust.json', import.meta.url));
+const everyRuntime = existsSync(RUST_RESULTS) || existsSync(RUST_SHIM) ? {} : { skip: 'no Rust results: cargo build -p repo-conformance --bin prism-conformance-shim' };
 
 const features = [
   {
@@ -90,8 +92,22 @@ test('line endings do not make the file stale, and any other difference does', (
 
 const cli = (...args) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8' });
 
+/** Put the Rust results in `dir`: the receipt's when there is one, else a run of the built shim. */
+function rustInto(dir) {
+  if (existsSync(RUST_RESULTS)) copyFileSync(RUST_RESULTS, join(dir, 'rust.json'));
+  else assert.equal(cli('run', '--runtime', 'rust', '--out', join(dir, 'rust.json')).status, 0);
+}
+
+/** A results directory with every registered runtime measured. */
+function measured() {
+  const dir = mkdtempSync(join(tmpdir(), 'prism-conformance-measured-'));
+  assert.equal(cli('run', '--runtime', 'js', '--out', join(dir, 'js.json')).status, 0);
+  rustInto(dir);
+  return dir;
+}
+
 test('the committed COMPLIANCE.md is what the suite generates today, and it names all three runtimes', everyRuntime, () => {
-  const check = cli('matrix', '--check');
+  const check = cli('matrix', '--check', '--results', measured());
   assert.equal(check.status, 0, check.stdout + check.stderr);
   const text = readFileSync(COMPLIANCE, 'utf8').replace(/\r\n/g, '\n');
   assert.match(text, /^<!-- @generated/);
@@ -103,12 +119,13 @@ test('a hand edit of COMPLIANCE.md is stale, says how to fix it, and --write rep
   const dir = mkdtempSync(join(tmpdir(), 'prism-conformance-matrix-'));
   const output = join(dir, 'COMPLIANCE.md');
   writeFileSync(output, readFileSync(COMPLIANCE, 'utf8').replace('| JavaScript |', '| JS, by hand |'));
-  const stale = cli('matrix', '--check', '--output', output);
+  const results = measured();
+  const stale = cli('matrix', '--check', '--results', results, '--output', output);
   assert.equal(stale.status, 1);
   assert.match(stale.stderr, /is stale\. It is generated/);
   assert.match(stale.stderr, /matrix --write/);
-  assert.equal(cli('matrix', '--write', '--output', output).status, 0);
-  assert.equal(cli('matrix', '--check', '--output', output).status, 0);
+  assert.equal(cli('matrix', '--write', '--results', results, '--output', output).status, 0);
+  assert.equal(cli('matrix', '--check', '--results', results, '--output', output).status, 0);
 });
 
 test('--results reads saved runs, and a registered runtime with no results is an error, not a blank column', everyRuntime, () => {
@@ -120,7 +137,7 @@ test('--results reads saved runs, and a registered runtime with no results is an
   const rustMissing = cli('matrix', '--results', dir);
   assert.equal(rustMissing.status, 2);
   assert.match(rustMissing.stderr, /rust has a shim .* a registered runtime cannot go unmeasured/);
-  assert.equal(cli('run', '--runtime', 'rust', '--out', join(dir, 'rust.json')).status, 0);
+  rustInto(dir);
   const check = cli('matrix', '--check', '--results', dir);
   assert.equal(check.status, 0, check.stderr);
   assert.equal(cli('matrix', '--write', '--check').status, 64);
