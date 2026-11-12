@@ -1,0 +1,4 @@
+{
+  "kib": 1,
+  "reason": "Target/2 guests in compileGuest (#640): the __stack_low and __stack_high export rule in core.mjs and its changelog entry (about 1.1 KiB)."
+}
