@@ -14,7 +14,7 @@
 use crate::error::PrismError;
 use crate::holo::archive::parse_application;
 use crate::holo::canonical::encode_value;
-use crate::verification::{executable, run_process_limited};
+use crate::sdk::process::{executable, run_process_limited, NoExtension};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -254,7 +254,7 @@ fn run_guest(guest: &[u8], allocation: u64, requests: &[String]) -> Result<Vec<V
         std::fs::write(path, bytes)
             .map_err(|error| refused(format!("{}: {error}", path.display())))?;
     }
-    run_process_limited(
+    run_process_limited::<NoExtension>(
         "replay",
         &node,
         &[&runner, &wasm, &plan, &outcomes].map(|path| path.to_string_lossy().into_owned()),
