@@ -33,6 +33,10 @@ const VENDORED: &[(&str, &str)] = &[
         "crates/prismpm/src/generate/rust_writer.rs",
     ),
     (
+        "prism_image_store_rules",
+        "xtask/src/image_store_rules/model.rs",
+    ),
+    (
         "prism_proof_statement",
         "crates/prismpm/src/verification/proof_statement.rs",
     ),

@@ -14,7 +14,8 @@
  * beside the container records in `$PRISM_HOME/containers`.
  *
  * What may be removed is not decided here in code. `IMAGE_STORE_RULES` is the
- * decision table of the store model (`bindings/src/Foundation/Images/V1/Store.lex.tex`):
+ * decision table the store model writes (`bindings/src/Foundation/Images/V1/Store.lex.tex`,
+ * checked byte for byte by `cargo xtask check-image-store-rules`; Lean proves its safety rules):
  * every combination of what is asked and what holds the image, and the one outcome
  * it has. A container that references an image holds it; a running one holds it
  * even against `force`. Garbage collection is `prune`: by default it removes only
