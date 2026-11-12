@@ -291,7 +291,7 @@ Feature: holo
     And a binding that overrides neither compiles and serves unchanged
 
   @HO-44 @build
-  Scenario: The session world is a new contract whose guest is the model's root inside a generated shim that keeps the state, checks every declared bound and compacts its arena after every step.
+  Scenario: The session world hologram:guest/core-wasm@2 is a new contract with its own WIT file and registry row, import-free, exporting exactly memory, holo_alloc and holo_step; its guest package is generated from the model's Bytes -> Bytes root as rendered by prod-codegen and a fixed shim rendered from the declared request, state, response, response-count, page and stack bounds alone; the shim keeps the state inside the instance, traps on a state, response, response count or trailing byte over its declaration and on a step over a region holo_alloc did not reserve, and compacts its arena after every step so the memory a step uses is a function of its state and request; bounds that cannot be generated and an entry that is not Bytes -> Bytes are refused with PP5101, and the @1 row and file are unchanged.
     Given the session world row and its WIT file
     And a model whose session root is Bytes -> Bytes and declared session bounds
     When the session guest package is generated
@@ -301,7 +301,7 @@ Feature: holo
     And the @1 row and its file are unchanged
 
   @HO-45 @build
-  Scenario: prism-code runs a session-world guest as sessions and replays prism/history/2 histories of them.
+  Scenario: prism-code runs a session-world guest as sessions: one instance per session with an empty first state, steps in order returning zero or more responses through dispatch and stream, every failure ending the session, session.closed for a later step, session.busy for a concurrent step, session.required for dispatch on the application and session.unsupported for open on a stateless one; acceptance sessions are compared step by step; prism/history/2 records sessions as steps and the failure that ended them, and replay re-executes each on a fresh session, reporting every divergence as a DeterminismViolationError and refusing a history of the other world with replay.history.
     Given a holo whose guest is the session world
     When a session takes three steps
     Then each step sees the state the previous steps left and returns its responses in order
