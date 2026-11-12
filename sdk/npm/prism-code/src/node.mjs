@@ -13,7 +13,7 @@ import { createPrism, loadArchive, loadClosure } from './index.mjs';
 import { createAuth } from './auth.mjs';
 import { hostDockerArguments } from './host.mjs';
 import { fail } from './errors.mjs';
-import { fileImageStore } from './image-store.mjs';
+import { fileImageStore, imagesDirectory } from './image-store.mjs';
 import { parseManifest, manifestCapabilities, MANIFEST_FILE } from './manifest.mjs';
 import { parseCapabilities } from './capabilities.mjs';
 
@@ -109,12 +109,7 @@ export function containersDirectory(env = process.env) {
   return join(env.PRISM_HOME || join(homedir(), '.prism'), 'containers');
 }
 
-/** The local image store `Prism.fromEnv()` keeps (#349): `$PRISM_IMAGES`, else `$PRISM_HOME/images`, by default `~/.prism/images`. */
-export function imagesDirectory(env = process.env) {
-  return env.PRISM_IMAGES || join(env.PRISM_HOME || join(homedir(), '.prism'), 'images');
-}
-
-export { fileImageStore, memoryImageStore } from './image-store.mjs';
+export { fileImageStore, imagesDirectory, memoryImageStore } from './image-store.mjs';
 
 /**
  * Records as one JSON file per container, readable only by this user. The

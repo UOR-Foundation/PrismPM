@@ -23,10 +23,10 @@ import {
 } from './errors.mjs';
 import { parseReference } from './oci-reference.mjs';
 import { experimental_pull, experimental_push, shortDigest } from './push-pull.mjs';
-import { createImageStore, fileImageStore, localName, storedName } from './image-store.mjs';
+import { createImageStore, fileImageStore, imagesDirectory, localName, storedName } from './image-store.mjs';
 
 /** The local image store of this machine, as `Prism.fromEnv()` keeps it; no container is consulted, since nothing here removes. */
-const localStore = async () => createImageStore({ backend: fileImageStore((await import('./node.mjs')).imagesDirectory()) });
+const localStore = async () => createImageStore({ backend: fileImageStore(imagesDirectory()) });
 
 const PUSH_OPTIONS = ['store', 'key', 'keyless', 'no-attestations', 'signing-config', 'plain-http', 'json', 'tuf-mirror-url', 'tuf-root', 'tuf-cache'];
 const PULL_OPTIONS = ['store', 'policy', 'key', 'certificate-identity', 'certificate-identity-regexp', 'certificate-oidc-issuer', 'type', 'trusted-root', 'entries', 'timestamps', 'plain-http', 'json', 'tuf-mirror-url', 'tuf-root', 'tuf-cache'];

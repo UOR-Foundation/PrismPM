@@ -31,6 +31,8 @@ import { fail } from './errors.mjs';
 import { parseReference } from './oci-reference.mjs';
 import { sha256Hex } from './sha256.mjs';
 import RULES from './image-store-rules.json' with { type: 'json' };
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 export const IMAGE_STORE_SCHEMA = 'prism/image-store/1';
 export const IMAGE_SCHEMA = 'prism/image/1';
@@ -104,6 +106,11 @@ export function memoryImageStore() {
       blobs.delete(hex);
     },
   });
+}
+
+/** The local image store `Prism.fromEnv()` keeps: `$PRISM_IMAGES`, else `$PRISM_HOME/images`, by default `~/.prism/images`. */
+export function imagesDirectory(env = process.env) {
+  return env.PRISM_IMAGES || join(env.PRISM_HOME || join(homedir(), '.prism'), 'images');
 }
 
 /** Images on disk, readable only by this user. Every write lands beside its target and is renamed over it. */

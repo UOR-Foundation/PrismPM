@@ -1137,12 +1137,12 @@ async function main(argv) {
     return 0;
   }
   // `prism-code <module> <verb>` (#441): a module's verb, or the flat verb it names.
-  // An alias that is also a module's name (`images`) is the alias only when no verb of the module follows.
-  const helped = rest.includes('--help') || rest.includes('-h');
-  if (Object.hasOwn(TOP_LEVEL, command) && !(Object.hasOwn(GROUPS, command) && (helped || groupVerb(command, rest) !== null))) return main([...TOP_LEVEL[command], ...rest]);
   const group = groupVerb(command, rest);
   if (group !== null) return group.verb.run ? group.verb.run(rest.slice(1)) : main([group.verb.flat, ...rest.slice(1)]);
-  if (Object.hasOwn(GROUPS, command) && !rest.includes('--help') && !rest.includes('-h')) {
+  // A top-level alias that is also a module (`images` for `images ls`) applies only when no group verb follows.
+  const helps = rest.includes('--help') || rest.includes('-h');
+  if (Object.hasOwn(TOP_LEVEL, command) && !(Object.hasOwn(GROUPS, command) && helps)) return main([...TOP_LEVEL[command], ...rest]);
+  if (Object.hasOwn(GROUPS, command) && !helps) {
     return usage(`${command} takes one of ${Object.keys(GROUPS[command]).join(', ')}`);
   }
   // `--help` after a built-in verb prints that verb's usage and never reaches Docker or a lockfile.
