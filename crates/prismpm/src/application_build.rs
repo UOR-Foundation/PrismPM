@@ -490,7 +490,9 @@ fn application_view(
                         core_error_type: application.error_type.clone(),
                         core_function: application.function_name.clone(),
                     },
-                );
+                )
+                .map_err(|error| PrismError::new("PP5203", error.to_string()))
+                .and_then(|generated| with_brand_closure(generated, &evaluated.title));
                 (generated, evaluated.model_id, evaluated.view_model_id)
             }
             Application::Text(application) => {
@@ -531,23 +533,19 @@ fn application_view(
                     },
                 )
                 .map_err(|error| PrismError::new("PP5203", error.to_string()))
-                .and_then(|generated| with_text_brand_closure(generated, &application.view.title));
+                .and_then(|generated| with_brand_closure(generated, &application.view.title));
                 return Ok((generated?, model_id, view_model_id));
             }
         };
-    Ok((
-        generated.map_err(|error| PrismError::new("PP5203", error.to_string()))?,
-        model_id,
-        view_model_id,
-    ))
+    Ok((generated?, model_id, view_model_id))
 }
 
-/// Closure v2 for the Text/1 page (#612): the vendored Text/1 generator
-/// writes the six-file closure v1, and `verify` expects closure v2 for every
+/// Closure v2 for the Application/1 and Text/1 pages (#612): the vendored
+/// view generators write the six-file closure v1, and `verify` expects closure v2 for every
 /// browser page. The brand files join the browser assets only, so the
 /// Hologram View attachment keeps its canonical three files, and the
 /// browser projection in the view manifest names the closure it ships.
-fn with_text_brand_closure(
+fn with_brand_closure(
     mut generated: GeneratedViewV1,
     title: &str,
 ) -> Result<GeneratedViewV1, PrismError> {
@@ -565,7 +563,7 @@ fn with_text_brand_closure(
                 .find(|projection| projection["target"] == "browser-wasm-bindgen")
         })
         .ok_or_else(|| {
-            PrismError::new("PP5203", "Text/1 view manifest has no browser projection")
+            PrismError::new("PP5203", "view manifest has no browser projection")
         })?;
     projection["files"] = serde_json::Value::Array(
         generated
