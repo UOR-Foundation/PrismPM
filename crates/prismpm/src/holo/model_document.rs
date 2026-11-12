@@ -1,5 +1,8 @@
-//! Owned DTOs for the closed, versioned non-Holo canonical model documents.
+//! Owned DTOs for the closed, versioned non-Holo canonical model documents
+//! and their validated canonical encoding.
 
+use super::canonical::{decode_value, encode_value};
+use crate::error::PrismError;
 use serde::{Deserialize, Serialize};
 
 /// Top-level Prism model document. Its domain sections contain only canonical
@@ -865,4 +868,28 @@ pub struct MeasureRecord {
     pub requirement_index: u64,
     /// Natural-number threshold.
     pub threshold: u64,
+}
+
+/// Encode a validated model document with sorted ASCII object keys and no final LF.
+pub fn encode_canonical(doc: &ModelDocument) -> Result<Vec<u8>, PrismError> {
+    super::validate::validate(doc)?;
+    let value =
+        serde_json::to_value(doc).map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    encode_value(&value)
+}
+
+/// Strictly decode, validate, and require the input bytes to be canonical.
+pub fn decode_canonical(bytes: &[u8]) -> Result<ModelDocument, PrismError> {
+    let value = decode_value(bytes, "model-document")?;
+    let doc: ModelDocument = serde_json::from_value(value).map_err(|error| {
+        PrismError::new("PP4004", format!("invalid model-document shape: {error}"))
+    })?;
+    super::validate::validate(&doc)?;
+    if encode_canonical(&doc)? != bytes {
+        return Err(PrismError::new(
+            "PP4004",
+            "model-document fields do not have their canonical typed shape",
+        ));
+    }
+    Ok(doc)
 }

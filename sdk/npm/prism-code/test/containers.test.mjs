@@ -499,6 +499,25 @@ test('the file store keeps the record across clients, never the input, and a rea
   assert.deepEqual(readdirSync(directory), [], '--rm leaves nothing');
 });
 
+test('a long-lived client sees what another client did to the shared store', async () => {
+  const directory = join(scratch(), 'containers');
+  const watcher = createPrism({ store: fileContainerStore(directory), warn: () => {} });
+  const worker = createPrism({ store: fileContainerStore(directory), warn: () => {} });
+  const created = await worker.containers.create(fixture, ADD, P0);
+  const seen = await watcher.containers.get(created.id);
+  assert.equal(seen.status, 'created');
+  assert.deepEqual(await watcher.containers.logs(created.id), new Uint8Array(0));
+  await created.start();
+  // The same object, read again: the record the worker wrote, not the one first read.
+  assert.equal(await watcher.containers.get(created.id), seen);
+  assert.equal(seen.status, 'exited');
+  assert.equal(new TextDecoder().decode(await watcher.containers.logs(created.id)), SUM);
+  assert.deepEqual((await watcher.containers.list({ all: true })).map((container) => container.exitCode), [0]);
+  await worker.containers.remove(created.id);
+  await assert.rejects(watcher.containers.get(created.id), { code: 'container.missing' });
+  assert.deepEqual(await watcher.containers.list({ all: true }), []);
+});
+
 test('the file store keeps output that is not text, and names the directory it cannot write', async () => {
   const directory = join(scratch(), 'containers');
   const app = { ...(await load(fixture)), dispatch: async () => Uint8Array.from([0xff, 0x00, 0xfe]) };

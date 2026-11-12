@@ -2,7 +2,8 @@
 
 use lexlean::{CheckRequest as LexCheckRequest, Engine, Selection};
 use prismpm::controller::{BuildRequest, CheckRequest, Controller};
-use prismpm::holo::canonical::{content_id, decode_canonical, encode_canonical};
+use prismpm::holo::canonical::content_id;
+use prismpm::holo::model_document::{decode_canonical, encode_canonical};
 use prismpm::holo::projector::project_snapshot;
 use proptest::prelude::*;
 use std::path::{Path, PathBuf};

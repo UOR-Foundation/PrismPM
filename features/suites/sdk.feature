@@ -279,3 +279,10 @@ Feature: sdk
     When containers are created, started, dispatched, inspected, read for logs and removed, with and without allowUnverified and with a volume
     Then a holo that fails check exits without the guest running, and an allowUnverified run records when it bypassed check and why
     And a volume is refused with a typed host-effects error kept on the record, and logs come from the stored output
+
+  @DK-44 @build
+  Scenario: The prism-code system and auth command groups are the CLI of prism.system and prism.auth: system info and version name the package, the holo format, the runtime and the toolchain and builder image the project's prismpm.lock pins, events replays and follows create, start, die and destroy from the container store with since, until and filters, df counts every record and prune removes exited containers only and asks first unless forced; auth login checks the credential with the registry before storing it where Docker would, refuses a password on the command line, and no password reaches stdout, stderr or an error in any spelling, and logout names an ambient token it cannot clear.
+    Given a PRISM_HOME with containers, a project with a prismpm.lock, a Docker config folder and an in-process registry
+    When the system and auth verbs are called as the CLI dispatcher calls them, with good and bad arguments
+    Then system reports, replays and follows events, counts and prunes as prism.system does, and every bad argument is a usage error
+    And login stores only a credential the registry accepts, a password on the command line is refused, and no secret appears in any output or error

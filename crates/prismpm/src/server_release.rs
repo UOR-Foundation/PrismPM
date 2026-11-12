@@ -15,7 +15,7 @@
 //! the model says, and its record is the retained one.
 
 use crate::error::PrismError;
-use crate::holo::canonical::decode_canonical;
+use crate::holo::model_document::decode_canonical;
 use crate::holo::model_document::Application;
 use crate::server_host::{acceptance, program_name, workspace};
 use crate::verification::server::{build_workspace, declared_bounds, under};

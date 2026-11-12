@@ -3,8 +3,8 @@
 
 mod support;
 
-use prismpm::holo::canonical::{decode_canonical, encode_canonical};
 use prismpm::holo::model_document::Application;
+use prismpm::holo::model_document::{decode_canonical, encode_canonical};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use support::{
@@ -40,7 +40,7 @@ fn serving_declaration_roundtrips_and_requires_the_closed_record() {
     let bytes = encode_canonical(&document).unwrap();
     assert_eq!(decode_canonical(&bytes).unwrap(), document);
     assert_eq!(serde_json::to_value(&document).unwrap(), value);
-    prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", value.clone())
+    prismpm::model_contract::contract_from_value("prismpm/model-document/7", value.clone())
         .unwrap();
     let Some(Application::Server(server)) = &document.application else {
         panic!("the server profile projects a server application");
@@ -65,8 +65,7 @@ fn serving_declaration_roundtrips_and_requires_the_closed_record() {
         .remove("serving");
     assert!(!schema().is_valid(&missing));
     assert!(
-        prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", missing)
-            .is_err()
+        prismpm::model_contract::contract_from_value("prismpm/model-document/7", missing).is_err()
     );
     let mut unserved = value.clone();
     unserved["application"]["serving"] = json!([]);
@@ -87,7 +86,7 @@ fn serving_declaration_roundtrips_and_requires_the_closed_record() {
         unknown.pointer_mut(parent).unwrap()[name] = json!(1);
         assert!(!schema().is_valid(&unknown), "{pointer}");
         assert!(
-            prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", unknown)
+            prismpm::model_contract::contract_from_value("prismpm/model-document/7", unknown)
                 .is_err(),
             "{pointer}"
         );

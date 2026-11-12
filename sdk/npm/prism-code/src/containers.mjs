@@ -21,6 +21,9 @@ import { attachVolume, refusalRecord } from './volumes.mjs';
 
 export const CONTAINER_SCHEMA = 'prism/container/1';
 
+// Not part of the API: how `get` hands a cached container the record in the store.
+const REFRESH = Symbol('refresh');
+
 /** The volume names `create` takes: an array of strings, each attached through `volumes` (#445). */
 function volumeNames(volumes) {
   if (volumes === undefined) return [];
@@ -181,6 +184,20 @@ class Container {
     if (options !== undefined && (options === null || typeof options !== 'object' || Object.keys(options).length > 0)) fail('container.option', 'logs takes no options: a run returns one output, kept on the record');
     if (this.#removed) fail('container.missing', `no such container: ${this.id}`);
     return decodeOutput(this.#record.output) ?? new Uint8Array(0);
+  }
+
+  /**
+   * Take the record another client wrote to the shared store, so a long-lived client
+   * sees what others did. A run in this process is the writer of its own record and
+   * keeps it.
+   */
+  [REFRESH](record) {
+    if (this.#inFlight === null && !this.#removed) {
+      this.#record = record;
+      this.#output = decodeOutput(record.output);
+      if (record.state.status !== 'exited' || record.state.error === null) this.#error = null;
+    }
+    return this;
   }
 
   /** The output as text, or null when the guest returned none. */
@@ -346,9 +363,15 @@ export function createContainers({ load, store = memoryContainerStore(), warn = 
     const ids = typeof id === 'string' && HEX_ID.test(id) ? await store.find(id) : [];
     if (ids.length === 0) fail('container.missing', `no such container: ${id}`);
     if (ids.length > 1) fail('container.ambiguous', `${id} names ${ids.length} containers; give more of the id`);
+    const record = await store.get(ids[0]);
+    // Removed by another client between find and get.
+    if (record === undefined) {
+      forget(ids[0]);
+      fail('container.missing', `no such container: ${id}`);
+    }
     const known = live.get(ids[0]);
-    if (known) return known;
-    const container = new Container({ record: await store.get(ids[0]), store, warn, forget, emit, volumeScope });
+    if (known) return known[REFRESH](record);
+    const container = new Container({ record, store, warn, forget, emit, volumeScope });
     live.set(ids[0], container);
     return container;
   }
