@@ -2375,7 +2375,10 @@ pub fn verify(bytes: &[u8], policy: &Policy) -> Result<Verdict, NoVerdict> {
 
     let mut passed = !outside_grant;
     // A holo whose bytes do not hold together fails every policy, P0 included.
-    if reasons.iter().any(|reason| reason.check == "holo.integrity") {
+    if reasons
+        .iter()
+        .any(|reason| reason.check == "holo.integrity")
+    {
         passed = false;
         reasons.push(Reason::new(
             "policy.integrity",
