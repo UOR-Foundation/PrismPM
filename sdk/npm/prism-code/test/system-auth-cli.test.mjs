@@ -181,9 +181,12 @@ test('system events replays create, start and die from the store in order, with 
 });
 
 test('system events follows the store until stopped, and reports a removed container as destroy', async () => {
-  const { env, prism, exited } = await home();
+  const { env, prism, exited, created } = await home();
   const stop = new AbortController();
   const following = call(systemCli, 'events', ['--json'], { env, pollMs: 20, signal: stop.signal });
+  // Let it read the store once, so a container it has already seen as created must be read again when it starts.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await (await prism.containers.get(created)).start();
   const later = await prism.containers.run(fixture, ADD, P0);
   await (await prism.containers.get(exited)).remove();
   await new Promise((resolve) => setTimeout(resolve, 200));
@@ -193,6 +196,7 @@ test('system events follows the store until stopped, and reports a removed conta
   const seen = out.trim().split('\n').map((line) => JSON.parse(line));
   assert.deepEqual(seen.filter((e) => e.id === later.id).map((e) => e.action), ['create', 'start', 'die']);
   assert.deepEqual(seen.filter((e) => e.id === exited).map((e) => e.action), ['destroy']);
+  assert.deepEqual(seen.filter((e) => e.id === created).map((e) => e.action), ['start', 'die']);
 });
 
 test('system events ends at an --until still ahead of it', async () => {

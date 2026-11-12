@@ -45,6 +45,8 @@ export function context(io = {}) {
     pollMs: io.pollMs ?? EVENTS_POLL_MS,
     signal: io.signal ?? null,
     prism: io.prism ?? Prism.fromEnv({ env, warn: () => {} }),
+    // A client keeps each container it has read, so following the store reads it through a new one each time.
+    fresh: () => io.prism ?? Prism.fromEnv({ env, warn: () => {} }),
   };
 }
 
@@ -140,7 +142,7 @@ async function events(argv, io) {
     const out = { schema: SYSTEM_EVENT_SCHEMA, sequence: ++sequence, type: 'container', action: event.action, id: event.id, image: event.image, exitCode: event.exitCode, time: new Date(event.timeMs).toISOString(), timeMs: event.timeMs };
     io.stdout.write(options.json ? `${JSON.stringify(out)}\n` : `${out.time} container ${out.action} ${out.id}${out.image ? ` (image=${out.image}${out.exitCode === null ? '' : `, exitCode=${out.exitCode}`})` : ''}\n`);
   };
-  let seen = await snapshot(io.prism);
+  let seen = await snapshot(io.fresh());
   const shown = new Set();
   const show = (records, quiet = false) => {
     const fresh = [...records.values()].flatMap(recordEvents).filter((e) => !shown.has(`${e.id} ${e.action} ${e.timeMs}`));
@@ -159,7 +161,14 @@ async function events(argv, io) {
   try {
     while (!stop && (until === undefined || Date.now() <= until)) {
       await new Promise((r) => setTimeout(r, until === undefined ? io.pollMs : Math.max(0, Math.min(io.pollMs, until - Date.now()))));
-      const next = await snapshot(io.prism);
+      let next;
+      try {
+        next = await snapshot(io.fresh());
+      } catch (error) {
+        // A record removed between listing the folder and reading it: read the store again on the next turn.
+        if (error?.code === 'container.store' || error?.code === 'container.missing') continue;
+        throw error;
+      }
       show(next);
       const gone = Date.now();
       for (const [id, record] of seen) if (!next.has(id)) emit({ action: 'destroy', id, image: record.image?.digest ?? null, exitCode: null, timeMs: gone });
