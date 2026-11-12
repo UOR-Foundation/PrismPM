@@ -113,6 +113,9 @@ export function imagesDirectory(env = process.env) {
   return env.PRISM_IMAGES || join(env.PRISM_HOME || join(homedir(), '.prism'), 'images');
 }
 
+/** The file a store made by `fileImageStore(directory)` keeps the image `blake3:<hex>` in. */
+export const imageFile = (directory, hex) => join(directory, 'blobs', 'blake3', hex);
+
 /** Images on disk, readable only by this user. Every write lands beside its target and is renamed over it. */
 export function fileImageStore(directory) {
   if (typeof directory !== 'string' || directory === '') fail('image.store', 'fileImageStore needs a directory');
@@ -132,7 +135,7 @@ export function fileImageStore(directory) {
     await fs.writeFile(scratch, bytes, { mode: 0o600 });
     await fs.rename(scratch, file);
   };
-  const blob = (path, hex) => path.join(directory, 'blobs', 'blake3', hex);
+  const blob = (path, hex) => imageFile(directory, hex);
   const absent = (cause) => {
     if (cause.code === 'ENOENT') return null;
     throw cause;

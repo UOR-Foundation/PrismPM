@@ -14,6 +14,9 @@ import { createAuth } from './auth.mjs';
 import { hostDockerArguments } from './host.mjs';
 import { fail } from './errors.mjs';
 import { fileImageStore, imagesDirectory } from './image-store.mjs';
+
+/** Whether anything is at this path; the client opens a stored image only when nothing is (#347). */
+export const pathExists = (path) => stat(path).then(() => true, () => false);
 import { parseManifest, manifestCapabilities, MANIFEST_FILE } from './manifest.mjs';
 import { parseCapabilities } from './capabilities.mjs';
 

@@ -48,6 +48,11 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code images",
+      "name": "images"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code init",
       "name": "init"
     },
@@ -73,6 +78,11 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code logs",
+      "name": "logs"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code manifest",
       "name": "manifest"
     },
@@ -90,6 +100,11 @@
       "kind": "verb",
       "place": "prism-code providers",
       "name": "providers"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code ps",
+      "name": "ps"
     },
     {
       "kind": "verb",
@@ -118,6 +133,11 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code rmi",
+      "name": "rmi"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code run",
       "name": "run"
     },
@@ -125,6 +145,11 @@
       "kind": "verb",
       "place": "prism-code setup",
       "name": "setup"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code tag",
+      "name": "tag"
     },
     {
       "kind": "verb",
@@ -170,6 +195,11 @@
       "kind": "verb",
       "place": "prism-code containers logs",
       "name": "logs"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers ls",
+      "name": "ls"
     },
     {
       "kind": "verb",
@@ -675,6 +705,21 @@
       "kind": "flag",
       "place": "--write",
       "name": "write"
+    },
+    {
+      "kind": "namespace",
+      "place": "prism-code container",
+      "name": "container"
+    },
+    {
+      "kind": "namespace",
+      "place": "prism-code image",
+      "name": "image"
+    },
+    {
+      "kind": "namespace",
+      "place": "prism-code volume",
+      "name": "volume"
     },
     {
       "kind": "namespace",

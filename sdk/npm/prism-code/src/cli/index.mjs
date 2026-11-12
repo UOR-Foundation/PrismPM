@@ -30,8 +30,15 @@ export const GROUPS = Object.freeze(Object.fromEntries(Object.entries(FILES).map
 export const TOP_LEVEL = Object.freeze(Object.fromEntries(Object.entries(FILES).flatMap(([module, file]) =>
   Object.entries(file.aliases ?? {}).map(([alias, name]) => [alias, Object.freeze([module, name])]))));
 
+/** Docker's singular management commands: `image ls` is `images ls`, `container ls` is `containers ls` (#347). */
+export const MODULE_ALIASES = Object.freeze({ container: 'containers', image: 'images', volume: 'volumes' });
+
+/** The module a word names: itself, or the module its singular spelling names. */
+export const moduleOf = (word) => (Object.hasOwn(MODULE_ALIASES, word) ? MODULE_ALIASES[word] : word);
+
 /** The group verb `args` names, or null when `args` is not a group command. */
-export function groupVerb(module, args) {
+export function groupVerb(word, args) {
+  const module = moduleOf(word);
   const verbs = Object.hasOwn(GROUPS, module) ? GROUPS[module] : null;
   const name = args[0];
   if (verbs === null || typeof name !== 'string' || !Object.hasOwn(verbs, name)) return null;
@@ -46,10 +53,9 @@ export function groupUsage() {
       lines.push(FILES[module].help.replace(/\n$/, ''));
       continue;
     }
-    for (const [name, { usage, summary }] of Object.entries(verbs)) {
-      const head = `  prism-code ${module} ${name}${usage ? ` ${usage}` : ''}`;
-      lines.push(head.length < 52 ? `${head.padEnd(52)}${summary}` : `${head}\n${' '.repeat(52)}${summary}`);
-    }
+    const line = (head, summary) => lines.push(head.length < 52 ? `${head.padEnd(52)}${summary}` : `${head}\n${' '.repeat(52)}${summary}`);
+    for (const [name, { usage, summary }] of Object.entries(verbs)) line(`  prism-code ${module} ${name}${usage ? ` ${usage}` : ''}`, summary);
+    for (const [alias, name] of Object.entries(FILES[module].aliases ?? {})) line(`  prism-code ${alias} ...`, `the same as prism-code ${module} ${name}`);
   }
   return lines.join('\n');
 }
