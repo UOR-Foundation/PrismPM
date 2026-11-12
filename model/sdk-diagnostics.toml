@@ -219,37 +219,37 @@ statement = "The closure's provenance.json is not JSON or names a schema other t
 
 [[error]]
 code = "container.ambiguous"
-capability = "DK-41"
+capability = "DK-43"
 statement = "The id prefix names more than one container; give more of the id."
 
 [[error]]
 code = "container.input"
-capability = "DK-41"
+capability = "DK-43"
 statement = "A container was given an input that is not one string or bytes."
 
 [[error]]
 code = "container.missing"
-capability = "DK-41"
+capability = "DK-43"
 statement = "No container has that id."
 
 [[error]]
 code = "container.option"
-capability = "DK-41"
+capability = "DK-43"
 statement = "prism.containers was given an option it does not have, or one of the wrong type."
 
 [[error]]
 code = "container.running"
-capability = "DK-41"
+capability = "DK-43"
 statement = "The container is running and cannot be removed."
 
 [[error]]
 code = "container.state"
-capability = "DK-41"
+capability = "DK-43"
 statement = "The container was read back from its store, which does not keep its input, so it cannot be started again; run the holo again."
 
 [[error]]
 code = "container.store"
-capability = "DK-41"
+capability = "DK-43"
 statement = "The container store directory cannot be created or written; set PRISM_HOME to a directory that can be written."
 
 [[error]]

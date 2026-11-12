@@ -958,13 +958,13 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `closure.glue` |  | `OC-11` | The closure glue module has no initSync export, or exports neither invoke_bytes nor calculate. |
 | `closure.model` |  | `OC-11` | Numeric closure dispatch needs the model document (application.view.operations), and none was given. |
 | `closure.provenance` |  | `OC-11` | The closure's provenance.json is not JSON or names a schema other than the closure provenance schemas. |
-| `container.ambiguous` |  | `DK-41` | The id prefix names more than one container; give more of the id. |
-| `container.input` |  | `DK-41` | A container was given an input that is not one string or bytes. |
-| `container.missing` |  | `DK-41` | No container has that id. |
-| `container.option` |  | `DK-41` | prism.containers was given an option it does not have, or one of the wrong type. |
-| `container.running` |  | `DK-41` | The container is running and cannot be removed. |
-| `container.state` |  | `DK-41` | The container was read back from its store, which does not keep its input, so it cannot be started again; run the holo again. |
-| `container.store` |  | `DK-41` | The container store directory cannot be created or written; set PRISM_HOME to a directory that can be written. |
+| `container.ambiguous` |  | `DK-43` | The id prefix names more than one container; give more of the id. |
+| `container.input` |  | `DK-43` | A container was given an input that is not one string or bytes. |
+| `container.missing` |  | `DK-43` | No container has that id. |
+| `container.option` |  | `DK-43` | prism.containers was given an option it does not have, or one of the wrong type. |
+| `container.running` |  | `DK-43` | The container is running and cannot be removed. |
+| `container.state` |  | `DK-43` | The container was read back from its store, which does not keep its input, so it cannot be started again; run the holo again. |
+| `container.store` |  | `DK-43` | The container store directory cannot be created or written; set PRISM_HOME to a directory that can be written. |
 | `core.allocation` |  | `DK-41` | The request is larger than the guest allocation maximum. |
 | `core.compile` |  | `DK-41` | The guest WebAssembly does not compile. |
 | `core.exports` |  | `DK-41` | The guest exports differ from the exports its ABI expects. |

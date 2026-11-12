@@ -18,6 +18,7 @@ use std::path::{Component, Path};
 mod advisory;
 mod executable_file;
 mod executable_inventory;
+pub(crate) mod process;
 pub(crate) use executable_file::ExecutableFile;
 
 pub(crate) const STDLIB_SOURCES: &[u8] = include_bytes!("../sdk/stdlib-sources.tar");
@@ -410,7 +411,7 @@ pub fn fetch_project_dependencies(root: &Path) -> Result<Vec<serde_json::Value>,
     let mut records = Vec::new();
     if root.join("Cargo.toml").is_file() && root.join("Cargo.lock").is_file() {
         let cargo = executable("cargo")?;
-        let record = crate::verification::run_process(
+        let record = process::run_process::<process::NoExtension>(
             "cargo-fetch",
             &cargo,
             &["fetch".to_owned(), "--locked".to_owned()],
@@ -426,7 +427,7 @@ pub fn fetch_project_dependencies(root: &Path) -> Result<Vec<serde_json::Value>,
     }
     if root.join("package.json").is_file() && root.join("package-lock.json").is_file() {
         let npm = executable("npm")?;
-        let record = crate::verification::run_process(
+        let record = process::run_process::<process::NoExtension>(
             "npm-ci",
             &npm,
             &[
@@ -1402,7 +1403,7 @@ fn capture_platform_update(
             environment.insert(name.to_owned(), value.to_string_lossy().into_owned());
         }
     }
-    let result = crate::verification::run_process_limited(
+    let result = process::run_process_limited::<process::NoExtension>(
         "sdk-platform-update",
         &node,
         &[

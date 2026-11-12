@@ -185,6 +185,10 @@ export interface ContainerRecord {
   /** ISO 8601. */
   created: string;
   rm: boolean;
+  /** Whether the caller asked to run past a refusing check. */
+  allowUnverified: boolean;
+  /** Each volume the container asked for, and the typed refusal that keeps it from the guest until host effects land (#216, #217). */
+  volumes: ContainerVolume[];
   state: {
     status: ContainerStatus;
     /** Null until exited. */
@@ -197,6 +201,8 @@ export interface ContainerRecord {
   };
   /** The verdict of the check this run was gated on, or null when none was reached. */
   verdict: Verdict | null;
+  /** Set when the last start ran past a refusing check under `allowUnverified`: when, the error check gave, and the warning. Null otherwise. */
+  unverified: { at: string; warning: string; code: string | null; check: string | null } | null;
   /** The output the guest returned, as text when it is valid UTF-8, otherwise as hex. Never the input. */
   output: { encoding: 'utf-8' | 'hex'; data: string } | null;
 }
@@ -218,6 +224,51 @@ export interface Container {
   inspect(): Promise<ContainerRecord>;
   /** Refused with `container.running` while it runs. */
   remove(): Promise<void>;
+  /** The output, from the record, as `docker logs`; empty before any run. Takes no options. */
+  logs(): Promise<Uint8Array>;
+}
+
+/** Experimental. A refusal of `prism.volumes`, as plain JSON (`refusalRecord`). */
+export interface VolumeRefusal {
+  name: string;
+  code: string;
+  /** `capabilities.host-effects`, `capabilities.host-folder`, `capabilities.key-value-stores` or `capabilities.providers`. */
+  check: string;
+  message: string;
+  details: { module: 'volumes'; verb: string; volume: string | null; outside?: 'grant' | 'declaration' | 'world' | 'policy'; dependsOn?: readonly string[]; [member: string]: unknown };
+}
+
+/** One volume a container asked for (#443, #445). */
+export interface ContainerVolume {
+  name: string;
+  attached: boolean;
+  refusal: VolumeRefusal | null;
+}
+
+/** Experimental. A volume: a named store the capability file allows and a provider declares (#445). Never a host folder. */
+export interface Volume {
+  readonly name: string;
+  /** The capability set in force, or null when none grants anything. */
+  readonly set: string | null;
+  /** The provider type that serves it, or null when none declares it. */
+  readonly provider: string | null;
+  readonly options: Record<string, unknown> | null;
+  /** A guest has no access yet; it depends on host effects. */
+  readonly guest: { readonly access: false; readonly dependsOn: readonly string[] };
+}
+
+/** What `volumes.create` returns: the volume and what the provider's `up` returned. `env` may hold secrets. */
+export interface CreatedVolume extends Volume {
+  readonly env: Record<string, string>;
+  readonly withheld: readonly object[];
+}
+
+/** Experimental. `prism.volumes` (#445). Every refusal is a `CapabilityDeniedError`; no verb takes options or writes the capability file. */
+export interface Volumes {
+  create(name: string, options?: Record<string, never>): Promise<CreatedVolume>;
+  list(options?: Record<string, never>): Promise<readonly Volume[]>;
+  inspect(name: string, options?: Record<string, never>): Promise<Volume>;
+  remove(name: string, options?: Record<string, never>): Promise<void>;
 }
 
 /** Where records are kept. `memoryContainerStore` is the default. */
@@ -235,8 +286,10 @@ export interface ContainerOptions extends LoadOptions {
   policy?: VerifyOptions | (() => VerifyOptions | Promise<VerifyOptions>);
   /** Run a holo that fails check, or that check cannot judge. Warns on every start; never the default. */
   allowUnverified?: boolean;
-  /** Remove the container when it exits, as `docker run --rm` does. */
+  /** Remove the container when it exits, as `docker run --rm` does. `dispatch` defaults it to true. */
   rm?: boolean;
+  /** Volume names, attached through `prism.volumes`; each refusal is kept on the record and the guest never runs (#445). */
+  volumes?: string[];
 }
 
 /** Experimental. `prism.containers` (#348). `image` is what `load` takes, or an application it returned. */
@@ -245,7 +298,11 @@ export interface Containers {
   run(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
   /** Open the image and make a container in state `created`. An image that cannot be opened makes no container. */
   create(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Container>;
+  /** Run once and return the output, as a call: the container is removed on exit unless `rm: false`, and a failed run rejects with its typed error. */
+  dispatch(image: Uint8Array | ArrayBuffer | Blob | string | URL | Application, input: string | Uint8Array | ArrayBuffer | ArrayBufferView, options?: ContainerOptions): Promise<Uint8Array>;
   start(id: string): Promise<Container>;
+  logs(id: string): Promise<Uint8Array>;
+  inspect(id: string): Promise<ContainerRecord>;
   /** The container with this id or unique id prefix. Rejects with `container.missing` or `container.ambiguous`. */
   get(id: string): Promise<Container>;
   remove(id: string): Promise<void>;
@@ -352,7 +409,7 @@ export interface PrismClient {
   readonly images: Images;
   readonly containers: Containers;
   readonly networks: { readonly [verb: string]: (...args: any[]) => Promise<unknown> };
-  readonly volumes: { readonly [verb: string]: (...args: any[]) => Promise<unknown> };
+  readonly volumes: Volumes;
   readonly system: System;
   readonly auth: { readonly [member: string]: unknown };
   readonly errors: { readonly [member: string]: unknown };

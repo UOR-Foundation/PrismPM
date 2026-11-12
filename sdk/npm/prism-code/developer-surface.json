@@ -158,8 +158,23 @@
     },
     {
       "kind": "verb",
+      "place": "prism-code containers create",
+      "name": "create"
+    },
+    {
+      "kind": "verb",
       "place": "prism-code containers inspect",
       "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers logs",
+      "name": "logs"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers ps",
+      "name": "ps"
     },
     {
       "kind": "verb",
@@ -170,6 +185,11 @@
       "kind": "verb",
       "place": "prism-code containers run",
       "name": "run"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code containers start",
+      "name": "start"
     },
     {
       "kind": "verb",
@@ -240,6 +260,26 @@
       "kind": "verb",
       "place": "prism-code system version",
       "name": "version"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes create",
+      "name": "create"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes ls",
+      "name": "ls"
+    },
+    {
+      "kind": "verb",
+      "place": "prism-code volumes rm",
+      "name": "rm"
     },
     {
       "kind": "flag",
@@ -628,6 +668,11 @@
     },
     {
       "kind": "flag",
+      "place": "--volume",
+      "name": "volume"
+    },
+    {
+      "kind": "flag",
       "place": "--write",
       "name": "write"
     },
@@ -693,13 +738,28 @@
     },
     {
       "kind": "method",
+      "place": "prism.containers.dispatch",
+      "name": "dispatch"
+    },
+    {
+      "kind": "method",
       "place": "prism.containers.get",
       "name": "get"
     },
     {
       "kind": "method",
+      "place": "prism.containers.inspect",
+      "name": "inspect"
+    },
+    {
+      "kind": "method",
       "place": "prism.containers.list",
       "name": "list"
+    },
+    {
+      "kind": "method",
+      "place": "prism.containers.logs",
+      "name": "logs"
     },
     {
       "kind": "method",
