@@ -20,5 +20,7 @@ sdk/npm/**/*.lock text eol=lf
 schemas/**/*.json text eol=lf
 # The matrix is generated and compared byte for byte; the corpus is hashed (#287).
 COMPLIANCE.md text eol=lf
+# The developer view's glossary page is rendered by its model and compared byte for byte (#347).
+docs/developer-glossary.md text eol=lf
 sdk/npm/conformance/corpus/*.holo binary
 crates/prismpm/src/generate/core-wasm.wit text eol=lf
