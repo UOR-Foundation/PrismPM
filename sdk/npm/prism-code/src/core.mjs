@@ -10,6 +10,8 @@ import { NO_CAPABILITIES } from './capabilities.mjs';
 
 export const CORE_CONTRACT = 'hologram:guest/core-wasm@1';
 const REQUIRED_EXPORTS = ['memory', 'holo_alloc', 'holo_run'];
+/** The linker globals a target/2 guest exports beside them (SPEC.md, application V2). */
+const STACK_EXPORTS = ['__stack_high', '__stack_low'];
 
 /**
  * Compile the guest and link its imports against `grant` (issue #279). Deny
@@ -25,8 +27,13 @@ export async function compileGuest(wasmBytes, grant = NO_CAPABILITIES) {
     fail('core.compile', `guest does not compile: ${error.message}`);
   }
   for (const entry of WebAssembly.Module.imports(module)) grant.linkImport(entry);
-  const exportNames = WebAssembly.Module.exports(module).map((e) => e.name).sort();
-  const expected = [...REQUIRED_EXPORTS].sort();
+  const exports = WebAssembly.Module.exports(module);
+  const exportNames = exports.map((e) => e.name).sort();
+  // A target/2 guest (SPEC.md, application V2) also exports its immutable
+  // __stack_low and __stack_high linker globals, both or neither.
+  const stack = exports.filter((e) => STACK_EXPORTS.includes(e.name));
+  const v2 = stack.length === STACK_EXPORTS.length && stack.every((e) => e.kind === 'global');
+  const expected = [...REQUIRED_EXPORTS, ...(v2 ? STACK_EXPORTS : [])].sort();
   if (exportNames.length !== expected.length || exportNames.some((n, i) => n !== expected[i])) {
     fail('core.exports', `guest exports ${JSON.stringify(exportNames)}, expected ${JSON.stringify(expected)}`);
   }
