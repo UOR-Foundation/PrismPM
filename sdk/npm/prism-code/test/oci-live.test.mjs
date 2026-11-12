@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArchive, resolveArchive } from '../src/archive.mjs';
 import { readAttestations } from '../src/attestations.mjs';
-import { experimental_attest } from '../src/attest.mjs';
+import { experimental_attest } from '../src/attest-write.mjs';
 import { PullVerificationError } from '../src/errors.mjs';
 import { experimental_pull, experimental_push } from '../src/push-pull.mjs';
 
