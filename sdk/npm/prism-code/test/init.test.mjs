@@ -186,6 +186,7 @@ test('a bound project points at build --check, the model check, not the removed 
   assert.equal(r.code, 0, r.err);
   assert.equal(readFileSync(join(dir, 'standards.lock'), 'utf8'), '{"stub":"standards"}');
   assert.ok(existsSync(join(dir, 'prismpm.lock')));
-  assert.match(r.out, /Done\. Next, from the cheapest gate to the whole build:\n {2}cd .*\n {2}npx prism-code build --check {5}T0[^\n]*\n {2}npx prism-code verify --lean {5}T1[^\n]*\n {2}npx prism-code axioms --write {4}when T1[^\n]*\n {2}npx prism-code verify {12}T2[^\n]*\n$/);
+  assert.match(r.out, /Done\. This is a LexLean project, not a Prism app\./);
+  assert.match(r.out, /Next, from the cheapest gate to the whole build:\n {2}cd .*\n {2}npx prism-code build --check {5}T0[^\n]*\n {2}npx prism-code verify --lean {5}T1[^\n]*\n {2}npx prism-code axioms --write {4}when T1[^\n]*\n {2}npx prism-code verify {12}T2[^\n]*\n$/);
   assert.doesNotMatch(r.out, /prism-code check\n/);
 });
