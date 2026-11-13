@@ -27,6 +27,7 @@ export const plumbing = Object.freeze([
   'scripts/ci-capacity.test.mjs',
   'scripts/factory.mjs',
   'scripts/factory.test.mjs',
+  'scripts/lexlean-pin.test.mjs',
   'scripts/library-sdk-check.test.mjs',
   'scripts/product-sdk-check.test.mjs',
   'scripts/release-gate-evidence.mjs',
