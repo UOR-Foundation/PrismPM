@@ -329,7 +329,7 @@ test('the MCP server greets, asks, records answers and refuses to build an unfin
   assert.deepEqual(tools, ['prism_start', 'prism_answer', 'prism_spec', 'prism_prove', 'prism_build', 'prism_try', 'prism_status']);
   const specInput = (await s.call('tools/list')).result.tools.find((t) => t.name === 'prism_spec').inputSchema.properties.spec;
   // prism/spec/1 first, then prism/spec/2 for an app that keeps state.
-  assert.deepEqual(specInput.anyOf[0].required, ['purpose', 'fields', 'outcomes', 'rules', 'otherwise']);
+  assert.deepEqual(specInput.anyOf[0].required, ['fields', 'rules', 'otherwise'], 'a draft needs only what the user said');
   assert.deepEqual(specInput.anyOf[1].required, ['schema', 'purpose', 'state', 'outcomes', 'actions']);
   const start = await s.tool('prism_start');
   assert.match(start.structuredContent.greeting, /draft the spec for your approval/);

@@ -21,6 +21,10 @@ export const INVALID = 'invalid';
 export const MAX_DIGITS = 18;
 export const NAT_MAX = 10n ** 18n - 1n;
 
+/** How the reason of a guarantee Prism proposed starts (complete.mjs). A surface shows a guarantee whose `why` starts so as proposed. */
+export const PROPOSED = 'Proposed by Prism';
+export const isProposed = (property) => typeof property?.why === 'string' && property.why.startsWith(PROPOSED);
+
 const WORD = /^[a-z][a-z0-9-]{0,31}$/;
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const OPS = ['<', '<=', '>', '>=', '=', '!='];
@@ -406,6 +410,9 @@ function candidates(spec) {
     return sorted.filter((n) => (f.min === undefined || n >= BigInt(f.min)) && (f.max === undefined || n <= BigInt(f.max)));
   });
 }
+
+/** How many requests the candidate values make. A search that tried this many tried every one of them. */
+export const sampleSize = (spec) => candidates(spec).reduce((n, list) => n * list.length, 1);
 
 /** Every decoded request over the candidate values, up to `limit`. */
 export function* sampleRequests(spec, limit = 200000) {
