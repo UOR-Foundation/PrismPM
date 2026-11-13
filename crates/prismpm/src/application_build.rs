@@ -1357,6 +1357,7 @@ fn generate_in(
             view_model_id,
             browser_projection_sha256: browser_projection_sha,
         },
+        basis: sdk_basis(repository_root),
     })?;
 
     let mut artifacts = vec![
@@ -1375,14 +1376,13 @@ fn generate_in(
         ),
         (format!("{}.holo", application.name()), holo.bytes),
         (
-            "application/application-manifest.bin".to_owned(),
+            "application/holo-manifest.json".to_owned(),
             holo.application_manifest,
         ),
         (
             "application/capability-request.bin".to_owned(),
             holo.capability_request,
         ),
-        ("application/directory.json".to_owned(), holo.directory),
         (
             "application/holo-identities.json".to_owned(),
             encode_value(
@@ -1642,6 +1642,17 @@ mod tests {
 
 /// The model-owned target metadata, shared by generation and source-free
 /// verification. V1 retains its original closed target/1 representation.
+/// κ of the Prism SDK release the project pins: the digest `prismpm.lock`
+/// names its SDK image by, which is the SHA-256 of that image's index, so it is
+/// already a κ-label once spelled `sha256:<hex>` (ADR-017). A project without a
+/// lock names no basis.
+fn sdk_basis(repository_root: &Path) -> Option<String> {
+    let lock: Value =
+        serde_json::from_slice(&std::fs::read(repository_root.join("prismpm.lock")).ok()?).ok()?;
+    let digest = lock["sdk_image"].as_str()?.rsplit_once('@')?.1;
+    crate::holo::v5::is_kappa(digest).then(|| digest.to_owned())
+}
+
 pub(crate) fn application_target_profile(application: &Application) -> Value {
     let mut target = json!({
         "contract": application.core_contract(),

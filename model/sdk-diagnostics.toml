@@ -91,6 +91,11 @@ capability = "AL-07"
 statement = "The archive footer does not verify, so no attestation is appended to it."
 
 [[error]]
+code = "attestation.format"
+capability = "AL-07"
+statement = "The holo is a physical-v4 archive, which stays readable but cannot be signed; rebuild it as a holo v5 (ADR-017) first."
+
+[[error]]
 code = "attestation.input"
 capability = "AL-07"
 statement = "appendAttestations was given no bundles, or a bundle that is not an object, a JSON string or UTF-8 bytes."

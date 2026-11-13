@@ -289,7 +289,8 @@ export async function experimental_push(source, target, options = {}) {
   // Step 5: the tags, last, so a tag never names a holo whose attestations are on the way.
   const tags = [];
   if (reference.tag && !reference.digest) tags.push(reference.tag);
-  if (reference.kind === 'registry') tags.push(fingerprintTag(fingerprint));
+  // A legacy v4 holo gets a tag for its BLAKE3 fingerprint; a holo v5 is already addressed by its κ, the layer digest.
+  if (reference.kind === 'registry' && fingerprint.startsWith('blake3:')) tags.push(fingerprintTag(fingerprint));
   for (const tag of tags) await endpoint.tagManifest(tag, manifestBytes);
 
   return {

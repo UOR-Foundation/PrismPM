@@ -253,6 +253,21 @@ export const FORMAT_REVISIONS = freeze({
   }),
 });
 /**
+ * Holo v5 (ADR-017): a raw self-contained UORC archive of ordered objects,
+ * sealed by UORC-SHA256-CHAIN-v1. Every identity is a κ-label, `sha256:` and
+ * the hex SHA-256 of the bytes it names; the κ of the file is its OCI digest.
+ */
+export const HOLO_V5 = freeze({
+  /** "UORC", format 2, profile 1, scope 0 (self-contained), representation 0 (raw). */
+  MAGIC_HEX: '554f52430201',
+  MANIFEST_SCHEMA: 'prism/holo/5',
+  PROVENANCE_SCHEMA: 'prismpm/model-provenance/2',
+  /** The objects in archive order; `attestations` follows only when the holo is signed. */
+  ROLES: freeze(['manifest', 'source-manifest', 'provenance', 'capabilities', 'guest', 'view', 'model']),
+  ROLE_ATTESTATIONS: 'attestations',
+  KAPPA_PREFIX: 'sha256:',
+});
+/**
  * Build provenance of a holo, issue #268 (docs/proposals/268-build-provenance.md). The predicate is SLSA
  * provenance v1; Prism adds the build type and the rules for each member. Schema: SCHEMA.
  */
@@ -320,6 +335,7 @@ export const SCHEMAS = freeze({
   "prismpm/model-document/5": "schemas/documents/model-document-v5.schema.json",
   "prismpm/model-document/6": "schemas/documents/model-document-v6.schema.json",
   "prismpm/model-provenance/1": "schemas/documents/model-provenance-v1.schema.json",
+  "prismpm/model-provenance/2": "schemas/documents/model-provenance-v2.schema.json",
 });
 
 /** The holo sections this reader checks. The spec's HOLO_SCHEMAS lists every section schema. */

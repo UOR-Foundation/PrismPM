@@ -119,6 +119,10 @@ test('no verdict exits 2, says why on stderr, and prints nothing on stdout', () 
   }
 });
 
+// Only a holo v5 can be signed (ADR-017), so the signing tests start from the v5 reference archives.
+const fixtureV5 = here('../fixtures/Calculator.v5.holo');
+const paymentApprovalV5 = here('../fixtures/PaymentApproval.v5.holo');
+
 // P2 (#270). The statements are signed at test time with a throwaway key, which is the only way a test can have a
 // signer the verifier accepts; the proof predicate is a stand-in that claims no Lean run. What these tests show is
 // that the verdict follows the signature, the subjects and the signer the caller names, and nothing else.
@@ -136,7 +140,7 @@ function proofPredicateFor(bytes) {
   const resolved = resolveArchive(parseArchive(bytes));
   const { provenance } = resolved;
   const predicate = structuredClone(calculatorProof);
-  predicate.model.document = { sha256: provenance.model_id, blake3: resolved.identities.modelKappa.slice('blake3:'.length) };
+  predicate.model.document = { sha256: provenance.model_id };
   Object.assign(predicate.model, { sourceId: provenance.source_id, semanticId: provenance.semantic_id, snapshotId: provenance.snapshot_id, compilerSemanticsId: provenance.compiler_semantics_id, leanManifestSha256: provenance.lean_manifest_sha256 });
   return predicate;
 }
@@ -153,20 +157,20 @@ async function signedHolo(path, { proof = true, provenance = true, predicate } =
 }
 
 test('both reference archives pass at P2 when signed by the key the policy trusts: exit 0', async () => {
-  for (const [name, path] of [['Calculator', fixture], ['PaymentApproval', paymentApproval]]) {
+  for (const [name, path] of [['Calculator', fixtureV5], ['PaymentApproval', paymentApprovalV5]]) {
     const signed = file(`${name}.signed.holo`, await signedHolo(path));
     const { code, out, err } = run(['check', signed, '--key', publicKey, '--json']);
     assert.equal(code, EXIT.PASSED, `${name}: ${out}${err}`);
     const verdict = JSON.parse(out);
     assert.deepEqual([verdict.level, verdict.passed], ['P2', true], name);
     assert.deepEqual(checks(verdict), ['replay.statement'], 'only the replay statement, which withholds P3, is missing');
-    assert.equal(verdict.holo, `blake3:${parseArchive(new Uint8Array(readFileSync(signed))).fingerprint}`, 'the holo member is the fingerprint of the file given');
+    assert.equal(verdict.holo, parseArchive(new Uint8Array(readFileSync(signed))).kappa, 'the holo member is the κ of the file given');
     assert.match(run(['check', signed, '--key', publicKey]).out, /^PASSED {2}P2 proof checked/);
   }
 });
 
 test('the same signed holo is P0 until the caller names a signer: an unchecked signature is no evidence', async () => {
-  const signed = file('unnamed.holo', await signedHolo(fixture));
+  const signed = file('unnamed.holo', await signedHolo(fixtureV5));
   for (const args of [[], ['--key', strangerKey]]) {
     const { code, out } = run(['check', signed, ...args, '--json']);
     assert.equal(code, EXIT.FAILED, args.join(' '));
@@ -180,7 +184,7 @@ test('the same signed holo is P0 until the caller names a signer: an unchecked s
 });
 
 test('a signer that cannot be read or is half named is no verdict: exit 2', async () => {
-  const signed = file('signer-errors.holo', await signedHolo(fixture));
+  const signed = file('signer-errors.holo', await signedHolo(fixtureV5));
   const { code, out, err } = run(['check', signed, '--key', join(dir, 'missing.pem'), '--json']);
   assert.deepEqual([code, out], [EXIT.NO_VERDICT, '']);
   assert.match(err, /^no verdict: policy\.unreadable: /);
@@ -190,8 +194,8 @@ test('a signer that cannot be read or is half named is no verdict: exit 2', asyn
 });
 
 test('a tampered wasm blob in a signed holo fails with ProofMismatch: exit 1', async () => {
-  const bytes = await signedHolo(fixture);
-  const guest = parseArchive(bytes).blobs.find((b) => b.label === 'blake3:2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380');
+  const bytes = await signedHolo(fixtureV5);
+  const guest = parseArchive(bytes).blobs.find((b) => b.label === 'sha256:dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03');
   bytes[guest.content.byteOffset + 100] ^= 0xff;
   const tampered = file('signed-tampered.holo', bytes);
   const { code, out } = run(['check', tampered, '--key', publicKey, '--json']);
@@ -205,7 +209,7 @@ test('a tampered wasm blob in a signed holo fails with ProofMismatch: exit 1', a
 
 test('a proof statement signed for another build fails with ProofMismatch at P1: exit 1', async () => {
   // The Calculator's own statement, validly signed, attached to Payment Approval: the signature holds and the subject does not.
-  const other = await signedHolo(paymentApproval, { proof: false });
+  const other = await signedHolo(paymentApprovalV5, { proof: false });
   const bundle = await signStatement(readFileSync(here('../../spec/test/fixtures/attestation/statement/calculator.json')), { key: privatePem });
   const { code, out } = run(['check', file('mismatch.holo', appendAttestations(other, [bundle])), '--key', publicKey, '--json']);
   assert.equal(code, EXIT.FAILED);
@@ -218,7 +222,7 @@ test('a proof statement signed for another build fails with ProofMismatch at P1:
 test('the committed signed fixtures are what check prints, signatures verified for real; the Rust CLI holds its verdicts against them (parity, #270)', () => {
   const signedDir = here('../test/fixtures/signed/');
   const damaged = new Uint8Array(readFileSync(join(signedDir, 'Calculator.signed.holo')));
-  const guest = parseArchive(damaged).blobs.find((b) => b.label === 'blake3:2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380');
+  const guest = parseArchive(damaged).blobs.find((b) => b.label === 'sha256:dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03');
   damaged[guest.content.byteOffset + 100] ^= 0xff;
   const tamperedSigned = file('signed-golden-tampered.holo', damaged);
   const signer = join(signedDir, 'signer.pub.pem');

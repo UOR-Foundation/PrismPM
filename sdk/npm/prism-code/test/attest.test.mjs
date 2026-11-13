@@ -29,7 +29,7 @@ import { experimental_verifyAttestations as verifyAttestations, experimental_ver
 import { experimental_attest as attest, experimental_signStatements as signStatements } from '../src/attest-write.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const holo = new Uint8Array(readFileSync(here('../fixtures/Calculator.holo')));
+const holo = new Uint8Array(readFileSync(here('../fixtures/Calculator.v5.holo')));
 const PROOF = 'https://uor.foundation/prism/proof/v1';
 const PROVENANCE = 'https://slsa.dev/provenance/v1';
 
@@ -97,8 +97,8 @@ for (const type of ['ec', 'ed25519']) {
     assert.deepEqual(stripAttestations(out.holo), holo);
 
     // The subject is the guest blob with both digests, recomputed from its bytes.
-    const guest = parseArchive(holo).blobs.find((b) => b.label === 'blake3:2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380');
-    assert.deepEqual(out.statement.subject, [{ name: 'guest', digest: { sha256: sha256(guest.content), blake3: blake3Hex(guest.content) } }]);
+    const guest = parseArchive(holo).blobs.find((b) => b.label === 'sha256:dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03');
+    assert.deepEqual(out.statement.subject, [{ name: 'guest', digest: { sha256: sha256(guest.content) } }]);
 
     const result = await verifyAttestations(out.holo, { key: publicKey, type: PROOF });
     assert.equal(result.passed, true);
@@ -164,14 +164,14 @@ test('a statement that names the wrong digest is a SubjectMismatchError, even wi
   const { privateKey, publicKey } = keys();
   const guest = parseArchive(holo).blobs[0];
   const subject = (digest) => ({ name: 'guest', digest });
-  const good = { sha256: sha256(guest.content), blake3: blake3Hex(guest.content) };
+  const good = { sha256: sha256(guest.content) };
   const statement = (digest) => ({ _type: 'https://in-toto.io/Statement/v1', subject: [subject(digest)], predicateType: PROOF, predicate: {} });
 
   const sound = appendAttestations(holo, [signByHand(statement(good), privateKey)]);
   assert.equal((await verifyAttestations(sound, { key: publicKey })).passed, true, 'the by-hand bundle is sound');
 
-  // Same blake3 label, a sha256 that is not the blob's: the two digests disagree about the same bytes.
-  const forged = appendAttestations(holo, [signByHand(statement({ ...good, sha256: '0'.repeat(64) }), privateKey)]);
+  // The guest role with a sha256 that is not the guest's: the subject names other bytes.
+  const forged = appendAttestations(holo, [signByHand(statement({ sha256: '0'.repeat(64) }), privateKey)]);
   const result = await verifyAttestations(forged, { key: publicKey });
   assert.equal(result.passed, false);
   assert.ok(result.error instanceof SubjectMismatchError);
@@ -212,6 +212,7 @@ test('attest refuses what it cannot sign, each with its check', async () => {
   await rejects(sign({ predicate: undefined }), SigningError, 'sign.predicate');
   await rejects(sign({ predicate: '{nope' }), SigningError, 'sign.predicate');
   await rejects(sign({ subjects: ['nonsense'] }), SigningError, 'sign.subject');
+  await rejects(sign({ subjects: ['sha256:' + '1'.repeat(64)] }), SigningError, 'sign.subject');
   await rejects(sign({ subjects: ['blake3:' + '1'.repeat(64)] }), SigningError, 'sign.subject');
   await rejects(sign({ subjects: ['guest', 'guest'] }), SigningError, 'sign.subject');
   await rejects(sign({ key: 'not a key' }), SigningError, 'sign.key');

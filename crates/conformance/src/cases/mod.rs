@@ -157,6 +157,7 @@ fn sample_application_holo(root: &Path) -> prismpm::holo::archive::GeneratedHolo
     let commit = "0".repeat(40);
     prismpm::holo::archive::compose_application(&prismpm::holo::archive::ApplicationArchiveInput {
         application_name: "Conformance".to_owned(),
+        basis: None,
         guest_wasm: b"\0asm\x01\0\0\0".to_vec(),
         view_bundle: b"HOLOVIEW\0\x01".to_vec(),
         model_document,

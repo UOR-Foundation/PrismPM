@@ -21,6 +21,7 @@ import { blake3 } from './vendor/blake3.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 export const REFERENCE_PATH = here('../corpus/Calculator.holo');
+export const REFERENCE_V5_PATH = here('../corpus/Calculator.v5.holo');
 export const LOCK_PATH = here('../corpus/archives.lock.json');
 
 const KIND_EXTENSION = 14;
@@ -226,6 +227,9 @@ const SESSION_PROBE = here('../corpus/session-probe.wasm');
  */
 export const ARCHIVES = Object.freeze({
   reference,
+  // The reference application as a holo v5, a UORC archive named by κ (ADR-017). Committed, not derived:
+  // its bytes come from compose_application, and a v4 recipe cannot write them.
+  'reference-v5': () => new Uint8Array(readFileSync(REFERENCE_V5_PATH)),
 
   // Not a holo at all, or a structure no reader may accept.
   empty: () => new Uint8Array(0),

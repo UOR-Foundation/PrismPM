@@ -933,6 +933,7 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `attestation.duplicate` |  | `AL-07` | The archive has more than one attestation section, or already carries the same bundle bytes; nothing is appended twice. |
 | `attestation.envelope` |  | `AL-07` | The bundle has no DSSE envelope, or a part of it is not valid base64. |
 | `attestation.footer` |  | `AL-07` | The archive footer does not verify, so no attestation is appended to it. |
+| `attestation.format` |  | `AL-07` | The holo is a physical-v4 archive, which stays readable but cannot be signed; rebuild it as a holo v5 (ADR-017) first. |
 | `attestation.input` |  | `AL-07` | appendAttestations was given no bundles, or a bundle that is not an object, a JSON string or UTF-8 bytes. |
 | `attestation.lines` |  | `AL-07` | The attestation section is empty, holds an empty line, or its last bundle line does not end with LF. |
 | `attestation.position` |  | `AL-07` | The attestation section is not the last row of the section table. |

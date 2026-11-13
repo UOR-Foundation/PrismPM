@@ -32,7 +32,7 @@
  *
  * Experimental until the v0.6 freeze (STABILITY.md section 6).
  */
-import { asBytes, parseArchive } from './archive.mjs';
+import { asBytes, holoDigest, parseArchive } from './archive.mjs';
 import { readAttestations } from './attestations.mjs';
 import { blake3Hex } from './blake3.mjs';
 import { fail, PrismError, ReferenceInvalidError } from './errors.mjs';
@@ -219,7 +219,7 @@ async function builtImage(root, result) {
   const parsed = parseArchive(bytes);
   if (!parsed.verification.footer) fail('PP3004', `${title} does not match its own digest: its footer is ${parsed.footer}, its body gives ${parsed.fingerprint}`);
   if (!parsed.verification.labels) fail('PP3008', `a layer of ${title} does not match its digest: ${parsed.verification.labelMismatches.map((m) => m.label).join(', ')}`);
-  return { bytes, digest: `blake3:${parsed.footer}`, path: pathOf(title) };
+  return { bytes, digest: holoDigest(parsed), path: pathOf(title) };
 }
 
 /** The file's digests in a push or pull, grouped the way an inspection groups them. */
@@ -277,7 +277,7 @@ function inspectionView(inspection, parsed) {
   return {
     schema: IMAGE_INSPECTION_SCHEMA,
     name: inspection.name,
-    digest: `blake3:${parsed.fingerprint}`,
+    digest: holoDigest(parsed),
     fileDigest: inspection.digest,
     size: inspection.size,
     format: { revision: inspection.revision, version: inspection.physical_version, flags: inspection.flags },
@@ -313,7 +313,7 @@ function inspectionView(inspection, parsed) {
     attestations: statements ?? [],
     verification: {
       digest: verification.footer,
-      claimedDigest: `blake3:${inspection.footer}`,
+      claimedDigest: parsed.format === 5 ? parsed.kappa : `blake3:${inspection.footer}`,
       layers: verification.labels,
       crossReferences: verification.cross_references,
       attestations: statements !== null,

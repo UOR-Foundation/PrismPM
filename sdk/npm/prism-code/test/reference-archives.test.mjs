@@ -21,6 +21,9 @@ const run = (args, env = {}) => runCli(args, { env });
 export const REFERENCE_ARCHIVES = Object.freeze({
   Calculator: { vectors: 22, profile: 'prismpm/model-document/1', document: 'prismpm/model-document/1' },
   PaymentApproval: { vectors: 19, profile: 'prismpm/text-application/1', document: 'prismpm/model-document/2' },
+  // The same applications written as holo v5, UORC archives named by κ (ADR-017).
+  'Calculator.v5': { app: 'Calculator', vectors: 22, profile: 'prismpm/model-document/1', document: 'prismpm/model-document/1' },
+  'PaymentApproval.v5': { app: 'PaymentApproval', vectors: 19, profile: 'prismpm/text-application/1', document: 'prismpm/model-document/2' },
 });
 
 const dir = mkdtempSync(join(tmpdir(), 'prism-reference-archives-'));
@@ -38,7 +41,7 @@ for (const [name, expected] of Object.entries(REFERENCE_ARCHIVES)) {
     const archive = await referenceArchive(name);
     const app = await archive.load();
     assert.equal(app.kind, 'holo');
-    assert.equal(app.name, name);
+    assert.equal(app.name, expected.app ?? name);
     assert.equal(app.profile, expected.profile);
     assert.equal(app.vectors.length, expected.vectors);
     assert.equal(app.identities.verified, true);
@@ -52,7 +55,7 @@ for (const [name, expected] of Object.entries(REFERENCE_ARCHIVES)) {
     scripted.assertComplete();
     const vectors = run(['vectors', here(`../fixtures/${name}.holo`)]);
     assert.equal(vectors.code, 0, vectors.err);
-    assert.match(vectors.out, new RegExp(`^${expected.vectors} of ${expected.vectors} vectors passed \\(holo, ${name}, identities verified\\)`, 'm'));
+    assert.match(vectors.out, new RegExp(`^${expected.vectors} of ${expected.vectors} vectors passed \\(holo, ${expected.app ?? name}, identities verified\\)`, 'm'));
   });
 
   test(`${name} inspects to its golden, equally through @prism-code/verify, and declares the core-wasm world`, async () => {
@@ -61,7 +64,7 @@ for (const [name, expected] of Object.entries(REFERENCE_ARCHIVES)) {
     assert.equal(`${canonicalJson(inspection)}\n`, golden(`${name}.inspect.json`));
     assert.deepEqual(inspection, verifyInspect(bytes));
     assert.equal(formatInspection(inspection), golden(`${name}.inspect.txt`));
-    assert.equal(inspection.model.name, name);
+    assert.equal(inspection.model.name, expected.app ?? name);
     assert.equal(inspection.model.vectors, expected.vectors);
     assert.equal(inspection.world.contract, spec.CORE_WASM.CONTRACT);
     assert.equal(inspection.world.conforms, true);

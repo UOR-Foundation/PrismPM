@@ -165,7 +165,7 @@
     },
     {
       "id": "replay.statement.written",
-      "title": "A replay writes a prism/replay/v1 statement that names the guest and every history by dual digest.",
+      "title": "A replay writes a prism/replay/v1 statement that names the guest and every history by its κ, sha256 alone (ADR-017).",
       "op": "replay",
       "archive": "reference",
       "input": {
@@ -209,7 +209,6 @@
               {
                 "name": "guest",
                 "digest": {
-                  "blake3": "2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380",
                   "sha256": "dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03"
                 }
               }
@@ -218,7 +217,9 @@
             "predicate": {
               "histories": [
                 {
-                  "digest": { "blake3": "a915d5f47798545723654ee20619f0cafc7e2caf244c4bbb9cfc1b7db8435170", "sha256": "12932cd1ab84ad9996e037cdbe25e277f1cec0d58b316e823fbe1d8d9199455d" },
+                  "digest": {
+                    "sha256": "12932cd1ab84ad9996e037cdbe25e277f1cec0d58b316e823fbe1d8d9199455d"
+                  },
                   "events": 3,
                   "divergences": 0
                 }

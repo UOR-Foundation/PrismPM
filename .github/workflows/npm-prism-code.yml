@@ -195,7 +195,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '{"run":"%s","note":"keyless attest round trip of #272"}\n' "$RUN_ID" > "$RUNNER_TEMP/predicate.json"
-          node bin/prism-code.mjs attest fixtures/Calculator.holo \
+          node bin/prism-code.mjs attest fixtures/Calculator.v5.holo \
             --predicate "$RUNNER_TEMP/predicate.json" \
             --type https://example.com/prism/ci-round-trip/v1 \
             --output "$RUNNER_TEMP/attested.holo"

@@ -671,8 +671,8 @@ pub(crate) fn validate_hologram_oracle_report(
         return Err(invalid());
     }
     for (field, prefix) in [
-        ("application_kappa", "blake3:"),
-        ("archive_kappa", "blake3:"),
+        ("application_kappa", "sha256:"),
+        ("archive_kappa", "sha256:"),
         ("archive_fingerprint", ""),
     ] {
         if report[field] != identities[field] {

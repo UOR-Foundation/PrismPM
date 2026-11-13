@@ -108,6 +108,16 @@ export declare const OCI: Readonly<{
 }>;
 
 /** Build provenance of a holo (#268). */
+/** Holo v5 (ADR-017): a raw self-contained UORC archive of ordered objects named by κ. */
+export declare const HOLO_V5: Readonly<{
+  MAGIC_HEX: '554f52430201';
+  MANIFEST_SCHEMA: 'prism/holo/5';
+  PROVENANCE_SCHEMA: 'prismpm/model-provenance/2';
+  ROLES: readonly ['manifest', 'source-manifest', 'provenance', 'capabilities', 'guest', 'view', 'model'];
+  ROLE_ATTESTATIONS: 'attestations';
+  KAPPA_PREFIX: 'sha256:';
+}>;
+
 export declare const PROVENANCE: Readonly<{
   PREDICATE_TYPE: 'https://slsa.dev/provenance/v1';
   BUILD_TYPE: 'https://uor.foundation/prism/holo-build/v1';

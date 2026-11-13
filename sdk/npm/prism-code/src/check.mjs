@@ -116,9 +116,11 @@ async function readReplay(path) {
  * footer is recomputed. So a file whose own footer does not match its bytes would read as intact: this puts the damage
  * back as the first `holo.integrity` reason, which withholds P1, and moves the level and the policy result with it.
  */
-function withoutIntegrity(verdict, { footer, fingerprint }) {
+function withoutIntegrity(verdict, { footer, fingerprint, v5 }) {
   const { RANK } = ASSURANCE;
-  const message = `The footer ${footer} does not equal the BLAKE3 of everything before it, ${fingerprint}.`;
+  const message = v5
+    ? `The seal ${footer} is not the UORC-SHA256-CHAIN-v1 of everything before it: the holo was altered.`
+    : `The footer ${footer} does not equal the BLAKE3 of everything before it, ${fingerprint}.`;
   const kept = verdict.reasons.filter((r) => r.check !== 'policy.level' && r.check !== 'policy.integrity');
   const reasons = [{ check: 'holo.integrity', withholds: 'P1', message }, ...kept];
   const level = 'P0';
@@ -168,7 +170,10 @@ async function attestedEvidence(bytes, signer) {
       if (statements[kind] === undefined || (envelope.verified && !statements[kind].envelope.verified)) statements[kind] = { statement: attestation.statement, envelope };
     }
   }
-  return { unsigned: stripAttestations(parsed), statements, footerMatches: parsed.verification.footer, footer: Buffer.from(bytes.subarray(bytes.length - 32)).toString('hex'), computed: parsed.fingerprint, fingerprint: `blake3:${parsed.fingerprint}` };
+  const footer = Buffer.from(bytes.subarray(bytes.length - 32)).toString('hex');
+  // A holo v5 is named by its κ, the sha256 of the file (ADR-017); a v4 holo by the BLAKE3 of its body.
+  if (parsed.format === 5) return { unsigned: stripAttestations(parsed), statements, footerMatches: parsed.verification.seal, footer, computed: parsed.kappa, fingerprint: parsed.kappa, v5: true };
+  return { unsigned: stripAttestations(parsed), statements, footerMatches: parsed.verification.footer, footer, computed: parsed.fingerprint, fingerprint: `blake3:${parsed.fingerprint}` };
 }
 
 async function signatureOutcome(attestation, signer) {
@@ -207,7 +212,7 @@ export async function check(path, options = {}) {
   try {
     if (!attested) return await experimental_verify(bytes, { ...policy, env: options.env });
     const verdict = await verifyWithStatements(attested.unsigned, { ...policy, env: options.env }, attested.statements);
-    return { ...verdict, ...(attested.footerMatches ? {} : withoutIntegrity(verdict, { footer: attested.footer, fingerprint: attested.computed })), holo: attested.fingerprint };
+    return { ...verdict, ...(attested.footerMatches ? {} : withoutIntegrity(verdict, { footer: attested.footer, fingerprint: attested.computed, v5: attested.v5 })), holo: attested.fingerprint };
   } catch (error) {
     if (error instanceof PrismError) throw error;
     throw noVerdict('verify.input', error.message, error);

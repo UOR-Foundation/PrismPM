@@ -1,7 +1,7 @@
 # ADR-016: `.holo` Normative Home, Canonical Bytes, and Version Policy
 
 ## Status
-Proposed (2026-10-29), amended 2026-11-01: one format for every Prism SDK application (§4), corrections from implementing the frame (§2.4 to §2.6)
+Proposed (2026-10-29), amended 2026-11-01: one format for every Prism SDK application (§4), corrections from implementing the frame (§2.4 to §2.6). Amended by [ADR-017](017-holo-v5-uorc-archive.md) (2026-11-13): an application holo is now a UORC archive (holo v5) named by κ; §2.4, §2.8, §3 and §4.2 to §4.4 describe legacy v4.
 
 ## Context
 `.holo` is defined in three places that disagree:

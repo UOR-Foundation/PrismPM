@@ -56,6 +56,7 @@
     "load.damage.footer-refused": "The Rust runtime has no load operation yet (#298).",
     "load.damage.guest-label-allowed": "The Rust runtime has no load operation yet (#298).",
     "load.damage.guest-label-refused": "The Rust runtime has no load operation yet (#298).",
+    "load.reference-v5.opens": "The Rust runtime has no load operation yet (#298).",
     "load.reference.opens": "The Rust runtime has no load operation yet (#298).",
     "load.refuse.bad-flags": "The Rust runtime has no load operation yet (#298).",
     "load.refuse.bad-magic": "The Rust runtime has no load operation yet (#298).",

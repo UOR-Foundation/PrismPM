@@ -13,6 +13,7 @@ import { validate } from './vendor/json-schema.mjs';
 import { SCHEMA_FILES } from './vendor/schemas.mjs';
 import { sha256Hex } from './sha256.mjs';
 import { readStructure } from './reader.mjs';
+import { analyzeV5, isUorc } from './holo5.mjs';
 import * as assurance from './vendor/assurance-levels.mjs';
 import * as transparency from './transparency.mjs';
 import { levelOf } from './level.mjs';
@@ -102,6 +103,9 @@ function digestsOf(bytes) {
   return { sha256: sha256Hex(bytes), blake3: blake3Hex(bytes) };
 }
 
+/** The digest set of the whole file: its κ alone for a holo v5 (ADR-017), both digests for v4. */
+const archiveDigests = (bytes, facts) => (facts.v5 ? { sha256: sha256Hex(bytes) } : digestsOf(bytes));
+
 function isLabel(bytes) {
   if (bytes.length !== spec.LABEL_LENGTH) return false;
   for (let i = 0; i < spec.LABEL_PREFIX.length; i++) if (bytes[i] !== spec.LABEL_PREFIX.charCodeAt(i)) return false;
@@ -167,6 +171,9 @@ function decodeSection(bytes, row) {
 
 /** Every check, and the facts both entry points report, computed once. */
 function analyze(bytes) {
+  if (isUorc(bytes)) {
+    return analyzeV5(bytes, { spec, schemaErrors, checkWorld, order: [...ARCHIVE_IDS, ...DOCUMENT_IDS], structureIds: STRUCTURE_IDS, archiveIds: ARCHIVE_IDS, documentIds: DOCUMENT_IDS });
+  }
   const structure = readStructure(bytes);
   const checks = structure.checks.map((c) => ({ ...c, level: 'archive' }));
   const facts = { structure, sections: [], documents: {}, roles: {}, revision: null, layoutRevision: null, footer: null, fingerprint: null };
@@ -612,6 +619,87 @@ function inspectionOf(bytes, facts, checks) {
 }
 
 /**
+ * The `prismpm/holo-inspection/1` object of a holo v5 (ADR-017): the same members as for v4, where every section is one
+ * object of the UORC archive, kind and role are the object's role, every digest is the object's κ alone, the footer is
+ * the UORC-SHA256-CHAIN-v1 seal and the manifest labels are the κ the holo manifest names.
+ */
+function inspectionOfV5(bytes, facts, checks) {
+  const status = (id) => checks.find((c) => c.id === id)?.status === 'pass';
+  const kappaOf = (payload) => ({ sha256: sha256Hex(payload) });
+  const objectOf = (role) => facts.sections.find((s) => s.role === role);
+  const sections = facts.sections.map((s) => ({
+    index: s.index,
+    kind: null,
+    kind_name: s.role,
+    role: s.role,
+    offset: s.offset,
+    length: s.length,
+    digest: kappaOf(s.payload),
+    label: `sha256:${sha256Hex(s.payload)}`,
+  }));
+  const { manifest, provenance, modelDocument } = facts.documents;
+  const application = modelDocument?.application ?? {};
+  const labelOf = (role) => orNull(objectOf(role) && `sha256:${sha256Hex(objectOf(role).payload)}`);
+  const capabilities = objectOf('capabilities');
+  const guest = objectOf('guest');
+  const model = objectOf('model');
+  const wasm = manifest?.layers?.find((l) => l.kind === 'wasm');
+  const contract = wasm?.contract ?? null;
+  return {
+    schema: INSPECTION_SCHEMA,
+    name: application.name ?? manifest?.name ?? null,
+    revision: facts.revision,
+    physical_version: 5,
+    flags: 0,
+    size: bytes.length,
+    digest: kappaOf(bytes),
+    footer: facts.footer.stored,
+    sections,
+    manifest: manifest
+      ? { uri: manifest.schema, labels: { capability_set: labelOf('capabilities'), guest: labelOf('guest'), view: labelOf('view') }, ...MANIFEST_SUFFIX_FIELDS }
+      : null,
+    model:
+      modelDocument && model
+        ? {
+            schema: orNull(modelDocument.schema),
+            name: orNull(application.name),
+            cargo_name: orNull(application.cargo_name),
+            cargo_version: orNull(application.cargo_version),
+            description: orNull(application.cargo_description),
+            profile: orNull(application.profile),
+            function: orNull(application.function_name),
+            vectors: Array.isArray(application.acceptance_vectors) ? application.acceptance_vectors.length : 0,
+            limits: {
+              request: orNull(application.request_maximum),
+              response: orNull(application.response_maximum),
+              guest_allocation: orNull(application.guest_allocation_maximum),
+            },
+            digest: kappaOf(model.payload),
+          }
+        : null,
+    provenance: provenance
+      ? {
+          schema: orNull(provenance.schema),
+          application_kappa: orNull(provenance.application_kappa),
+          model_id: orNull(provenance.model_id),
+          compiler_semantics_id: orNull(provenance.compiler_semantics_id),
+          stdlib_semantics_id: orNull(provenance.stdlib_semantics_id),
+          lexlean_commit: orNull(provenance.lexlean_commit),
+        }
+      : null,
+    world:
+      contract && capabilities
+        ? {
+            ...describeWorld(contract, guest ? guest.payload : null),
+            capability_set: { label: labelOf('capabilities'), empty: hex(capabilities.payload) === spec.CAPABILITY_SET.EMPTY_HEX },
+          }
+        : null,
+    attestations: [],
+    verification: { footer: status('archive.footer'), labels: status('blob.labels'), cross_references: status('references') },
+  };
+}
+
+/**
  * Describe a holo as a `prismpm/holo-inspection/1` object. Throws VerifyError
  * when the header or section table cannot be read, because then there are no
  * sections to describe. Later damage is reported, not thrown: `verification`
@@ -625,7 +713,7 @@ export function inspect(source) {
   const { checks, facts } = analyze(bytes);
   const broken = checks.find((c) => c.status === 'fail' && STRUCTURE_IDS.includes(c.id));
   if (broken) throw new VerifyError(broken.id, broken.detail);
-  return inspectionOf(bytes, facts, checks);
+  return facts.v5 ? inspectionOfV5(bytes, facts, checks) : inspectionOf(bytes, facts, checks);
 }
 
 /**
@@ -831,7 +919,7 @@ function predicateOf(entry, reasons, prefix) {
 function inputOf(bytes, evidence, capabilities) {
   const { facts, reasons, contract, world, replay, attested, level } = evidence;
   const blob = (role) => (facts.roles[role] ? facts.sections.find((s) => s.label === facts.roles[role]) : undefined);
-  const digests = { archive: digestsOf(bytes) };
+  const digests = { archive: archiveDigests(bytes, facts) };
   for (const role of ['capabilities', 'guest', 'view', 'model']) {
     const section = blob(role);
     if (section?.digests) digests[role] = section.digests;
@@ -921,7 +1009,7 @@ export async function verify(source, policy) {
   }
   for (const [target, expected] of Object.entries(wanted.digests)) {
     let actual = null;
-    if (target === 'archive') actual = digestsOf(bytes);
+    if (target === 'archive') actual = archiveDigests(bytes, facts);
     else if (facts.roles[target]) actual = facts.sections.find((s) => s.label === facts.roles[target])?.digests ?? null;
     const mismatches = actual
       ? Object.entries(expected)

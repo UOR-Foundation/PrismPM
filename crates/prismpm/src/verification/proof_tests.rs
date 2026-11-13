@@ -28,7 +28,6 @@ fn input(statement: &Value) -> Input {
     };
     let values: Values = [
         s(&statement["subject"][0]["name"]),
-        s(&statement["subject"][0]["digest"]["blake3"]),
         s(&statement["subject"][0]["digest"]["sha256"]),
         s(&p["verifier"]["lean"]["version"])
             .trim_start_matches('v')
@@ -45,7 +44,6 @@ fn input(statement: &Value) -> Input {
         s(&tcb("sdk-image")["version"]),
         s(&p["model"]["snapshotId"]),
         s(&p["model"]["document"]["sha256"]),
-        s(&p["model"]["document"]["blake3"]),
         s(&p["model"]["sourceId"]),
         s(&p["model"]["semanticId"]),
         s(&p["model"]["compilerSemanticsId"]),
@@ -150,7 +148,7 @@ fn a_model_without_theorems_gets_no_statement() {
 fn malformed_input_is_refused_by_the_model() {
     let (values, modules, theorems, exits) = input(&calculator());
     let mut image = values.clone();
-    image[12] = "ghcr.io/uor-foundation/prismpm:0.3.0".to_owned();
+    image[11] = "ghcr.io/uor-foundation/prismpm:0.3.0".to_owned();
     let (_, message) = refusal(
         project(
             image,
@@ -163,7 +161,7 @@ fn malformed_input_is_refused_by_the_model() {
     assert!(message.contains("is not pinned"), "{message}");
 
     let mut commit = values.clone();
-    commit[4] = "F054605A".to_owned();
+    commit[3] = "F054605A".to_owned();
     let (_, message) = refusal(
         project(
             commit,

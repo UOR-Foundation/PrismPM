@@ -17,7 +17,7 @@ const sigstore = await import('@sigstore/sign').then(() => true, () => false);
 const needsSigstore = { skip: sigstore ? false : 'the optional sigstore packages are not installed' };
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
-const plain = new Uint8Array(readFileSync(here('../fixtures/Calculator.holo')));
+const plain = new Uint8Array(readFileSync(here('../fixtures/Calculator.v5.holo')));
 const PROOF = 'https://uor.foundation/prism/proof/v1';
 const SLSA = 'https://slsa.dev/provenance/v1';
 const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -33,9 +33,9 @@ const fresh = (name) => join(dir, `${name}-${counter++}`);
 
 /** The Calculator with a signed provenance statement and a signed proof statement about its guest. */
 async function signedImage() {
-  const { provenance, identities } = resolveArchive(parseArchive(plain));
+  const { provenance } = resolveArchive(parseArchive(plain));
   const predicate = structuredClone(JSON.parse(readFileSync(here('../../spec/test/fixtures/attestation/statement/calculator.json'), 'utf8')).predicate);
-  predicate.model.document = { sha256: provenance.model_id, blake3: identities.modelKappa.slice('blake3:'.length) };
+  predicate.model.document = { sha256: provenance.model_id };
   Object.assign(predicate.model, { sourceId: provenance.source_id, semanticId: provenance.semantic_id, snapshotId: provenance.snapshot_id, compilerSemanticsId: provenance.compiler_semantics_id, leanManifestSha256: provenance.lean_manifest_sha256 });
   const { holo } = await experimental_attest(plain, { type: SLSA, predicate: { buildDefinition: { buildType: 'https://uor.foundation/prism/holo-build/v1' } }, subjects: ['guest', 'view', 'model', 'capabilities'], key: privateKey });
   return (await experimental_attest(holo, { type: PROOF, predicate, subjects: ['guest'], key: privateKey })).holo;

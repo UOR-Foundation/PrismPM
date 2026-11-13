@@ -31,7 +31,7 @@ process.env.PRISM_IMAGES ??= (await import('node:fs')).mkdtempSync((await import
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const fixture = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
 const plain = new Uint8Array(readFileSync(fixture));
-const placeholders = new Uint8Array(readFileSync(new URL('./fixtures/attestation/Calculator.signed.holo', import.meta.url)));
+const placeholders = new Uint8Array(readFileSync(new URL('./fixtures/attestation/Calculator.v5.signed.holo', import.meta.url)));
 const FINGERPRINT = `blake3:${blake3Hex(plain.subarray(0, plain.length - 32))}`;
 const same = (a, b) => Buffer.from(a).equals(Buffer.from(b));
 
@@ -289,7 +289,8 @@ function failures() {
   statement.subject[0].digest.sha256 = '0'.repeat(64);
   const bundle = structuredClone(line.bundle);
   bundle.dsseEnvelope.payload = Buffer.from(JSON.stringify(statement)).toString('base64');
-  const lying = appendAttestations(plain, [bundle]);
+  // Only a holo v5 takes attestations (ADR-017).
+  const lying = appendAttestations(new Uint8Array(readFileSync(new URL('../fixtures/Calculator.v5.holo', import.meta.url))), [bundle]);
   return [
     {
       name: 'a changed blob',

@@ -1779,7 +1779,7 @@ fn application_archive(
     ensure(
         archive.blobs.values().any(|content| content == model_bytes)
             && archive.blobs.values().any(|content| content == guest)
-            && archive.application_manifest == file(files, "application/application-manifest.bin")?
+            && archive.application_manifest == file(files, "application/holo-manifest.json")?
             && archive.metadata == file(files, "application/source-manifest.json")?
             && archive.identities.guest_content_kappa == crate::holo::archive::content_kappa(guest)
             && archive.identities.model_content_kappa
@@ -1793,8 +1793,7 @@ fn application_archive(
         "application Holo identities differ",
     )?;
     ensure(
-        archive.directory == file(files, "application/directory.json")?
-            && archive.prism_extension == file(files, "application/model-provenance.json")?,
+        archive.prism_extension == file(files, "application/model-provenance.json")?,
         "application archive extension bytes differ",
     )?;
     let provenance = canonical_json(&archive.prism_extension, false)?;

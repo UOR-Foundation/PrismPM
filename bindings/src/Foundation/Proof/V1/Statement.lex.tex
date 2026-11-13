@@ -32,7 +32,6 @@ structure{
   parameters: [],
   fields: [
     {name: subjectName, type: String},
-    {name: subjectBlake3, type: String},
     {name: subjectSha256, type: String},
     {name: leanVersion, type: String},
     {name: leanCommit, type: String},
@@ -47,7 +46,6 @@ structure{
     {name: sdkVersion, type: String},
     {name: snapshotId, type: String},
     {name: modelSha256, type: String},
-    {name: modelBlake3, type: String},
     {name: sourceId, type: String},
     {name: semanticId, type: String},
     {name: compilerSemanticsId, type: String},
@@ -279,7 +277,7 @@ definition{
   name: refusal,
   parameters: [input : ProofInput],
   result: (Option (String * String)),
-  body: (Foundation.Bindings.V1.Text::either (theoremRefusal (project input theorems)) (Foundation.Bindings.V1.Text::either (emptyModules (project input modules)) (Foundation.Bindings.V1.Text::either (plainRefusal (cons (project input subjectName) (cons (project input leanVersion) (cons (project input lexleanVersion) (cons (project input rustcVersion) (cons (project input wasmBindgenVersion) (cons (project input prismpmVersion) (cons (project input sdkImage) (cons (project input sdkVersion) (cons (project input timeVerified) (prim append (modulePaths (project input modules)) (theoremTexts (project input theorems)) : (List String)))))))))))) (Foundation.Bindings.V1.Text::either (sdkRefusal (project input sdkImage)) (Foundation.Bindings.V1.Text::either (moduleRefusal (project input modules)) (Foundation.Bindings.V1.Text::either (digestRefusal "subject.blake3" (project input subjectBlake3) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "subject.sha256" (project input subjectSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lean.commit" (project input leanCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lexlean.commit" (project input lexleanCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lexlean.crateSha256" (project input lexleanCrateSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "the lean4-prod commit" (project input lean4ProdCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "model.snapshotId" (project input snapshotId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.document.sha256" (project input modelSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.document.blake3" (project input modelBlake3) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.sourceId" (project input sourceId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.semanticId" (project input semanticId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.compilerSemanticsId" (project input compilerSemanticsId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.leanManifestSha256" (project input leanManifestSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "evidence.lexleanAttestation.sha256" (project input attestationSha256) 64) (digestRefusal "evidence.verificationManifest.sha256" (project input manifestSha256) 64)))))))))))))))))))),
+  body: (Foundation.Bindings.V1.Text::either (theoremRefusal (project input theorems)) (Foundation.Bindings.V1.Text::either (emptyModules (project input modules)) (Foundation.Bindings.V1.Text::either (plainRefusal (cons (project input subjectName) (cons (project input leanVersion) (cons (project input lexleanVersion) (cons (project input rustcVersion) (cons (project input wasmBindgenVersion) (cons (project input prismpmVersion) (cons (project input sdkImage) (cons (project input sdkVersion) (cons (project input timeVerified) (prim append (modulePaths (project input modules)) (theoremTexts (project input theorems)) : (List String)))))))))))) (Foundation.Bindings.V1.Text::either (sdkRefusal (project input sdkImage)) (Foundation.Bindings.V1.Text::either (moduleRefusal (project input modules)) (Foundation.Bindings.V1.Text::either (digestRefusal "subject.sha256" (project input subjectSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lean.commit" (project input leanCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lexlean.commit" (project input lexleanCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "verifier.lexlean.crateSha256" (project input lexleanCrateSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "the lean4-prod commit" (project input lean4ProdCommit) 40) (Foundation.Bindings.V1.Text::either (digestRefusal "model.snapshotId" (project input snapshotId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.document.sha256" (project input modelSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.sourceId" (project input sourceId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.semanticId" (project input semanticId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.compilerSemanticsId" (project input compilerSemanticsId) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "model.leanManifestSha256" (project input leanManifestSha256) 64) (Foundation.Bindings.V1.Text::either (digestRefusal "evidence.lexleanAttestation.sha256" (project input attestationSha256) 64) (digestRefusal "evidence.verificationManifest.sha256" (project input manifestSha256) 64)))))))))))))))))),
   axioms: [Classical.choice, Quot.sound, propext],
   executable: true
 }
@@ -334,15 +332,6 @@ definition{
   parameters: [digest : String],
   result: String,
   body: (object (cons (member "sha256" (text digest)) (nil String))),
-  axioms: [Classical.choice, Quot.sound, propext],
-  executable: true
-}
-
-definition{
-  name: digestSet,
-  parameters: [blake3 : String, sha256 : String],
-  result: String,
-  body: (object (cons (member "blake3" (text blake3)) (cons (member "sha256" (text sha256)) (nil String)))),
   axioms: [Classical.choice, Quot.sound, propext],
   executable: true
 }
@@ -478,7 +467,7 @@ definition{
   name: predicate,
   parameters: [input : ProofInput],
   result: String,
-  body: (object (cons (member "evidence" (object (cons (member "lexleanAttestation" (sha256Of (project input attestationSha256))) (cons (member "verificationManifest" (sha256Of (project input manifestSha256))) (nil String))))) (cons (member "model" (object (cons (member "compilerSemanticsId" (text (project input compilerSemanticsId))) (cons (member "document" (digestSet (project input modelBlake3) (project input modelSha256))) (cons (member "leanManifestSha256" (text (project input leanManifestSha256))) (cons (member "modules" (array (modulesJson (project input modules)))) (cons (member "semanticId" (text (project input semanticId))) (cons (member "snapshotId" (text (project input snapshotId))) (cons (member "sourceId" (text (project input sourceId))) (nil String)))))))))) (cons (member "policy" (object (cons (member "digest" (sha256Of (project input snapshotId))) (cons (member "uri" (text "https://uor.foundation/prism/proof/v1/policy/axiom-audit")) (nil String))))) (cons (member "tcb" (tcb input)) (cons (member "theorems" (array (theoremsJson (project input theorems)))) (cons (member "timeVerified" (text (project input timeVerified))) (cons (member "verificationResult" (text (verdict ((allPassed (project input theorems)) && (replaysClean (project input replayExits)))))) (cons (member "verifiedLevels" (texts (cons "P2" (nil String)))) (cons (member "verifier" (object (cons (member "id" (text "https://uor.foundation/prism/verifier/lean4")) (cons (member "lean" (object (cons (member "commit" (text (project input leanCommit))) (cons (member "version" (text (Foundation.Bindings.V1.Text::concat (cons "v" (cons (project input leanVersion) (nil String)))))) (nil String))))) (cons (member "lexlean" (object (cons (member "commit" (text (project input lexleanCommit))) (cons (member "crateSha256" (text (project input lexleanCrateSha256))) (cons (member "version" (text (project input lexleanVersion))) (nil String)))))) (cons (member "prismpm" (object (cons (member "version" (text (project input prismpmVersion))) (nil String)))) (cons (member "sdkImage" (text (project input sdkImage))) (nil String)))))))) (nil String))))))))))),
+  body: (object (cons (member "evidence" (object (cons (member "lexleanAttestation" (sha256Of (project input attestationSha256))) (cons (member "verificationManifest" (sha256Of (project input manifestSha256))) (nil String))))) (cons (member "model" (object (cons (member "compilerSemanticsId" (text (project input compilerSemanticsId))) (cons (member "document" (sha256Of (project input modelSha256))) (cons (member "leanManifestSha256" (text (project input leanManifestSha256))) (cons (member "modules" (array (modulesJson (project input modules)))) (cons (member "semanticId" (text (project input semanticId))) (cons (member "snapshotId" (text (project input snapshotId))) (cons (member "sourceId" (text (project input sourceId))) (nil String)))))))))) (cons (member "policy" (object (cons (member "digest" (sha256Of (project input snapshotId))) (cons (member "uri" (text "https://uor.foundation/prism/proof/v1/policy/axiom-audit")) (nil String))))) (cons (member "tcb" (tcb input)) (cons (member "theorems" (array (theoremsJson (project input theorems)))) (cons (member "timeVerified" (text (project input timeVerified))) (cons (member "verificationResult" (text (verdict ((allPassed (project input theorems)) && (replaysClean (project input replayExits)))))) (cons (member "verifiedLevels" (texts (cons "P2" (nil String)))) (cons (member "verifier" (object (cons (member "id" (text "https://uor.foundation/prism/verifier/lean4")) (cons (member "lean" (object (cons (member "commit" (text (project input leanCommit))) (cons (member "version" (text (Foundation.Bindings.V1.Text::concat (cons "v" (cons (project input leanVersion) (nil String)))))) (nil String))))) (cons (member "lexlean" (object (cons (member "commit" (text (project input lexleanCommit))) (cons (member "crateSha256" (text (project input lexleanCrateSha256))) (cons (member "version" (text (project input lexleanVersion))) (nil String)))))) (cons (member "prismpm" (object (cons (member "version" (text (project input prismpmVersion))) (nil String)))) (cons (member "sdkImage" (text (project input sdkImage))) (nil String)))))))) (nil String))))))))))),
   axioms: [Classical.choice, Quot.sound, propext],
   executable: true
 }
@@ -487,7 +476,7 @@ definition{
   name: statement,
   parameters: [input : ProofInput],
   result: String,
-  body: (object (cons (member "_type" (text "https://in-toto.io/Statement/v1")) (cons (member "predicate" (predicate input)) (cons (member "predicateType" (text "https://uor.foundation/prism/proof/v1")) (cons (member "subject" (array (cons (object (cons (member "digest" (digestSet (project input subjectBlake3) (project input subjectSha256))) (cons (member "name" (text (project input subjectName))) (nil String)))) (nil String)))) (nil String)))))),
+  body: (object (cons (member "_type" (text "https://in-toto.io/Statement/v1")) (cons (member "predicate" (predicate input)) (cons (member "predicateType" (text "https://uor.foundation/prism/proof/v1")) (cons (member "subject" (array (cons (object (cons (member "digest" (sha256Of (project input subjectSha256))) (cons (member "name" (text (project input subjectName))) (nil String)))) (nil String)))) (nil String)))))),
   axioms: [Classical.choice, Quot.sound, propext],
   executable: true
 }
