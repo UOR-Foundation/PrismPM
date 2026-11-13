@@ -59,11 +59,24 @@ export function claims(spec) {
 
 const tomlString = (text) => JSON.stringify(text);
 
-/** `model/ids.toml`: the template's header comment kept, every row replaced by the app's claims. */
+/** The suite of the template's sample, the one claim an app replaces: the stem of its feature file, `contract`. */
+const TEMPLATE_SUITE = TEMPLATE_EXAMPLE[2].replace(/^.*\/|\.feature$/g, '');
+
+/** Whether a register row or CONFORMANCE.md section of this suite is the frame's to keep: not the sample's, not the app's own. */
+const keptSuite = (spec, suite) => suite !== TEMPLATE_SUITE && suite !== suiteOf(spec);
+
+/**
+ * `model/ids.toml`: the template's header comment and the frame's rows kept (such as `FR-01`, which the frame's
+ * own scenario and test name), the sample's row and any earlier build's rows replaced by the app's claims.
+ */
 export function idsToml(spec, current) {
-  const head = current.slice(0, current.indexOf('[[id]]') < 0 ? current.length : current.indexOf('[[id]]')).replace(/\n*$/, '\n\n');
+  const first = current.indexOf('[[id]]');
+  const head = current.slice(0, first < 0 ? current.length : first).replace(/\n*$/, '\n\n');
+  const kept = first < 0 ? [] : current.slice(first).split(/^(?=\[\[id\]\])/m)
+    .filter((row) => keptSuite(spec, /^suite\s*=\s*"([^"]*)"/m.exec(row)?.[1] ?? ''))
+    .map((row) => row.replace(/\n*$/, '\n'));
   const rows = claims(spec).map((c) => `[[id]]\nid = "${c.id}"\nlevel = "build"\nsuite = "${suiteOf(spec)}"\nstatement = ${tomlString(c.statement)}\n`);
-  return `${head}${rows.join('\n')}`;
+  return `${head}${[...rows, ...kept].join('\n')}`;
 }
 
 /** `features/suites/<suite>.feature`: one scenario per claim, tagged with its ID and level. */
@@ -148,16 +161,21 @@ export function rustTestText(spec) {
 
 /**
  * `CONFORMANCE.md` as `cargo xtask check-model --write` renders it: the
- * template's text kept, the suite sections between the honesty levels and
- * "Cited authorities" replaced by the app's.
+ * template's text kept, the frame's suite sections kept, the sample's and any
+ * earlier build's replaced by the app's, every section in byte order of its
+ * suite as the renderer orders them.
  */
 export function conformanceText(spec, current) {
   const start = current.indexOf('\n## ');
   const end = current.indexOf('\n## Cited authorities');
   if (start < 0 || end < 0) throw new Error('CONFORMANCE.md has no suite sections to replace');
   const rows = claims(spec).map((c) => `| \`${c.id}\` | \`build\` | ${c.statement.replace(/\|/g, '\\|').trim()} |`);
-  const section = rows.length ? `\n## ${suiteOf(spec)}\n\n| ID | Level | Statement |\n| --- | --- | --- |\n${rows.join('\n')}\n` : '';
-  return `${current.slice(0, start)}${section}${current.slice(end)}`;
+  const sections = current.slice(start, end).split('\n## ').slice(1)
+    .map((body) => [body.slice(0, body.indexOf('\n')), `\n## ${body}`])
+    .filter(([suite]) => keptSuite(spec, suite));
+  if (rows.length) sections.push([suiteOf(spec), `\n## ${suiteOf(spec)}\n\n| ID | Level | Statement |\n| --- | --- | --- |\n${rows.join('\n')}\n`]);
+  sections.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `${current.slice(0, start)}${sections.map(([, text]) => text).join('')}${current.slice(end)}`;
 }
 
 /** The text of the rules, for the page's proposition. */

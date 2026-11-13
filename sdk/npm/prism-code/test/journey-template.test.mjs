@@ -91,6 +91,21 @@ test('the register, scenarios and CONFORMANCE.md agree, and keep the template\'s
   assert.equal(after, `# CONFORMANCE\n\nThe levels.\n\n## payment_approval\n\n| ID | Level | Statement |\n| --- | --- | --- |\n| \`PA-01\` | \`build\` | ${claims(spec)[0].statement} |\n| \`PA-02\` | \`build\` | ${claims(spec)[1].statement} |\n\n## Cited authorities\n\nNever.\n`);
 });
 
+test('the frame\'s rows and sections stay, and a rebuild replaces only the app\'s own', () => {
+  const spec = specOf('payment');
+  const frame = '[[id]]\nid = "FR-01"\nlevel = "build"\nsuite = "frame"\nstatement = "the frame"\n';
+  const ids = idsToml(spec, `# header\n\nspec = "template/1"\n\n[[id]]\nid = "TC-01"\nlevel = "build"\nsuite = "contract"\nstatement = "x"\n\n${frame}`);
+  assert.deepEqual([...ids.matchAll(/^id = "([^"]+)"$/gm)].map((m) => m[1]), ['PA-01', 'PA-02', 'FR-01']);
+  assert.match(ids, /\n\n\[\[id\]\]\nid = "FR-01"\nlevel = "build"\nsuite = "frame"\nstatement = "the frame"\n$/);
+  assert.equal(idsToml(spec, ids), ids);
+  const table = '| ID | Level | Statement |\n| --- | --- | --- |\n';
+  const before = `# CONFORMANCE\n\nThe levels.\n\n## contract\n\n${table}| \`TC-01\` | \`build\` | x |\n\n## frame\n\n${table}| \`FR-01\` | \`build\` | the frame |\n\n## Cited authorities\n\nNever.\n`;
+  const after = conformanceText(spec, before);
+  assert.deepEqual([...after.matchAll(/^## (.+)$/gm)].map((m) => m[1]), ['frame', 'payment_approval', 'Cited authorities']);
+  assert.match(after, /\n## frame\n\n\| ID \| Level \| Statement \|\n\| --- \| --- \| --- \|\n\| `FR-01` \| `build` \| the frame \|\n\n## payment_approval\n/);
+  assert.equal(conformanceText(spec, after), after);
+});
+
 test('the Rust tests pin each condition and theorem, one test per claim', () => {
   const text = rustTestText(specOf('shipping'));
   assert.equal((text.match(/^#\[test\]\nfn shipping_tier_st_0[1-3]\(\) \{$/gm) ?? []).length, 3);
