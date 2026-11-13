@@ -1,4 +1,4 @@
-import { readSemantic, writeSemantic } from './semantic-source.mjs';
+import { readSemantic, writeSemantic, runtimeAudit } from './semantic-source.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -6,7 +6,7 @@ import {cpSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSyn
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,sourceRoots,sourceAliases,cli,readHistoricalLibraryEvidence,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock} from './library-sdk-check.mjs';
+import {capture,verifySource,sourceRoots,sourceAliases,cli,readHistoricalLibraryEvidence,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock,boundRuntimeAudit} from './library-sdk-check.mjs';
 import {lockFixture,resultFixture,sourceAuthorityFixture} from './library-sdk-fixture.mjs';
 const checkAccepted=(project,receipt)=>readHistoricalLibraryEvidence(project,receipt,'3'.repeat(64));
 
@@ -14,7 +14,10 @@ const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-library-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const put=(root,path,bytes)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),bytes);};
 function source(root){
- for(const path of sourceRoots)if(!Object.hasOwn(sourceAliases,path))put(root,path+'/input','source');
+ for(const path of sourceRoots)if(!Object.hasOwn(sourceAliases,path)){
+  if(path==='crates/conformance/Cargo.toml')put(root,path,readFileSync(new URL('../'+path,import.meta.url)));
+  else put(root,path+'/input','source');
+ }
  for(const [path,target] of Object.entries(sourceAliases)){
   const full=join(root,path);mkdirSync(dirname(full),{recursive:true});
   if(path.includes('/embedded/')){const actual=resolve(dirname(full),target);mkdirSync(dirname(actual),{recursive:true});writeFileSync(actual,'bound alias target');}
@@ -32,7 +35,19 @@ test('closed shipped-library source binding includes implementation, fixtures, s
   'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock']){
   assert.ok(sourceRoots.includes(path));put(root,path+'/input','mutated');assert.throws(()=>verifySource(root,expected),/source closure/);put(root,path+'/input','source');
  }
+ const manifest='crates/conformance/Cargo.toml',bytes=readFileSync(join(root,manifest));assert(sourceRoots.includes(manifest));
+ put(root,manifest,Buffer.concat([bytes,Buffer.from('\n# changed helper package\n')]));assert.throws(()=>verifySource(root,expected),/source closure/);put(root,manifest,bytes);
+ const omitted=structuredClone(expected);omitted.files=omitted.files.filter(row=>row.path!==manifest);assert.throws(()=>verifySource(root,omitted),/source closure/);
  put(root,'crates/prismpm/src/nested/target/extra','ordinary source');assert.throws(()=>verifySource(root,expected),/source closure/);
+});
+
+test('helper package cannot acquire an unregistered automatic build script',t=>{
+ const root=temporary(t);source(root);const expected=capture(root,revision);
+ const path='crates/conformance/build.rs';put(root,path,'fn main() {}');
+ assert.throws(()=>capture(root,revision),/unregistered conformance build script/);
+ assert.throws(()=>verifySource(root,expected),/unregistered conformance build script/);
+ rmSync(join(root,path));symlinkSync('missing-build-source',join(root,path));
+ assert.throws(()=>capture(root,revision),/unregistered conformance build script/);
 });
 
 test('source capture refuses symlinks, missing members and duplicate or altered evidence',t=>{
@@ -97,7 +112,37 @@ test('source mutation preserves canonical LexLean module structure and changes t
  mutateModule(root,module=>{module.declarations[0].body=body;});
  const after=readFileSync(join(root,path),'utf8');assert.notEqual(after,before);assert.deepEqual(readSemantic(after).declarations[0].body,body);
  assert.equal(writeSemantic(after,readSemantic(after)),after,'the mutant stays canonical notation');
+ const data='\\begin{lexlean}{Probe}\n\\begin{semanticmodule}\n\\semanticdata{'+JSON.stringify(readSemantic(before))+'}\n\\end{semanticmodule}\n\\end{lexlean}\n';
+ assert.deepEqual(readSemantic(data),readSemantic(before),'the helper still reads the data surface');
+ const written=writeSemantic(data,readSemantic(after));assert(written.includes('\\semanticdata{'));
+ assert.deepEqual(readSemantic(written),readSemantic(after),'the helper still writes the data surface');
  put(root,path,before+before);assert.throws(()=>mutateModule(root,()=>{}));
+});
+
+test('runtime audit derives exact imported modules and their transitive closure from pinned source',()=>{
+ assert.deepEqual(runtimeAudit(['module\npublic import Init\n']),[], 'frozen generated modules require no external runtime audit');
+ const portable=runtimeAudit(['public import LexLeanRuntime.Portable\n']);
+ const reasoning=runtimeAudit(['public import LexLeanRuntime.Reasoning\n']);
+ assert(portable.length>0&&reasoning.length>portable.length);
+ const names=reasoning.map(row=>row.name);
+ assert.deepEqual(names,[...new Set(names)].sort(),'runtime closure is complete and duplicate-free');
+ for(const row of portable)assert.deepEqual(reasoning.find(other=>other.name===row.name),row,'transitive Portable module is retained exactly');
+ for(const row of reasoning){
+  assert.deepEqual(Object.keys(row).sort(),['name','observed','policy','result']);
+  assert.equal(row.policy.kind,'exact');assert.equal(row.result,'ok');assert.deepEqual(row.observed,row.policy.axioms);
+ }
+ assert(portable.some(row=>row.observed.length>0),'source-pinned nonempty axiom policies must not be erased');
+ assert.deepEqual(runtimeAudit(['public import LexLeanRuntime.Reasoning\n','import LexLeanRuntime.Portable\n']),reasoning);
+ assert.throws(()=>runtimeAudit([Buffer.from([255])]),/encoded data/,'bound bytes must not change through replacement decoding');
+});
+
+test('runtime authority refuses imports changed after artifact capture even at the same byte length',t=>{
+ const root=temporary(t),path='lexlean/build/modules/LibraryProbe/Probe.lean';
+ const source='public import LexLeanRuntime.Portable\n';put(root,path,source);
+ const artifacts=tree(root).filter(row=>row.kind==='file');
+ assert(boundRuntimeAudit(root,artifacts).length>0);
+ const changed=source.replace('Portable','Whatever');assert.equal(changed.length,source.length);put(root,path,changed);
+ assert.throws(()=>boundRuntimeAudit(root,artifacts),/exact bound generated Lean bytes/);
 });
 
 test('tree comparison includes empty directories, extra outputs and byte changes',t=>{
