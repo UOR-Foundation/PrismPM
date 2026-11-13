@@ -118,6 +118,10 @@ jobs:
             dockerfile: sdk/Dockerfile
             target: oracles
             repository: ghcr.io/uor-foundation/prismpm-oracles
+          - name: sdk-build
+            dockerfile: sdk/Dockerfile
+            target: sdk-build
+            repository: ghcr.io/uor-foundation/prismpm-sdk-build
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -282,6 +286,11 @@ jobs:
               adapter-kubernetes) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/kubernetes.json ;;
               adapter-github-pages) docker run --rm "$REPOSITORY@$DIGEST" test -r /opt/prismpm/share/adapters/github-pages.json ;;
               oracles) docker run --rm "$REPOSITORY@$DIGEST" test -x /usr/local/bin/oci-distribution-conformance ;;
+              sdk) bash scripts/sdk-cargo-startup-smoke.sh "$REPOSITORY@$DIGEST" ;;
+              sdk-build)
+                docker run --rm "$REPOSITORY@$DIGEST" sh -ec 'test -d /ms-playwright/chromium_headless_shell-cft-157.0.8099.0; test ! -e /ms-playwright/firefox-1538; test ! -e /usr/local/bin/prismpm-conformance; lean --version'
+                bash scripts/sdk-cargo-startup-smoke.sh "$REPOSITORY@$DIGEST"
+                ;;
             esac
           fi
           printf '%s@%s\n' "$REPOSITORY" "$DIGEST" > "${{ matrix.name }}-image.txt"
@@ -390,6 +399,18 @@ jobs:
             target: oracles
             name: oracles-arm64
             image: oracles
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            dockerfile: sdk/Dockerfile
+            target: sdk-build
+            name: sdk-build-amd64
+            image: sdk-build
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+            dockerfile: sdk/Dockerfile
+            target: sdk-build
+            name: sdk-build-arm64
+            image: sdk-build
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
