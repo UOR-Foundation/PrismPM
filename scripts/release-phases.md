@@ -1,32 +1,22 @@
 # Publication phases
 
-## v0.4 release branch
-
-The authoritative v0.4 pipeline is the copy of `release.yml` on `release/v0.4`,
-not the older workflow described below on `main`. Every push to `release/v0.4`
-runs its complete existing qualification pipeline as a forced rehearsal:
-`version=0.4.0`, `rehearsal=true`, `publish-crates=false`. Use the last release
-fix's merge SHA and its automatic run; do not launch a duplicate dispatch or
-change that source during qualification.
-
-Rehearsals retain every source, installed SDK, native, image and reproducibility
-gate. They push images by digest and write public signatures/attestations, while
-skipping release assets, discovery aliases, crates, native archive provenance
-and the final release. Follow `docs/release/v0.4.0-runbook.md` for qualification
-and publication. Tag ownership does not delay a qualified release.
-
-Image/SBOM verification can consume release-branch `push` or `workflow_dispatch`
-signatures, requiring the exact actual event, ref, source SHA and workflow.
-When independently verifying a push run, set `GITHUB_EVENT_NAME=push`; a
-dispatch matcher cannot authenticate a push-produced signature. The retained
-main workflow supports only its historical dispatch identity; main push
-signatures are not admitted by this addition.
-
-## Retained main workflow
-
-`release.yml` accepts an exact `main` dispatch or the `v0.4.0` tag. Source
-verification runs `just vv` twice without cleanup. All existing image, native,
+`release.yml` runs for the workspace version in `Cargo.toml` (`workspaceVersion`):
+a dispatch on `main`, a push or dispatch on `release/vMAJOR.MINOR`, or the tag
+`vVERSION` by a push or by the factory's cut (`prism-factory/README.md`). Source
+verification runs one pass as the eight `just vv-part` jobs listed in
+`scripts/vv-assemble.mjs`. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
+
+A dispatch with `rehearsal=true`, the default, runs every check and publishes no GitHub
+release assets, discovery aliases, crates or native-archive provenance. It still pushes
+images by digest and signs them, because later checks read those exact images.
+
+A branch run is always a rehearsal and only the tag publishes. Every push to a
+release branch forces the workspace version, `rehearsal=true` and
+`publish-crates=false`, independently of dispatch inputs. Merging release fixes
+therefore qualifies the exact merge commit without manual Actions dispatch.
+Branch-push signatures bind the actual `push` trigger; explicit dispatch signatures
+continue to bind `workflow_dispatch`. Freeze that merge SHA through qualification.
 
 With `publish-crates=false`, OCI images are pushed by digest without discovery aliases.
 The `sdk-oci-<source SHA>-<run ID>-<attempt>` GitHub prerelease publishes their immutable references,
@@ -39,14 +29,19 @@ downloaded asset must match. Complete, identical drafts may resume publication;
 different bytes and incomplete drafts fail closed. The workflow never deletes,
 overwrites or silently repairs them. Each credentialed writer independently
 checks the allowed repository, source revision, event, ref and Cargo choice.
+`scripts/release-publication.mjs` performs this publication. It is release
+plumbing outside the build plumbing, so a publication fix never invalidates a
+build receipt. It reads GitHub as the REST API answers: a draft is found in the
+release list, since `releases/tags/{tag}` serves published releases only, and a
+tag resolves through `git/ref/tags/{tag}`, whose 404 is the only absence.
 
-Both native installed-SDK two-run records and their original command transcripts,
+All six native installed-SDK part records and their original command transcripts,
 genuine product-CLI evidence, and complete browser/library logs are retained in
 that same immutable publication. Deterministic USTAR archives bind each original
 file; missing, substituted, aliased or over-bound inputs stop publication.
-Both source `just vv` runs retain separate stdout, stderr, exit status, original
-VV receipt and four bootstrap outputs. Installed SDK runs likewise retain all
-four fresh bootstrap outputs per run before the next run can replace them.
+Each source `just vv-part` job retains separate stdout, stderr, exit status and its
+original part receipt; the source part also retains the four bootstrap outputs.
+Installed SDK source parts likewise retain all four fresh bootstrap outputs.
 Native/SDK comparisons retain all four commands and separate output streams,
 including expected exit code 6; negative stdout and stderr must both agree.
 Source and native records bind source, architecture, GitHub run and attempt;
@@ -92,8 +87,8 @@ cryptographic registry verification; a saved success file is not sufficient.
 Image-index signatures use the same exact source/workflow/ref/event policy and
 pinned trust root; a signature from another allowed release ref is insufficient.
 
-Before SDK acceptance, the release path still requires twice-run verification
-in the exact shipped SDK images; the
+Before SDK acceptance, the release path still requires all eight parts (`scripts/vv-assemble.mjs`)
+in the exact shipped SDK images on both architectures; the
 source-devcontainer runs are not that evidence. No SDK acceptance receipt or
 consumer lock is changed by this workflow split.
 
@@ -101,12 +96,13 @@ Regression tests: `node --test scripts/release-phases.test.mjs` in the PrismPM
 devcontainer. They reject missing/failed/skipped gates, Cargo coupling,
 unshipped reproducible bytes, source/ref drift and changed existing releases.
 The dependency-free `node --test scripts/release-native-contract.test.mjs` runs
-before source verification or image construction. It checks native smoke
-expectations against the registered diagnostic exit and workspace release
-version; its synthetic records are never release evidence. Source verification
-imports the devcontainer layer cache populated by PR Fast Checks, but still
-executes every check. Cache misses rebuild normally. Hosted timing is required
-before claiming a release-duration reduction.
+in the release policy job before source verification or image construction. It
+checks native smoke expectations against the registered diagnostic exit and
+workspace release version; its synthetic records are never release evidence.
+Source verification shards import the devcontainer layer cache already populated
+by PR Fast Checks. They do not write it concurrently. Cache misses rebuild as
+usual, and every shard still runs its complete source check; no acceptance result
+is cached. Hosted timing is required before claiming a release-duration reduction.
 Publication tests use an isolated GitHub command fixture, not live publication.
 The planted self-comparison defect in the shipped-digest check failed the real
 reproducibility regression; restoring the comparison restored the passing gate.

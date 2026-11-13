@@ -15,7 +15,7 @@ RUN case "$TARGETARCH" in \
     esac \
     && curl --fail --location --silent --show-error "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-${node_arch}.tar.xz" --output /tmp/node.tar.xz \
     && echo "${node_sha}  /tmp/node.tar.xz" | sha256sum --check --strict \
-    && tar --extract --xz --file /tmp/node.tar.xz --strip-components=1 --directory /usr/local \
+    && tar --extract --no-same-owner --xz --file /tmp/node.tar.xz --strip-components=1 --directory /usr/local \
     && rm /tmp/node.tar.xz
 
 FROM input_tools AS source_inputs
@@ -47,7 +47,7 @@ RUN case "$TARGETARCH" in \
     esac \
     && curl --fail --location --silent --show-error "https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_${oras_arch}.tar.gz" --output /tmp/oras.tar.gz \
     && echo "${oras_sha}  /tmp/oras.tar.gz" | sha256sum --check --strict \
-    && tar --extract --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
+    && tar --extract --no-same-owner --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
     && rm /tmp/oras.tar.gz \
     && openssl version \
     && docker buildx version \
@@ -133,7 +133,7 @@ RUN case "$TARGETARCH" in \
     esac \
     && curl --fail --location --silent --show-error "https://github.com/casey/just/releases/download/1.57.0/${archive}" --output /tmp/just.tar.gz \
     && echo "${checksum}  /tmp/just.tar.gz" | sha256sum --check --strict \
-    && tar --extract --gzip --file /tmp/just.tar.gz --directory /usr/local/bin just \
+    && tar --extract --no-same-owner --gzip --file /tmp/just.tar.gz --directory /usr/local/bin just \
     && rm /tmp/just.tar.gz
 
 RUN case "$TARGETARCH" in \
@@ -144,7 +144,7 @@ RUN case "$TARGETARCH" in \
     && archive="cargo-deny-0.20.2-${deny_arch}-unknown-linux-musl.tar.gz" \
     && curl --fail --location --silent --show-error "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/${archive}" --output /tmp/cargo-deny.tar.gz \
     && echo "${deny_sha}  /tmp/cargo-deny.tar.gz" | sha256sum --check --strict \
-    && tar --extract --gzip --file /tmp/cargo-deny.tar.gz --strip-components=1 --directory /usr/local/bin "cargo-deny-0.20.2-${deny_arch}-unknown-linux-musl/cargo-deny" \
+    && tar --extract --no-same-owner --gzip --file /tmp/cargo-deny.tar.gz --strip-components=1 --directory /usr/local/bin "cargo-deny-0.20.2-${deny_arch}-unknown-linux-musl/cargo-deny" \
     && rm /tmp/cargo-deny.tar.gz
 
 RUN case "$TARGETARCH" in \
@@ -154,7 +154,7 @@ RUN case "$TARGETARCH" in \
     esac \
     && curl --fail --location --silent --show-error "https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_${oras_arch}.tar.gz" --output /tmp/oras.tar.gz \
     && echo "${oras_sha}  /tmp/oras.tar.gz" | sha256sum --check --strict \
-    && tar --extract --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
+    && tar --extract --no-same-owner --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
     && curl --fail --location --silent --show-error "https://github.com/kubernetes-sigs/kind/releases/download/v0.31.0/kind-linux-${oras_arch}" --output /usr/local/bin/kind \
     && echo "${kind_sha}  /usr/local/bin/kind" | sha256sum --check --strict \
     && curl --fail --location --silent --show-error "https://dl.k8s.io/release/v1.36.4/bin/linux/${oras_arch}/kubectl" --output /usr/local/bin/kubectl \
@@ -177,7 +177,7 @@ RUN case "$TARGETARCH" in \
     && echo "${slsa_sha}  /usr/local/bin/slsa-verifier" | sha256sum --check --strict \
     && curl --fail --location --silent --show-error "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.136.0/otelcol-contrib_0.136.0_linux_${otel_arch}.tar.gz" --output /tmp/otelcol.tar.gz \
     && echo "${otel_sha}  /tmp/otelcol.tar.gz" | sha256sum --check --strict \
-    && tar --extract --gzip --file /tmp/otelcol.tar.gz --directory /usr/local/bin otelcol-contrib \
+    && tar --extract --no-same-owner --gzip --file /tmp/otelcol.tar.gz --directory /usr/local/bin otelcol-contrib \
     && curl --fail --location --silent --show-error "https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_${slsa_arch}" --output /usr/local/bin/osv-scanner \
     && echo "${osv_sha}  /usr/local/bin/osv-scanner" | sha256sum --check --strict \
     && chmod 0755 /usr/local/bin/slsa-verifier /usr/local/bin/otelcol-contrib /usr/local/bin/osv-scanner \
@@ -304,8 +304,10 @@ RUN set -eu; \
 
 RUN chmod -R a+rX,a-w /opt/prismpm/share
 
-# Keep the offline dependency content, not Cargo's access-time/GC database.
+# Keep the offline dependency content, not Cargo's access-time/GC database or
+# the live crates.io listing and validators its sparse-index cache recorded.
 RUN /usr/bin/python3 -I -B scripts/normalize-cargo-git.py /usr/local/cargo \
+    && /usr/bin/python3 -I -B scripts/normalize-cargo-index.py /usr/local/cargo \
     && mkdir -p /opt/prismpm/cargo-home \
     && cp -a /usr/local/cargo/registry /opt/prismpm/cargo-home/ \
     && if [ -d /usr/local/cargo/git ]; then cp -a /usr/local/cargo/git /opt/prismpm/cargo-home/; fi \

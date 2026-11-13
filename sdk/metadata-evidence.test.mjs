@@ -123,7 +123,7 @@ test('private native evidence survives two-lane roundtrip and refuses missing ch
     const values={'source.json':original,'image.json':[{Os:'linux',Architecture:architecture,RepoDigests:[sdk.image],
       Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{
         'org.opencontainers.image.revision':revision,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM',
-        'org.opencontainers.image.version':'0.3.0'}}}],
+        'org.opencontainers.image.version':'0.4.0'}}}],
       'acquisition.json':{lock:sdk.lock,metadata,migration},'compiler.json':qualificationFixture(binding,authority),
       'custody.json':{scope:'filesystem-custody-only',checks:6,status:'passed'},'result.json':resultFixture(binding,authority)};
     for(const [name,value] of Object.entries(values))writeFileSync(join(directory,name),name==='acquisition.json'?canonical(value):JSON.stringify(value));

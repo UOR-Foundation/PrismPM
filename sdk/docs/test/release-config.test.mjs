@@ -54,6 +54,10 @@ test('the root tag stays v<version>, which release.yml reads, and npm tags carry
   assert.equal(config['include-v-in-tag'], true);
   assert.equal(config.packages['.']['include-component-in-tag'], false);
   assert.ok(read('.github/workflows/release.yml').includes('tags:'));
+  // The root tag and its GitHub Release are the factory's cut (release-cut.yml),
+  // made only once a rehearsal of that commit passed; release-please bumps.
+  assert.equal(config.packages['.']['skip-github-release'], true);
+  assert.match(read('prism-factory/factory.sh'), /gh release create "\$tag" --verify-tag/);
   assert.ok(read('.github/workflows/npm-prism-code.yml').includes('prism-code-v*'));
   assert.equal(config.packages['sdk/npm/prism-code'].component, 'prism-code');
 });
@@ -107,7 +111,10 @@ test('the dry run pins release-please at the version the pinned action bundles',
 test('a GitHub Release that release-please created keeps its body when release.yml adds the assets', () => {
   const step = /softprops\/action-gh-release@[\s\S]*?files: \|/.exec(read('.github/workflows/release.yml'))[0];
   assert.match(step, /append_body: true/);
-  assert.match(step, /body_path: RELEASE_NOTES\.md/);
+  assert.match(step, /body_path: \$\{\{ runner\.temp \}\}\/release-notes\.md/);
+  // RELEASE_NOTES.md names no version: the release job writes it in.
+  assert.match(read('RELEASE_NOTES.md'), /^# PrismPM @VERSION@$/m);
+  assert.match(read('.github/workflows/release.yml'), /sed -e "s\/@VERSION@\/\$VERSION\/g"/);
 });
 
 test('npm can be published from a tag that started no workflow, and a prerelease never takes latest', () => {

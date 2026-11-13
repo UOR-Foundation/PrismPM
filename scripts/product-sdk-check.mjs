@@ -87,7 +87,7 @@ export async function command(program,args,{cwd,env=process.env,timeout=1800000,
  assert(Number.isSafeInteger(timeout)&&timeout>0&&timeout<=1800000);assert(Number.isSafeInteger(maximum)&&maximum>0&&maximum<=64*1024*1024);
  const child=await launch(program,args,{cwd,env,encoding:'utf8',timeout,maxBuffer:maximum,killSignal:'SIGKILL'});
  assert.equal(child.error,undefined,'command execution failed');assert.equal(child.signal,null,'command terminated');
- assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\n'+(child.stderr??'').slice(-4000));
+ assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\n'+(child.stderr??'').slice(-4000)+'\n'+(child.stdout??'').slice(-4000));
  return child;
 }
 export async function cli(project,args,expected,launch=launchProcess){
@@ -153,7 +153,10 @@ async function projectSource(project){
  for(const name of ['prismpm.toml','lakefile.toml','lake-manifest.json','lean-toolchain'])put(join(project,name),bytes(join(installed,'examples/Calculator',name)));
  put(join(project,'lexlean.toml'),bytes(join(installed,'tests/browser-system/lexlean.toml')));
  put(join(project,'src/Release.lex.tex'),bytes(join(installed,'tests/browser-system/Release.lex.tex')));
- put(join(project,'src/Calculator.lex.tex'),bytes(join(installed,'examples/Calculator/src/Calculator.lex.tex')));
+ put(join(project,'src/Calculator.lex.tex'),bytes(join(installed,'tests/browser-system/Calculator.lex.tex')));
+ // The fixture's lexlean.toml declares the `prism.arch` path package; the
+ // installed stdlib modules title themselves from it.
+ cpSync(join(installed,'language/prism.arch'),join(project,'language/prism.arch'),{recursive:true,errorOnExist:true,force:false});
  for(const name of ['Core','BrowserSystem'])put(join(project,'src/Production',name+'.lex.tex'),bytes(join(installed,'stdlib/src/Production',name+'.lex.tex')));
  put(join(project,'prismpm.lock'),bytes(join(inputs,'prismpm.lock')));put(join(project,'standards.lock'),bytes(shared+'/standards.lock'));
  await command('/usr/local/bin/lexlean',['lock'],{cwd:project,timeout:300000});
@@ -167,7 +170,10 @@ async function registry(project){
  const inventory=validateInventory(bytes(shared+'/inventory.json'));
  const row=inventory.artifacts.filter(item=>item.id==='prism-stdlib');assert.equal(row.length,1);assert.equal(row[0].digest,sha(crate));
  put(join(path,'prism-stdlib-0.2.0.crate'),crate);
- put(join(path,'index/pr/is/prism-stdlib'),JSON.stringify({name:'prism-stdlib',vers:'0.2.0',deps:[],cksum:release.crate_sha256,features:{default:['std'],std:[]},yanked:false})+'\n');
+ // As the CLI's own stdlib registry does, the 0.2.0 row replaces the
+ // vendored archive's historical prism-stdlib index entry.
+ const index=join(path,'index/pr/is/prism-stdlib');assert(lstatSync(index).isFile());rmSync(index);
+ put(index,JSON.stringify({name:'prism-stdlib',vers:'0.2.0',deps:[],cksum:release.crate_sha256,features:{default:['std'],std:[]},yanked:false})+'\n');
  // Scoped only to this fixture. The ordinary verifier has its own isolated
  // dependency homes; neither a host package nor a public-registry claim enters.
  put(join(project,'.cargo/config.toml'),'[net]\noffline = true\n[source.crates-io]\nreplace-with = "installed-sdk-probe"\n[source.installed-sdk-probe]\nlocal-registry = ".prism/product-registry"\n');

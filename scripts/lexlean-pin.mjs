@@ -30,6 +30,8 @@ export const VERSION_SITES = Object.freeze({
   '.github/workflows/release.yml': ['wait_for_crate lexlean {v}'],
   'Cargo.toml': ['lexlean = { version = "{v}", path = "vendor/lexlean" }'],
   'SPEC.md': ['LexLean {v} package', 'lexlean-{v}.crate'],
+  // release.yml is projected from this fragment; a bump rewrites both alike.
+  'prism-factory/jobs/crates.yml': ['wait_for_crate lexlean {v}'],
   'crates/prismpm/src/input_lock.rs': ['pinned["lexlean"], "{v}"'],
   'scripts/package-release-crates.sh': ['lexlean-{v}.crate', 'public_checksum lexlean {v}', 'lexlean {v} must'],
   'scripts/reconcile-lexlean.mjs': ["LEXLEAN_VERSION='{v}'"],

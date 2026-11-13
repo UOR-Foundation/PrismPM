@@ -8,6 +8,7 @@ import test from 'node:test';
 import { validateConfig, validateEnvironment, validateEvidence } from './sdk-candidate.mjs';
 import { BUILD_VARIANT_OMITTED, compilerRevision, encodeInventory, omitBuildVariantArtifacts, validateAuthorityMetadata } from '../sdk/inventory-metadata.mjs';
 import './sdk-candidate-sbom.test.mjs';
+import { workspaceVersion } from './workspace-version.mjs';
 
 const revision = 'a'.repeat(40);
 const digest = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -23,7 +24,7 @@ const standardsFixture = () => {
 const config = () => ({architecture: 'amd64', os: 'linux', rootfs: {type: 'layers', diff_ids: []},
   config: {Labels: {'org.opencontainers.image.revision': revision,
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
-    'org.opencontainers.image.version': '0.4.0',
+    'org.opencontainers.image.version': workspaceVersion(),
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z'}}});
 
 test('final runtime inventory is canonical after appending measured browser artifacts', () => {

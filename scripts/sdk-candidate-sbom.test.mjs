@@ -8,6 +8,7 @@ import { artifactManifest, describeSpdx, digest, emptyConfig, handleSbom, issuer
   manifestType, repository, sbomRecord, signingArguments, trustRootDigest,
   releaseTransportPolicy, validateArtifact, verificationArguments, workflow } from './sdk-candidate-sbom.mjs';
 import { releaseSbomRecord } from './release-phases.mjs';
+import { workspaceVersion } from './workspace-version.mjs';
 
 const revision = 'a'.repeat(40);
 const encode = value => Buffer.from(`${JSON.stringify(value)}\n`);
@@ -30,12 +31,12 @@ function fixture(sbom = rawSpdx()) {
   return {candidate, child, sbom, record, manifest};
 }
 
-function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main', event) {
+function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/release/v0.4', event) {
   const config = encode({architecture, os: 'linux', config: {Labels: {
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
-    'org.opencontainers.image.version': '0.4.0'}}});
+    'org.opencontainers.image.version': workspaceVersion()}}});
   const child = encode({schemaVersion: 2, mediaType: manifestType,
     config: {mediaType: 'application/vnd.oci.image.config.v1+json', digest: digest(config), size: config.length}, layers: []});
   const subject = {mediaType: manifestType, digest: digest(child), size: child.length};
@@ -49,8 +50,8 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
 }
 
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
-  for (const [ref, event] of [['refs/heads/main', 'workflow_dispatch'],
-    ['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push']]) {
+  for (const [ref, event] of [['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/main', 'workflow_dispatch'],
+    ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push'], ['refs/tags/v0.5.0', 'workflow_dispatch']]) {
     for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build']) {
       for (const architecture of ['amd64', 'arm64']) {
         const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref, event);
@@ -75,10 +76,9 @@ test('release transport has exact repository/ref/signer policies without pretend
   }
   const {record, manifest, options, sbom} = releaseFixture();
   for (const bad of [{...options, repository: 'registry.attacker.test/sdk'}, {...options, ref: 'refs/heads/feature'},
-    {...options, event: 'push'}, {...options, event: 'pull_request'},
-    {...options, ref: 'refs/heads/release/v0.4', event: 'push|workflow_dispatch'},
-    {...options, ref: 'refs/tags/v0.4.0', event: 'workflow_dispatch'}, {...options, event: null},
-    {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.3.0'}]) {
+    {...options, event: 'pull_request'}, {...options, event: 'push|workflow_dispatch'},
+    {...options, ref: 'refs/heads/main', event: 'push'}, {...options, event: null}, {...options, ref: 'refs/heads/release/v04'},
+    {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.3'}, {...options, ref: 'refs/tags/0.3.0'}]) {
     assert.throws(() => artifactManifest(record, bad));
     assert.throws(() => verificationArguments(record, digest(manifest), '/root', bad));
     assert.throws(() => signingArguments(digest(manifest), '/root', '/bundle', bad));

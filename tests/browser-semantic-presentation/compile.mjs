@@ -32,7 +32,7 @@ export function frozenInputs() {
       'provenance.mjs', 'fixture-files.mjs'].map(path => 'tests/browser-presentation/' + path),
     ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs', 'generated-package.mjs',
       'generated-package.test.mjs', 'file-custody.mjs', 'compiler-owner.mjs',
-      'compiler-artifact.mjs', 'compiler-owner-checks.mjs', 'generated-wasm.mjs']
+      'compiler-artifact.mjs', 'compiler-owner-checks.mjs', 'generated-wasm.mjs', 'lexicon-inputs.mjs']
       .map(path => 'tests/browser-view/' + path),
     ...lexiconPaths(repository), 'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
@@ -160,7 +160,11 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
       sources.set(name, Buffer.from(writeSemantic(text, canonical(model))));
     }
     const project = join(work, 'project');
-    for (const path of lexiconPaths(repository)) stage('project/' + path, capturedInput(path, inputs));
+    for (const path of lexiconPaths(repository)) {
+      const destination = join(project, path);
+      mkdirSync(dirname(destination), {recursive: true});
+      writeFileSync(destination, capturedInput(path, inputs), {flag: 'wx'});
+    }
     for (const [module, bytes] of sources) {
       const destination = join(project, 'src', ...module.split('.')) + '.lex.tex';
       mkdirSync(dirname(destination), {recursive: true}); writeFileSync(destination, bytes, {flag: 'wx'});

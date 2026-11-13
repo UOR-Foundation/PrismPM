@@ -7,6 +7,10 @@ default:
 vv:
     ./scripts/vv.sh
 
+# Run one separately run part of vv: source, gates, conformance, ho-oc, st-sy, dk-0-1, dk-2 or dk-3
+vv-part part:
+    ./scripts/vv.sh vv-part {{part}}
+
 # Planted defects: a gate counts only when a deliberate defect makes it fail.
 # G2 text refusals, G3 statement time, G5 axioms outside Lean's three, G7
 # integrity under every policy (P0 included), G8 the removed author route, G9
