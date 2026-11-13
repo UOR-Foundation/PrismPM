@@ -29,7 +29,7 @@ const { version } = require('../../package.json');
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism or /prism, call prism_start.
-Every app has one input: prism/spec.json, a prism/spec/1 spec. Draft it from the user's sentence, a reason per rule and property, and pass it to prism_spec; to change it, edit spec.json or pass the new spec. The same JSON gives the same model. Ask only what you cannot infer; on an issue, fix the draft or ask.
+Every app has one input: prism/spec.json: prism/spec/1, stateful apps prism/spec/2. Draft it from the user's sentence, a reason per rule and property, and pass it to prism_spec; to change it, edit spec.json or pass the new spec. The same JSON gives the same model. Ask only what you cannot infer; on an issue, fix the draft or ask.
 Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML, draw one editable card, never a multiple-choice question.
 On approval, answer the review yes, then call prism_build.
 Never write LexLean; spec.json is the one file you write.
@@ -93,6 +93,79 @@ const SPEC_INPUT = {
   required: ['purpose', 'fields', 'outcomes', 'rules', 'otherwise'],
 };
 
+const NAMED_VALUE = (state) => ({
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'A lower-case word.' },
+    kind: { type: 'string', enum: ['number', 'choice'] },
+    values: { type: 'array', items: { type: 'string' }, description: 'For a choice: two to 32 lower-case words.' },
+    min: { type: 'integer', minimum: 0 },
+    max: { type: 'integer', minimum: 0, ...(state ? { description: 'Required for a number in the state: state is bounded.' } : {}) },
+    ...(state ? { start: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }], description: 'The value at the start; default the min, or the first choice.' } } : {}),
+    means: { type: 'string' },
+  },
+  required: ['name', 'kind'],
+});
+
+/** The prism/spec/2 shape: an app that keeps state between the steps of a session. */
+const STATEFUL_SPEC_INPUT = {
+  type: 'object',
+  description: 'A whole prism/spec/2 spec, for an app that keeps state between steps.',
+  properties: {
+    schema: { type: 'string', enum: ['prism/spec/2'] },
+    name: { type: 'string', description: 'Lower case and hyphens.' },
+    title: { type: 'string' },
+    purpose: { type: 'string', description: 'What the app keeps and does, in one sentence.' },
+    state: { type: 'array', minItems: 1, maxItems: 8, description: 'What the app keeps: each a bounded number or a choice, with a start.', items: NAMED_VALUE(true) },
+    outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Lower-case words; invalid is reserved.' },
+    meanings: { type: 'object', additionalProperties: { type: 'string' } },
+    actions: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 8,
+      description: 'What a user can do. A step is the action name and its inputs, separated by single spaces.',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'A lower-case word.' },
+          means: { type: 'string' },
+          inputs: { type: 'array', maxItems: 4, items: NAMED_VALUE(false) },
+          rules: {
+            type: 'array',
+            maxItems: 12,
+            description: 'In order. The first whose conditions hold (all of them; none means always) and whose changes keep every number within its bounds answers `then` and makes its changes.',
+            items: {
+              type: 'object',
+              properties: {
+                when: { ...CONDITIONS, minItems: 0, description: 'Over the state and this action\'s inputs. A choice compares with is or is not; a number with a whole number or another number, as {"field": "seats"}.' },
+                then: { type: 'string' },
+                change: {
+                  type: 'array',
+                  description: 'Changes to the state, each read from the state before the step: set a choice or number, add to or subtract from a number, by a whole number or {"field": name}.',
+                  items: { type: 'object', properties: { field: { type: 'string' }, op: { type: 'string', enum: ['set', 'add', 'subtract'] }, value: CONDITIONS.items.properties.value }, required: ['field', 'op', 'value'] },
+                },
+                why: WHY,
+              },
+              required: ['then'],
+            },
+          },
+          otherwise: { type: 'string', description: 'The answer when no rule applies; the state does not change.' },
+          otherwiseWhy: WHY,
+        },
+        required: ['name', 'rules', 'otherwise'],
+      },
+    },
+    properties: {
+      type: 'array',
+      description: 'Each becomes theorems Lean proves for every reachable state. Without action: what is always (or never) true of the state. With action and then: that action never (or always) answers then when the conditions hold.',
+      items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, action: { type: 'string' }, when: { ...CONDITIONS, minItems: 0 }, then: { type: 'string' }, why: WHY }, required: ['kind', 'when'] },
+    },
+    limits: { type: 'array', items: { type: 'string' } },
+    examples: { type: 'array', description: 'Sessions from the start: steps and the answer each gives; each becomes acceptance vectors.', items: { type: 'object', properties: { steps: { type: 'array', items: { type: 'string' } }, answers: { type: 'array', items: { type: 'string' } } }, required: ['steps', 'answers'] } },
+  },
+  required: ['schema', 'purpose', 'state', 'outcomes', 'actions'],
+};
+
 const TOOLS = [
   {
     name: 'prism_start',
@@ -111,8 +184,8 @@ const TOOLS = [
   },
   {
     name: 'prism_spec',
-    description: 'Read the whole spec as prism/spec/1 JSON, or replace it in one call with a spec you drafted from the user\'s request. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
-    inputSchema: { type: 'object', properties: { spec: SPEC_INPUT }, additionalProperties: false },
+    description: 'Read the whole spec as JSON, or replace it in one call with a spec you drafted from the user\'s request: prism/spec/1 for an app that decides one answer from one request, prism/spec/2 for an app that keeps state between steps. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
+    inputSchema: { type: 'object', properties: { spec: { anyOf: [SPEC_INPUT, STATEFUL_SPEC_INPUT], description: 'A whole spec. Omit to read.' } }, additionalProperties: false },
   },
   {
     name: 'prism_prove',
@@ -136,7 +209,7 @@ const TOOLS = [
   {
     name: 'prism_try',
     description: 'Answer one request, from the built app when there is one, else from the spec, and say which rule decided it.',
-    inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'One request line, the fields separated by single spaces.' } }, required: ['request'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'One request line, the fields separated by single spaces; for a prism/spec/2 app, a session: its steps separated by ;, as book 4;cancel 2.' } }, required: ['request'], additionalProperties: false },
   },
   {
     name: 'prism_status',
@@ -307,7 +380,7 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
         return { spec, step: session.step, specHash: session.status?.specHash ?? null, ...(session.adopted ? { note: session.adopted } : {}), ...(session.specFileIssue ? { issue: session.specFileIssue } : {}) };
       }
       try {
-        // The same strict reading spec.json gets: no member prism/spec/1 does not define, whole numbers only.
+        // The same strict reading spec.json gets: no member its schema does not define, whole numbers only.
         readSpecFile(args.spec);
         session.answers = { ...answersFromSpec(args.spec), review: undefined };
       } catch (error) {

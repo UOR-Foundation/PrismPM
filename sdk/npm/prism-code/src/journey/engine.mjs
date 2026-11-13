@@ -9,7 +9,8 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
-import { names, renderSpecDocument } from './render.mjs';
+import { isStateful, names, renderSpecDocument } from './render.mjs';
+import { respondSession, runSession, statefulCounterexample } from './stateful.mjs';
 import { bind, isBound, modelMismatches, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, forbiddenAxioms, forbiddenMessage, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
@@ -128,12 +129,15 @@ function provedResult(dir, session, seconds, proof) {
     seconds,
     where: proof.where,
     ...(proof.attestation ? { attestation: proof.attestation } : {}),
-    properties: spec.properties.map((p) => ({ id: p.id, theorem: n.properties[p.id].theorem, says: `It ${p.kind} answers ${p.then} when ${describeConditions(p.when)}.`, status: 'proved' })),
+    properties: spec.properties.map((p) => ({ id: p.id, theorem: theoremsOf(n, p).join(', '), says: p.says, status: 'proved' })),
     message: spec.properties.length
       ? `Lean proved all ${spec.properties.length} propert${spec.properties.length === 1 ? 'y' : 'ies'} for every request${where}, in ${seconds} s.`
       : `The model checks and verifies${where} in ${seconds} s. No property is stated, so nothing about the rules is proved.`,
   };
 }
+
+/** The theorems that prove a property: one for prism/spec/1, one per action and the start for a state property of prism/spec/2. */
+const theoremsOf = (n, p) => n.properties[p.id].theorems ?? [n.properties[p.id].theorem];
 
 /** A Lean warning, such as an unused simp argument: reported, never a reason the proof failed. LexLean files Lean's warnings under LLV7002 with the word in the message. */
 export const isWarning = (d) => d.severity === 'warning' || /^Lean rejected `[^`]+` \(warning\):/.test(d.message);
@@ -205,7 +209,7 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps 
   writeFileSync(join(dir, '.prism-last.log'), run.output);
   if (run.code === 69 || run.code === 70) return { ok: false, message: tail(run.output) };
   const source = (file) => (existsSync(join(dir, file)) ? readFileSync(join(dir, file), 'utf8') : '');
-  const byTheorem = Object.fromEntries(spec.properties.map((p) => [n.properties[p.id].theorem, p]));
+  const byTheorem = Object.fromEntries(spec.properties.flatMap((p) => theoremsOf(n, p).map((t) => [t, p])));
   const failing = [];
   const other = [];
   for (const d of diagnostics) {
@@ -224,11 +228,18 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps 
   writeSpecDocument(dir, session);
   if (failing.length && other.length === 0) {
     const explained = failing.map((p) => {
+      if (isStateful(spec)) {
+        const found = statefulCounterexample(spec, p);
+        if (found.steps === null) gaps?.record({ kind: 'unproved', construct: propertyShape(p), code: codeOf(diagnostics, p, byTheorem, source) });
+        return found.steps !== null
+          ? `${p.id} is false. The session \`${found.steps.join(';')}\` ${p.action ? `ends with ${p.action} answering ${found.outcome} (${found.rule ?? 'otherwise'})` : `reaches the state ${found.state}`}.`
+          : `Lean could not prove ${p.id} ("${p.says}"), and none of ${found.checked} sampled reachable states breaks it. A state property is proved by induction, so it may hold yet not be kept by some action from a state no session reaches; add the state property that rules that state out, or restate it.`;
+      }
       const found = counterexample(spec, p);
       if (found.request === null) gaps?.record({ kind: 'unproved', construct: propertyShape(p), code: codeOf(diagnostics, p, byTheorem, source) });
       return found.request !== null
         ? `${p.id} is false. The request \`${found.request}\` meets "${describeConditions(p.when)}" and the rules answer ${found.outcome} (${found.rule ?? 'otherwise'}).`
-        : `Lean could not prove ${p.id} ("${p.kind} ${p.then} when ${describeConditions(p.when)}"), and none of ${found.checked} sampled requests breaks it. It may hold only for requests the sampling missed, such as very large numbers. Restate it more narrowly, or drop it and keep it as a tested example.`;
+        : `Lean could not prove ${p.id} ("${p.says}"), and none of ${found.checked} sampled requests breaks it. It may hold only for requests the sampling missed, such as very large numbers. Restate it more narrowly, or drop it and keep it as a tested example.`;
     });
     return { ok: false, seconds, properties: spec.properties.map((p) => ({ id: p.id, status: session.status.properties[p.id] })), message: explained.join('\n'), next: 'Change a rule or restate the property (prism_answer with step rules or properties), then prove again.' };
   }
@@ -269,6 +280,8 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
     return { ok: false, stage: 'build', mismatched, message: `model does not match spec.json: ${mismatched.join(', ')}. The model is generated from prism/spec.json alone; change spec.json (or the spec through prism_spec) and build again, or pass overwrite to regenerate the model from it.` };
   }
   const where = buildWhere(dir, session, { env, remote: repository && !remote ? 'github' : remote });
+  // The GitHub template writes a decision app's claims, scenarios and tests; a stateful app builds here until it has its own.
+  if (where === 'github' && isStateful(session.spec)) return { ok: false, stage: 'build', message: 'A stateful app (prism/spec/2) builds on this machine for now: the GitHub template writes the claims, scenarios and tests of a decision app. Call prism_build without a repository.' };
   if (where === 'github') return buildRemote(dir, session, { log, root: root ?? defaultRoot(dir), repository });
   // A build needs the image, and a hosted proof did not: pull it now if it is missing, saying so, and pin the app to it.
   const ready = await prepare(dir, session, log, { pull: true });
@@ -510,11 +523,13 @@ async function built(dir, session, holo, seconds, proof) {
 }
 
 function exampleRequest(spec) {
+  if (isStateful(spec)) return spec.examples[0]?.steps.join(';') ?? spec.actions[0].name;
   return spec.examples[0]?.request ?? spec.fields.map((f) => (f.kind === 'choice' ? f.values[0] : String(f.min ?? 1))).join(' ');
 }
 
 /** Answer one request: from the built guest when there is one, else from the spec. */
 export async function tryRequest(session, request) {
+  if (isStateful(session.spec)) return trySession(session, request);
   const { respond, decodeRequest, judge } = await import('./spec.mjs');
   const bytes = new TextEncoder().encode(request);
   const expected = respond(session.spec, bytes);
@@ -526,4 +541,17 @@ export async function tryRequest(session, request) {
     return { request, answer, from: 'the built app', decidedBy: why, agreesWithSpec: answer === expected };
   }
   return { request, answer: expected, from: 'the spec (not built yet)', decidedBy: why };
+}
+
+/** Answer one session of a stateful app: from the built app when there is one, else from the spec, with what each step answered. */
+async function trySession(session, request) {
+  const bytes = new TextEncoder().encode(request);
+  const expected = respondSession(session.spec, bytes);
+  const steps = runSession(session.spec, request.split(';')).map((r, i) => ({ step: request.split(';')[i], answer: r.outcome, decidedBy: r.rule ?? (r.outcome === 'invalid' ? 'malformed' : 'otherwise') }));
+  if (session.status.holo && existsSync(session.status.holo)) {
+    const app = await fromFile(session.status.holo);
+    const answer = new TextDecoder().decode(await app.dispatch(bytes));
+    return { request, answer, from: 'the built app', steps, agreesWithSpec: answer === expected };
+  }
+  return { request, answer: expected, from: 'the spec (not built yet)', steps };
 }
