@@ -163,7 +163,7 @@ test('load refuses an altered holo with DigestMismatchError, and opens it only w
       assert.ok(error instanceof DigestMismatchError, error.stack);
       assert.equal(error.code, 'digest_mismatch');
       assert.equal(error.check, 'holo.integrity');
-      assert.match(error.message, /^the holo was altered: the footer is not the BLAKE3 of the body/);
+      assert.match(error.message, /^integrity failure: the holo was altered: the footer is not the BLAKE3 of the body/);
       assert.match(error.message, /to open it anyway, pass allowUnverified: true \(--allow-unverified on the command line\)$/);
       return true;
     });
@@ -174,7 +174,7 @@ test('load refuses an altered holo with DigestMismatchError, and opens it only w
   // The model document's blob, altered and the footer resealed: is refused for the label.
   const resealed = corrupt(19000, bytes[19000] ^ 1);
   resealed.set(blake3(resealed.subarray(0, resealed.length - 32)), resealed.length - 32);
-  await assert.rejects(load(resealed), (error) => error instanceof DigestMismatchError && /^the holo was altered: a content blob does not hash to its label;/.test(error.message));
+  await assert.rejects(load(resealed), (error) => error instanceof DigestMismatchError && /^integrity failure: the holo was altered: a content blob does not hash to its label;/.test(error.message));
   // An intact holo opens as before.
   assert.equal((await load(bytes)).identities.verified, true);
 });
