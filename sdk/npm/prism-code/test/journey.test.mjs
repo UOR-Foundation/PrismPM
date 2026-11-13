@@ -255,7 +255,7 @@ test('diagnostics, axiom violations and step markers are read from the SDK outpu
   const d = parseDiagnostics(output);
   assert.equal(d.length, 2);
   assert.deepEqual(d[1].span, { file: 'src/X.lex.tex', line: 74, column: 1 });
-  assert.deepEqual(axiomViolations(d), [{ name: 'inv001Holds', axioms: '[Quot.sound, propext]' }]);
+  assert.deepEqual(axiomViolations(d), [{ name: 'inv001Holds', axioms: '[Quot.sound, propext]', forbidden: [] }]);
   assert.deepEqual(steps(output), [{ step: 'verify', code: 1 }]);
   const proofs = renderProofs(paymentSpec());
   const line = proofs.split('\n').findIndex((l) => l.startsWith('theorem{')) + 1;

@@ -940,12 +940,6 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `attestation.subject` |  | `AL-07` | A statement subject has no digest set, or its digests are not exactly blake3 and sha256 as 64 lowercase hex characters (ADR-015). |
 | `attestation_not_found` | `AttestationNotFoundError` | `CT-12` | Verify-attestation found no attestation bundle for the holo. |
 | `auth.unavailable` |  | `SE-09` | prism.auth reads and writes Docker's credential stores, which this build of prism-code leaves out; use it in Node. |
-| `author.agent` |  | `DK-41` | The agent that drafts the model could not start, exited with an error, or gave an answer that is not JSON, is too large, or does not answer the spec's sentences one to one; nothing is compiled. |
-| `author.example` |  | `DK-41` | An example of the spec is missing, is not a .json file, or holds hex that is not lowercase. |
-| `author.intent` |  | `DK-41` | An intent sentence of the spec breaks the sentence rules: one sentence per line, ending with a period, with exactly one of always, never or only. |
-| `author.model` |  | `DK-41` | The generated model directory changed after it was generated from the spec, or has no sidecar record, so it is not regenerated over. |
-| `author.spec` |  | `DK-41` | The spec directory is not a plain directory of regular files, or exceeds the file count or byte limit. |
-| `author.types` |  | `DK-41` | A types file of the spec is not TypeScript (.ts), JSON Schema (.json) or Pydantic (.py). |
 | `axioms.probe` |  | `DK-41` | Lean refused the axiom probe, said nothing about a declaration, or left no audit records. |
 | `axioms.project` |  | `DK-41` | The project has no .lex.tex file under its source roots, so there is nothing to audit. |
 | `canonical.algorithm` |  | `DK-41` | The digest algorithm needs node:crypto, which this host does not have; sha256 stays available. |
@@ -1006,10 +1000,7 @@ Registered in model/sdk-diagnostics.toml. These are the codes the Prism SDK modu
 | `load.fetch` |  | `DK-41` | The URL a holo was loaded from answered with an HTTP error. |
 | `load.path` |  | `OC-11` | The holo path cannot be read, or is not a local file. |
 | `load.source` |  | `OC-11` | load or images.push was given a source that is not bytes, a Blob, a path or a URL; until the local image store (#349) a pushed image comes as options.source. |
-| `lock.changed` |  | `DK-41` | prismpm.lock changed while the build was running, so the build is not recorded; rerun it. |
 | `lock.image` |  | `OC-11` | prismpm.lock does not select an immutable SDK image, or the image named is not immutable. |
-| `lock.invalid` |  | `DK-41` | prismpm.lock is not JSON. |
-| `lock.missing` |  | `DK-41` | The project has no prismpm.lock; bind an SDK first with prism-code init --sdk-image. |
 | `manifest.env` |  | `DK-41` | A manifest variable reads an environment variable that is not set. |
 | `manifest.invalid` |  | `DK-41` | The manifest is missing, is not TOML text or bytes, or has a member it does not allow. |
 | `manifest.overlay` |  | `DK-41` | A manifest overlay is not a table, or names no target or an unknown one. |
