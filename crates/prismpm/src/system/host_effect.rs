@@ -66,6 +66,37 @@ pub(crate) fn certificate(system: &Value) -> Value {
     })
 }
 
+/// Hold a host-effect system to the application it binds. The manifest check
+/// only sees the system's own effect list; this compares it with the host
+/// protocol the selected server application declares, so a system cannot name
+/// an effect its application never requests, or omit one it does.
+pub(crate) fn validate_application(
+    system: &Value,
+    model: &crate::holo::model_document::ModelDocument,
+) -> Result<(), PrismError> {
+    let Some(crate::holo::model_document::Application::Server(application)) = &model.application
+    else {
+        return Err(invalid(
+            "host-effect system requires a selected server application",
+        ));
+    };
+    let declared: BTreeSet<&str> = application
+        .host
+        .effects
+        .iter()
+        .map(|effect| effect.name.as_str())
+        .collect();
+    let listed: BTreeSet<&str> = strings(&system["application_profile"], "effects")
+        .into_iter()
+        .collect();
+    if declared != listed {
+        return Err(invalid(&format!(
+            "host-effect system lists effects {listed:?}, but its server application declares {declared:?}"
+        )));
+    }
+    Ok(())
+}
+
 fn subset(items: &[&str], within: &BTreeSet<&str>) -> bool {
     items.iter().all(|item| within.contains(item))
 }
