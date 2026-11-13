@@ -291,6 +291,7 @@ RUN cargo build --locked --release --package prismpm \
     && rm -rf target vendor/lexlean/target
 
 COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/devcontainer-init.sh /usr/local/bin/prismpm-devcontainer-init
+COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/cargo-home.sh /usr/local/libexec/prismpm-cargo-home
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
@@ -394,6 +395,7 @@ RUN set -eu; \
     fi; \
     mkdir -p /workspace /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
     && cp -a /opt/prismpm/cargo-home/. /home/vscode/.cargo/ \
+    && : > /home/vscode/.cargo/.seeded \
     && chown -R 1000:1000 /workspace /home/vscode \
     && chmod 0755 /home/vscode \
     && chmod -R a+rwX /home/vscode/.cargo /home/vscode/.elan /home/vscode/.docker \
@@ -478,3 +480,67 @@ FROM runtime AS oracles
 ENV PRISMPM_OCI_PACKAGE=standards-oracles
 LABEL org.opencontainers.image.title="PrismPM standards oracles" \
       org.opencontainers.image.description="Immutable redistributable upstream-oracle runners and corpora"
+
+# Build-only SDK (`prismpm-sdk-build`): what `prismpm check`, `build` and
+# `verify` use, byte-identical to runtime_base, without the release-acceptance
+# oracle runners and their Java runtime, the browsers the Hologram oracle does
+# not pin, the deploy and telemetry CLIs, and the pre-seeded copy of the offline
+# Cargo cache in /home/vscode/.cargo: the entrypoint and login shells seed it
+# on demand from /opt/prismpm/cargo-home for the executing identity
+# (sdk/cargo-home.sh). Application builds bind tool identities, never the
+# image, so they are byte-identical across the two images. `conformance`,
+# `deploy` and the Kubernetes lifecycle need the full SDK. The removed files
+# live in lower layers, so the remaining tree is flattened into one layer.
+FROM runtime_base AS sdk_build_tree
+COPY --from=build --chmod=0444 /opt/prismpm/artifact-inventory.json /tmp/prismpm-build-variant/artifact-inventory.json
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /prepared/source/sdk/inventory-metadata.mjs /prepared/source/sdk/exporter-seed.mjs /tmp/prismpm-build-variant/
+RUN --network=none set -eu; \
+    cd /ms-playwright; \
+    test -d chromium_headless_shell-cft-157.0.8099.0; \
+    find . -mindepth 1 -maxdepth 1 ! -name chromium_headless_shell-cft-157.0.8099.0 -exec rm -rf {} +; \
+    rm -rf /opt/prismpm/openid-maven /opt/prismpm/openid-java /opt/prismpm/openid-m2 /opt/prismpm/openid-target; \
+    find /home/vscode/.cargo -mindepth 1 -delete; \
+    cd /usr/local/bin; \
+    rm otelcol-contrib kubectl prismpm-conformance openid-conformance \
+      oci-distribution-conformance oci-runtime-validate oci-image-schema-conformance \
+      cloudevents-sdk-conformance cloudevents-validator intoto-statement-validator; \
+    cd /; \
+    rm /opt/prismpm/share/inventory.json /opt/prismpm/share/inventory.sha256; \
+    PRISMPM_SDK_VARIANT=build PRISMPM_ARTIFACT_INVENTORY=/tmp/prismpm-build-variant/artifact-inventory.json \
+      node /tmp/prismpm-build-variant/generate-inventory.mjs /opt/prismpm/share/inventory.json; \
+    sha256sum /opt/prismpm/share/inventory.json > /opt/prismpm/share/inventory.sha256; \
+    chmod 0444 /opt/prismpm/share/inventory.json /opt/prismpm/share/inventory.sha256; \
+    rm -rf /tmp/prismpm-build-variant; \
+    prismpm --json completion bash > /tmp/prismpm-sdk-self-check.json; \
+    grep -Fq '"schema":"prismpm/completion-result/1"' /tmp/prismpm-sdk-self-check.json; \
+    rm /tmp/prismpm-sdk-self-check.json
+
+FROM sdk_build_tree AS sdk_build_metadata
+RUN set -eu; \
+    install -d -m 0755 /sdk-metadata/opt/prismpm/share \
+    && install -m 0444 /opt/prismpm/share/inventory.json /sdk-metadata/opt/prismpm/share/inventory.json \
+    && install -m 0444 /opt/prismpm/share/standards.lock /sdk-metadata/opt/prismpm/share/standards.lock \
+    && test "$(stat -c %s /sdk-metadata/opt/prismpm/share/inventory.json)" -le 8388608 \
+    && test "$(stat -c %s /sdk-metadata/opt/prismpm/share/standards.lock)" -le 16777216 \
+    && touch -d @0 /sdk-metadata/opt /sdk-metadata/opt/prismpm /sdk-metadata/opt/prismpm/share \
+      /sdk-metadata/opt/prismpm/share/inventory.json /sdk-metadata/opt/prismpm/share/standards.lock
+
+FROM scratch AS sdk-build
+COPY --from=sdk_build_tree / /
+COPY --link --from=sdk_build_metadata /sdk-metadata/ /
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    CARGO_HOME=/home/vscode/.cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    ELAN_HOME=/usr/local/elan \
+    ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 \
+    PRISMPM_SDK_INVENTORY=/opt/prismpm/share/inventory.json \
+    PRISMPM_OCI_PACKAGE=sdk-build \
+    PATH=/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/prismpm-devcontainer-init"]
+CMD []
+LABEL org.prismpm.sdk.metadata="prismpm/sdk-metadata/1" \
+      org.opencontainers.image.title="PrismPM build-only SDK" \
+      org.opencontainers.image.description="prismpm check, build and verify without release-acceptance oracles, extra browsers or deploy CLIs"

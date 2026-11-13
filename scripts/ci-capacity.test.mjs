@@ -311,6 +311,7 @@ const products = [
   ['adapter-kubernetes', 'sdk/Dockerfile', 'adapter-kubernetes'],
   ['adapter-github-pages', 'sdk/Dockerfile', 'adapter-github-pages'],
   ['oracles', 'sdk/Dockerfile', 'oracles'],
+  ['sdk-build', 'sdk/Dockerfile', 'sdk-build'],
 ];
 const platforms = [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}];
 const expectedMatrices = {

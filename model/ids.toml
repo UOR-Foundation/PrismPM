@@ -994,7 +994,7 @@ statement = "Browser-resident system releases bind selected proved applications,
 id = "SY-09"
 suite = "system"
 level = "build"
-statement = "Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's."
+statement = "Host-effect service system releases declare exactly the effects their selected server application declares, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's."
 
 [[id]]
 id = "DK-01"

@@ -26,7 +26,7 @@ function transportPolicy(options) {
     event: 'workflow_dispatch', name: 'PrismPM development SDK candidate', candidate: true};
   assert.deepEqual(Object.keys(options).sort(), ['event', 'kind', 'ref', 'repository']);
   assert.equal(options.kind, 'release');
-  assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']
+  assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build']
     .some(name => options.repository === `ghcr.io/uor-foundation/prismpm-${name}`));
   assert.ok(['refs/heads/main', 'refs/heads/release/v0.4', 'refs/tags/v0.4.0'].includes(options.ref));
   assert.ok((options.ref === 'refs/heads/main' && options.event === 'workflow_dispatch')
