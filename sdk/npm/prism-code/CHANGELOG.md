@@ -8,6 +8,8 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-13
+
 ### Breaking Changes
 
 - Every app carries a seal: the UOR content address of the `prism/spec.json` it was built from (`blake3:<hex>`, the kappa its canonical bytes hash to, the same name a holo labels its own blobs with). It rides in the model's description, so it is inside the holo's model blob, whose label is that blob's content address and whose bytes the footer covers; changing the seal changes the holo and the integrity check refuses it. `prism-code check <holo> --spec <file>` holds an app to a spec and fails when it was built from another, or carries no seal; with no flag, a `spec.json` beside the holo is reported. A build whose holo seals another spec is refused.
