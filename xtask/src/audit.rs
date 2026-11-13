@@ -125,7 +125,7 @@ pub fn audit_retained_native_profiles(root: &Path) -> Result<(), Fail> {
 
 /// The LexLean commit the vendored package is built from: the commit of the
 /// annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
-const LEXLEAN_AUTHORITY_REVISION: &str = "e0b74b81e6f49c83596a957d232c8383a5db1a25";
+const LEXLEAN_AUTHORITY_REVISION: &str = "cce7271be1d21db322ca57456ea1e973302d7c63";
 /// Handwritten Lean admitted from the vendored LexLean package. The v0.4
 /// package carries its extraction adapter (`language/lcnf-1.2/tooling/src`)
 /// and the preservation library (`language/preservation-1.2/library/src`) as

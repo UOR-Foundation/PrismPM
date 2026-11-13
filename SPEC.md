@@ -1283,7 +1283,7 @@ no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
 
 The only imported Lean-source exception is the registered LexLean 0.4.0 package
-at revision `e0b74b81e6f49c83596a957d232c8383a5db1a25`, the commit of the
+at revision `cce7271be1d21db322ca57456ea1e973302d7c63`, the commit of the
 annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
 Its exact 4-file compiler-authority closure is the following paths under
 `vendor/lexlean/language/preservation-1.2/`:
