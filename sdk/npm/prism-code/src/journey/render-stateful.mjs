@@ -92,11 +92,12 @@ export function statefulNames(spec) {
 }
 
 /**
- * The axioms a theorem about the state is expected to rest on: Lean's standard three, as observed
- * for every one (splitting a goal over a structure uses `Classical.choice`). A verify that observes
- * another set still rewrites it (engine.mjs), and anything outside these three is refused.
+ * The axioms each theorem is expected to rest on, as Lean observed them for the dinner-seats
+ * example: a bounds theorem, over every field of the state, uses all three standard axioms; a
+ * property theorem uses two. A verify that observes another set still rewrites it (engine.mjs),
+ * and anything outside these three is refused.
  */
-const STANDARD = '[Classical.choice, Quot.sound, propext]';
+const BOUNDS_AXIOMS = '[Classical.choice, Quot.sound, propext]';
 
 const NONE = (t) => `(ctor Option.none [${t}])`;
 const SOME = (t, v) => `(ctor Option.some [${t}] ${v})`;
@@ -322,14 +323,14 @@ export function statefulProofDeclarations(spec, n = statefulNames(spec)) {
   const q = (name) => `${n.module}::${name}`;
   const constants = [...Object.values(n.answers), ...Object.values(n.state).flatMap((f) => Object.values(f.choices)), ...Object.values(n.actions).flatMap((a) => Object.values(a.inputs).flatMap((f) => Object.values(f.choices)))];
   const invariants = spec.properties.filter((p) => !p.action);
-  const theorem = (name, parameters, body, uses) => {
+  const theorem = (name, parameters, body, uses, axioms = QP) => {
     const breaks = `breaks${pascal(name)}`;
     out.push({ name: breaks, kind: 'definition', parameters, result: 'Bool', body, axioms: null });
     const args = parameters.map((p) => p.split(' : ')[0]).join(' ');
-    out.push({ name, kind: 'theorem', parameters, statement: `((${breaks}${args ? ` ${args}` : ''}) = false)`, unfold: [...new Set([breaks, ...uses.map(q), ...constants.map(q)])].sort(), axioms: STANDARD });
+    out.push({ name, kind: 'theorem', parameters, statement: `((${breaks}${args ? ` ${args}` : ''}) = false)`, unfold: [...new Set([breaks, ...uses.map(q), ...constants.map(q)])].sort(), axioms });
   };
   const atStart = scope(spec, n, null, { state: `(${q('initial')})`, q });
-  theorem('startInBounds', [], `(not ${conjunction(stateBounds(spec, atStart.subject))})`, ['initial']);
+  theorem('startInBounds', [], `(not ${conjunction(stateBounds(spec, atStart.subject))})`, ['initial'], BOUNDS_AXIOMS);
   for (const p of invariants) theorem(n.properties[p.id].theorems[0], [], `(not ${invariant(p, atStart.subject, atStart.constant)})`, ['initial']);
   for (const a of spec.actions) {
     const names = n.actions[a.name];
@@ -338,7 +339,7 @@ export function statefulProofDeclarations(spec, n = statefulNames(spec)) {
     const before = scope(spec, n, a, { q });
     const after = scope(spec, n, a, { state: call, q });
     const hypotheses = [...stateBounds(spec, before.subject), ...inputBounds(a, before.subject)];
-    theorem(names.keepsBounds, params, conjunction([...hypotheses, `(not ${conjunction(stateBounds(spec, after.subject))})`]), [names.after]);
+    theorem(names.keepsBounds, params, conjunction([...hypotheses, `(not ${conjunction(stateBounds(spec, after.subject))})`]), [names.after], BOUNDS_AXIOMS);
     const held = invariants.map((p) => invariant(p, before.subject, before.constant));
     for (const p of invariants) {
       theorem(n.properties[p.id].theorems[1 + spec.actions.indexOf(a)], params, conjunction([...hypotheses, ...held, `(not ${invariant(p, after.subject, after.constant)})`]), [names.after]);
