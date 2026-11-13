@@ -578,6 +578,11 @@
     },
     {
       "kind": "flag",
+      "place": "--spec",
+      "name": "spec"
+    },
+    {
+      "kind": "flag",
       "place": "--statement",
       "name": "statement"
     },

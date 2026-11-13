@@ -15,7 +15,7 @@ An example is one input and its expected output:
 {"input": {"op": "add", "a": 2, "b": 3}, "output": 5}
 ```
 
-An intent sentence is something the application must always or never do. `intent.md` holds one per line. Each becomes a theorem that `build` must prove before it writes a holo.
+A property is something the application must always or never do. The `properties` of `prism/spec.json` hold them, and each becomes a theorem Lean proves for every request.
 
 ## Holo
 
@@ -91,6 +91,6 @@ The digest is the same in the registry, on disk and in `check`. A pull that does
 
 ## Next steps
 
-- [Write from examples](/docs/guides/write-from-examples)
+- [Write the spec](/docs/guides/write-from-examples)
 - [Verify and inspect](/docs/guides/verify-and-inspect)
 - [Run and gate](/docs/guides/run-and-gate)

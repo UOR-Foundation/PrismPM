@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { userInfo } from 'node:os';
-import { DEFAULT_TEMPLATE, TEMPLATES, bindCommands, nameFromDirectory, nextSteps, planInit } from './init.mjs';
+import { DEFAULT_TEMPLATE, NOT_AN_APP, TEMPLATES, bindCommands, nameFromDirectory, nextSteps, planInit } from './init.mjs';
 import { PrismCodeError } from './errors.mjs';
 import { cacheVolumeName } from './docker.mjs';
 import { hostDocker } from './host.mjs';
@@ -109,6 +109,7 @@ export async function runInit(argv, { out = process.stdout, err = process.stderr
 
   if (!options['sdk-image']) {
     out.write(`Not bound to an SDK. No PrismPM SDK release exists yet; bind an image with\n  prism-code init ${positional[0] ?? '.'} --sdk-image <NAME@sha256:DIGEST> --force\n`);
+    out.write(`${NOT_AN_APP}\n`);
     return 0;
   }
 

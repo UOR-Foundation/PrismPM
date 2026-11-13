@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { prismHome } from './agents.mjs';
 import { VERSION } from './version.mjs';
 import { REFUSALS } from './journey/spec.mjs';
+import { SPEC_FILE_REFUSALS } from './journey/spec-file.mjs';
 import { ROUND_TRIP_PARTS, STEPS } from './journey/session.mjs';
 
 export const GAPS_SCHEMA = 'prism/gaps/1';
@@ -78,7 +79,7 @@ export function propertyShape(property) {
 }
 
 const PARTS = new Set([...ROUND_TRIP_PARTS, ...STEPS]);
-const REFUSED = new Set(REFUSALS);
+const REFUSED = new Set([...REFUSALS, ...SPEC_FILE_REFUSALS]);
 
 /** Whether `construct` belongs to the vocabulary of `kind`. */
 function knownConstruct(kind, construct) {

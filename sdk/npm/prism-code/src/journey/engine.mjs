@@ -10,7 +10,7 @@ import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
-import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
+import { bind, isBound, modelMismatches, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, forbiddenAxioms, forbiddenMessage, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
@@ -18,6 +18,7 @@ import { TEMPLATE_REPOSITORY, commitApp, createFromTemplate, fetchLive, gitRoot,
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
 import { gapLedger, propertyShape } from '../gaps.mjs';
+import { checkSpecBinding } from './binding.mjs';
 
 const PROVE_SCRIPT_FULL = [
   'echo "@@step prelock"; lexlean lock 2>&1; code=$?; echo "@@exit prelock $code"; [ $code -eq 0 ] || exit $code',
@@ -262,6 +263,11 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
   }
+  // The one path: the model built is exactly what spec.json renders to, byte for byte. Anything else is refused.
+  const mismatched = modelMismatches(dir, { axioms: session.axioms ?? {} });
+  if (mismatched.length) {
+    return { ok: false, stage: 'build', mismatched, message: `model does not match spec.json: ${mismatched.join(', ')}. The model is generated from prism/spec.json alone; change spec.json (or the spec through prism_spec) and build again, or pass overwrite to regenerate the model from it.` };
+  }
   const where = buildWhere(dir, session, { env, remote: repository && !remote ? 'github' : remote });
   if (where === 'github') return buildRemote(dir, session, { log, root: root ?? defaultRoot(dir), repository });
   // A build needs the image, and a hosted proof did not: pull it now if it is missing, saying so, and pin the app to it.
@@ -462,6 +468,11 @@ export function proofSentence(session, proof) {
 
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
 async function built(dir, session, holo, seconds, proof) {
+  // What the holo says about the spec it came from. A holo that names another spec is not this app.
+  const binding = checkSpecBinding(new Uint8Array(readFileSync(holo)), session.spec);
+  if (binding.reason === 'mismatch') {
+    return { ok: false, stage: 'build', spec: binding, message: `The built holo does not match prism/spec.json. ${binding.message}` };
+  }
   const app = await fromFile(holo);
   const acceptance = await app.acceptance();
   session.status.holo = holo;
@@ -482,6 +493,7 @@ async function built(dir, session, holo, seconds, proof) {
     stage: 'build',
     seconds,
     holo,
+    spec: { sealed: binding.ok, specAddress: binding.specAddress, ...(binding.ok ? {} : { note: binding.message }) },
     where: proof.where,
     ...(proof.live ? { live: proof.live } : {}),
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
