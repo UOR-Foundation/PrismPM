@@ -169,6 +169,8 @@ test('a bound project points at build --check, the model check, not the removed 
       // init asks the daemon for its version first, as every command that reaches Docker does.
       '  "version --format {{.Server.Version}}") echo 29.1.3 ;;',
       '  *"--entrypoint cat"*) printf \'{"stub":"standards"}\' ;;',
+      // init relocks the template's LexLean project with the image's compiler before update (B3).
+      '  *" lexlean lock") echo "wrote lexlean.lock" ;;',
       '  *"prismpm update --toolchain"*) prev=; for a in "$@"; do [ "$prev" = --workdir ] && d="$a"; prev="$a"; done; printf \'{"stub":"lock"}\' > "$d/prismpm.lock" ;;',
       '  *) exit 9 ;;',
       'esac',
