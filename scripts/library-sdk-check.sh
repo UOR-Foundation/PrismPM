@@ -16,8 +16,6 @@ harness_mount=()
 if test -n "${PRISMPM_QUALIFY_SOURCE:-}"; then
   root=$(cd "$PRISMPM_QUALIFY_SOURCE" && pwd -P)
   test "$root" != "$harness"
-  harness_mount=(--mount "type=bind,source=$harness/scripts,target=/opt/prismpm/share/conformance-root/scripts,readonly"
-    --mount "type=bind,source=$harness/sdk,target=/opt/prismpm/share/conformance-root/sdk,readonly")
 fi
 qualification_trust=()
 if test "$#" -eq 3; then
@@ -32,10 +30,16 @@ test -z "$(git -C "$root" status --porcelain)"
 case "$(uname -m)" in x86_64) architecture=amd64 ;; aarch64) architecture=arm64 ;; *) exit 64 ;; esac
 sdk_work=$(mktemp -d)
 container=''
+overlay_scripts=''
+overlay_sdk=''
 cleanup() {
+  local failed=0
   if test -n "$container"; then docker container rm --force "$container" >/dev/null 2>&1 || true; fi
-  chmod -R u+rwX -- "$sdk_work"
-  rm -r -- "$sdk_work"
+  if test -n "$overlay_scripts"; then docker volume rm "$overlay_scripts" >/dev/null || failed=1; fi
+  if test -n "$overlay_sdk"; then docker volume rm "$overlay_sdk" >/dev/null || failed=1; fi
+  chmod -R u+rwX -- "$sdk_work" || failed=1
+  rm -r -- "$sdk_work" || failed=1
+  return "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -44,6 +48,33 @@ node "$helper" capture "$root" "$revision" > "$sdk_work/source.json"
 docker pull --platform "linux/$architecture" "$image"
 docker image inspect "$image" > "$sdk_work/image.json"
 node "$helper" image "$image" "$architecture" "$revision" < "$sdk_work/image.json"
+# Read-only bind mounts keep the runner UID. The installed compiler custody
+# check correctly rejects that owner, including the scripts/ mount ancestor.
+# Stage only the harness overlays into fresh volumes, with exact byte equality,
+# as root in a networkless, capability-free container. All consumers mount
+# those volumes read-only, and continue executing as their original users.
+if test -n "${PRISMPM_QUALIFY_SOURCE:-}"; then
+  node "$harness/sdk/qualification-overlay.mjs" capture "$harness" > "$sdk_work/overlay-source.json"
+  overlay_scripts=$(docker volume create)
+  [[ $overlay_scripts =~ ^[0-9a-f]{64}$ ]] || exit 1
+  overlay_sdk=$(docker volume create)
+  [[ $overlay_sdk =~ ^[0-9a-f]{64}$ ]] || exit 1
+  container=$(docker container create --entrypoint node --user 0:0 --read-only --network none --cap-drop ALL \
+    --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+    --mount "type=bind,source=$harness/scripts,target=/run/prismpm-harness/scripts,readonly" \
+    --mount "type=bind,source=$harness/sdk,target=/run/prismpm-harness/sdk,readonly" \
+    --mount "type=volume,source=$overlay_scripts,target=/run/prismpm-overlay/scripts,volume-nocopy" \
+    --mount "type=volume,source=$overlay_sdk,target=/run/prismpm-overlay/sdk,volume-nocopy" \
+    "$image" /run/prismpm-harness/sdk/qualification-overlay.mjs stage /run/prismpm-harness /run/prismpm-overlay)
+  [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
+  docker container start --attach "$container" > "$sdk_work/overlay-staged.json"
+  test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
+  cmp "$sdk_work/overlay-source.json" "$sdk_work/overlay-staged.json"
+  docker container rm "$container" >/dev/null
+  container=''
+  harness_mount=(--mount "type=volume,source=$overlay_scripts,target=/opt/prismpm/share/conformance-root/scripts,volume-nocopy,readonly"
+    --mount "type=volume,source=$overlay_sdk,target=/opt/prismpm/share/conformance-root/sdk,volume-nocopy,readonly")
+fi
 container=$(docker container create --network none --read-only --entrypoint /usr/bin/true "$image")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 mkdir "$sdk_work/source"
@@ -129,6 +160,10 @@ cat "$sdk_work/result.json"
 docker container rm "$container" >/dev/null
 container=''
 node "$helper" verify "$root" "$sdk_work/source.json"
+if test -n "${PRISMPM_QUALIFY_SOURCE:-}"; then
+  node "$harness/sdk/qualification-overlay.mjs" capture "$harness" > "$sdk_work/overlay-after.json"
+  cmp "$sdk_work/overlay-source.json" "$sdk_work/overlay-after.json"
+fi
 node "$root/scripts/library-sdk-metadata-evidence.mjs" retain "$sdk_work" \
   "$root/target/library-sdk-evidence/linux-$architecture" "$root" "$image" "$revision" "$architecture"
 printf 'native-library SDK closure passed: source=%s image=%s platform=linux/%s\n' "$revision" "$image" "$architecture"

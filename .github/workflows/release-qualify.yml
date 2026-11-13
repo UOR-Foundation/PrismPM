@@ -16,6 +16,7 @@ on:
       - scripts/product-sdk-check.*
       - scripts/library-sdk-*
       - sdk/exporter-*.mjs
+      - sdk/qualification-overlay.mjs
       - scripts/browser-api-sdk-check.mjs
       - tests/browser-system/**
 
