@@ -8,7 +8,7 @@
       "root": "PrismFactory.Factory.plan",
       "targets": [
         {
-          "digest": "957f6e9a7a87b504094f9c5d0ed9305aad7cbee156bba670acc8bda99db5224c",
+          "digest": "f5095d80d7771c6ab6a6aa4c38fdce0621322c9d1e5b6f85435a4f2dbd410b35",
           "id": "rust-std"
         }
       ]
@@ -21,7 +21,7 @@
       "root": "PrismFactory.Factory.reweigh",
       "targets": [
         {
-          "digest": "957f6e9a7a87b504094f9c5d0ed9305aad7cbee156bba670acc8bda99db5224c",
+          "digest": "f5095d80d7771c6ab6a6aa4c38fdce0621322c9d1e5b6f85435a4f2dbd410b35",
           "id": "rust-std"
         }
       ]
@@ -34,7 +34,7 @@
       "root": "PrismFactory.Factory.workflow",
       "targets": [
         {
-          "digest": "957f6e9a7a87b504094f9c5d0ed9305aad7cbee156bba670acc8bda99db5224c",
+          "digest": "f5095d80d7771c6ab6a6aa4c38fdce0621322c9d1e5b6f85435a4f2dbd410b35",
           "id": "rust-std"
         }
       ]

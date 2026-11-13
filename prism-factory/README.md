@@ -144,6 +144,7 @@ Pages to deploy from GitHub Actions, set the repository variable
 
 ```sh
 cd prism-factory/model
+lexlean lock                                                 # refresh bindings after a compiler change
 lexlean verify --all                                         # kernel-check every theorem
 lexlean production build --request ../production-request.json
 rm -rf ../certified && cp -r .lexlean/production/<result> ../certified
@@ -155,6 +156,31 @@ cd ../host && cargo test --release
 `check.sh` (the `factory-model` obligation) replays the bundle without Lean.
 Where the pinned Lean is installed, it also re-verifies the model and requires
 the re-export to equal `certified/`.
+
+### Admitted compiler binding
+
+The factory bundle was regenerated with the repository's admitted LexLean
+`bc71b33f9a4ce7f5582c337b5752a7ba9eb49706` and
+`leanprover/lean4:v4.32.1` in
+[the owning production run](https://github.com/UOR-Foundation/PrismPM/actions/runs/43397958196),
+from diagnostic source `0a78163a8261e356ebe1eb3af14ee7a6eba8f8d4`.
+That run first reproduced the old bundle's `LLV7102` refusal and the old
+request's `LLC0203` refusal. It refreshed the model lock with `lexlean lock`
+and obtained the three request descriptor bindings from the same compiler's
+canonical `production targets` document. The roots, target IDs and package
+identities stayed unchanged.
+
+The original [generated artifact](https://github.com/UOR-Foundation/PrismPM/actions/runs/43397958196/artifacts/14024791952)
+has ZIP SHA-256
+`642e025dd1a4f53f74d003c6677bd182355698be6b233daeb965c14d27583f07`.
+Its full bundle is imported unchanged, with result
+`857a556738b9801968062b2d3276302f4ed27a409e40a926b3038c63c0b6321e`
+and compiler semantics
+`635a25acb886587f8777525e778092e9599d1f2df26da59403ee39e9e299151a`.
+The run kernel-verified all seven modules, exported all three packages, and
+passed the unchanged `check.sh`, including its Lean re-export, ten host tests
+and exact projections of both committed workflows. This establishes the
+factory binding only; it does not qualify an SDK or replace release V&V.
 
 ## Limits
 
