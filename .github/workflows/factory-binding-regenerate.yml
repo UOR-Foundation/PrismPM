@@ -48,6 +48,35 @@ jobs:
           grep -F 'LLV7102' "$out/baseline-replay.log"
           "$lexlean" production targets > "$out/targets.json"
           (cd prism-factory/model && "$lexlean" lock && "$lexlean" lock --check && "$lexlean" verify --all) 2>&1 | tee "$out/model-verification.log"
+          if (cd prism-factory/model && "$lexlean" production build --request ../production-request.json) > "$out/baseline-request.log" 2>&1; then
+            echo "Expected the original request to refuse the old target descriptor" >&2
+            exit 1
+          fi
+          grep -F 'LLC0203' "$out/baseline-request.log"
+          # Bind only existing target references from the current compiler's
+          # canonical descriptor document. No digest is supplied by this writer.
+          python3 - "$out/targets.json" prism-factory/production-request.json <<'PY'
+          import copy, json, sys
+          from pathlib import Path
+          descriptors = json.loads(Path(sys.argv[1]).read_text())
+          assert descriptors["spec"] == "lexlean/target-descriptors/1"
+          targets = {target["id"]: target for target in descriptors["targets"]}
+          assert len(targets) == len(descriptors["targets"])
+          path = Path(sys.argv[2])
+          request = json.loads(path.read_text())
+          original = copy.deepcopy(request)
+          assert request["spec"] == "lexlean/production-request/1"
+          for root in request["roots"]:
+              for target in root["targets"]:
+                  target["digest"] = targets[target["id"]]["digest"]
+          # The caller's roots, targets, package names and versions stay exact.
+          neutral = copy.deepcopy(request)
+          for before, after in zip(original["roots"], neutral["roots"], strict=True):
+              for old, new in zip(before["targets"], after["targets"], strict=True):
+                  new["digest"] = old["digest"]
+          assert neutral == original
+          path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n")
+          PY
           (cd prism-factory/model && "$lexlean" production build --request ../production-request.json) 2>&1 | tee "$out/production-build.log"
           result=$(sed -n 's/.*; result \([0-9a-f]\{64\}\);.*/\1/p' "$out/production-build.log")
           test "${#result}" = 64
@@ -59,11 +88,12 @@ jobs:
           git diff --exit-code -- .github/workflows/release.yml .github/workflows/factory.yml prism-factory/model/src prism-factory/std vendor/lexlean
           git add -N -- prism-factory/certified
           git diff --check
-          git diff --binary HEAD -- prism-factory/model/lexlean.lock prism-factory/certified > "$out/generated.patch"
+          git diff --binary HEAD -- prism-factory/model/lexlean.lock prism-factory/production-request.json prism-factory/certified > "$out/generated.patch"
           cp prism-factory/model/lexlean.lock "$out/lexlean.lock"
+          cp prism-factory/production-request.json "$out/production-request.json"
           cp -a prism-factory/certified "$out/certified"
           (cd "$out" && find certified -type f -print0 | sort -z | xargs -0 sha256sum > bundle.sha256)
-          (cd "$out" && sha256sum generated.patch lexlean.lock source.txt compiler-vcs.json compiler-package.sha256 > SHA256SUMS)
+          (cd "$out" && sha256sum generated.patch lexlean.lock production-request.json source.txt compiler-vcs.json compiler-package.sha256 > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
