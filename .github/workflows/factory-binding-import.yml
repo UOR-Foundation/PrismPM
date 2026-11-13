@@ -1,0 +1,73 @@
+name: Import verified factory binding
+on:
+  push:
+    branches: [work/stitch-factory-compiler-binding]
+    paths: [.github/workflows/factory-binding-import.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: factory-binding-import
+  cancel-in-progress: false
+jobs:
+  import:
+    if: github.ref == 'refs/heads/work/stitch-factory-compiler-binding'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+      - name: Verify the original artifact and exact reviewed tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          gh api repos/UOR-Foundation/PrismPM/actions/artifacts/14024791952/zip > "$RUNNER_TEMP/factory-binding.zip"
+          echo "642e025dd1a4f53f74d003c6677bd182355698be6b233daeb965c14d27583f07  $RUNNER_TEMP/factory-binding.zip" | sha256sum -c -
+          python3 - "$RUNNER_TEMP/factory-binding.zip" "$RUNNER_TEMP/verified-factory-binding" <<'PY'
+          import hashlib, json, pathlib, shutil, stat, sys, zipfile
+          out=pathlib.Path(sys.argv[2]); out.mkdir()
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              names=z.namelist()
+              assert len(names)==len(set(names))
+              for member in z.infolist():
+                  p=pathlib.PurePosixPath(member.filename)
+                  assert not p.is_absolute() and ".." not in p.parts
+                  assert not stat.S_ISLNK(member.external_attr>>16)
+              assert sum(m.file_size for m in z.infolist()) < 50_000_000
+              z.extractall(out)
+          assert (out/"source.txt").read_text().strip()=="0a78163a8261e356ebe1eb3af14ee7a6eba8f8d4"
+          for manifest in ["SHA256SUMS","bundle.sha256"]:
+              for line in (out/manifest).read_text().splitlines():
+                  digest, path=line.split("  ",1)
+                  p=pathlib.PurePosixPath(path)
+                  assert not p.is_absolute() and ".." not in p.parts
+                  assert hashlib.sha256((out/path).read_bytes()).hexdigest()==digest
+          result=json.loads((out/"certified/result.json").read_text())
+          assert result["result_id"]=="857a556738b9801968062b2d3276302f4ed27a409e40a926b3038c63c0b6321e"
+          assert result["compiler"]["semantics"]=="635a25acb886587f8777525e778092e9599d1f2df26da59403ee39e9e299151a"
+          log=(out/"original-factory-check.log").read_text()
+          assert "10 passed; 0 failed" in log and "verified 7 modules" in log
+          assert "no Lean toolchain" not in log
+          shutil.rmtree("prism-factory/certified")
+          shutil.copytree(out/"certified","prism-factory/certified")
+          shutil.copyfile(out/"lexlean.lock","prism-factory/model/lexlean.lock")
+          shutil.copyfile(out/"production-request.json","prism-factory/production-request.json")
+          PY
+          gh api repos/UOR-Foundation/PrismPM/git/blobs/23bb83994129ea8feae1900417d64357347b6b59 --jq .content | base64 -d > prism-factory/README.md
+          test "$(git hash-object prism-factory/README.md)" = 23bb83994129ea8feae1900417d64357347b6b59
+          rm .github/workflows/factory-binding-regenerate.yml .github/workflows/factory-binding-import.yml
+          git add -A -- prism-factory .github/workflows/factory-binding-regenerate.yml .github/workflows/factory-binding-import.yml
+          git diff --cached --check
+          tree=$(git write-tree)
+          test "$tree" = 3b808ba1f967a089dd7fd06c32a3e58736c58922
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(factory): import verified admitted-compiler binding"
+          git push origin HEAD:refs/heads/work/stitch-factory-compiler-binding
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
