@@ -361,10 +361,6 @@ path = "sdk/npm/prism-code/src/auth.mjs"
 module = "auth"
 
 [[owner]]
-path = "sdk/npm/prism-code/src/author/"
-module = "client"
-
-[[owner]]
 path = "sdk/npm/prism-code/src/axioms.mjs"
 module = "client"
 
