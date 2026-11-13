@@ -172,3 +172,60 @@ test('G1 planted defect: prism_spec refuses a member the spec does not define', 
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /\$\.color.*is not a member of prism\/spec\/1/);
 });
+
+// The seal: an app carries the UOR content address of the spec.json it was built from,
+// inside its model blob, so it verifies itself against that JSON with nothing else in hand.
+test('the seal is the spec\'s UOR content address, and the model carries it', async () => {
+  const { SPEC_SEAL_MARK } = await import('../src/journey/render.mjs');
+  const { kappa } = await import('../src/blake3.mjs');
+  const read = readSpecFile(text());
+  assert.equal(read.specAddress, kappa(read.bytes), 'the seal is the kappa of the canonical bytes');
+  assert.match(read.specAddress, /^blake3:[0-9a-f]{64}$/, 'the same shape a holo labels its blobs with');
+  const model = renderModel(read.spec, { specAddress: read.specAddress });
+  assert.equal(SPEC_SEAL_MARK.exec(model)?.[1], read.specAddress, 'the model names the spec it came from');
+  // A change to the JSON changes the seal the model carries.
+  const other = readSpecFile(text({ ...SPEC, otherwise: 'approved' }));
+  assert.notEqual(other.specAddress, read.specAddress);
+  assert.equal(SPEC_SEAL_MARK.exec(renderModel(other.spec, { specAddress: other.specAddress }))?.[1], other.specAddress);
+});
+
+/** A holo's model blob, as `specAddressOf` reads one, carrying `described`. */
+const sealedHolo = (described) => ({ blobs: [{ content: new TextEncoder().encode('not json') }, { content: new TextEncoder().encode(JSON.stringify({ application: { cargo_description: described } })) }] });
+
+test('an app verifies itself against its spec: bound, unbound and built from another spec', async () => {
+  const { checkSpecBinding, specAddressOf } = await import('../src/journey/binding.mjs');
+  const { describedBy } = await import('../src/journey/render.mjs');
+  const read = readSpecFile(text());
+  const holo = sealedHolo(describedBy(read.spec, read.specAddress));
+  assert.equal(specAddressOf(holo), read.specAddress);
+  const bound = checkSpecBinding(holo, text());
+  assert.equal(bound.ok, true);
+  assert.equal(bound.reason, 'bound');
+  assert.match(bound.message, /matches this spec/);
+  // Planted defect: the same app held to a spec it was not built from.
+  const mismatch = checkSpecBinding(holo, text({ ...SPEC, otherwise: 'approved' }));
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.reason, 'mismatch');
+  assert.match(mismatch.message, /built from another spec/);
+  // Planted defect: an app with no seal cannot claim a spec.
+  const unbound = checkSpecBinding(sealedHolo('A description with no seal.'), text());
+  assert.equal(unbound.ok, false);
+  assert.equal(unbound.reason, 'unbound');
+  // Planted defect: a seal that is not a content address is no seal.
+  assert.equal(specAddressOf(sealedHolo('Purpose. [prism/spec/1 sha256:' + 'a'.repeat(64) + ']')), null);
+  assert.equal(specAddressOf(sealedHolo('Purpose. [prism/spec/1 blake3:short]')), null);
+});
+
+test('the seal lives in the model blob, so the archive digest covers it', async () => {
+  const { parseArchive } = await import('../src/archive.mjs');
+  const { modelDocument } = await import('../src/journey/binding.mjs');
+  const { kappa } = await import('../src/blake3.mjs');
+  const bytes = new Uint8Array(readFileSync(new URL('../fixtures/Calculator.holo', import.meta.url)));
+  const parsed = parseArchive(bytes);
+  const model = parsed.blobs.find((b) => { try { return JSON.parse(new TextDecoder().decode(b.content))?.application; } catch { return false; } });
+  assert.ok(model, 'the holo carries a model blob');
+  assert.equal(model.label, kappa(model.content), 'the blob is named by its own content address');
+  assert.ok(modelDocument(parsed).application.cargo_description, 'the description the seal rides in is inside that blob');
+  // The shipped fixture predates the seal, so it carries none.
+  assert.equal((await import('../src/journey/binding.mjs')).specAddressOf(bytes), null);
+});

@@ -3,7 +3,7 @@
  * edits it, as JSON; everything after that is a function of its bytes:
  *
  *   JSON text  --readSpecFile-->  closed, normalized spec  --canonicalJson-->  spec.json (RFC 8785 bytes)
- *              --sha256-->  specHash
+ *              --kappa-->  specAddress, the UOR content address of those bytes
  *   spec.json  --render.mjs-->  the LexLean model and proofs, the same bytes every time
  *
  * Reading is strict and never alters what it reads: a duplicate key, a number
@@ -14,6 +14,7 @@
  * says), and reading it again gives the same bytes.
  */
 import { createHash } from 'node:crypto';
+import { kappa } from '../blake3.mjs';
 import { SPEC_SCHEMA, SpecError, validateSpec } from './spec.mjs';
 
 export const SPEC_FILE = 'spec.json';
@@ -181,8 +182,10 @@ export function canonicalJson(value) {
 /**
  * Read a spec: JSON text, or a value already parsed (an agent's tool call).
  * Returns the normalized spec, its canonical text and bytes (what spec.json
- * holds), and `specHash`, `sha256:<hex>` of those bytes. Throws SpecError
- * naming the rule and the JSON path of the first problem.
+ * holds), and two names for those bytes: `specAddress`, the UOR content
+ * address (`blake3:<hex>`, the same kappa a holo labels its blobs with, and
+ * the seal the app carries), and `specHash`, their `sha256:<hex>`. Throws
+ * SpecError naming the rule and the JSON path of the first problem.
  */
 export function readSpecFile(input) {
   const raw = typeof input === 'string' ? parseStrictJson(input) : structuredClone(input);
@@ -192,5 +195,5 @@ export function readSpecFile(input) {
   const spec = validateSpec(raw);
   const text = canonicalJson(spec);
   const bytes = new TextEncoder().encode(text);
-  return { spec, text, bytes, specHash: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+  return { spec, text, bytes, specAddress: kappa(bytes), specHash: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
 }

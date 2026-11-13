@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,4 +67,20 @@ test('the route where an agent wrote the model stays removed', () => {
   const r = run(['build', '--unstable-author']);
   assert.equal(r.code, 64);
   assert.match(r.err, /unknown option --unstable-author/);
+});
+
+test('check holds a holo to a spec: --spec refuses one that carries no seal', () => {
+  const dir = scratch();
+  const policy = join(dir, 'p0.json');
+  writeFileSync(policy, '{"minimum":"P0"}');
+  const spec = join(dir, 'spec.json');
+  writeFileSync(spec, JSON.stringify({ purpose: 'Decide whether a payment is approved.', fields: [{ name: 'role', kind: 'choice', values: ['clerk', 'manager'] }], outcomes: ['approved', 'refused'], rules: [{ when: [{ field: 'role', op: 'is', value: 'manager' }], then: 'approved' }], otherwise: 'refused' }));
+  const holo = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
+  const asked = run(['check', holo, '--policy', policy, '--spec', spec]);
+  assert.equal(asked.code, 1, asked.err || asked.out);
+  assert.match(asked.out, /^spec {6}none {4}The holo carries no spec seal/m);
+  // Without the flag, and with no spec beside the holo, the check says nothing about a spec.
+  const plain = run(['check', holo, '--policy', policy]);
+  assert.equal(plain.code, 0, plain.err);
+  assert.doesNotMatch(plain.out, /^spec /m);
 });

@@ -18,6 +18,7 @@ import { TEMPLATE_REPOSITORY, commitApp, createFromTemplate, fetchLive, gitRoot,
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
 import { gapLedger, propertyShape } from '../gaps.mjs';
+import { checkSpecBinding } from './binding.mjs';
 
 const PROVE_SCRIPT_FULL = [
   'echo "@@step prelock"; lexlean lock 2>&1; code=$?; echo "@@exit prelock $code"; [ $code -eq 0 ] || exit $code',
@@ -467,6 +468,11 @@ export function proofSentence(session, proof) {
 
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
 async function built(dir, session, holo, seconds, proof) {
+  // What the holo says about the spec it came from. A holo that names another spec is not this app.
+  const binding = checkSpecBinding(new Uint8Array(readFileSync(holo)), session.spec);
+  if (binding.reason === 'mismatch') {
+    return { ok: false, stage: 'build', spec: binding, message: `The built holo does not match prism/spec.json. ${binding.message}` };
+  }
   const app = await fromFile(holo);
   const acceptance = await app.acceptance();
   session.status.holo = holo;
@@ -487,6 +493,7 @@ async function built(dir, session, holo, seconds, proof) {
     stage: 'build',
     seconds,
     holo,
+    spec: { sealed: binding.ok, specAddress: binding.specAddress, ...(binding.ok ? {} : { note: binding.message }) },
     where: proof.where,
     ...(proof.live ? { live: proof.live } : {}),
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),

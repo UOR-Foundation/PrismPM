@@ -61,6 +61,7 @@
   "src/init-cli.mjs",
   "src/init.mjs",
   "src/inspect.mjs",
+  "src/journey/binding.mjs",
   "src/journey/engine.mjs",
   "src/journey/github.mjs",
   "src/journey/mcp.mjs",

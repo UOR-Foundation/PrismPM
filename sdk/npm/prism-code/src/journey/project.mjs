@@ -59,6 +59,7 @@ export function writeSpecFile(dir, session) {
   const read = readSpecFile(session.spec);
   write(dir, SPEC_FILE, read.bytes);
   session.status ??= {};
+  session.status.specAddress = read.specAddress;
   session.status.specHash = read.specHash;
   return read;
 }
@@ -79,7 +80,7 @@ export function modelMismatches(dir, { axioms = {} } = {}) {
   if (!read) return [SPEC_FILE];
   const n = names(read.spec);
   const proofs = renderProofs(read.spec, { axioms });
-  const expected = [[`src/${n.module}.lex.tex`, renderModel(read.spec, { axioms })], [`src/${n.proofs}.lex.tex`, proofs || null]];
+  const expected = [[`src/${n.module}.lex.tex`, renderModel(read.spec, { axioms, specAddress: read.specAddress })], [`src/${n.proofs}.lex.tex`, proofs || null]];
   const differs = [];
   for (const [file, text] of expected) {
     const path = join(dir, file);
@@ -158,7 +159,9 @@ export function modelDigest(dir, spec) {
  */
 export function writeApp(dir, session, { overwrite = false } = {}) {
   // The model is rendered from spec.json alone: write it canonically, read it back strictly, render what it says.
-  session.spec = writeSpecFile(dir, session).spec;
+  const read = writeSpecFile(dir, session);
+  session.spec = read.spec;
+  const specAddress = read.specAddress;
   const spec = session.spec;
   const n = names(spec);
   const path = modelPath(dir, spec);
@@ -177,7 +180,7 @@ export function writeApp(dir, session, { overwrite = false } = {}) {
   for (const entry of readdirSync(join(dir, 'src'))) {
     if (entry.endsWith('.lex.tex') && entry !== `${n.module}.lex.tex` && entry !== `${n.proofs}.lex.tex`) rmSync(join(dir, 'src', entry));
   }
-  const model = renderModel(spec, { axioms: session.axioms ?? {} });
+  const model = renderModel(spec, { axioms: session.axioms ?? {}, specAddress });
   write(dir, `src/${n.module}.lex.tex`, model);
   const proofs = renderProofs(spec, { axioms: session.axioms ?? {} });
   if (proofs) write(dir, `src/${n.proofs}.lex.tex`, proofs);
