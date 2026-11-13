@@ -241,6 +241,9 @@ function worldWithinGrant(directory, grant) {
  */
 export async function loadArchive(source, options = {}) {
   const parsed = parseArchive(asBytes(source));
+  // An altered archive is refused before anything inside it is read, so damage is
+  // named as damage, not as whichever document it happened to break.
+  if (!parsed.verification.footer) refuseUnverified('integrity failure: the holo was altered: the footer is not the BLAKE3 of the body', options);
   const resolved = resolveArchive(parsed);
   // A malformed attestation row fails the load; the bundles decode lazily.
   attestationSection(parsed);
@@ -343,7 +346,7 @@ function unverifiedArchive(parsed, identities) {
   if (!parsed.verification.footer) problems.push('the footer is not the BLAKE3 of the body');
   if (!parsed.verification.labels) problems.push('a content blob does not hash to its label');
   if (!identities.consistent) problems.push('the manifest, directory and provenance do not name the same blobs');
-  return `the holo was altered: ${problems.join('; ')}`;
+  return `integrity failure: the holo was altered: ${problems.join('; ')}`;
 }
 
 /**

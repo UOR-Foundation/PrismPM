@@ -309,3 +309,12 @@ Feature: holo
     And dispatch on the application fails session.required
     And a recorded prism/history/2 history replays without divergence, and a changed response is one DeterminismViolationError
     And a history of the other world fails replay.history
+
+  @HO-46 @build
+  Scenario: Definitions of one application that share a last name component build: prod-export names a requested root by its last component and any other definition of the closure by its last component while no other definition has it, and otherwise by a reserved prefix followed by the length and text of each component of its qualified name, so distinct definitions have distinct names and calls reach the definition they name; an application with no shared last component exports the same bytes as before, and two requested roots that share a last component are refused by name with PP5004.
+    Given an application whose entry calls a definition named answer in each of two modules
+    When the application is built and verified
+    Then the two definitions are exported under distinct qualified names and each call names its own definition
+    And the entry and every definition with a unique last component keep that component as their name
+    And the acceptance vectors pass
+    And the same application with both definitions requested as roots is refused with PP5004, naming both

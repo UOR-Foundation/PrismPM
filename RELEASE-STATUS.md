@@ -97,7 +97,7 @@ committed in `model/dependencies.toml` at revision `991956fe427bb646498fd0912c89
 for Lean 4.32.1.
 
 Vendored release artifacts and tree manifests are locked to immutable SHA-256 digests:
-- `vendor/lean4-prod/lean.tar`: `7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf`
+- `vendor/lean4-prod/lean.tar`: `50e085623708a3ffa3d582027589a0cc8b78e79fd62b176049f2eaad8efe47db`
 - `vendor/lean4-prod/rust/MANIFEST.sha256`: `8ba068e264dc8ea1fa487718d74e66f551f3d7f6e1f96ad5a7879cb55eab4f08`
 - `vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
 - `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `b7aa58c95cb7ccec3e97afd8b75df912bc9cd2c092ca82def1838bfe17e7ba35`
@@ -122,6 +122,13 @@ All 15 generic compiler contributions follow established fork-PR flows to `auser
 - [PR 65](https://github.com/auser/lean4-prod/pull/65) ([Issue 63](https://github.com/auser/lean4-prod/issues/63)): Recognize LexLean byte-slice operations during lowering (`fix/specialized-slice-lowering`)
 - [PR 67](https://github.com/auser/lean4-prod/pull/67) ([Issue 66](https://github.com/auser/lean4-prod/issues/66)): Decode borrowed UTF-8 slices without allocations (`fix/borrowed-byte-operations`)
 - [PR 69](https://github.com/auser/lean4-prod/pull/69) ([Issue 68](https://github.com/auser/lean4-prod/issues/68)): Reuse owned list tail during functional updates (`fix/owned-byte-read-lifetimes`)
+
+One vendored change has no upstream issue or pull request yet. `Prod/Lower.lean` and
+`Prod/Export.lean` in `vendor/lean4-prod/lean.tar` name a definition that shares its last
+component with another definition of the closure by its qualified name
+(PrismPM [issue 644](https://github.com/UOR-Foundation/PrismPM/issues/644), SPEC §7, HO-46).
+The vendored archive is the release artifact (ADR-006). Until the change is proposed to
+`auser/lean4-prod` and merged there, it is an unlinked dependency change under the rule below.
 
 Strict isolation is preserved: no Prism application or target semantics are proposed as generic compiler functionality. All contributions are strictly generic compiler/intermediate-representation/codegen invariants.
 Any unmerged, unlinked, or unsupported upstream dependency changes block the final `prismpm/ecosystem-release/2` release claim.

@@ -3657,3 +3657,47 @@ here; the Buildx test ("pinned Buildx pushes a genuine two-platform OCI index")
 needs `docker buildx`, which this environment lacks, and does not touch the
 `crates` job. The layout-custody test failed once when the file ran beside
 `crate-readiness.test.mjs` and passed alone and in the next full run.
+
+## Definitions that share a last name component (HO-46, #644)
+
+`prod-export` named every definition by the last component of its Lean name, so
+two modules of one application that each define `answer` gave a crate with two
+`pub fn answer` (E0428). The fixture `tests/fixtures/holo/ho-46-qualified-definitions`
+is that application: the entry calls `Kernel.Admission::answer` and
+`Kernel.Range::answer`, and the request `hé` must answer `admit:hé range:hé`.
+
+Run on 2026-11-12 with `cargo test --locked -p repo-conformance --test conformance
+conformance_ho_46`, inside the SDK image
+`ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:cd3b47d7a370c4a26b8285f5e9c3bb15e639973c55505c3809ddbe55352fea58`,
+on a copy of the checkout at each commit:
+
+| Tree | Exporter archive | Observed |
+| --- | --- | --- |
+| the fixture and HO-46 without the fix (`a449e567`) | `7a1a716a…66bf` | FAILED in 80 s: `PP4102 application-cargo-check exited 101`, `error[E0428]: the name answer is defined multiple times` |
+| the fix (`9fd2de55`) | `50e08562…47db` | ok in 634 s, including the two-roots case refused with `PP5004` naming both definitions |
+| the fix with the defect planted again: `vendor/lean4-prod/lean.tar`, `model/dependencies.toml` and `lean4_prod_dependency.rs` restored from `a449e567` | `7a1a716a…66bf` | FAILED in 101 s, the same `PP4102` and E0428 |
+
+The planted tree was a scratch clone, discarded after the run. The failure is
+reported as `PP4102`, the stage's own code, because #643 is fixed; before that
+fix the same failure was `PP5008` about exporter retirement.
+
+The exporter alone, built from each archive with Lean 4.32.1 and run on one
+three-module package, wrote byte-identical `kernel.ir`, `roots.json` and
+`coverage.json` when no two definitions share a last component, and distinct
+qualified names when they do.
+
+The unchanged Text Request application (`tests/fixtures/holo/ho-11-text-application`)
+was built in the same image with `prismpm build --no-provenance`, by `prismpm`
+from `0e9d75de` (old archive) and from `4f4ba8bd` (new archive). Its
+`Text Request.holo` is the same bytes from both,
+`1d9608c0d4bf22e0b55d885d63c3eb5649def6c85e7c0f7eaf5ca5b90767863e`, and so are
+`cargo/kernel.ir`, `cargo/roots.json`, `cargo/coverage.json`, the generated crate,
+the Core-Wasm guest and the browser Wasm. Only `application/exporter-identity.json`,
+which records the exporter archive and executable, differs, and with it the
+build identity. `--no-provenance` was needed because the fixture has no
+`prismpm.lock`; it omits the provenance statement. A build with a statement was
+not compared.
+
+What this does not show: the native library profile, which still requires a
+distinct last component for every definition of its closure, and two types that
+share a last component, which `prod-codegen` refuses with `DuplicateTypeName`.
