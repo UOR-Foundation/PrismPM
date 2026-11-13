@@ -221,7 +221,7 @@ function closure(entry) {
 
 test('at load the module needs no Node and reaches only what docs/proposals/440-nine-modules.md gives verify and errors', () => {
   const graph = closure(here('../src/verify-namespace.mjs'));
-  // verify: archive, attestations, blake3, sha256, replay, the vendored verifier and its own files. errors: errors, version.
+  // verify: archive, attestations, blake3, sha256, uorc (the holo v5 container), replay, the vendored verifier and its own files. errors: errors, version.
   // provenance.mjs writes statements, so it is `images`', and verify may not depend on images.
   assert.deepEqual([...graph.keys()].sort(), [
     'archive.mjs',
@@ -230,6 +230,7 @@ test('at load the module needs no Node and reaches only what docs/proposals/440-
     'errors.mjs',
     'replay.mjs',
     'sha256.mjs',
+    'uorc.mjs',
     'vendor/verify.mjs',
     'verify-namespace.mjs',
     'verify.mjs',

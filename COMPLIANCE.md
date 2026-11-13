@@ -20,9 +20,9 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Dual digests (`digests`) | 18 | + | + | N/A |
 | Dispatch through the guest (`dispatch`) | 7 | + | - | N/A |
 | Typed errors (`errors`) | 8 | + | - | N/A |
-| Load a holo (`load`) | 21 | + | - | N/A |
+| Load a holo (`load`) | 22 | + | - | N/A |
 | Histories and replay (`replay`) | 5 | + | - | N/A |
-| Verify a holo (`verify`) | 25 | + | + | N/A |
+| Verify a holo (`verify`) | 26 | + | + | N/A |
 | The world contract (`world`) | 17 | + | - | N/A |
 
 ## Checks
@@ -131,6 +131,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Check | Asks | JavaScript | Rust | Python |
 | --- | --- | --- | --- | --- |
 | `load.reference.opens` | The reference holo opens, with its name, limits, vector count and identities verified. | + | - | N/A |
+| `load.reference-v5.opens` | The reference holo v5, a UORC archive, opens with the same name, limits and vectors as the v4 reference. | + | - | N/A |
 | `load.refuse.empty` | An empty file is refused. | + | - | N/A |
 | `load.refuse.too-short` | A file shorter than a header and a footer is refused. | + | - | N/A |
 | `load.refuse.bad-magic` | A file that does not start with HOLO is refused. | + | - | N/A |
@@ -160,13 +161,14 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `replay.history.divergence` | Replaying against a changed model is a determinism violation (determinism_violation). | + | - | N/A |
 | `replay.history.malformed` | A history that does not read is a replay error (replay_failed), not a divergence. | + | - | N/A |
 | `replay.recorder.round-trip` | Dispatches recorded into prism/history/1 replay unchanged, refusals included. | + | - | N/A |
-| `replay.statement.written` | A replay writes a prism/replay/v1 statement that names the guest and every history by dual digest. | + | - | N/A |
+| `replay.statement.written` | A replay writes a prism/replay/v1 statement that names the guest and every history by its κ, sha256 alone (ADR-017). | + | - | N/A |
 
 ### Verify a holo
 
 | Check | Asks | JavaScript | Rust | Python |
 | --- | --- | --- | --- | --- |
 | `verify.reference.default-policy` | The default policy fails the reference holo at P0, and names every missing statement. | + | + | N/A |
+| `verify.reference-v5.default-policy` | A holo v5 gets the same verdict as the v4 reference, named by the κ of the file (ADR-017). | + | + | N/A |
 | `verify.reference.minimum-p0` | A P0 policy accepts the reference holo. | + | + | N/A |
 | `verify.level.not-raised-by-policy` | A policy that asks for P3 does not raise the level. | + | + | N/A |
 | `verify.level.unsigned-claim-not-believed` | An unsigned statement that claims P3 never raises the level: the holo is P0, or it gets no verdict. | + | + | N/A |
@@ -267,6 +269,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | Rust | `errors.capability.denied-import` | The Rust runtime has no load operation yet (#298). |
 | Rust | `errors.capability.denied-resource` | The Rust runtime has no capabilities operation yet (#298). |
 | Rust | `load.reference.opens` | The Rust runtime has no load operation yet (#298). |
+| Rust | `load.reference-v5.opens` | The Rust runtime has no load operation yet (#298). |
 | Rust | `load.refuse.empty` | The Rust runtime has no load operation yet (#298). |
 | Rust | `load.refuse.too-short` | The Rust runtime has no load operation yet (#298). |
 | Rust | `load.refuse.bad-magic` | The Rust runtime has no load operation yet (#298). |

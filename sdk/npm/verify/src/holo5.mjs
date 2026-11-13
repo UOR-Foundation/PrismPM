@@ -278,6 +278,8 @@ export function analyzeV5(bytes, context) {
     const revision = spec.FORMAT_REVISIONS[spec.FORMAT_REVISION];
     const differences = [];
     if (!known) differences.push(`the archive holds ${archive.objects.length} objects, expected ${ROLES.length} or ${ROLES.length + 1} when signed`);
+    // As for v4: this package judges the unsigned holo, and `check` reads the attestations and strips them first.
+    if (archive.objects.length === ROLES.length + 1) differences.push(`the archive carries an ${ROLE_ATTESTATIONS} object, which this package does not read; check reads it`);
     if (contract && contract !== revision.coreWasmContract) differences.push(`the guest contract is ${contract}, expected ${revision.coreWasmContract}`);
     const sourceManifest = facts.documents.sourceManifest;
     if (sourceManifest && sourceManifest.version !== revision.sourceManifestVersion) differences.push(`the source manifest version is ${sourceManifest.version}, expected ${revision.sourceManifestVersion}`);
@@ -287,7 +289,8 @@ export function analyzeV5(bytes, context) {
       const version = view.length >= 10 ? (view[8] << 8) | view[9] : null;
       if (magic !== spec.HOLOVIEW.MAGIC || version !== revision.holoviewVersion) differences.push(`the view is not a HOLOVIEW version ${revision.holoviewVersion} bundle`);
     }
-    if (known) facts.layoutRevision = spec.FORMAT_REVISION;
+    // A signed holo has no layout revision, so verdict refuses it as for v4; check strips the attestations first.
+    if (known && archive.objects.length === ROLES.length) facts.layoutRevision = spec.FORMAT_REVISION;
     if (differences.length === 0) facts.revision = spec.FORMAT_REVISION;
     facts.newestDifferences = differences;
     add('documents', 'format.revision', differences.length === 0, differences.length === 0 ? `holo v5, format revision ${spec.FORMAT_REVISION}` : `the archive matches no format revision this package knows (holo v5): ${differences.join('; ')}`);

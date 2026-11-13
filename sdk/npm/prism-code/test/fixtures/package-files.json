@@ -105,6 +105,7 @@
   "src/tiers.mjs",
   "src/toml.mjs",
   "src/tracing.mjs",
+  "src/uorc.mjs",
   "src/vendor/spec/assurance-levels.mjs",
   "src/vendor/spec/constants.mjs",
   "src/vendor/verify.mjs",

@@ -1374,6 +1374,8 @@ const __holo5 = (() => {
       const revision = spec.FORMAT_REVISIONS[spec.FORMAT_REVISION];
       const differences = [];
       if (!known) differences.push(`the archive holds ${archive.objects.length} objects, expected ${ROLES.length} or ${ROLES.length + 1} when signed`);
+      // As for v4: this package judges the unsigned holo, and `check` reads the attestations and strips them first.
+      if (archive.objects.length === ROLES.length + 1) differences.push(`the archive carries an ${ROLE_ATTESTATIONS} object, which this package does not read; check reads it`);
       if (contract && contract !== revision.coreWasmContract) differences.push(`the guest contract is ${contract}, expected ${revision.coreWasmContract}`);
       const sourceManifest = facts.documents.sourceManifest;
       if (sourceManifest && sourceManifest.version !== revision.sourceManifestVersion) differences.push(`the source manifest version is ${sourceManifest.version}, expected ${revision.sourceManifestVersion}`);
@@ -1383,7 +1385,8 @@ const __holo5 = (() => {
         const version = view.length >= 10 ? (view[8] << 8) | view[9] : null;
         if (magic !== spec.HOLOVIEW.MAGIC || version !== revision.holoviewVersion) differences.push(`the view is not a HOLOVIEW version ${revision.holoviewVersion} bundle`);
       }
-      if (known) facts.layoutRevision = spec.FORMAT_REVISION;
+      // A signed holo has no layout revision, so verdict refuses it as for v4; check strips the attestations first.
+      if (known && archive.objects.length === ROLES.length) facts.layoutRevision = spec.FORMAT_REVISION;
       if (differences.length === 0) facts.revision = spec.FORMAT_REVISION;
       facts.newestDifferences = differences;
       add('documents', 'format.revision', differences.length === 0, differences.length === 0 ? `holo v5, format revision ${spec.FORMAT_REVISION}` : `the archive matches no format revision this package knows (holo v5): ${differences.join('; ')}`);
@@ -4686,6 +4689,87 @@ const __index = (() => {
   }
 
   /**
+   * The `prismpm/holo-inspection/1` object of a holo v5 (ADR-017): the same members as for v4, where every section is one
+   * object of the UORC archive, kind and role are the object's role, every digest is the object's κ alone, the footer is
+   * the UORC-SHA256-CHAIN-v1 seal and the manifest labels are the κ the holo manifest names.
+   */
+  function inspectionOfV5(bytes, facts, checks) {
+    const status = (id) => checks.find((c) => c.id === id)?.status === 'pass';
+    const kappaOf = (payload) => ({ sha256: sha256Hex(payload) });
+    const objectOf = (role) => facts.sections.find((s) => s.role === role);
+    const sections = facts.sections.map((s) => ({
+      index: s.index,
+      kind: null,
+      kind_name: s.role,
+      role: s.role,
+      offset: s.offset,
+      length: s.length,
+      digest: kappaOf(s.payload),
+      label: `sha256:${sha256Hex(s.payload)}`,
+    }));
+    const { manifest, provenance, modelDocument } = facts.documents;
+    const application = modelDocument?.application ?? {};
+    const labelOf = (role) => orNull(objectOf(role) && `sha256:${sha256Hex(objectOf(role).payload)}`);
+    const capabilities = objectOf('capabilities');
+    const guest = objectOf('guest');
+    const model = objectOf('model');
+    const wasm = manifest?.layers?.find((l) => l.kind === 'wasm');
+    const contract = wasm?.contract ?? null;
+    return {
+      schema: INSPECTION_SCHEMA,
+      name: application.name ?? manifest?.name ?? null,
+      revision: facts.revision,
+      physical_version: 5,
+      flags: 0,
+      size: bytes.length,
+      digest: kappaOf(bytes),
+      footer: facts.footer.stored,
+      sections,
+      manifest: manifest
+        ? { uri: manifest.schema, labels: { capability_set: labelOf('capabilities'), guest: labelOf('guest'), view: labelOf('view') }, ...MANIFEST_SUFFIX_FIELDS }
+        : null,
+      model:
+        modelDocument && model
+          ? {
+              schema: orNull(modelDocument.schema),
+              name: orNull(application.name),
+              cargo_name: orNull(application.cargo_name),
+              cargo_version: orNull(application.cargo_version),
+              description: orNull(application.cargo_description),
+              profile: orNull(application.profile),
+              function: orNull(application.function_name),
+              vectors: Array.isArray(application.acceptance_vectors) ? application.acceptance_vectors.length : 0,
+              limits: {
+                request: orNull(application.request_maximum),
+                response: orNull(application.response_maximum),
+                guest_allocation: orNull(application.guest_allocation_maximum),
+              },
+              digest: kappaOf(model.payload),
+            }
+          : null,
+      provenance: provenance
+        ? {
+            schema: orNull(provenance.schema),
+            application_kappa: orNull(provenance.application_kappa),
+            model_id: orNull(provenance.model_id),
+            compiler_semantics_id: orNull(provenance.compiler_semantics_id),
+            stdlib_semantics_id: orNull(provenance.stdlib_semantics_id),
+            lexlean_commit: orNull(provenance.lexlean_commit),
+          }
+        : null,
+      world:
+        contract && capabilities
+          ? {
+              ...describeWorld(contract, guest ? guest.payload : null),
+              capability_set: { label: labelOf('capabilities'), empty: hex(capabilities.payload) === spec.CAPABILITY_SET.EMPTY_HEX },
+            }
+          : null,
+      attestations: [],
+      verification: { footer: status('archive.footer'), labels: status('blob.labels'), cross_references: status('references') },
+    };
+  }
+
+  /**
    * Describe a holo as a `prismpm/holo-inspection/1` object. Throws VerifyError
    * when the header or section table cannot be read, because then there are no
    * sections to describe. Later damage is reported, not thrown: `verification`
@@ -4699,7 +4783,7 @@ const __index = (() => {
     const { checks, facts } = analyze(bytes);
     const broken = checks.find((c) => c.status === 'fail' && STRUCTURE_IDS.includes(c.id));
     if (broken) throw new VerifyError(broken.id, broken.detail);
-    return inspectionOf(bytes, facts, checks);
+    return facts.v5 ? inspectionOfV5(bytes, facts, checks) : inspectionOf(bytes, facts, checks);
   }
 
   /**
