@@ -162,7 +162,8 @@ fn browser_system_project() -> tempfile::TempDir {
     copy_fixture_file(fixture.join("lexlean.toml"), root.join("lexlean.toml"));
     copy_stdlib_lexicon(root);
     relock(root);
-    bind_application_digest(root);
+    // Exercise the committed binding exactly as the installed product gate
+    // does. Rebinding here hides compiler/model drift from source V&V.
     temporary
 }
 
