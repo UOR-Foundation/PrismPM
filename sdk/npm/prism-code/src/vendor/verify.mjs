@@ -4648,6 +4648,12 @@ const __index = (() => {
     const { RANK } = ASSURANCE;
 
     let passed = !decision.denied;
+    // A holo whose bytes do not hold together fails every policy, P0 included: no policy can accept damage.
+    const damaged = reasons.filter((r) => r.check === 'holo.integrity');
+    if (damaged.length > 0) {
+      passed = false;
+      reasons.push({ check: 'policy.integrity', withholds: null, message: 'The holo is damaged, and an integrity failure fails every policy, whatever its minimum.' });
+    }
     if (RANK[level] < RANK[minimum]) {
       passed = false;
       reasons.push({ check: 'policy.level', code: 'PP5601', withholds: null, message: `The level is ${level}; the policy requires ${minimum} or above.` });

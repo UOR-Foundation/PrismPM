@@ -1204,7 +1204,7 @@ const COMMAND_LINE_TARGETS: [&str; 2] = ["aarch64-unknown-linux-musl", "x86_64-u
 /// languages; the 1.2 copy is `lexlean migrate --to 1.2` of the 1.1 example.
 /// The prism-code model is the first downstream language-1.2 project (#203).
 /// Payment Approval is the second reference archive, a text/1 application (#278).
-const EXAMPLES: [Example; 6] = [
+const EXAMPLES: [Example; 7] = [
     Example {
         name: "Calculator",
         project: "examples/Calculator",
@@ -1226,6 +1226,12 @@ const EXAMPLES: [Example; 6] = [
     Example {
         name: "Text Request",
         project: "tests/fixtures/holo/ho-11-text-application/project",
+        command_line: None,
+        same_outputs_as: None,
+    },
+    Example {
+        name: "Qualified Definitions",
+        project: "tests/fixtures/holo/ho-46-qualified-definitions/project",
         command_line: None,
         same_outputs_as: None,
     },

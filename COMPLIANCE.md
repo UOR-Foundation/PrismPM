@@ -176,7 +176,7 @@ Which Prism runtime passes which part of the runtime contract, from the results 
 | `verify.damage.label` | A forged blob label is a table the Wire codec refuses: no verdict. | + | + | N/A |
 | `verify.damage.model-document` | A damaged model document fails integrity and the document check. | + | + | N/A |
 | `verify.damage.manifest` | A damaged application manifest is not the Wire template, which the codec refuses: no verdict. | + | + | N/A |
-| `verify.damage.p0-has-no-requirement` | P0 asks nothing of a holo, so damage is reported and the P0 policy still passes. | + | + | N/A |
+| `verify.damage.p0-fails-on-integrity` | Damage fails every policy: under P0 the level is P0, and the policy still fails with policy.integrity. | + | + | N/A |
 | `verify.no-verdict.empty` | An empty file gets no verdict. | + | + | N/A |
 | `verify.no-verdict.bad-magic` | A file that is not a holo gets no verdict. | + | + | N/A |
 | `verify.no-verdict.bad-version` | An unknown physical version gets no verdict. | + | + | N/A |

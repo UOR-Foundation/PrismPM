@@ -18,9 +18,10 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { SpecError, validateSpec } from './spec.mjs';
 import { answersFromSpec, nextTurn, roundTrip, STEPS } from './session.mjs';
-import { appDir, modelPath, readSession, writeSession, writeSpecDocument } from './project.mjs';
+import { appDir, modelPath, readProjectSpec, readSession, writeSession, writeSpecDocument } from './project.mjs';
 import { build, prove, tryRequest } from './engine.mjs';
 import { gapLedger } from '../gaps.mjs';
+import { readSpecFile } from './spec-file.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../../package.json');
@@ -28,11 +29,11 @@ const { version } = require('../../package.json');
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism or /prism, call prism_start.
-From the user's one-line request, draft the whole spec, with a reason for every rule and property, and pass it to prism_spec. Ask only what you cannot infer. When a result has an issue, fix the draft, or ask the user if only they know.
-Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML in the chat, draw one editable card (an App name field, a text box per part, approve button), never a multiple-choice question.
+Every app has one input: prism/spec.json, a prism/spec/1 spec. Draft it from the user's sentence, a reason per rule and property, and pass it to prism_spec; to change it, edit spec.json or pass the new spec. The same JSON gives the same model. Ask only what you cannot infer; on an issue, fix the draft or ask.
+Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML, draw one editable card, never a multiple-choice question.
 On approval, answer the review yes, then call prism_build.
-Never edit files under prism/ by hand.
-prism_prove and prism_build take minutes: while they return "running", say what is happening and call again.
+Never write LexLean; spec.json is the one file you write.
+prism_prove and prism_build take minutes: while they return "running", say so and call again.
 Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
 const GREETING = 'Prism turns one sentence into an app whose rules are proved by Lean, not just tested. I will draft the spec for your approval, then prove and build it.';
@@ -115,18 +116,18 @@ const TOOLS = [
   },
   {
     name: 'prism_prove',
-    description: 'Write the LexLean model and ask Lean to prove every property: in the SDK image when it is on this machine, else on the hosted verifier at https://mcp.uor.foundation/, which receives the files under prism/src/ and stores them unlisted (not searchable, but readable by anyone with its draft ID). Takes one to five minutes. Returns state running while it works; call again to keep waiting.',
+    description: 'Write the LexLean model and ask Lean to prove every property, in the SDK image on this machine. Nothing is sent anywhere: the hosted verifier at https://mcp.uor.foundation/ is used only when the user sets PRISM_CODE_TIER=hosted, and it stores the files under prism/src/ unlisted, not privately. Takes one to five minutes. Returns state running while it works; call again to keep waiting.',
     inputSchema: { type: 'object', properties: { wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' }, overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' } }, additionalProperties: false },
   },
   {
     name: 'prism_build',
-    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. Where it builds is chosen for the user: in the SDK image when it is on this machine, else on GitHub Actions when the user is signed in to GitHub (no Docker here; this machine verifies what comes back), else in the SDK image after downloading it (about 5.5 GB). A GitHub build of an app with no repository returns needs "repository" and a suggested name: ask the user to approve creating that public repository, then call again with repository set. Prism creates it from UOR-Foundation/template, so the app gets the template\'s frame, page and gate; writes the app, its claims, tests and page into it; pushes; and once the gate and the page pass, returns the live GitHub Pages URL, after checking the live holo here. A GitHub build takes ten to fifteen minutes. Returns state running while it works; call again to keep waiting.',
+    description: 'Prove, then build the app into a holo and replay its acceptance vectors through the built guest. It builds in the SDK image on this machine, downloading it first if it is missing (about 5.5 GB). It builds on GitHub Actions only when the user asks for it by naming a repository (remote github): ask the user before doing so, since the app then lives in a public repository. Prism creates it from UOR-Foundation/template, so the app gets the template\'s frame, page and gate; writes the app, its claims, tests and page into it; pushes; and once the gate and the page pass, returns the live GitHub Pages URL, after checking the live holo here. A GitHub build takes ten to fifteen minutes. Returns state running while it works; call again to keep waiting.',
     inputSchema: {
       type: 'object',
       properties: {
         wait: { type: 'number', description: 'Seconds to wait before returning, default 45.' },
         overwrite: { type: 'boolean', description: 'Replace a model that was edited by hand.' },
-        remote: { type: 'string', enum: ['github', 'local'], description: 'Where to build, when the user asks for one: github (the repository\'s Actions) or local (the SDK image). Omit to let Prism choose.' },
+        remote: { type: 'string', enum: ['github', 'local'], description: 'Where to build, when the user asks for one: github (the repository\'s Actions) or local (the SDK image). Omit to build locally.' },
         repository: { type: 'string', description: 'owner/name of the GitHub repository to create for the app, only after the user approved it.' },
       },
       additionalProperties: false,
@@ -161,8 +162,36 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
   const dir = appDir(cwd);
   const jobs = new Map();
 
-  const load = () => readSession(dir);
-  const save = (session) => writeSession(dir, session);
+  /**
+   * The session, with spec.json as the source of truth: when an agent edited
+   * spec.json directly since Prism last wrote it, the edit is adopted, as if
+   * it had been passed to prism_spec. A spec.json that does not read is left
+   * on disk and its refusal kept, so the next call can say what to fix.
+   */
+  const load = () => {
+    const session = readSession(dir);
+    let read;
+    try {
+      read = readProjectSpec(dir);
+    } catch (error) {
+      if (!(error instanceof SpecError)) throw error;
+      session.specFileIssue = { message: error.message, where: error.where, rule: error.rule };
+      return session;
+    }
+    if (read && read.specHash !== session.status?.specHash) {
+      session.answers = { ...answersFromSpec(read.spec), review: undefined };
+      delete session.answers.review;
+      session.spec = null;
+      session.step = nextTurn(session.answers).step;
+      session.status = { ...(session.status ?? {}), specHash: read.specHash };
+      session.adopted = 'spec.json was edited since Prism last wrote it; that edit is now the spec.';
+    }
+    return session;
+  };
+  const save = (session) => {
+    const { specFileIssue, adopted, ...kept } = session;
+    writeSession(dir, kept);
+  };
 
   /** A spec that does not come back from its own answers is a Prism bug: record which part. */
   function checkRoundTrip(spec) {
@@ -216,6 +245,8 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
 
   async function longTool(kind, args, progress) {
     const session = load();
+    if (session.specFileIssue) return { state: 'blocked', message: `prism/spec.json does not read: ${session.specFileIssue.message} Fix spec.json, or pass the corrected spec to prism_spec.`, issue: session.specFileIssue };
+    if (session.adopted) save(session);
     if (!session.spec || session.step !== 'ready') {
       const t = nextTurn(session.answers);
       if (t.step !== 'ready') return { state: 'blocked', message: `The spec is not complete yet. Next question: ${t.question}`, step: t.step };
@@ -255,9 +286,10 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
   const tools = {
     prism_start(args) {
       const session = args.restart ? { ...load(), step: 'purpose', answers: {}, spec: null, status: {}, axioms: {} } : load();
+      if (session.adopted) save(session);
       const t = turn(session);
       const resumed = Object.keys(session.answers).length > 0;
-      return { greeting: resumed ? `Welcome back. ${t.progress}.` : GREETING, project: dir, ...t };
+      return { greeting: resumed ? `Welcome back. ${t.progress}.` : GREETING, project: dir, ...t, ...(session.adopted ? { note: session.adopted } : {}), ...(session.specFileIssue ? { issue: session.specFileIssue } : {}) };
     },
     prism_answer(args) {
       const session = load();
@@ -269,8 +301,14 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
     },
     prism_spec(args) {
       const session = load();
-      if (!args.spec) return { spec: session.spec ?? nextTurn(session.answers).spec ?? null, step: session.step };
+      if (!args.spec) {
+        if (session.adopted) save(session);
+        const spec = session.spec ?? nextTurn(session.answers).spec ?? null;
+        return { spec, step: session.step, specHash: session.status?.specHash ?? null, ...(session.adopted ? { note: session.adopted } : {}), ...(session.specFileIssue ? { issue: session.specFileIssue } : {}) };
+      }
       try {
+        // The same strict reading spec.json gets: no member prism/spec/1 does not define, whole numbers only.
+        readSpecFile(args.spec);
         session.answers = { ...answersFromSpec(args.spec), review: undefined };
       } catch (error) {
         if (error instanceof SpecError) gaps.record({ kind: 'refusal', construct: error.rule });

@@ -52,7 +52,7 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
   for (const [ref, event] of [['refs/heads/release/v0.4', 'workflow_dispatch'], ['refs/heads/main', 'workflow_dispatch'],
     ['refs/heads/release/v0.4', 'push'], ['refs/tags/v0.4.0', 'push'], ['refs/tags/v0.5.0', 'workflow_dispatch']]) {
-    for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
+    for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build']) {
       for (const architecture of ['amd64', 'arm64']) {
         const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref, event);
         validateArtifact(manifest, digest(manifest), record, sbom, options);

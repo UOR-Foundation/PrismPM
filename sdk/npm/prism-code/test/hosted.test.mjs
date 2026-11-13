@@ -138,7 +138,7 @@ test('a 502 is tried again, and a hosted check returns the command result', asyn
   assert.equal(seen[0].name, 'lexlean_profiles');
 });
 
-test('routing from app/: the lockfile at the repository root is found, so the local tier has its image and the hosted one says why (dry run)', () => {
+test('routing from app/: the lockfile at the repository root is found, so the local tier has its image, and only --hosted sends anything (dry run)', () => {
   // A template instance: prismpm.lock at the root, the LexLean project in app/, where the user runs the tiers.
   const dir = scratch();
   mkdirSync(join(dir, '.git'));
@@ -150,10 +150,13 @@ test('routing from app/: the lockfile at the repository root is found, so the lo
   const local = run('verify', '--lean', '--local');
   assert.equal(local.status, 0, local.stderr);
   assert.match(local.stdout, /prismpm-sdk@sha256:36da25ef[0-9a-f]{56} lexlean verify --project /, 'the image comes from ../prismpm.lock');
-  assert.match(run('verify', '--lean').stderr, /, because the SDK image is not on this machine: sending the 4 files under src\//);
+  // Planted defect G9: the SDK image is not on this machine. Nothing is sent: the tier stays local.
+  const lean = run('verify', '--lean');
+  assert.doesNotMatch(lean.stderr + lean.stdout, /hosted verifier|mcp\.uor\.foundation/);
+  assert.match(lean.stdout, /prismpm-sdk@sha256:36da25ef[0-9a-f]{56} lexlean verify --project /);
   const check = run('build', '--check');
-  assert.equal(check.status, 0, check.stderr);
-  assert.match(check.stderr, /^build --check: lexlean check on the hosted verifier https:\/\/mcp\.uor\.foundation\/ \(profile prism-app\), because the SDK image is not on this machine: sending 4 files under src\//);
+  assert.doesNotMatch(check.stderr + check.stdout, /hosted verifier|mcp\.uor\.foundation/);
+  assert.match(run('build', '--check', '--hosted').stderr, /^build --check: lexlean check on the hosted verifier https:\/\/mcp\.uor\.foundation\/ \(profile prism-app\), because --hosted asked for it: sending 4 files under src\//);
 
   // Above the repository's root nothing is looked for.
   const outer = scratch();
@@ -162,9 +165,8 @@ test('routing from app/: the lockfile at the repository root is found, so the lo
   mkdirSync(join(repo, '.git'), { recursive: true });
   cpSync(template, join(repo, 'app'), { recursive: true });
   const alone = spawnSync(process.execPath, [bin, 'build', '--check'], { cwd: join(repo, 'app'), env, encoding: 'utf8' });
-  assert.equal(alone.status, 0, alone.stderr);
-  assert.match(alone.stderr, /because there is no prismpm\.lock here or above:/);
-  assert.match(alone.stdout, /skipped  prismpm check: there is no prismpm\.lock here or above to check/);
+  assert.equal(alone.status, 64, alone.stderr);
+  assert.match(alone.stderr, /^prismpm\.lock not found here or above\. build --check runs on this machine.*Pass --hosted/);
 });
 
 test('a refused proof prints where: file, line and column, the whole goal under it, and long goals cut', () => {
@@ -201,21 +203,30 @@ test('--help after a verb prints that verb and touches no Docker and no lockfile
     assert.doesNotMatch(r.stdout, /prism-code verify-attestation|prism-code inspect /, `${args.join(' ')} prints only its own verb`);
     assert.equal(r.stderr, '', `${args.join(' ')} says nothing about an image or a lockfile`);
   }
-  assert.match(run('build', '--help').stdout, /Options for build --unstable-author:/);
+  assert.doesNotMatch(run('build', '--help').stdout, /unstable-author/, 'the author route is gone');
+  const author = run('build', '--unstable-author');
+  assert.equal(author.status, 64, 'G8 planted defect: an agent writing the model is refused');
+  assert.match(author.stderr, /unknown option --unstable-author/);
 });
 
-test('routing: with no image a tier runs hosted, --local runs it in the image, and lexlean flags mean local (dry run)', () => {
+test('routing: every tier runs on this machine unless --hosted asks, and lexlean flags stay local (dry run)', () => {
   const dir = scratch();
   cpSync(template, join(dir, 'app'), { recursive: true });
   writeFileSync(join(dir, 'prismpm.lock'), JSON.stringify({ sdk_image: IMAGE }));
   const env = { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: join(scratch(), '.prism') };
   const run = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd: dir, env, encoding: 'utf8' });
 
+  // Planted defect G9: no image on this machine. Before, verify --lean sent src/ to the hosted verifier on its own.
   const lean = run('verify', '--lean');
   assert.equal(lean.status, 0, lean.stderr);
-  assert.match(lean.stdout, /^hosted lexlean_verify https:\/\/mcp\.uor\.foundation\/ profile prism-app files src\/TextRequest\.lex\.tex\n$/);
-  assert.match(lean.stderr, /, because the SDK image is not on this machine: sending the 4 files under app\/src\/, which the server stores unlisted: not searchable, but readable by anyone with the draft's ID; --local verifies in the SDK image instead/);
-  assert.match(run('verify', '--lean', '--all').stdout, /files src\/Foundation\/Bytes\.lex\.tex .*src\/TextRequest\.lex\.tex/);
+  assert.match(lean.stdout, /prismpm-sdk@sha256:[0-9a-f]{64} lexlean verify --project /);
+  assert.doesNotMatch(lean.stderr + lean.stdout, /hosted verifier|hosted lexlean|mcp\.uor\.foundation/);
+
+  const hosted = run('verify', '--lean', '--hosted');
+  assert.equal(hosted.status, 0, hosted.stderr);
+  assert.match(hosted.stdout, /^hosted lexlean_verify https:\/\/mcp\.uor\.foundation\/ profile prism-app files src\/TextRequest\.lex\.tex\n$/);
+  assert.match(hosted.stderr, /, because --hosted asked for it: sending the 4 files under app\/src\/, which the server stores unlisted: not searchable, but readable by anyone with the draft's ID; --local verifies in the SDK image instead/);
+  assert.match(run('verify', '--lean', '--hosted', '--all').stdout, /files src\/Foundation\/Bytes\.lex\.tex .*src\/TextRequest\.lex\.tex/);
   assert.match(run('verify', '--lean', '--local').stdout, /prismpm-sdk@sha256:[0-9a-f]{64} lexlean verify --project /);
   assert.match(run('verify', '--lean', '--trace').stdout, / lexlean verify --project .* --trace\n$/, 'a lexlean flag runs where lexlean is');
   assert.equal(run('verify', '--lean', '--hosted', '--trace').status, 64, 'a lexlean flag is refused when hosted was asked for');
@@ -223,8 +234,11 @@ test('routing: with no image a tier runs hosted, --local runs it in the image, a
 
   const check = run('build', '--check');
   assert.equal(check.status, 0, check.stderr);
-  assert.match(check.stdout, /hosted lexlean_check https:\/\/mcp\.uor\.foundation\/ profile prism-app draft\nskipped  prismpm check: the lockfile and its SDK pins are checked only in the image; --local runs it there/);
-  assert.doesNotMatch(check.stdout, /setup --pull/, 'an image that is here is not offered for download');
+  assert.match(check.stdout, / prismpm check\n$/);
+  assert.doesNotMatch(check.stderr + check.stdout, /hosted verifier|hosted lexlean|mcp\.uor\.foundation/);
+  const hostedCheck = run('build', '--check', '--hosted');
+  assert.equal(hostedCheck.status, 0, hostedCheck.stderr);
+  assert.match(hostedCheck.stdout, /hosted lexlean_check https:\/\/mcp\.uor\.foundation\/ profile prism-app draft\nskipped  prismpm check: the lockfile and its SDK pins are checked only in the image; run without --hosted to check them there/);
   assert.match(run('build', '--check', '--local').stdout, / prismpm check\n$/);
   assert.match(run('build', '--check', '--verbose').stdout, / prismpm check --verbose\n$/);
   assert.match(run('verify').stdout, / prismpm verify\n$/, 'a full verify always needs the image');
@@ -232,7 +246,7 @@ test('routing: with no image a tier runs hosted, --local runs it in the image, a
   const layout = join(dir, 'app', 'lexlean.toml');
   writeFileSync(layout, readFileSync(layout, 'utf8').replace('source_roots = ["src"]', 'source_roots = ["model"]'));
   mkdirSync(join(dir, 'app', 'model'), { recursive: true });
-  const refused = run('verify', '--lean');
+  const refused = run('verify', '--lean', '--hosted');
   assert.equal(refused.status, 2);
   assert.match(refused.stderr, /hosted\.layout: source_roots is \["model"\].*\nThis project cannot be verified on the hosted verifier; run it in the SDK image with --local/);
 });

@@ -26,7 +26,7 @@ function transportPolicy(options) {
     event: 'workflow_dispatch', name: 'PrismPM development SDK candidate', candidate: true};
   assert.deepEqual(Object.keys(options).sort(), ['event', 'kind', 'ref', 'repository']);
   assert.equal(options.kind, 'release');
-  assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']
+  assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build']
     .some(name => options.repository === `ghcr.io/uor-foundation/prismpm-${name}`));
   // The release line (scripts/release-phases.mjs releaseRefKind): rehearsals on
   // main (dispatch only) or a release branch, publication at a version tag by a

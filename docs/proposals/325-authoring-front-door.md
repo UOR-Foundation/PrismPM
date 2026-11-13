@@ -4,7 +4,7 @@
 | --- | --- |
 | Issue | [#325](https://github.com/UOR-Foundation/PrismPM/issues/325) |
 | Milestone | M3 v0.6 Replay, capabilities, conformance |
-| Status | Experimental, behind `--unstable-author` |
+| Status | Withdrawn: `--unstable-author` was removed. Every app comes from one `prism/spec/1` spec through the guided path; an agent never writes the model. The checks named below no longer exist. |
 | Depends on | #264 (input lock), #266 (proof predicate), #280 (`prism.toml`), #284 (replay of `examples/`) |
 | Waits for | #267 (statements in the holo), `lexlean-mcp` v0.1 (a running gateway) |
 

@@ -86,10 +86,12 @@ export function dockerArguments({
   program = 'prismpm',
   cache = null,
   mount = 'native',
+  network = null,
 }) {
   if (!SDK_IMAGE_PATTERN.test(image)) fail('lock.image', `not an immutable SDK image: ${image}`);
   const workdir = platform === 'win32' ? WINDOWS_WORKDIR : cwd;
   const out = ['run', '--rm'];
+  if (network) out.push('--network', network);
   if (uid !== null && gid !== null && uid >= 0 && gid >= 0) out.push('--user', `${uid}:${gid}`);
   if (build && dockerSocketGid !== null) out.push('--group-add', String(dockerSocketGid));
   if (cache) out.push('--mount', `type=volume,source=${cache},target=/tmp`);

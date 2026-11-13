@@ -86,7 +86,7 @@ export const isAncestor = (root, ancestor, revision) =>
 // changes are proved against these images before they merge
 // (.github/workflows/release-qualify.yml); the merged commit's own release run
 // still checks its own images.
-export const imageJobs = 6;
+export const imageJobs = 7;
 // The branches a release rehearsal runs on: main and release/vMAJOR.MINOR.
 export const releaseLine = branch => branch === 'main' || /^release\/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(branch ?? '');
 export function findCandidate(root, revision, client) {

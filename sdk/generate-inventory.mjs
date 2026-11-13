@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { compilerRevision, encodeInventory, exporterArtifactBindings, validateAuthorityMetadata, validateImageInputMetadata } from './inventory-metadata.mjs';
+import { compilerRevision, encodeInventory, exporterArtifactBindings, omitBuildVariantArtifacts, validateAuthorityMetadata, validateImageInputMetadata } from './inventory-metadata.mjs';
 import { readSmall, snapshotFile } from './exporter-seed.mjs';
 
 const output = process.argv[2];
@@ -149,6 +149,14 @@ definitions.push(
   ['sdk-image-input-verifier', 'test-corpus', '1', 'scripts/sdk-image-inputs.mjs'],
   ['sdk-image-input-authorities', 'test-corpus', '1', 'sdk/vv-inputs.lock.json'],
 );
+// The build-only SDK variant (`sdk-build` in sdk/Dockerfile) is derived from
+// the measured runtime inventory; see omitBuildVariantArtifacts.
+const variant = process.env.PRISMPM_SDK_VARIANT ?? 'runtime';
+if (!['runtime', 'build'].includes(variant)) throw new Error(`unknown SDK variant: ${variant}`);
+if (variant === 'build' && !process.env.PRISMPM_ARTIFACT_INVENTORY) {
+  throw new Error('the build SDK variant is derived from the measured runtime artifact inventory');
+}
+
 let artifacts;
 const dependencies = process.env.PRISMPM_ARTIFACT_INVENTORY
   ? '/opt/prismpm/share/conformance-root/model/dependencies.toml' : 'model/dependencies.toml';
@@ -169,6 +177,7 @@ if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
   artifacts.push({id: 'playwright-headless-shell', kind: 'oracle', version: '157.0.8099.0',
     digest: await treeDigest('/ms-playwright/chromium_headless_shell-cft-157.0.8099.0')});
   artifacts.sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
+  if (variant === 'build') artifacts = omitBuildVariantArtifacts(artifacts, new Set(commands.map(row => row.command)));
 } else {
   artifacts = [];
   for (const [id, kind, version, source, mode] of definitions) {

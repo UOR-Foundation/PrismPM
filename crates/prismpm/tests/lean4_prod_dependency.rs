@@ -121,7 +121,7 @@ fn lean4_prod_dependency_record_and_checksums_are_valid() {
         (
             "vendor/lean4-prod/lean.tar",
             (
-                "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf",
+                "50e085623708a3ffa3d582027589a0cc8b78e79fd62b176049f2eaad8efe47db",
                 None,
             ),
         ),
@@ -315,7 +315,7 @@ source = "vendored"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf"
+sha256 = "50e085623708a3ffa3d582027589a0cc8b78e79fd62b176049f2eaad8efe47db"
 "#;
 
     let parsed = parse_lean4_prod_dependency(valid_toml).expect("valid parse");

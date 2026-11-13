@@ -75,6 +75,7 @@
           adapter-kubernetes sdk/Dockerfile adapter-kubernetes ghcr.io/uor-foundation/prismpm-adapter-kubernetes
           adapter-github-pages sdk/Dockerfile adapter-github-pages ghcr.io/uor-foundation/prismpm-adapter-github-pages
           oracles sdk/Dockerfile oracles ghcr.io/uor-foundation/prismpm-oracles
+          sdk-build sdk/Dockerfile sdk-build ghcr.io/uor-foundation/prismpm-sdk-build
           IMAGES
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

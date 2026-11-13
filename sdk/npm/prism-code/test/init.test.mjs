@@ -79,14 +79,19 @@ test('planInit is the template plus prism.toml and an LF-only .gitattributes; an
   assert.ok(files.has('prism.toml') && files.has('lexlean.lock') && files.has('prismpm.toml') && files.has('src/TextRequest.lex.tex'));
   assert.equal(files.size, templateFiles().size + 2);
   assert.equal(Buffer.from(files.get('.gitattributes')).toString('utf8'), '* text eol=lf\n', 'LexLean refuses CRLF, so a new project never gets it');
-  assert.equal(nextSteps('calc').split('\n')[1], '  cd calc');
+  // The scaffold names the canonical path first: an app has one input, prism/spec.json.
+  const steps = nextSteps('calc').split('\n');
+  assert.match(steps[0], /not a Prism app\. An app has one input, prism\/spec\.json/);
+  assert.ok(steps.includes('  cd calc'));
   assert.throws(() => planInit({ name: 'calc', template: 'nope' }), (e) => e.code === 'init.template' && /text-request/.test(e.message));
 });
 
-test('binding takes the image standards.lock and runs prismpm update --toolchain in the project', () => {
-  const { standards, update } = bindCommands({ image: IMAGE, cwd: '/work/calc', uid: 1000, gid: 1000, platform: 'linux' });
+test('binding takes the image standards.lock, relocks with the image compiler and runs prismpm update --toolchain, all with no network', () => {
+  const { standards, lock, update } = bindCommands({ image: IMAGE, cwd: '/work/calc', uid: 1000, gid: 1000, platform: 'linux' });
   assert.deepEqual(standards, ['run', '--rm', '--network', 'none', '--entrypoint', 'cat', IMAGE, IMAGE_STANDARDS_LOCK]);
   assert.deepEqual(update.slice(-5), [IMAGE, 'prismpm', 'update', '--toolchain', IMAGE]);
+  assert.deepEqual(lock.slice(-3), [IMAGE, 'lexlean', 'lock']);
+  for (const command of [lock, update]) assert.deepEqual(command.slice(0, 4), ['run', '--rm', '--network', 'none']);
   assert.ok(update.includes('--volume') && update.includes('/work/calc:/work/calc'));
   for (const bad of [undefined, 'ghcr.io/x/y:latest', 'ghcr.io/x/y@sha256:abc']) assert.throws(() => bindCommands({ image: bad, cwd: '/w' }), (e) => e.code === 'lock.image');
 });
@@ -130,13 +135,15 @@ test('init: --name, a bad name, an unknown template, usage errors', () => {
   assert.match(run(bin, ['init', '--help']).out, /--sdk-image <ref>/);
 });
 
-test('init --sdk-image prints the two docker commands under PRISM_CODE_DRY_RUN', () => {
+test('init --sdk-image prints the three docker commands under PRISM_CODE_DRY_RUN, each with no network', () => {
   const dir = join(scratch(), 'bound');
   const r = run(bin, ['init', dir, '--sdk-image', IMAGE], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(r.code, 0, r.err);
-  const lines = r.out.trim().split('\n').slice(-2);
+  const lines = r.out.trim().split('\n').slice(-3);
   assert.match(lines[0], new RegExp(`^docker run --rm --network none --entrypoint cat ${IMAGE.replace(/[.@]/g, '\\$&')} /opt/prismpm/share/standards\\.lock > standards\\.lock$`));
-  assert.match(lines[1], new RegExp(`prismpm update --toolchain ${IMAGE.replace(/[.@]/g, '\\$&')}$`));
+  // B3: the template's lexlean.lock can predate the image's compiler (LLC0102), so the image relocks it before update.
+  assert.match(lines[1], new RegExp(`^docker run --rm --network none .* ${IMAGE.replace(/[.@]/g, '\\$&')} lexlean lock$`));
+  assert.match(lines[2], new RegExp(`^docker run --rm --network none .*prismpm update --toolchain ${IMAGE.replace(/[.@]/g, '\\$&')}$`));
   const refused = run(bin, ['init', join(scratch(), 'x'), '--sdk-image', 'ghcr.io/x/y:latest'], { env: { ...process.env, PRISM_CODE_DRY_RUN: '1', PRISM_HOME: mkdtempSync(join(tmpdir(), 'prism-home-')) } });
   assert.equal(refused.code, 2);
   assert.match(refused.err, /^lock\.image:/);
@@ -165,6 +172,8 @@ test('a bound project points at build --check, the model check, not the removed 
       // init asks the daemon for its version first, as every command that reaches Docker does.
       '  "version --format {{.Server.Version}}") echo 29.1.3 ;;',
       '  *"--entrypoint cat"*) printf \'{"stub":"standards"}\' ;;',
+      // init relocks the template's LexLean project with the image's compiler before update (B3).
+      '  *" lexlean lock") echo "wrote lexlean.lock" ;;',
       '  *"prismpm update --toolchain"*) prev=; for a in "$@"; do [ "$prev" = --workdir ] && d="$a"; prev="$a"; done; printf \'{"stub":"lock"}\' > "$d/prismpm.lock" ;;',
       '  *) exit 9 ;;',
       'esac',
@@ -177,6 +186,7 @@ test('a bound project points at build --check, the model check, not the removed 
   assert.equal(r.code, 0, r.err);
   assert.equal(readFileSync(join(dir, 'standards.lock'), 'utf8'), '{"stub":"standards"}');
   assert.ok(existsSync(join(dir, 'prismpm.lock')));
-  assert.match(r.out, /Done\. Next, from the cheapest gate to the whole build:\n {2}cd .*\n {2}npx prism-code build --check {5}T0[^\n]*\n {2}npx prism-code verify --lean {5}T1[^\n]*\n {2}npx prism-code axioms --write {4}when T1[^\n]*\n {2}npx prism-code verify {12}T2[^\n]*\n$/);
+  assert.match(r.out, /Done\. This is a LexLean project, not a Prism app\./);
+  assert.match(r.out, /Next, from the cheapest gate to the whole build:\n {2}cd .*\n {2}npx prism-code build --check {5}T0[^\n]*\n {2}npx prism-code verify --lean {5}T1[^\n]*\n {2}npx prism-code axioms --write {4}when T1[^\n]*\n {2}npx prism-code verify {12}T2[^\n]*\n$/);
   assert.doesNotMatch(r.out, /prism-code check\n/);
 });

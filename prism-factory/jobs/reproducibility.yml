@@ -80,6 +80,18 @@
             target: oracles
             name: oracles-arm64
             image: oracles
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            dockerfile: sdk/Dockerfile
+            target: sdk-build
+            name: sdk-build-amd64
+            image: sdk-build
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+            dockerfile: sdk/Dockerfile
+            target: sdk-build
+            name: sdk-build-arm64
+            image: sdk-build
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read

@@ -50,7 +50,7 @@ pub(crate) fn sdk_projection(lock: &Value) -> Value {
     let mut value = lock.clone();
     if let Some(object) = value.as_object_mut() {
         object.remove("inputs");
-        // Written by `prism-code build --unstable-author` (#325); the SDK rules never read it.
+        // Written by the removed `prism-code build --unstable-author` (#325); kept so older locks still parse. The SDK rules never read it.
         object.remove("authoring");
         object.insert("schema".to_owned(), Value::String(SDK_LOCK_V2.to_owned()));
     }

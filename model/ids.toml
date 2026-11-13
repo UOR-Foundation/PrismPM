@@ -457,6 +457,12 @@ level = "build"
 statement = "prism-code runs a session-world guest as sessions: one instance per session with an empty first state, steps in order returning zero or more responses through dispatch and stream, every failure ending the session, session.closed for a later step, session.busy for a concurrent step, session.required for dispatch on the application and session.unsupported for open on a stateless one; acceptance sessions are compared step by step; prism/history/2 records sessions as steps and the failure that ended them, and replay re-executes each on a fresh session, reporting every divergence as a DeterminismViolationError and refusing a history of the other world with replay.history."
 
 [[id]]
+id = "HO-46"
+suite = "holo"
+level = "build"
+statement = "Definitions of one application that share a last name component build: prod-export names a requested root by its last component and any other definition of the closure by its last component while no other definition has it, and otherwise by a reserved prefix followed by the length and text of each component of its qualified name, so distinct definitions have distinct names and calls reach the definition they name; an application with no shared last component exports the same bytes as before, and two requested roots that share a last component are refused by name with PP5004."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"
@@ -994,7 +1000,7 @@ statement = "Browser-resident system releases bind selected proved applications,
 id = "SY-09"
 suite = "system"
 level = "build"
-statement = "Host-effect service system releases declare the effects of a server application, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's."
+statement = "Host-effect service system releases declare exactly the effects their selected server application declares, and project Compose services that pass the locked Compose oracle and publish no port: each api component runs on the host network, where the loopback its listeners bind is the host's."
 
 [[id]]
 id = "DK-01"

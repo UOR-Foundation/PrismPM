@@ -122,8 +122,21 @@ export function planInit({ name, template = DEFAULT_TEMPLATE }) {
 }
 
 /** The tiers a new project's author runs next, cheapest first, as `init` prints them. */
+/**
+ * What this scaffold is not. A Prism app has one input, `prism/spec.json`, and
+ * its model is rendered from that JSON; a scaffolded LexLean project is one of
+ * this repository's own kind, where the model is written by hand.
+ */
+export const NOT_AN_APP = [
+  'This is a LexLean project, not a Prism app. An app has one input, prism/spec.json:',
+  'ask your agent for one (npx prism-code@latest setup adds the prism server), and Prism',
+  'renders the model from that JSON. Hand-written LexLean is for a project like this one.',
+].join('\n');
+
 export function nextSteps(directory) {
   return [
+    NOT_AN_APP,
+    '',
     'Next, from the cheapest gate to the whole build:',
     `  cd ${directory}`,
     '  npx prism-code build --check     T0: the model is well formed and locked (seconds)',
@@ -135,9 +148,12 @@ export function nextSteps(directory) {
 }
 
 /**
- * The two `docker` invocations that bind a project to an SDK image: read the
- * image's standards lock, then `prismpm update --toolchain <image>` in the
- * project. Returns `{ standards, update }`, argument lists for `docker`.
+ * The three `docker` invocations that bind a project to an SDK image, each
+ * with no network, so binding works offline once the image is here: read the
+ * image's standards lock, relock the template's LexLean project with the
+ * image's own compiler (the lexlean.lock a template ships can predate it),
+ * then `prismpm update --toolchain <image>`. Returns `{ standards, lock, update }`,
+ * argument lists for `docker`.
  */
 export function bindCommands({ image, cwd, uid = null, gid = null, platform = process.platform, mount = 'native', cache = null }) {
   if (typeof image !== 'string' || !SDK_IMAGE_PATTERN.test(image)) {
@@ -145,6 +161,7 @@ export function bindCommands({ image, cwd, uid = null, gid = null, platform = pr
   }
   return {
     standards: ['run', '--rm', '--network', 'none', '--entrypoint', 'cat', image, IMAGE_STANDARDS_LOCK],
-    update: dockerArguments({ image, cwd, command: 'update', args: ['--toolchain', image], uid, gid, platform, mount, cache }),
+    lock: dockerArguments({ image, cwd, program: 'lexlean', command: 'lock', uid, gid, platform, mount, cache, network: 'none' }),
+    update: dockerArguments({ image, cwd, command: 'update', args: ['--toolchain', image], uid, gid, platform, mount, cache, network: 'none' }),
   };
 }

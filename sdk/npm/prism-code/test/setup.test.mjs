@@ -74,7 +74,7 @@ test('Linux: each agent found is configured once, in its own file and format, an
     '.config/Claude': null,
   });
   const c = context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' } });
-  const plan = planSetup({}, c);
+  const plan = planSetup({ hosted: true }, c);
   const rows = byAgent(plan);
   assert.deepEqual(Object.fromEntries(plan.agents.map((a) => [a.agent, a.status])), { 'claude-code': 'configure', codex: 'configure', cursor: 'already', vscode: 'configure', 'claude-desktop': 'manual' });
   assert.match(rows['claude-desktop'].detail, /Settings > Connectors > Add custom connector/);
@@ -109,7 +109,7 @@ test('Linux: each agent found is configured once, in its own file and format, an
   assert.equal(refused.status, 2, refused.stderr);
   assert.match(readFileSync(join(home, '.prism', 'handler.log'), 'utf8'), /^\S+ open\.host: holo:\/\/evil is not a link prism-code opens/);
 
-  const again = planSetup({}, c);
+  const again = planSetup({ hosted: true }, c);
   assert.deepEqual(again.agents.map((a) => a.status), ['already', 'already', 'already', 'already', 'manual']);
   assert.deepEqual(again.journey.map((a) => [a.agent, a.status]), [['claude-code', 'already'], ['codex', 'already'], ['cursor', 'already'], ['vscode', 'already'], ['claude-desktop', 'already']]);
   assert.equal(again.handler.status, 'already');
@@ -118,15 +118,15 @@ test('Linux: each agent found is configured once, in its own file and format, an
 
 test('Claude Code on the PATH is configured by its own CLI at user scope', () => {
   const home = fixtureHome({ '.claude.json': '{}' });
-  const plan = planSetup({ agent: 'claude-code' }, context('linux', home, { found: { claude: '/usr/local/bin/claude' } }));
+  const plan = planSetup({ hosted: true, agent: 'claude-code' }, context('linux', home, { found: { claude: '/usr/local/bin/claude' } }));
   assert.deepEqual(plan.agents[0].steps, [{ kind: 'command', command: '/usr/local/bin/claude', args: ['mcp', 'add', '--transport', 'http', '--scope', 'user', 'lexlean', MCP_URL], options: {}, display: `claude mcp add --transport http --scope user lexlean ${MCP_URL}` }]);
-  const shim = planSetup({ agent: 'claude-code' }, context('win32', home, { found: { claude: 'C:\\npm\\claude.cmd' }, env: { ComSpec: 'C:\\Windows\\system32\\cmd.exe' } }));
+  const shim = planSetup({ hosted: true, agent: 'claude-code' }, context('win32', home, { found: { claude: 'C:\\npm\\claude.cmd' }, env: { ComSpec: 'C:\\Windows\\system32\\cmd.exe' } }));
   assert.equal(shim.agents[0].steps[0].command, 'C:\\Windows\\system32\\cmd.exe');
   assert.match(shim.agents[0].steps[0].args[3], /claude\.cmd \^\^\^"mcp\^\^\^" .*\^\^\^"--scope\^\^\^" \^\^\^"user\^\^\^"/);
 });
 
 test('nothing installed: every agent is not found, and no preferred agent is set', () => {
-  const plan = planSetup({}, context('linux', fixtureHome()));
+  const plan = planSetup({ hosted: true }, context('linux', fixtureHome()));
   assert.deepEqual(plan.agents.map((a) => a.status), ['not-found', 'not-found', 'not-found', 'not-found', 'not-found']);
   assert.equal(plan.preferred.agent, null);
   assert.match(formatSetup(plan), / {2}preferred agent none: pass --agent <id>\n$/);
@@ -137,7 +137,7 @@ test('a lexlean server at another URL is reported and left alone', () => {
     '.cursor/mcp.json': JSON.stringify({ mcpServers: { lexlean: { url: 'http://localhost:9000/' } } }),
     '.codex/config.toml': '[mcp_servers.lexlean]\ncommand = "lexlean-mcp"\n',
   });
-  const rows = byAgent(planSetup({}, context('linux', home)));
+  const rows = byAgent(planSetup({ hosted: true }, context('linux', home)));
   assert.equal(rows.cursor.status, 'conflict');
   assert.match(rows.cursor.detail, /lexlean server at http:\/\/localhost:9000\/; left as it is/);
   assert.equal(rows.cursor.steps, undefined);
@@ -151,19 +151,19 @@ test('a file this reader cannot parse is never rewritten', () => {
     // A float is valid TOML that the manifest reader refuses.
     '.codex/config.toml': 'temperature = 0.2\n[mcp_servers.lexlean]\nurl = "x"\n',
   });
-  const rows = byAgent(planSetup({}, context('linux', home)));
+  const rows = byAgent(planSetup({ hosted: true }, context('linux', home)));
   assert.equal(rows.vscode.status, 'unreadable');
   assert.match(rows.vscode.detail, /not plain JSON.*add "servers": \{"lexlean": \{"type":"http","url":"https:\/\/mcp\.uor\.foundation\/"\}\} by hand/);
   assert.equal(rows.cursor.status, 'unreadable');
   assert.equal(rows.codex.status, 'unreadable');
   // TOML this reader does not parse, with no lexlean in it, still gets the table appended.
   const other = fixtureHome({ '.codex/config.toml': 'temperature = 0.2\n' });
-  assert.equal(byAgent(planSetup({}, context('linux', other))).codex.status, 'configure');
+  assert.equal(byAgent(planSetup({ hosted: true }, context('linux', other))).codex.status, 'configure');
 });
 
 test('the indentation of a JSON file is kept', () => {
   const home = fixtureHome({ '.cursor/mcp.json': '{\n\t"mcpServers": {\n\t\t"a": {"url": "https://a/"}\n\t}\n}\n' });
-  const plan = planSetup({ agent: 'cursor' }, context('linux', home));
+  const plan = planSetup({ hosted: true, agent: 'cursor' }, context('linux', home));
   applySetup(plan, recorder());
   const bin = JSON.stringify(join(sourceDir, '..', 'bin', 'prism-code.mjs'));
   assert.equal(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8'), `{\n\t"mcpServers": {\n\t\t"a": {\n\t\t\t"url": "https://a/"\n\t\t},\n\t\t"lexlean": {\n\t\t\t"url": "https://mcp.uor.foundation/"\n\t\t},\n\t\t"prism": {\n\t\t\t"command": "/usr/bin/node",\n\t\t\t"args": [\n\t\t\t\t${bin},\n\t\t\t\t"mcp"\n\t\t\t]\n\t\t}\n\t}\n}\n`);
@@ -175,7 +175,7 @@ test('Windows: config under %APPDATA%, and the handler registered under HKCU wit
   const paths = agentPaths(c);
   assert.equal(paths.vscode.file, join(home, 'AppData', 'Roaming', 'Code', 'User', 'mcp.json'));
   assert.equal(paths['claude-desktop'].file, join(home, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json'));
-  const plan = planSetup({}, c);
+  const plan = planSetup({ hosted: true }, c);
   assert.deepEqual(plan.agents.map((a) => a.status), ['not-found', 'not-found', 'configure', 'configure', 'manual']);
   const entry = join(home, '.prism', 'handler', 'handler.mjs');
   const command = `"C:\\Program Files\\nodejs\\node.exe" "${entry}" "%1"`;
@@ -187,32 +187,32 @@ test('Windows: config under %APPDATA%, and the handler registered under HKCU wit
   const { calls, run } = recorder();
   applySetup(plan, { run });
   assert.equal(calls.length, 3);
-  const again = planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: command } }));
+  const again = planSetup({ hosted: true }, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: command } }));
   assert.equal(again.handler.status, 'already');
-  assert.equal(planSetup({}, context('win32', home)).handler.status, 'configure', 'a missing registration is written');
+  assert.equal(planSetup({ hosted: true }, context('win32', home)).handler.status, 'configure', 'a missing registration is written');
   const moved = `"D:\\node\\node.exe" "${entry}" "%1"`;
-  assert.equal(planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: moved } })).handler.status, 'configure', 'our handler under another node is written again');
+  assert.equal(planSetup({ hosted: true }, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: moved } })).handler.status, 'configure', 'our handler under another node is written again');
 });
 
 test('a holo:// handler another program owns is left alone, on Windows and on Linux', () => {
   const home = fixtureHome();
   const hologram = '"C:\\Users\\u\\AppData\\Local\\Hologram\\hologram.exe" "%1"';
   const record = join(home, '.prism', 'handler.json');
-  const win = planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })).handler;
+  const win = planSetup({ hosted: true }, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })).handler;
   assert.equal(win.status, 'conflict');
   assert.equal(win.detail, `holo:// already opens ${hologram}; left alone. That app can forward holo://build links to the handler ${record} names`);
   // The registration is left alone, but the handler and its record are still installed for that app to forward to.
   assert.deepEqual(win.steps.map((s) => s.kind), [...HANDLER_FILES.map(() => 'copy'), 'write']);
   assert.ok(!win.steps.some((s) => s.kind === 'command'));
-  const linux = planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler;
+  const linux = planSetup({ hosted: true }, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler;
   assert.equal(linux.status, 'conflict');
   assert.ok(!linux.steps.some((s) => s.kind === 'command' || s.path?.endsWith('.desktop')));
   applySetup({ agents: [], handler: linux, preferred: { steps: [] } }, recorder());
   assert.deepEqual(json(record), { schema: 'prism/handler/1', scheme: 'holo', host: 'build', node: '/usr/bin/node', entry: join(home, '.prism', 'handler', 'handler.mjs') });
-  assert.equal(planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler.steps.length, 0, 'a second run installs nothing again');
-  const ours = planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'prism-open.desktop' } })).handler;
+  assert.equal(planSetup({ hosted: true }, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'hologram.desktop' } })).handler.steps.length, 0, 'a second run installs nothing again');
+  const ours = planSetup({ hosted: true }, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' }, mime: { 'x-scheme-handler/holo': 'prism-open.desktop' } })).handler;
   assert.equal(ours.status, 'configure');
-  const text = formatSetup(planSetup({}, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })));
+  const text = formatSetup(planSetup({ hosted: true }, context('win32', home, { registry: { [OPEN_COMMAND_KEY]: hologram } })));
   assert.match(text, /\n {2}holo:\/\/ {9}left alone {10}holo:\/\/ already opens /);
 });
 
@@ -220,7 +220,7 @@ test('macOS: config under Application Support, and the handler an AppleScript ap
   const home = fixtureHome({ 'Library/Application Support/Code/User': null, '.codex': null });
   const c = context('darwin', home);
   assert.equal(agentPaths(c).vscode.file, join(home, 'Library', 'Application Support', 'Code', 'User', 'mcp.json'));
-  const plan = planSetup({}, c);
+  const plan = planSetup({ hosted: true }, c);
   assert.deepEqual(plan.agents.map((a) => a.status), ['not-found', 'configure', 'not-found', 'configure', 'not-found']);
   const app = join(home, 'Applications', 'Prism Open.app');
   const script = join(home, '.prism', 'handler', 'prism-open.applescript');
@@ -238,17 +238,17 @@ test('macOS: config under Application Support, and the handler an AppleScript ap
 
 test('--agent limits setup to one agent and makes it the preferred one; an unknown agent is refused', () => {
   const home = fixtureHome({ '.cursor': null, '.codex': null, '.prism/config.json': JSON.stringify({ preferredAgent: 'codex', other: 1 }) });
-  const plan = planSetup({ agent: 'cursor' }, context('linux', home));
+  const plan = planSetup({ hosted: true, agent: 'cursor' }, context('linux', home));
   assert.deepEqual(plan.agents.map((a) => a.agent), ['cursor']);
   assert.deepEqual(plan.preferred, { agent: 'cursor', steps: [{ kind: 'write', path: join(home, '.prism', 'config.json'), content: '{\n  "preferredAgent": "cursor",\n  "other": 1\n}\n' }] });
-  assert.deepEqual(planSetup({}, context('linux', home)).preferred, { agent: 'codex', steps: [] }, 'without --agent a remembered agent stays');
-  assert.equal(planSetup({ agent: 'chatgpt' }, context('linux', home)).agents[0].status, 'manual');
-  assert.throws(() => planSetup({ agent: 'emacs' }, context('linux', home)), (e) => e.code === 'setup.agent');
+  assert.deepEqual(planSetup({ hosted: true }, context('linux', home)).preferred, { agent: 'codex', steps: [] }, 'without --agent a remembered agent stays');
+  assert.equal(planSetup({ hosted: true, agent: 'chatgpt' }, context('linux', home)).agents[0].status, 'manual');
+  assert.throws(() => planSetup({ hosted: true, agent: 'emacs' }, context('linux', home)), (e) => e.code === 'setup.agent');
 });
 
 test('a command that fails marks its row failed and the rest still run', () => {
   const home = fixtureHome({ '.cursor': null });
-  const plan = planSetup({}, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' } }));
+  const plan = planSetup({ hosted: true }, context('linux', home, { found: { 'xdg-mime': '/usr/bin/xdg-mime' } }));
   applySetup(plan, { run: () => ({ status: 1, stderr: 'no display' }) });
   assert.equal(plan.handler.status, 'failed');
   assert.match(plan.handler.detail, /xdg-mime failed: exit 1: no display/);
@@ -258,8 +258,8 @@ test('a command that fails marks its row failed and the rest still run', () => {
 
 test('--dry-run prints every step under its agent and writes nothing', () => {
   const home = fixtureHome({ '.cursor/mcp.json': '{}', '.codex': null });
-  const text = formatSetup(planSetup({}, context('linux', home)), { dryRun: true });
-  assert.match(text, /^prism-code setup --dry-run: your agents\n {2}the server lexlean, remote at https:\/\/mcp\.uor\.foundation\/: checks and proves LexLean models\n/);
+  const text = formatSetup(planSetup({ hosted: true }, context('linux', home)), { dryRun: true });
+  assert.match(text, /^prism-code setup --dry-run: your agents\n {2}the server lexlean, remote at https:\/\/mcp\.uor\.foundation\/: checks and proves LexLean models; it stores them unlisted, not privately\n/);
   assert.match(text, /\n {2}claude-code {5}not found\n/);
   assert.match(text, /\n {2}codex {11}would configure {5}.*config\.toml\n {6}append to .*config\.toml:\n {8}\[mcp_servers\.lexlean\]\n {8}url = "https:\/\/mcp\.uor\.foundation\/"\n/);
   assert.match(text, /\n {2}cursor {10}would configure {5}.*mcp\.json\n {6}set mcpServers\.lexlean = \{"url":"https:\/\/mcp\.uor\.foundation\/"\} in .*\(backup .*mcp\.json\.prism-backup\)\n/);
@@ -272,7 +272,7 @@ test('--dry-run prints every step under its agent and writes nothing', () => {
 test('prism-code setup --dry-run reads the home it is given, and refuses an unknown option', () => {
   const home = fixtureHome({ '.cursor': null });
   const env = { PATH: '', Path: '', SystemRoot: process.env.SystemRoot ?? '', HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), XDG_CONFIG_HOME: join(home, '.config'), XDG_DATA_HOME: join(home, '.local', 'share'), PRISM_HOME: join(home, '.prism') };
-  const result = spawnSync(process.execPath, [bin, 'setup', '--dry-run'], { encoding: 'utf8', env });
+  const result = spawnSync(process.execPath, [bin, 'setup', '--dry-run', '--hosted'], { encoding: 'utf8', env });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /\n {2}cursor {10}would configure {5}/);
   // A machine with the Hologram app already has a holo:// handler, which setup leaves alone.
@@ -311,20 +311,20 @@ test('setup removes a skill it installed and prism replaces, and never one it di
     '.agents/skills/prism-sdk/SKILL.md': 'the user wrote this\n',
   });
   assert.deepEqual(RETIRED_SKILLS, ['prism-sdk']);
-  const plan = planSetup({ skills: bundledSkills() }, context('linux', home));
+  const plan = planSetup({ hosted: true, skills: bundledSkills() }, context('linux', home));
   assert.deepEqual(plan.skills.steps.filter((s) => s.kind === 'remove').map((s) => s.path), [join(home, '.claude', 'skills', 'prism-sdk')]);
   assert.match(plan.skills.detail, /; replaces prism-sdk/);
   applySetup(plan, recorder());
   assert.equal(existsSync(join(home, '.claude', 'skills', 'prism-sdk')), false);
   assert.equal(readFileSync(join(home, '.agents', 'skills', 'prism-sdk', 'SKILL.md'), 'utf8'), 'the user wrote this\n');
   assert.ok(existsSync(join(home, '.claude', 'skills', 'prism', 'SKILL.md')));
-  assert.equal(planSetup({ skills: bundledSkills() }, context('linux', home)).skills.status, 'already');
+  assert.equal(planSetup({ hosted: true, skills: bundledSkills() }, context('linux', home)).skills.status, 'already');
 });
 
 test('skills go to ~/.claude/skills for Claude Code and ~/.agents/skills for Codex, Cursor and VS Code, once', () => {
   const home = fixtureHome({ '.claude.json': '{}', '.cursor': null });
   const fetched = { skills: [{ name: 'prism-new-app', markdown: SKILL, digest: sha(SKILL), url: `${ORIGIN}prism-new-app/SKILL.md` }] };
-  const plan = planSetup({ skills: fetched }, context('linux', home));
+  const plan = planSetup({ hosted: true, skills: fetched }, context('linux', home));
   assert.equal(plan.skills.status, 'configure');
   assert.equal(plan.skills.detail, `prism-new-app in ${join(home, '.claude', 'skills')}, ${join(home, '.agents', 'skills')}`);
   applySetup(plan, recorder());
@@ -332,26 +332,26 @@ test('skills go to ~/.claude/skills for Claude Code and ~/.agents/skills for Cod
     assert.equal(readFileSync(join(dir, 'prism-new-app', 'SKILL.md'), 'utf8'), SKILL);
     assert.deepEqual(json(join(dir, 'prism-new-app', '.prism-code.json')), { source: `${ORIGIN}prism-new-app/SKILL.md`, digest: sha(SKILL) });
   }
-  assert.equal(planSetup({ skills: fetched }, context('linux', home)).skills.status, 'already');
-  assert.match(formatSetup(planSetup({ skills: fetched }, context('linux', home))), /\n {2}skills {10}already installed {3}prism-new-app in /);
+  assert.equal(planSetup({ hosted: true, skills: fetched }, context('linux', home)).skills.status, 'already');
+  assert.match(formatSetup(planSetup({ hosted: true, skills: fetched }, context('linux', home))), /\n {2}skills {10}already installed {3}prism-new-app in /);
   // A newer skill replaces the one prism-code wrote.
   const newer = { skills: [{ ...fetched.skills[0], markdown: `${SKILL}More.\n`, digest: sha(`${SKILL}More.\n`) }] };
-  assert.equal(planSetup({ skills: newer }, context('linux', home)).skills.steps.length, 4);
+  assert.equal(planSetup({ hosted: true, skills: newer }, context('linux', home)).skills.steps.length, 4);
   // Only Cursor found: only the shared folder.
   const cursorOnly = fixtureHome({ '.cursor': null });
-  assert.match(planSetup({ skills: fetched }, context('linux', cursorOnly)).skills.detail, /in [^,]*\.agents[\\/]skills$/);
+  assert.match(planSetup({ hosted: true, skills: fetched }, context('linux', cursorOnly)).skills.detail, /in [^,]*\.agents[\\/]skills$/);
 });
 
 test('a skill folder prism-code did not write is left alone, and no skills is not an error', () => {
   const home = fixtureHome({ '.claude.json': '{}', '.claude/skills/prism-new-app/SKILL.md': 'my own notes\n' });
   const fetched = { skills: [{ name: 'prism-new-app', markdown: SKILL, digest: sha(SKILL), url: `${ORIGIN}prism-new-app/SKILL.md` }] };
-  const plan = planSetup({ agent: 'claude-code', skills: fetched }, context('linux', home));
+  const plan = planSetup({ hosted: true, agent: 'claude-code', skills: fetched }, context('linux', home));
   assert.equal(plan.skills.status, 'conflict');
   assert.deepEqual(plan.skills.steps, []);
   assert.match(plan.skills.detail, /left alone, not written by prism-code: .*prism-new-app[\\/]SKILL\.md$/);
-  assert.deepEqual(planSetup({ skills: { error: 'skill/SKILL.md: ENOENT' } }, context('linux', home)).skills, { status: 'unreadable', detail: 'not read: skill/SKILL.md: ENOENT', steps: [] });
-  assert.equal(planSetup({ skills: fetched }, context('linux', fixtureHome())).skills.status, 'not-found');
-  assert.equal(planSetup({}, context('linux', home)).skills, undefined, 'without fetched skills there is no row');
+  assert.deepEqual(planSetup({ hosted: true, skills: { error: 'skill/SKILL.md: ENOENT' } }, context('linux', home)).skills, { status: 'unreadable', detail: 'not read: skill/SKILL.md: ENOENT', steps: [] });
+  assert.equal(planSetup({ hosted: true, skills: fetched }, context('linux', fixtureHome())).skills.status, 'not-found');
+  assert.equal(planSetup({ hosted: true }, context('linux', home)).skills, undefined, 'without fetched skills there is no row');
 });
 
 test('setup ends with what to do next: sign in when needed, restart the agent it changed, then the first sentence', () => {
@@ -369,4 +369,18 @@ test('setup ends with what to do next: sign in when needed, restart the agent it
   assert.match(nextSteps(missing)[0], /^Install an agent, such as Claude Code \(https:/);
   assert.equal(formatNext(['one', 'two']), 'next\n  1. one\n  2. two\n');
   assert.equal(formatNext([]), '');
+});
+
+// Planted defect G9: setup used to add the hosted lexlean server to every agent it found.
+test('without --hosted, setup adds no hosted server to any agent; the local prism server is still added', () => {
+  const home = fixtureHome({ '.codex/config.toml': 'model = "o3"\n', '.config/Code/User': null, '.config/Claude': null });
+  const plan = planSetup({}, context('linux', home));
+  assert.equal(plan.hosted, false);
+  for (const row of plan.agents) {
+    assert.notEqual(row.status, 'configure', `${row.agent} gets no hosted server`);
+    for (const step of row.steps ?? []) assert.doesNotMatch(JSON.stringify(step), /mcp\.uor\.foundation/);
+  }
+  assert.ok(plan.agents.some((row) => row.status === 'local-only'));
+  assert.ok((plan.journey ?? []).some((row) => row.status === 'configure'), 'the local prism server is added');
+  assert.match(formatSetup(plan), /not added; it stores models unlisted, not privately \(pass --hosted to add it\)/);
 });

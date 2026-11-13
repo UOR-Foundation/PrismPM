@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { userInfo } from 'node:os';
-import { DEFAULT_TEMPLATE, TEMPLATES, bindCommands, nameFromDirectory, nextSteps, planInit } from './init.mjs';
+import { DEFAULT_TEMPLATE, NOT_AN_APP, TEMPLATES, bindCommands, nameFromDirectory, nextSteps, planInit } from './init.mjs';
 import { PrismCodeError } from './errors.mjs';
 import { cacheVolumeName } from './docker.mjs';
 import { hostDocker } from './host.mjs';
@@ -109,6 +109,7 @@ export async function runInit(argv, { out = process.stdout, err = process.stderr
 
   if (!options['sdk-image']) {
     out.write(`Not bound to an SDK. No PrismPM SDK release exists yet; bind an image with\n  prism-code init ${positional[0] ?? '.'} --sdk-image <NAME@sha256:DIGEST> --force\n`);
+    out.write(`${NOT_AN_APP}\n`);
     return 0;
   }
 
@@ -128,7 +129,7 @@ export async function runInit(argv, { out = process.stdout, err = process.stderr
     return error.code === 'docker.missing' ? 69 : 2;
   }
   if (env.PRISM_CODE_DRY_RUN) {
-    out.write(`${show(commands.standards)} > standards.lock\n${show(commands.update)}\n`);
+    out.write(`${show(commands.standards)} > standards.lock\n${show(commands.lock)}\n${show(commands.update)}\n`);
     return 0;
   }
 
@@ -145,6 +146,13 @@ export async function runInit(argv, { out = process.stdout, err = process.stderr
   writeFileSync(standardsPath, standards.stdout);
   out.write('  standards.lock     from the SDK image\n');
 
+  // The template's lexlean.lock can predate the image's compiler (LLC0102), so the image relocks it first.
+  const lock = await docker(host, commands.lock);
+  if (lock.code !== 0) {
+    err.write(`init.bind: lexlean lock exited ${lock.code} in the SDK image; the project is scaffolded but not bound\n`);
+    return lock.code === 69 ? 69 : 2;
+  }
+  out.write('  lexlean.lock       relocked by the image\'s compiler\n');
   const update = await docker(host, commands.update);
   if (update.code !== 0) {
     err.write(`init.bind: prismpm update --toolchain exited ${update.code}; the project is scaffolded but prismpm.lock was not written\n`);

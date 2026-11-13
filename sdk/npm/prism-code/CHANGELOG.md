@@ -10,6 +10,23 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ### Breaking Changes
 
+- Every app carries a seal: the UOR content address of the `prism/spec.json` it was built from (`blake3:<hex>`, the kappa its canonical bytes hash to, the same name a holo labels its own blobs with). It rides in the model's description, so it is inside the holo's model blob, whose label is that blob's content address and whose bytes the footer covers; changing the seal changes the holo and the integrity check refuses it. `prism-code check <holo> --spec <file>` holds an app to a spec and fails when it was built from another, or carries no seal; with no flag, a `spec.json` beside the holo is reported. A build whose holo seals another spec is refused.
+- `prism/spec.json` is the one input of every Prism app, and the model is rendered from it alone. An agent writes or edits that JSON; Prism reads it strictly, keeps it as canonical JSON (RFC 8785) and records its SHA-256 as `specHash`. The same JSON always gives the same LexLean, byte for byte, whatever the clock, time zone, locale or working directory.
+- Reading a spec refuses what it used to accept: a member `prism/spec/1` does not define (`json.member`), a duplicate key (`json.duplicate`), a number that is not a whole number within plus or minus 2^53 (`json.number`), and text that is not JSON (`json.syntax`), each naming its JSON path. `prism_spec` holds an agent's spec to the same rules, so a tool call and a hand-edited file are refused alike.
+- A model that is not what `prism/spec.json` renders to is refused at build, naming the files that differ. The model is generated, never edited.
+- `prism_start` and `prism_spec` read `prism/spec.json` each call: an edit an agent made to that file directly becomes the spec, reported as a note. A `spec.json` that does not read blocks `prism_prove` and `prism_build` with its refusal, instead of building from a stale session.
+- `spec.json` holds canonical bytes, not pretty-printed JSON. A tool that read the old formatting still parses it; nothing else changes.
+
+- `setup` adds the hosted lexlean server (`https://mcp.uor.foundation/`) to agents only with `--hosted`. Without it, each agent gets the local Prism server and nothing else; an entry already there is left as it is.
+- A proof may rest only on `propext`, `Quot.sound` and `Classical.choice`. The guided path used to record whatever axiom set Lean observed and prove again, so a proof resting on `sorryAx` or `Lean.ofReduceBool` (native_decide) passed; it is now refused, naming the declaration and the axiom.
+- `init --sdk-image` relocks the template's LexLean project with the image's own compiler before `prismpm update`, so a template lock older than the image no longer fails with `LLC0102`. Every bind run has `--network none`. `prismpm update --toolchain` still reads the image's index from its registry, so binding is not yet fully offline.
+- The build result says where Lean proved the model (this machine, the hosted verifier or the GitHub gate), and claims nothing when no proof of the model is recorded. Acceptance vectors are reported as tested, never as verified.
+
+- One canonical path for every app. `build --unstable-author` and `check <holo> --unstable-author`, where an agent wrote the model, are removed; `build --unstable-author` now exits 64 with `unknown option --unstable-author`. An app comes from one `prism/spec/1` spec through the guided path.
+- Nothing is sent to the hosted verifier unless asked. `verify --lean` and `build --check` run in the SDK image on this machine and use the hosted verifier only with `--hosted`; with no lockfile they exit 64 and name `--hosted`. The guided path proves locally unless `PRISM_CODE_TIER=hosted`, and builds locally unless the caller names a repository or `remote: github`.
+- An integrity failure fails every policy, P0 included. `check` adds the reason `policy.integrity` and exits 1 for a damaged holo whatever the policy's minimum; `run-policy.json` with `minimum: P0` no longer passes one.
+- The spec is never altered. Text that the model or its documents cannot carry as written is refused as `text.character`, `text.length` or `text.space`, naming the character, its code point and its JSON path, instead of being stripped, collapsed or cut.
+
 - The developer view's glossary (#346, #347) renames two spellings of the command line, each kept as a deprecated alias through 0.8 that prints one warning naming the new term and is removed in 0.9.0:
 
   | Was | Now | Why |
@@ -45,6 +62,7 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `prism-code system info|version|events|df|prune` and `prism-code auth login|logout` (#446, #447, experimental), with `login` and `logout` as top-level spellings. `info` and `version` name the toolchain and builder image the project's `prismpm.lock` pins; `events` reads create, start, die and destroy from the container store, since there is no daemon, and follows it until `--until`; `prune` asks first unless `--force`. `login` checks the credential with the registry (`GET /v2/`) before storing it where Docker would, and reads the password only from `--password-stdin` or a prompt that does not echo: `-p` and `--password` are refused, and nothing printed or thrown holds the secret. Every verb takes `--json`.
 
 ### Bugs Fixed
+- A holo with one byte altered is refused as an integrity failure at load and at `run`, under every policy, before anything inside it is read. Before, a flip that left a text section invalid UTF-8 escaped as a raw `TypeError` (exit 70), and a flip inside a document or the manifest was named as that document's error. Every such refusal is now `digest_mismatch` with check `holo.integrity`, its message starts with `integrity failure:`, and `run` exits 1; only damage to the header or the section table, which locate the footer, is still refused structurally.
 - A built holo says plainly that it does not carry its proof (#582). `prism_build` and its run note now say that the holo holds no signed proof statement, so the default `prism-code check` reports P0. The verdict's reasons for a holo with no attestation section no longer cite closed issues #266, #267 and #284, and now read as the Rust verifier's do: "The holo carries no provenance statement." and the same for proof and replay.
 
 

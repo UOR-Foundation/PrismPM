@@ -14,7 +14,7 @@ export { workspaceVersion };
 import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, verificationArguments } from './sdk-candidate-sbom.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
-const imageNames = ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles'];
+const imageNames = ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles', 'sdk-build'];
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const buildStages = ['images', 'native', 'reproducibility', 'installed-sdk'];
 const ociNeeds = ['gate', 'factory', ...buildStages];

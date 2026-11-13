@@ -10,14 +10,15 @@ import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
-import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
-import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
+import { bind, isBound, modelMismatches, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
+import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, forbiddenAxioms, forbiddenMessage, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
-import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
+import { TEMPLATE_REPOSITORY, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
 import { gapLedger, propertyShape } from '../gaps.mjs';
+import { checkSpecBinding } from './binding.mjs';
 
 const PROVE_SCRIPT_FULL = [
   'echo "@@step prelock"; lexlean lock 2>&1; code=$?; echo "@@exit prelock $code"; [ $code -eq 0 ] || exit $code',
@@ -33,27 +34,21 @@ const MAX_AXIOM_ROUNDS = 8;
 const imageFor = (dir, session) => (isBound(dir) ? imageOf(dir) : session.image ?? DEFAULT_SDK_IMAGE);
 
 /**
- * Where Lean proves the app: `local` in the SDK image when Docker and the image
- * are on this machine, else `hosted` on the UOR MCP server. `PRISM_CODE_TIER`
- * set to `local` or `hosted` chooses.
+ * Where Lean proves the app: always `local`, in the SDK image on this machine.
+ * Only `PRISM_CODE_TIER=hosted` sends the model to the UOR MCP server, which
+ * stores it unlisted, not privately; Prism never chooses that on its own.
  */
 export function proveWhere(dir, session, { env = process.env } = {}) {
-  if (env.PRISM_CODE_TIER === 'local' || env.PRISM_CODE_TIER === 'hosted') return env.PRISM_CODE_TIER;
-  if (resolveDocker().error) return 'hosted';
-  return hasImage(imageFor(dir, session)) ? 'local' : 'hosted';
+  return env.PRISM_CODE_TIER === 'hosted' ? 'hosted' : 'local';
 }
 
 /**
- * Where the app is built: `local` in the SDK image when Docker and the image
- * are on this machine, else `github` on the repository's own Actions when a
- * GitHub token is there, else `local`, which downloads the image first.
- * `remote` names one; `PRISM_CODE_TIER=local` chooses local.
+ * Where the app is built: always `local`, in the SDK image on this machine,
+ * which is downloaded first when it is missing. Only `remote: 'github'` (the
+ * caller named a repository or asked for GitHub) builds on GitHub Actions.
  */
-export function buildWhere(dir, session, { env = process.env, remote = null, docker = resolveDocker, image = hasImage, github = canBuildOnGitHub } = {}) {
-  if (remote === 'github' || remote === 'local') return remote;
-  if (env.PRISM_CODE_TIER === 'local') return 'local';
-  if (!docker().error && image(imageFor(dir, session))) return 'local';
-  return github({ env }) ? 'github' : 'local';
+export function buildWhere(dir, session, { remote = null } = {}) {
+  return remote === 'github' ? 'github' : 'local';
 }
 
 /**
@@ -66,7 +61,7 @@ export async function prepare(dir, session, log, { pull = false } = {}) {
   if (d.error) return { ok: false, message: d.error };
   const image = imageFor(dir, session);
   if (!hasImage(image)) {
-    if (!pull) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code@latest setup --pull\` in a terminal to download it (about ${SDK_IMAGE_DOWNLOAD}), or leave PRISM_CODE_TIER unset so the proof runs hosted.\n  ${image}` };
+    if (!pull) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code@latest setup --pull\` in a terminal to download it (about ${SDK_IMAGE_DOWNLOAD}), or set PRISM_CODE_TIER=hosted to prove on the hosted verifier, which stores the model unlisted, not privately.\n  ${image}` };
     log(`The SDK image is not on this machine yet. Downloading it once now, about ${SDK_IMAGE_DOWNLOAD}; this can take a while.`);
     const pulled = await docker(['pull', image], { onLine: (l) => /^(Status|Digest|[0-9a-f]{12}: Pull complete)/.test(l) && log(l) });
     if (pulled.code !== 0) return { ok: false, message: `Could not download the SDK image:\n${tail(pulled.output)}` };
@@ -107,6 +102,8 @@ export async function prove(dir, session, { log = () => {}, overwrite = false, w
     const diagnostics = parseDiagnostics(run.output);
     const failed = steps(run.output).find((s) => s.code !== 0);
     const fixes = axiomViolations(diagnostics);
+    // Planted defect G5: an observed sorryAx or Lean.ofReduceBool is refused, never recorded as the expected set.
+    if (forbiddenAxioms(fixes).length) return { ok: false, message: forbiddenMessage(forbiddenAxioms(fixes)) };
     if (fixes.length && diagnostics.every((d) => d.code === 'LLV7005')) {
       for (const f of fixes) session.axioms[f.name] = f.axioms;
       continue;
@@ -186,6 +183,7 @@ async function proveHosted(dir, session, { log, client, gaps }) {
     }
     const diagnostics = outcome.diagnostics.map(fromHosted);
     const fixes = axiomViolations(diagnostics);
+    if (forbiddenAxioms(fixes).length) return { ok: false, message: forbiddenMessage(forbiddenAxioms(fixes)) };
     if (fixes.length && diagnostics.filter((d) => !isWarning(d)).every((d) => d.code === 'LLV7005')) {
       for (const f of fixes) session.axioms[f.name] = f.axioms;
       continue;
@@ -218,7 +216,8 @@ function explainFailure(dir, session, { run, diagnostics, failed, seconds, gaps 
       if (!failing.includes(property)) failing.push(property);
     } else if (d.code === 'LLV7005') {
       const fix = axiomViolations([d])[0];
-      if (fix) session.axioms[fix.name] = fix.axioms;
+      if (fix && fix.forbidden.length === 0) session.axioms[fix.name] = fix.axioms;
+      else if (fix) other.push(d);
     } else other.push(d);
   }
   session.status.properties = Object.fromEntries(spec.properties.map((p) => [p.id, failing.includes(p) ? 'failing' : 'unknown']));
@@ -263,6 +262,11 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
     session.status.lastSpec = JSON.stringify(session.spec);
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
+  }
+  // The one path: the model built is exactly what spec.json renders to, byte for byte. Anything else is refused.
+  const mismatched = modelMismatches(dir, { axioms: session.axioms ?? {} });
+  if (mismatched.length) {
+    return { ok: false, stage: 'build', mismatched, message: `model does not match spec.json: ${mismatched.join(', ')}. The model is generated from prism/spec.json alone; change spec.json (or the spec through prism_spec) and build again, or pass overwrite to regenerate the model from it.` };
   }
   const where = buildWhere(dir, session, { env, remote: repository && !remote ? 'github' : remote });
   if (where === 'github') return buildRemote(dir, session, { log, root: root ?? defaultRoot(dir), repository });
@@ -449,8 +453,26 @@ async function buildFromTemplate(dir, session, { log, repository, clone, create 
   return built(dir, session, holo, seconds, { where: 'github', repository, live, run: runs['pages.yml'].html_url, gate: runs['bootstrap.yml'].html_url, fingerprint: null, signer: `the pages workflow of ${repository}` });
 }
 
+/**
+ * Where Lean checked the proofs of what was built, said plainly: proved names
+ * only a run the kernel finished, and says where it ran. The acceptance
+ * vectors are tested, never proved.
+ */
+export function proofSentence(session, proof) {
+  if (proof.where === 'github') return 'Lean checked every property in the GitHub build gate, not on this machine.';
+  const proved = session.status.proved;
+  if (!proved || proved.modelSha !== session.status.modelSha) return 'No proof of this model is recorded, so nothing about its rules is proved.';
+  if (proved.where === 'hosted') return 'Lean proved every property on the hosted verifier, not on this machine; that proof is trusted, not local.';
+  return 'Lean proved every property on this machine (lexlean verify --all) before the build.';
+}
+
 /** Record a built holo, replay its vectors here and say how to run it. `proof` says where it was built. */
 async function built(dir, session, holo, seconds, proof) {
+  // What the holo says about the spec it came from. A holo that names another spec is not this app.
+  const binding = checkSpecBinding(new Uint8Array(readFileSync(holo)), session.spec);
+  if (binding.reason === 'mismatch') {
+    return { ok: false, stage: 'build', spec: binding, message: `The built holo does not match prism/spec.json. ${binding.message}` };
+  }
   const app = await fromFile(holo);
   const acceptance = await app.acceptance();
   session.status.holo = holo;
@@ -471,17 +493,18 @@ async function built(dir, session, holo, seconds, proof) {
     stage: 'build',
     seconds,
     holo,
+    spec: { sealed: binding.ok, specAddress: binding.specAddress, ...(binding.ok ? {} : { note: binding.message }) },
     where: proof.where,
     ...(proof.live ? { live: proof.live } : {}),
     ...(proof.where === 'github' ? { repository: `https://github.com/${proof.repository}`, actions: proof.run, fingerprint: proof.fingerprint ?? app.identities?.archiveFingerprint ?? null } : {}),
     vectors: { passed: acceptance.passed, total: acceptance.total },
     message: ok
-      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built and verified in ${seconds} s${where}: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
+      ? `${proof.live ? `Live at ${proof.live}. ` : ''}Built in ${seconds} s${where}. ${proofSentence(session, proof)} Tested: ${acceptance.passed} of ${acceptance.total} acceptance vectors pass in the built guest. The holo does not carry the proof: it has no signed proof statement, so the default \`prism-code check\` reports P0; run it with the run policy below.`
       : `Built, but ${acceptance.failed.length} of ${acceptance.total} acceptance vectors fail in the guest. That is a Prism bug: the evaluator and the model disagree.`,
     run: {
       serve: `npx prism-code run "${rel}" --policy "${policy}" --port 8080`,
       once: `npx prism-code run "${rel}" "${exampleRequest(session.spec)}" --policy "${policy}"`,
-      note: 'The run policy accepts P0. The proofs were checked when the app was built, but the holo does not carry them: it holds no signed proof statement, so `prism-code check` under the default policy (P2) reports P0 and fails (#582).',
+      note: `The run policy accepts P0. ${proofSentence(session, proof)} The holo does not carry that proof: it holds no signed proof statement, so \`prism-code check\` under the default policy (P2) reports P0 and fails (#582).`,
     },
   };
 }

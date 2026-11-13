@@ -11,6 +11,17 @@ vv:
 vv-part part:
     ./scripts/vv.sh vv-part {{part}}
 
+# Planted defects: a gate counts only when a deliberate defect makes it fail.
+# G2 text refusals, G3 statement time, G5 axioms outside Lean's three, G7
+# integrity under every policy (P0 included), G8 the removed author route, G9
+# nothing sent to the hosted verifier by default, B3 init relocks offline.
+defects:
+    cd sdk/npm/prism-code && node --test test/defects.test.mjs
+    cd sdk/npm/prism-code && node --test --test-name-pattern 'never recorded|where Lean proved|without --hosted|three docker commands' test/journey-hosted.test.mjs test/setup.test.mjs test/init.test.mjs
+    cd sdk/npm/prism-code && node --test --test-name-pattern 'drops to P0 and fails the default|tampered blob is a failed verdict|--help after a verb|G9|routing' test/check.test.mjs test/verify.test.mjs test/hosted.test.mjs test/journey-hosted.test.mjs
+    cd sdk/npm/verify && node --test --test-name-pattern 'minimum is P0|integrity fails it|reported as holo.integrity' test/policy.test.mjs test/verify.test.mjs
+    cargo test -p prismpm --lib -- inspect::verdict holo::provenance
+
 # Validate claim registers and spec links
 validate:
     cargo run --package xtask -- validate

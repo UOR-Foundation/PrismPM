@@ -338,26 +338,6 @@
     },
     {
       "kind": "flag",
-      "place": "--author-command",
-      "name": "author-command"
-    },
-    {
-      "kind": "flag",
-      "place": "--author-max-tokens",
-      "name": "author-max-tokens"
-    },
-    {
-      "kind": "flag",
-      "place": "--author-model",
-      "name": "author-model"
-    },
-    {
-      "kind": "flag",
-      "place": "--author-timeout",
-      "name": "author-timeout"
-    },
-    {
-      "kind": "flag",
       "place": "--build",
       "name": "build"
     },
@@ -483,11 +463,6 @@
     },
     {
       "kind": "flag",
-      "place": "--max-iterations",
-      "name": "max-iterations"
-    },
-    {
-      "kind": "flag",
       "place": "--model",
       "name": "model"
     },
@@ -500,11 +475,6 @@
       "kind": "flag",
       "place": "--no-attestations",
       "name": "no-attestations"
-    },
-    {
-      "kind": "flag",
-      "place": "--no-cache",
-      "name": "no-cache"
     },
     {
       "kind": "flag",
@@ -573,11 +543,6 @@
     },
     {
       "kind": "flag",
-      "place": "--reference",
-      "name": "reference"
-    },
-    {
-      "kind": "flag",
       "place": "--remote",
       "name": "remote"
     },
@@ -610,6 +575,11 @@
       "kind": "flag",
       "place": "--since",
       "name": "since"
+    },
+    {
+      "kind": "flag",
+      "place": "--spec",
+      "name": "spec"
     },
     {
       "kind": "flag",
@@ -665,11 +635,6 @@
       "kind": "flag",
       "place": "--unsigned",
       "name": "unsigned"
-    },
-    {
-      "kind": "flag",
-      "place": "--unstable-author",
-      "name": "unstable-author"
     },
     {
       "kind": "flag",

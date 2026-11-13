@@ -333,12 +333,10 @@ const vars = resolveVariables(manifest, process.env);
 `@prism-code/spec`'s `schemas/manifest/manifest-v1.schema.json` and
 `schemas/capabilities/capabilities-v1.schema.json`.
 
-### Author from examples and develop locally
+### Develop locally
 
-`build --unstable-author` has an agent write `model/` from `examples/`,
-`intent.md`, `types/`. Toolchain, kernel and examples gate the build;
-unchanged specs never call the agent again. `check <holo> --unstable-author`
-checks that the holo came from its spec.
+An agent never writes the model: `build --unstable-author` was removed. Every
+app comes from one `prism/spec/1` spec through the guided path, `prism-code mcp`.
 
 ```sh
 npx prism-code dev
