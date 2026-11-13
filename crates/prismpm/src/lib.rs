@@ -42,6 +42,8 @@ mod process_resources;
 mod reference;
 mod release_verification;
 pub mod replay;
+#[cfg(test)]
+mod resource_adapter;
 pub mod sdk;
 pub mod server_build;
 pub mod server_host;
