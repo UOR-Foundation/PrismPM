@@ -8,6 +8,11 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 
 ## [Unreleased]
 
+### Features Added
+
+- `prism/spec/2`, the JSON spec of an app that keeps state between steps (#664, `docs/proposals/664-stateful-spec.md`, experimental). Bounded `state` with a start, `actions` with inputs and ordered rules whose `change` sets, adds to or subtracts from the state, an `otherwise` per action, properties over every reachable state, and examples as sessions. It is read as strictly as `prism/spec/1`, with its own registered refusals (`STATEFUL_REFUSALS`), renders to the same bytes from the same JSON, and carries the same seal, `[prism/spec/2 blake3:<hex>]`, so `prism-code check --spec` holds a stateful app to its JSON. Lean proves the bounds and each property by induction over a session's steps, every theorem `linear_arithmetic`. A session runs on the text profile as one request, its steps separated by `;`, answered with the last outcome and the state. `prism_spec` takes either schema; a model still writes only JSON. A stateful app builds on this machine only for now: the GitHub template is for decision apps.
+- An unknown `schema` in a spec is refused as `spec.schema`, naming both schemas, rather than as an unknown member.
+
 ## [0.8.0] - 2026-11-13
 
 ### Breaking Changes

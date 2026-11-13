@@ -24,6 +24,7 @@ import {
   unreachableRules,
   validateSpec,
 } from './spec.mjs';
+import { STATEFUL_SCHEMA, statefulCounterexample } from './stateful.mjs';
 
 export const STEPS = ['purpose', 'fields', 'outcomes', 'rules', 'properties', 'examples', 'review'];
 const NONE = /^\s*(none|no|nothing|skip|n\/a|-)\s*\.?\s*$/i;
@@ -124,6 +125,7 @@ export function describeConditionPlain(c) {
  * what gets proved; when the whole spec is long, the rules are counted instead.
  */
 export function summary(spec) {
+  if (spec?.schema === STATEFUL_SCHEMA) return statefulSummary(spec);
   if (!spec?.fields) return '';
   const because = (why) => (why ? `, because ${why}` : '');
   const purpose = [`${spec.title}: ${spec.purpose}`];
@@ -138,8 +140,26 @@ export function summary(spec) {
   return [...purpose, ...properties, ...shown, ...tail].join('\n');
 }
 
-/** Answers that reproduce a whole spec, so a spec written as data joins the same flow. */
+/** A stateful spec on one screen: its properties first, then the state, the actions and the answers. */
+function statefulSummary(spec) {
+  const because = (why) => (why ? `, because ${why}` : '');
+  const value = (f) => (f.kind === 'choice' ? f.values.join('|') : `number ${f.min ?? 0}..${f.max}`);
+  return [
+    `${spec.title}: ${spec.purpose}`,
+    ...spec.properties.map((p) => `${p.id}: ${p.says.replace(/[.]$/, '')}${because(p.why)} (to be proved)`),
+    `State: ${spec.state.map((f) => `${f.name} (${value(f)}, starts ${f.start}${f.means ? `; ${f.means}` : ''})`).join(', ')}`,
+    ...spec.actions.map((a) => `Action ${[a.name, ...a.inputs.map((f) => `<${f.name}: ${f.kind === 'choice' ? f.values.join('|') : `number${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''}`}>`)].join(' ')}: ${[...a.rules.map((r) => `${r.id} ${r.says.replace(/[.]$/, '')}`), `otherwise ${a.otherwise}${because(a.otherwiseWhy)}`].join('; ')}`),
+    `Answers: ${spec.outcomes.map((o) => (spec.meanings?.[o] ? `${o} (${spec.meanings[o]})` : o)).join(', ')}, or invalid; each with the state after it`,
+    ...(spec.limits ? [`Out of scope: ${spec.limits.map((l) => l.replace(/[.]$/, '')).join('; ')}`] : []),
+  ].join('\n');
+}
+
+/**
+ * Answers that reproduce a whole spec, so a spec written as data joins the same flow.
+ * A stateful spec (prism/spec/2) has no line answers: it is kept whole, as `stateful`.
+ */
 export function answersFromSpec(input) {
+  if (input?.schema === STATEFUL_SCHEMA) return { stateful: validateSpec(input) };
   const spec = validateSpec(input);
   const bound = (f) => (f.min !== undefined && f.max !== undefined ? ` ${f.min}..${f.max}` : f.min !== undefined ? ` at least ${f.min}` : f.max !== undefined ? ` at most ${f.max}` : '');
   return {
@@ -195,6 +215,7 @@ function withAbout(spec, about) {
  * `issue` explains why an answered step must be asked again.
  */
 export function compile(answers) {
+  if (answers.stateful) return compileStateful(answers);
   const spec = {};
   const notes = [];
   for (const step of STEPS) {
@@ -267,6 +288,31 @@ export function compile(answers) {
   return { spec, step: 'ready', issue: null, notes };
 }
 
+/**
+ * A stateful spec, kept whole: it was read strictly when it was passed, so
+ * what is left is to look for a property the rules break, then the review.
+ */
+function compileStateful(answers) {
+  let spec;
+  try {
+    spec = validateSpec(answers.stateful);
+  } catch (error) {
+    if (!(error instanceof SpecError)) throw error;
+    return { spec: answers.stateful, step: 'review', issue: error.message, refusal: error.rule, notes: [] };
+  }
+  const notes = spec.properties.length ? [] : ['No property is stated: Lean proves only that the state stays within its bounds; the acceptance vectors test the rest.'];
+  for (const p of spec.properties) {
+    const found = statefulCounterexample(spec, p);
+    if (found.steps !== null) {
+      const how = p.action ? `ends with ${p.action} answering ${found.outcome} (${found.rule ?? 'otherwise'})` : `reaches the state ${found.state}`;
+      return { spec, step: 'properties', issue: `${p.id} does not hold. The session \`${found.steps.join(';')}\` ${how}. Change a rule or restate the property, and pass the spec to prism_spec again.`, notes };
+    }
+  }
+  if (answers.review === undefined || answers.review === null || String(answers.review).trim() === '') return { spec, step: 'review', issue: null, notes };
+  if (!YES.test(String(answers.review))) return { spec, step: 'review', issue: 'Tell me what to change, and pass the changed spec to prism_spec.', notes };
+  return { spec, step: 'ready', issue: null, notes };
+}
+
 /** The parts of a spec a round trip must give back; ids and the sentences describing rules are derived. */
 export const ROUND_TRIP_PARTS = Object.freeze(['name', 'title', 'purpose', 'fields', 'outcomes', 'rules', 'otherwise', 'properties', 'examples']);
 const part = (spec, key) => {
@@ -285,6 +331,8 @@ const part = (spec, key) => {
  * are compared.
  */
 export function roundTrip(input) {
+  // A stateful spec is its own answer: it is kept whole, so there is nothing to lose.
+  if (input?.schema === STATEFUL_SCHEMA) return null;
   const spec = validateSpec(input);
   const answers = { ...answersFromSpec(spec), review: 'yes' };
   const back = compile(answers);
@@ -297,6 +345,10 @@ export function roundTrip(input) {
 /** What the agent shows next: the question, any issue, notes, and progress. */
 export function nextTurn(answers) {
   const { spec: bare, step, issue, refusal, notes } = compile(answers);
+  if (answers.stateful) {
+    const full = step === 'review' && issue && refusal ? null : bare;
+    return { step, ...(issue ? { issue } : {}), ...(notes.length ? { notes } : {}), ...question(step === 'properties' ? 'review' : step, full ?? {}), progress: step === 'ready' ? 'the stateful spec is approved' : 'the stateful spec is drafted', spec: full, refusal: refusal ?? null };
+  }
   const spec = withAbout(bare, answers.about);
   const done = STEPS.indexOf(step) === -1 ? STEPS.length : STEPS.indexOf(step);
   const full = (() => {

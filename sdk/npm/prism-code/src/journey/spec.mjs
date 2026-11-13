@@ -13,6 +13,8 @@
  * and it mirrors the model's semantics exactly (see render.mjs).
  */
 
+import { STATEFUL_SCHEMA, validateStatefulSpec } from './stateful.mjs';
+
 export const SPEC_SCHEMA = 'prism/spec/1';
 export const INVALID = 'invalid';
 /** A number is at most 18 decimal digits, so every value fits the guest's 64-bit arithmetic with room to spare. */
@@ -216,8 +218,10 @@ const withWhy = (item, why, where) => (prose(why, where) ? { ...item, why } : it
 
 /** Validate a whole spec; return it normalized. Throws `SpecError` naming the first problem. */
 export function validateSpec(input) {
+  // A stateful spec (prism/spec/2, stateful.mjs) is read by its own rules.
+  if (input?.schema === STATEFUL_SCHEMA) return validateStatefulSpec(input);
   const spec = structuredClone(input ?? {});
-  if (spec.schema !== undefined && spec.schema !== SPEC_SCHEMA) refuse(`schema must be ${SPEC_SCHEMA}`, 'schema', 'spec.schema');
+  if (spec.schema !== undefined && spec.schema !== SPEC_SCHEMA) refuse(`schema must be ${SPEC_SCHEMA}, or ${STATEFUL_SCHEMA} for an app that keeps state`, 'schema', 'spec.schema');
   spec.schema = SPEC_SCHEMA;
   if (!spec.name) spec.name = nameFromPurpose(spec.purpose);
   if (!NAME.test(spec.name)) refuse('name must be lower case letters, digits and hyphens, starting with a letter', 'name', 'spec.name');
