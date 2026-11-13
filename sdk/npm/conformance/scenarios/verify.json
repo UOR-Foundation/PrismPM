@@ -110,12 +110,12 @@
       "expect": { "ok": false, "error": { "code": "verification_failed", "check": "archive.table", "verdict": { "$absent": true } } }
     },
     {
-      "id": "verify.damage.p0-has-no-requirement",
-      "title": "P0 asks nothing of a holo, so damage is reported and the P0 policy still passes.",
+      "id": "verify.damage.p0-fails-on-integrity",
+      "title": "Damage fails every policy: under P0 the level is P0, and the policy still fails with policy.integrity.",
       "op": "verify",
       "archive": "footer-flipped",
       "input": { "policy": { "minimum": "P0" } },
-      "expect": { "ok": true, "result": { "level": "P0", "passed": true, "reasons": { "$contains": [{ "check": "holo.integrity", "withholds": "P1" }] } } }
+      "expect": { "ok": true, "result": { "level": "P0", "passed": false, "reasons": { "$contains": [{ "check": "holo.integrity", "withholds": "P1" }, { "check": "policy.integrity", "withholds": null }] } } }
     },
     {
       "id": "verify.no-verdict.empty",

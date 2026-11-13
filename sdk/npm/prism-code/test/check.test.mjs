@@ -93,8 +93,9 @@ test('a tampered wasm blob fails holo.integrity, drops to P0 and fails the defau
   const verdict = JSON.parse(out);
   assert.equal(verdict.level, 'P0');
   assert.deepEqual(verdict.reasons[0], { check: 'holo.integrity', message: verdict.reasons[0].message, withholds: 'P1' });
-  // P0 asks only that check could read the file, so a policy of P0 accepts even a damaged holo.
-  assert.equal(run(['check', tampered, '--policy', P0]).code, EXIT.PASSED);
+  // Planted defect G7: an integrity failure fails every policy, so even a policy of P0 refuses a damaged holo.
+  assert.equal(run(['check', tampered, '--policy', P0]).code, EXIT.FAILED);
+  assert.equal(run(['check', fixture, '--policy', P0]).code, EXIT.PASSED);
 });
 
 test('no verdict exits 2, says why on stderr, and prints nothing on stdout', () => {

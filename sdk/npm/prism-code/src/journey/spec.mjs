@@ -44,6 +44,7 @@ export const REFUSALS = Object.freeze([
   'meanings.shape', 'meanings.unknown',
   'number.bound', 'number.bound-order', 'number.bounds', 'outcome.unknown', 'outcomes.duplicate', 'outcomes.reserved', 'outcomes.too-few', 'outcomes.word',
   'properties.format', 'properties.kind', 'rules.format', 'rules.none', 'rules.otherwise', 'rules.too-many', 'spec.limits', 'spec.name', 'spec.purpose', 'spec.schema',
+  'text.character', 'text.length', 'text.space',
 ]);
 
 const refuse = (message, where, rule) => {
@@ -190,11 +191,28 @@ export function parseExamples(text) {
 }
 
 /**
- * Prose a person reads but no proof depends on: a reason, a meaning or a
- * limit. One line, at most 240 characters; empty when there is nothing.
+ * Text is never altered: what the spec says is what the model and the spec
+ * document carry, or the spec is refused naming the character, its code point
+ * and where it is. `ascii` text reaches a LexLean string, so it is printable
+ * ASCII without a quote or a backslash. Prose is Unicode in NFC form. Either is
+ * one line with no leading, trailing or doubled space.
  */
-const prose = (text) => String(text ?? '').replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
-const withWhy = (item, why) => (prose(why) ? { ...item, why: prose(why) } : item);
+const codePoint = (ch) => `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+export function checkText(value, where, { ascii = false, max = 240 } = {}) {
+  if (typeof value !== 'string') refuse(`\`${where}\` must be text.`, where, 'text.character');
+  for (const ch of value) {
+    const bad = ascii ? !/^[\x20-\x7e]$/.test(ch) || ch === '"' || ch === '\\' : /^[\p{Cc}\p{Cs}\p{Zl}\p{Zp}]$/u.test(ch);
+    if (bad) refuse(`\`${where}\` holds ${JSON.stringify(ch)} (${codePoint(ch)}), which ${ascii ? 'this text cannot carry; use printable ASCII without a quote or a backslash' : 'text cannot carry'}. Prism refuses text rather than change it.`, where, 'text.character');
+  }
+  if (!ascii && value.normalize('NFC') !== value) refuse(`\`${where}\` is not in Unicode NFC form; write it composed.`, where, 'text.character');
+  if (value !== value.trim() || / {2}/.test(value)) refuse(`\`${where}\` has a leading, trailing or doubled space.`, where, 'text.space');
+  if ([...value].length > max) refuse(`\`${where}\` is longer than ${max} characters.`, where, 'text.length');
+  return value;
+}
+
+/** Prose a person reads but no proof depends on: a reason, a meaning or a limit. Absent or empty means there is nothing. */
+const prose = (text, where) => (text === undefined || text === null || text === '' ? '' : checkText(text, where));
+const withWhy = (item, why, where) => (prose(why, where) ? { ...item, why } : item);
 
 /** Validate a whole spec; return it normalized. Throws `SpecError` naming the first problem. */
 export function validateSpec(input) {
@@ -203,19 +221,20 @@ export function validateSpec(input) {
   spec.schema = SPEC_SCHEMA;
   if (!spec.name) spec.name = nameFromPurpose(spec.purpose);
   if (!NAME.test(spec.name)) refuse('name must be lower case letters, digits and hyphens, starting with a letter', 'name', 'spec.name');
-  spec.title = String(spec.title ?? titleFromName(spec.name)).replace(/["\\\p{Cc}]/gu, '').slice(0, 64) || titleFromName(spec.name);
-  spec.purpose = String(spec.purpose ?? '').replace(/["\\\p{Cc}]/gu, '').trim();
-  if (!spec.purpose) refuse('Say in one sentence what the app decides.', 'purpose', 'spec.purpose');
-  spec.actors = (spec.actors ?? []).map(String);
+  spec.title = spec.title === undefined ? titleFromName(spec.name) : checkText(spec.title, 'title', { ascii: true, max: 64 });
+  if (!spec.title) refuse('`title` is empty; leave it out to take it from the name.', 'title', 'text.length');
+  if (spec.purpose === undefined || spec.purpose === null || spec.purpose === '') refuse('Say in one sentence what the app decides.', 'purpose', 'spec.purpose');
+  checkText(spec.purpose, 'purpose', { ascii: true, max: 200 });
+  spec.actors = (spec.actors ?? []).map((a, i) => checkText(a, `actors[${i}]`, { max: 64 }));
   if (spec.limits !== undefined && !Array.isArray(spec.limits)) refuse('`limits` is a list of what the app does not decide.', 'limits', 'spec.limits');
-  spec.limits = (spec.limits ?? []).map(prose).filter(Boolean);
+  spec.limits = (spec.limits ?? []).filter((l, i) => prose(l, `limits[${i}]`));
   if (spec.limits.length === 0) delete spec.limits;
 
   const fields = spec.fields ?? [];
   if (!Array.isArray(fields) || fields.length === 0) refuse('Name at least one field.', 'fields', 'fields.none');
   if (fields.length > 8) refuse('A request has at most eight fields.', 'fields', 'fields.too-many');
   const seen = new Set();
-  for (const f of fields) {
+  for (const [fi, f] of fields.entries()) {
     if (!WORD.test(f.name ?? '')) refuse(`Field name \`${f.name}\` must be a lower-case word.`, 'fields', 'field.name');
     if (seen.has(f.name)) refuse(`Field \`${f.name}\` is named twice.`, 'fields', 'field.duplicate');
     seen.add(f.name);
@@ -228,7 +247,7 @@ export function validateSpec(input) {
       for (const b of ['min', 'max']) if (f[b] !== undefined && !(Number.isSafeInteger(f[b]) && f[b] >= 0)) refuse(`\`${b}\` of \`${f.name}\` must be a whole number.`, 'fields', 'number.bound');
       if (f.min !== undefined && f.max !== undefined && f.min > f.max) refuse(`\`${f.name}\` has min above max.`, 'fields', 'number.bound-order');
     } else refuse(`Field \`${f.name}\` must be a \`number\` or a \`choice\`.`, 'fields', 'field.kind');
-    if (f.means !== undefined) f.means = prose(f.means) || undefined;
+    if (f.means !== undefined) f.means = prose(f.means, `fields[${fi}].means`) || undefined;
     if (f.means === undefined) delete f.means;
   }
 
@@ -242,7 +261,7 @@ export function validateSpec(input) {
   if (spec.meanings !== undefined) {
     if (typeof spec.meanings !== 'object' || Array.isArray(spec.meanings)) refuse('`meanings` maps each answer to what it means.', 'outcomes', 'meanings.shape');
     for (const key of Object.keys(spec.meanings)) if (!outcomes.includes(key)) refuse(`\`meanings\` names \`${key}\`, which is not an answer.`, 'outcomes', 'meanings.unknown');
-    spec.meanings = Object.fromEntries(outcomes.filter((o) => prose(spec.meanings[o])).map((o) => [o, prose(spec.meanings[o])]));
+    spec.meanings = Object.fromEntries(outcomes.filter((o) => prose(spec.meanings[o], `meanings.${o}`)).map((o) => [o, spec.meanings[o]]));
     if (Object.keys(spec.meanings).length === 0) delete spec.meanings;
   }
 
@@ -266,16 +285,18 @@ export function validateSpec(input) {
   spec.rules = spec.rules.map((r, i) => {
     checkConds(r.when, 'rule');
     if (!outcomes.includes(r.then)) refuse(`Rule ${i + 1} answers \`${r.then}\`, which is not an answer.`, 'rules', 'outcome.unknown');
-    return withWhy({ id: r.id ?? `REQ-${String(i + 1).padStart(3, '0')}`, when: r.when, then: r.then, says: r.says ?? describeRule(r) }, r.why);
+    if (r.says !== undefined) checkText(r.says, `rules[${i}].says`);
+    return withWhy({ id: r.id ?? `REQ-${String(i + 1).padStart(3, '0')}`, when: r.when, then: r.then, says: r.says ?? describeRule(r) }, r.why, `rules[${i}].why`);
   });
   if (!outcomes.includes(spec.otherwise)) refuse('Say which answer applies when no rule matches.', 'rules', 'rules.otherwise');
-  if (spec.otherwiseWhy !== undefined) spec.otherwiseWhy = prose(spec.otherwiseWhy) || undefined;
+  if (spec.otherwiseWhy !== undefined) spec.otherwiseWhy = prose(spec.otherwiseWhy, 'otherwiseWhy') || undefined;
   if (spec.otherwiseWhy === undefined) delete spec.otherwiseWhy;
   spec.properties = (spec.properties ?? []).map((p, i) => {
     if (!['never', 'always'].includes(p.kind)) refuse('A property is `never` or `always`.', 'properties', 'properties.kind');
     checkConds(p.when, 'property');
     if (!outcomes.includes(p.then)) refuse(`Property ${i + 1} names \`${p.then}\`, which is not an answer.`, 'properties', 'outcome.unknown');
-    return withWhy({ id: p.id ?? `INV-${String(i + 1).padStart(3, '0')}`, kind: p.kind, when: p.when, then: p.then, says: p.says ?? describeProperty(p) }, p.why);
+    if (p.says !== undefined) checkText(p.says, `properties[${i}].says`);
+    return withWhy({ id: p.id ?? `INV-${String(i + 1).padStart(3, '0')}`, kind: p.kind, when: p.when, then: p.then, says: p.says ?? describeProperty(p) }, p.why, `properties[${i}].why`);
   });
   spec.examples = (spec.examples ?? []).map((e) => ({ request: String(e.request), response: String(e.response) }));
   for (const e of spec.examples) if (e.response !== INVALID && !outcomes.includes(e.response)) refuse(`Example \`${e.request}\` answers \`${e.response}\`, which is not an answer.`, 'examples', 'examples.outcome');

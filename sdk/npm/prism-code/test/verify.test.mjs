@@ -80,7 +80,8 @@ test('the level is the honest one: P0 today, however low the policy and whatever
 test('a tampered blob is a failed verdict that withholds P1, and throws a VerificationError on request', async () => {
   const bytes = tampered();
   const verdict = await experimental_verify(bytes, { minimum: 'P0', env: {} });
-  assert.equal(verdict.passed, true, 'P0 has no requirement');
+  assert.equal(verdict.passed, false, 'an integrity failure fails every policy, P0 included');
+  assert.ok(verdict.reasons.some((r) => r.check === 'policy.integrity' && r.withholds === null));
   const reasons = (await experimental_verify(bytes, none)).reasons;
   assert.ok(reasons.some((r) => r.check === 'holo.integrity' && r.withholds === 'P1'));
   await assert.rejects(

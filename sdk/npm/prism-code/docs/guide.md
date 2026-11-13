@@ -122,9 +122,9 @@ Run `npx prism-code@latest setup`, then open the leap-year link above from a bro
 
 A link the handler refuses on macOS or Linux has no terminal to show the refusal in, so the refusal is also written to `$PRISM_HOME/handler.log`.
 
-## Write from examples (experimental)
+## Write from examples (removed)
 
-`prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See [docs/proposals/325-authoring-front-door.md](../../../../docs/proposals/325-authoring-front-door.md).
+`prism-code build --unstable-author`, where an agent wrote `model/`, was removed. Every app comes from one `prism/spec/1` spec through the guided path, `prism-code mcp`, and Lean proves it on this machine.
 
 ## Three calls
 

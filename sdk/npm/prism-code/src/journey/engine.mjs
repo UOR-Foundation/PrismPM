@@ -14,7 +14,7 @@ import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSes
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
-import { TEMPLATE_REPOSITORY, canBuildOnGitHub, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
+import { TEMPLATE_REPOSITORY, commitApp, createFromTemplate, fetchLive, gitRoot, originRepository, publishRepository, pushClone, readyForGitHub, signedInLogin, suggestedRepository, waitForWorkflows } from './github.mjs';
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, liveUrl, rustTestText, suiteOf } from './template.mjs';
 import { VERSION } from '../version.mjs';
 import { gapLedger, propertyShape } from '../gaps.mjs';
@@ -33,27 +33,21 @@ const MAX_AXIOM_ROUNDS = 8;
 const imageFor = (dir, session) => (isBound(dir) ? imageOf(dir) : session.image ?? DEFAULT_SDK_IMAGE);
 
 /**
- * Where Lean proves the app: `local` in the SDK image when Docker and the image
- * are on this machine, else `hosted` on the UOR MCP server. `PRISM_CODE_TIER`
- * set to `local` or `hosted` chooses.
+ * Where Lean proves the app: always `local`, in the SDK image on this machine.
+ * Only `PRISM_CODE_TIER=hosted` sends the model to the UOR MCP server, which
+ * stores it unlisted, not privately; Prism never chooses that on its own.
  */
 export function proveWhere(dir, session, { env = process.env } = {}) {
-  if (env.PRISM_CODE_TIER === 'local' || env.PRISM_CODE_TIER === 'hosted') return env.PRISM_CODE_TIER;
-  if (resolveDocker().error) return 'hosted';
-  return hasImage(imageFor(dir, session)) ? 'local' : 'hosted';
+  return env.PRISM_CODE_TIER === 'hosted' ? 'hosted' : 'local';
 }
 
 /**
- * Where the app is built: `local` in the SDK image when Docker and the image
- * are on this machine, else `github` on the repository's own Actions when a
- * GitHub token is there, else `local`, which downloads the image first.
- * `remote` names one; `PRISM_CODE_TIER=local` chooses local.
+ * Where the app is built: always `local`, in the SDK image on this machine,
+ * which is downloaded first when it is missing. Only `remote: 'github'` (the
+ * caller named a repository or asked for GitHub) builds on GitHub Actions.
  */
-export function buildWhere(dir, session, { env = process.env, remote = null, docker = resolveDocker, image = hasImage, github = canBuildOnGitHub } = {}) {
-  if (remote === 'github' || remote === 'local') return remote;
-  if (env.PRISM_CODE_TIER === 'local') return 'local';
-  if (!docker().error && image(imageFor(dir, session))) return 'local';
-  return github({ env }) ? 'github' : 'local';
+export function buildWhere(dir, session, { remote = null } = {}) {
+  return remote === 'github' ? 'github' : 'local';
 }
 
 /**
@@ -66,7 +60,7 @@ export async function prepare(dir, session, log, { pull = false } = {}) {
   if (d.error) return { ok: false, message: d.error };
   const image = imageFor(dir, session);
   if (!hasImage(image)) {
-    if (!pull) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code@latest setup --pull\` in a terminal to download it (about ${SDK_IMAGE_DOWNLOAD}), or leave PRISM_CODE_TIER unset so the proof runs hosted.\n  ${image}` };
+    if (!pull) return { ok: false, message: `The SDK image is not on this machine. Run \`npx prism-code@latest setup --pull\` in a terminal to download it (about ${SDK_IMAGE_DOWNLOAD}), or set PRISM_CODE_TIER=hosted to prove on the hosted verifier, which stores the model unlisted, not privately.\n  ${image}` };
     log(`The SDK image is not on this machine yet. Downloading it once now, about ${SDK_IMAGE_DOWNLOAD}; this can take a while.`);
     const pulled = await docker(['pull', image], { onLine: (l) => /^(Status|Digest|[0-9a-f]{12}: Pull complete)/.test(l) && log(l) });
     if (pulled.code !== 0) return { ok: false, message: `Could not download the SDK image:\n${tail(pulled.output)}` };
