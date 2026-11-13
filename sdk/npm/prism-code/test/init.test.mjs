@@ -79,7 +79,10 @@ test('planInit is the template plus prism.toml and an LF-only .gitattributes; an
   assert.ok(files.has('prism.toml') && files.has('lexlean.lock') && files.has('prismpm.toml') && files.has('src/TextRequest.lex.tex'));
   assert.equal(files.size, templateFiles().size + 2);
   assert.equal(Buffer.from(files.get('.gitattributes')).toString('utf8'), '* text eol=lf\n', 'LexLean refuses CRLF, so a new project never gets it');
-  assert.equal(nextSteps('calc').split('\n')[1], '  cd calc');
+  // The scaffold names the canonical path first: an app has one input, prism/spec.json.
+  const steps = nextSteps('calc').split('\n');
+  assert.match(steps[0], /not a Prism app\. An app has one input, prism\/spec\.json/);
+  assert.ok(steps.includes('  cd calc'));
   assert.throws(() => planInit({ name: 'calc', template: 'nope' }), (e) => e.code === 'init.template' && /text-request/.test(e.message));
 });
 
