@@ -4,7 +4,9 @@
  * `prism.toml`), so an existing repository gains one directory and nothing
  * else.
  *
- *   prism/spec.json     the spec, as data
+ *   prism/spec.json     the app's one input: the prism/spec/1 spec an agent writes or edits,
+ *                       kept as canonical JSON (RFC 8785); its SHA-256 is the specHash, and
+ *                       the model is rendered from it alone (spec-file.mjs)
  *   prism/session.json  where the conversation is, and what was proved
  *   prism/SPEC.md       the spec in prose
  *   prism/src/<App>.lex.tex   the generated LexLean model, the app's single source
@@ -15,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, join } from 'node:path';
 import { templateFiles } from '../init.mjs';
 import { names, renderModel, renderProofs, renderSpecDocument } from './render.mjs';
+import { SPEC_FILE, readSpecFile } from './spec-file.mjs';
 import { DEFAULT_SDK_IMAGE, IMAGE_STANDARDS_LOCK, docker, runInImage } from './sdk.mjs';
 
 export const SESSION_SCHEMA = 'prism/session/1';
@@ -44,8 +47,49 @@ export function readSession(dir) {
 }
 
 export function writeSession(dir, session) {
+  if (session.spec) writeSpecFile(dir, session);
   write(dir, 'session.json', `${JSON.stringify(session, null, 2)}\n`);
-  if (session.spec) write(dir, 'spec.json', `${JSON.stringify(session.spec, null, 2)}\n`);
+}
+
+/**
+ * Write spec.json, the canonical bytes of the session's spec, and record its
+ * specHash. Returns what reading those bytes back gives.
+ */
+export function writeSpecFile(dir, session) {
+  const read = readSpecFile(session.spec);
+  write(dir, SPEC_FILE, read.bytes);
+  session.status ??= {};
+  session.status.specHash = read.specHash;
+  return read;
+}
+
+/** The project's spec.json, read strictly, or null when there is none. Throws SpecError when it is not a valid spec. */
+export function readProjectSpec(dir) {
+  const path = join(dir, SPEC_FILE);
+  return existsSync(path) ? readSpecFile(readFileSync(path, 'utf8')) : null;
+}
+
+/**
+ * The model files that are not what spec.json renders to, compared byte for
+ * byte: empty when the model is exactly the spec's. `axioms` are the recorded
+ * axiom sets the render takes. Names spec.json itself when there is none.
+ */
+export function modelMismatches(dir, { axioms = {} } = {}) {
+  const read = readProjectSpec(dir);
+  if (!read) return [SPEC_FILE];
+  const n = names(read.spec);
+  const proofs = renderProofs(read.spec, { axioms });
+  const expected = [[`src/${n.module}.lex.tex`, renderModel(read.spec, { axioms })], [`src/${n.proofs}.lex.tex`, proofs || null]];
+  const differs = [];
+  for (const [file, text] of expected) {
+    const path = join(dir, file);
+    const actual = existsSync(path) ? readFileSync(path, 'utf8') : null;
+    if (actual !== text) differs.push(file);
+  }
+  for (const entry of existsSync(join(dir, 'src')) ? readdirSync(join(dir, 'src')) : []) {
+    if (entry.endsWith('.lex.tex') && !expected.some(([file]) => file === `src/${entry}`)) differs.push(`src/${entry}`);
+  }
+  return differs;
 }
 
 /** Write the template's project files the folder lacks. Never overwrites. Returns the paths written. */
@@ -113,6 +157,8 @@ export function modelDigest(dir, spec) {
  * someone edited by hand since Prism last wrote it, unless `overwrite`.
  */
 export function writeApp(dir, session, { overwrite = false } = {}) {
+  // The model is rendered from spec.json alone: write it canonically, read it back strictly, render what it says.
+  session.spec = writeSpecFile(dir, session).spec;
   const spec = session.spec;
   const n = names(spec);
   const path = modelPath(dir, spec);

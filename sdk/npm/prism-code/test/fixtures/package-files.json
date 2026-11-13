@@ -69,6 +69,7 @@
   "src/journey/render.mjs",
   "src/journey/sdk.mjs",
   "src/journey/session.mjs",
+  "src/journey/spec-file.mjs",
   "src/journey/spec.mjs",
   "src/journey/template.mjs",
   "src/manifest.mjs",

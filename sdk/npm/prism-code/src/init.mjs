@@ -122,8 +122,21 @@ export function planInit({ name, template = DEFAULT_TEMPLATE }) {
 }
 
 /** The tiers a new project's author runs next, cheapest first, as `init` prints them. */
+/**
+ * What this scaffold is not. A Prism app has one input, `prism/spec.json`, and
+ * its model is rendered from that JSON; a scaffolded LexLean project is one of
+ * this repository's own kind, where the model is written by hand.
+ */
+export const NOT_AN_APP = [
+  'This is a LexLean project, not a Prism app. An app has one input, prism/spec.json:',
+  'ask your agent for one (npx prism-code@latest setup adds the prism server), and Prism',
+  'renders the model from that JSON. Hand-written LexLean is for a project like this one.',
+].join('\n');
+
 export function nextSteps(directory) {
   return [
+    NOT_AN_APP,
+    '',
     'Next, from the cheapest gate to the whole build:',
     `  cd ${directory}`,
     '  npx prism-code build --check     T0: the model is well formed and locked (seconds)',

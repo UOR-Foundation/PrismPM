@@ -65,6 +65,6 @@ An agent never writes the model. It writes one `prism/spec/1` spec through the `
 
 ## Next steps
 
-- [Write from examples](/docs/guides/write-from-examples)
+- [Write the spec](/docs/guides/write-from-examples)
 - [Audit a holo](/docs/guides/audit)
 - [Use a holo as a tool](/docs/api/as-tool)

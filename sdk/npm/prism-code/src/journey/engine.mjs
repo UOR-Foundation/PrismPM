@@ -10,7 +10,7 @@ import { PrismError } from '../errors.mjs';
 import { fromFile } from '../node.mjs';
 import { counterexample, describeConditions } from './spec.mjs';
 import { names, renderSpecDocument } from './render.mjs';
-import { bind, isBound, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
+import { bind, isBound, modelMismatches, modelPath, newestHolo, rememberModel, writeApp, writeSession, writeSpecDocument } from './project.mjs';
 import { BUILD_SCRIPT, DEFAULT_SDK_IMAGE, buildProgress, axiomViolations, declarationAt, forbiddenAxioms, forbiddenMessage, docker, hasImage, imageOf, parseDiagnostics, resolveDocker, runInImage, steps } from './sdk.mjs';
 import { SDK_IMAGE_DOWNLOAD } from '../setup-machine.mjs';
 import { parseRepository } from '../github.mjs';
@@ -261,6 +261,11 @@ export async function build(dir, session, { log = () => {}, overwrite = false, r
     session.status.lastSpec = JSON.stringify(session.spec);
     writeSession(dir, session);
     if (!p.ok) return { ...p, stage: 'prove' };
+  }
+  // The one path: the model built is exactly what spec.json renders to, byte for byte. Anything else is refused.
+  const mismatched = modelMismatches(dir, { axioms: session.axioms ?? {} });
+  if (mismatched.length) {
+    return { ok: false, stage: 'build', mismatched, message: `model does not match spec.json: ${mismatched.join(', ')}. The model is generated from prism/spec.json alone; change spec.json (or the spec through prism_spec) and build again, or pass overwrite to regenerate the model from it.` };
   }
   const where = buildWhere(dir, session, { env, remote: repository && !remote ? 'github' : remote });
   if (where === 'github') return buildRemote(dir, session, { log, root: root ?? defaultRoot(dir), repository });

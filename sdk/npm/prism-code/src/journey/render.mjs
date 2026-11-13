@@ -547,7 +547,7 @@ export function renderSpecDocument(spec, status = {}) {
     '',
     '## Files',
     '',
-    `- \`prism/spec.json\` is this spec as data.`,
+    `- \`prism/spec.json\` is this spec as data, the app's one input, in canonical JSON (RFC 8785)${status.specHash ? `, \`${status.specHash}\`` : ''}. The model is rendered from it alone, so the same spec.json always gives the same model.`,
     `- \`src/${n.module}.lex.tex\` is the LexLean model generated from it. It is the single source of the app.`,
     '',
   ];
