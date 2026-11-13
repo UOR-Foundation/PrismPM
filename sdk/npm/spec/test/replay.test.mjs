@@ -17,7 +17,6 @@ const statement = readJson('fixtures/attestation/statement/calculator-replay.jso
 const history = readJson('fixtures/history/history-v1/calculator.json');
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const unlabel = (label) => label.slice('blake3:'.length);
 const toHex = (bytes) => Buffer.from(bytes).toString('hex');
 
 const replayErrors = (predicate) => validate(schema(REPLAY_SCHEMA), predicate);
@@ -37,11 +36,11 @@ test('the replay-v1 predicate fixture is the predicate of the calculator stateme
   assert.equal(statement.predicateType, REPLAY_PREDICATE_TYPE);
 });
 
-test('the calculator statement names the guest and model of the reference archive, by both digests', () => {
+test('the calculator statement names the guest and model of the reference archive by their κ (ADR-017)', () => {
   assert.equal(statement.subject.length, 1);
-  assert.deepEqual(statement.subject[0].digest, { blake3: unlabel(ref.resolved.guest.label), sha256: sha256(ref.guest) });
+  assert.deepEqual(statement.subject[0].digest, { sha256: sha256(ref.guest) });
   const { model } = statement.predicate;
-  assert.deepEqual(model, { blake3: unlabel(ref.resolved.model.label), sha256: sha256(ref.resolved.model.content) });
+  assert.deepEqual(model, { sha256: sha256(ref.resolved.model.content) });
   assert.equal(model.sha256, ref.provenance.model_id);
 });
 
@@ -64,7 +63,7 @@ test('the calculator history is the acceptance vectors of the model, in order', 
   assert.equal(history.application, 'Calculator');
 });
 
-test('the predicate schema rejects a statement that claims nothing or names a digest of one algorithm', () => {
+test('the predicate schema rejects a statement that claims nothing or names a digest without its sha256', () => {
   const base = statement.predicate;
   const edit = (change) => {
     const next = copy(base);
@@ -75,7 +74,7 @@ test('the predicate schema rejects a statement that claims nothing or names a di
   rejects(edit((p) => (p.histories[0].events = 0)), 'a history of no events');
   rejects(edit((p) => (p.divergenceCount = -1)), 'a negative count');
   rejects(edit((p) => (p.divergenceCount = 1.5)), 'a fractional count');
-  rejects(edit((p) => delete p.histories[0].digest.blake3), 'a history digest with sha256 only');
+  rejects(edit((p) => delete p.histories[0].digest.sha256), 'a history digest with blake3 only');
   rejects(edit((p) => delete p.model.sha256), 'a model digest with blake3 only');
   rejects(edit((p) => (p.model.sha1 = '0'.repeat(40))), 'a third digest');
   rejects(edit((p) => (p.verifiedLevels = ['P3'])), 'a claimed level, which a checker would never read');

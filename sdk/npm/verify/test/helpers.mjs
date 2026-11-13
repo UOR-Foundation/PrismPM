@@ -28,6 +28,10 @@ export function archive(name) {
 }
 
 /** ADR-015's digest table for the reference archive. */
+/** The same Calculator as a holo v5 (ADR-017): every statement fixture is about it. */
+export const REFERENCE_V5_PATH = here('../../prism-code/fixtures/Calculator.v5.holo');
+export const referenceV5 = () => new Uint8Array(readFileSync(REFERENCE_V5_PATH));
+
 export const ADR_015 = Object.freeze({
   archive: { sha256: REFERENCE_SHA256, blake3: '4efe02106778d44a469cc0fc8f6998167af7c9075a3ac605c150098c0f5243bb' },
   footer: '8408e0895572fab09e783f7aadb129dc4cb96d0b62850a16f3ddbe44ed6021ba',

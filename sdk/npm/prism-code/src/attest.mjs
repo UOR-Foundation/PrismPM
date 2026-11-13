@@ -145,12 +145,12 @@ function policyOf(options) {
   return { keyed, entries, timestamps };
 }
 
-/** The blobs a bundle's subjects name must be in this holo with both digests equal; otherwise a typed error. */
+/** The objects a bundle's subjects name must be in this holo, named by their κ; otherwise a typed error. */
 export function checkSubjects(parsed, attestation) {
   for (const subject of attestation.subjects) {
     const blob = subject.blob === null ? null : parsed.blobs.find((b) => b.label === subject.blob);
     if (!blob) throw new SubjectMismatchError(`subject ${subject.name} is not a content blob of this holo`, { check: 'attestation.subject' });
-    if (sha256Hex(blob.content) !== subject.digest.sha256 || blake3Hex(blob.content) !== subject.digest.blake3) {
+    if (sha256Hex(blob.content) !== subject.digest.sha256 || (subject.digest.blake3 !== undefined && blake3Hex(blob.content) !== subject.digest.blake3)) {
       throw new SubjectMismatchError(`subject ${subject.name} names ${subject.blob} but its digests are not the blob's`, { check: 'attestation.subject' });
     }
   }

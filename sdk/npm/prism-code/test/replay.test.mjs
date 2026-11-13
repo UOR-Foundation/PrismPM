@@ -31,6 +31,7 @@ import { fromFile } from '../src/node.mjs';
 import { ALIASES, aliasWarning } from '../src/developer-view.mjs';
 import { policyInput } from '../src/vendor/verify.mjs';
 import { VERSION } from '../src/version.mjs';
+import { sha256Hex as sha256HexOf } from '../src/sha256.mjs';
 import { deriveChangedModel } from '../scripts/derive-changed-model.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
@@ -59,7 +60,7 @@ async function blobsOf(bytes) {
   const { resolveArchive } = await import('../src/archive.mjs');
   const { sha256Hex } = await import('../src/sha256.mjs');
   const { guest, model } = resolveArchive(app.archive);
-  const digests = async (blob) => ({ blake3: blake3Hex(blob.content), sha256: await sha256Hex(blob.content) });
+  const digests = async (blob) => ({ sha256: await sha256Hex(blob.content) });
   return { guest: await digests(guest), model: await digests(model) };
 }
 
@@ -126,7 +127,7 @@ test('the digest covers canonical JSON, so reordered members and a CRLF file are
   const expected = await historyDigest(historyText);
   assert.deepEqual(await historyDigest(reordered), expected);
   assert.deepEqual(await historyDigest(JSON.stringify(value, null, 2).replaceAll('\n', '\r\n')), expected);
-  assert.equal(blake3Hex(historyBytes(reordered)), expected.blake3);
+  assert.equal(await sha256HexOf(historyBytes(reordered)), expected.sha256);
   assert.equal(Buffer.from(historyBytes(value)).toString(), historyText.trimEnd(), 'no trailing newline');
 });
 
@@ -392,7 +393,7 @@ test('replay: exit 0 on the reference archive, and the statement file is the sta
   const statement = out('statement.json');
   const r = cli('replay', historyPath, '--image', holoPath, '--statement', statement);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^Replaying 1 history against Calculator@blake3:2adca3e7ca42$/m);
+  assert.match(r.stdout, /^Replaying 1 history against Calculator@sha256:dcf53677c7c8$/m);
   assert.match(r.stdout, /Calculator\.history\.json {2}22 events, no divergence/);
   assert.match(r.stdout, /^Replay: PASS {2}no divergence$/m);
   const { statement: expected } = await (await load(original)).experimental_replay(historyText);

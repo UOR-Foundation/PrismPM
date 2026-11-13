@@ -25,7 +25,9 @@ process.env.PRISM_IMAGES ??= (await import('node:fs')).mkdtempSync((await import
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
 const fixture = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
 const plain = new Uint8Array(readFileSync(fixture));
-const placeholders = new Uint8Array(readFileSync(new URL('./fixtures/attestation/Calculator.signed.holo', import.meta.url)));
+// Only a holo v5 can be signed (ADR-017): every signing test starts from the v5 reference archive.
+const signable = new Uint8Array(readFileSync(fileURLToPath(new URL('../fixtures/Calculator.v5.holo', import.meta.url))));
+const placeholders = new Uint8Array(readFileSync(new URL('./fixtures/attestation/Calculator.v5.signed.holo', import.meta.url)));
 const PROOF = 'https://uor.foundation/prism/proof/v1';
 const same = (a, b) => Buffer.from(a).equals(Buffer.from(b));
 
@@ -45,7 +47,7 @@ const publicKey = pair.publicKey.export({ type: 'spki', format: 'pem' });
 const otherPublic = other.publicKey.export({ type: 'spki', format: 'pem' });
 
 async function attested() {
-  const { holo } = await experimental_attest(plain, { type: PROOF, predicate: { accepted: true }, key: privateKey });
+  const { holo } = await experimental_attest(signable, { type: PROOF, predicate: { accepted: true }, key: privateKey });
   return holo;
 }
 
@@ -141,7 +143,7 @@ test('moving a tag leaves the old manifest reachable by digest; one manifest can
   assert.ok(same((await experimental_pull('app:3', { store })).holo, plain));
   const listed = await openStore(store).list();
   assert.deepEqual(listed.map((i) => `${i.name}=${i.digest === first.digest}`).sort(), ['app:1=false', 'app:2=true', 'app:3=true']);
-  assert.ok(listed.every((i) => i.size > 0 && /^blake3:/.test(i.fingerprint)), 'list() is what images needs (#349)');
+  assert.ok(listed.every((i) => i.size > 0 && /^(sha256|blake3):/.test(i.fingerprint)), 'list() is what images needs (#349)');
 });
 
 test('two names under one tag: the full name finds each, the bare tag refuses to guess', async () => {
@@ -274,7 +276,7 @@ test('a statement that lies about its subject is refused by push and by pull', a
   statement.subject[0].digest.sha256 = '0'.repeat(64);
   const bundle = JSON.parse(JSON.stringify(line.bundle));
   bundle.dsseEnvelope.payload = Buffer.from(JSON.stringify(statement)).toString('base64');
-  const lying = appendAttestations(plain, [bundle]);
+  const lying = appendAttestations(signable, [bundle]);
   const store = fresh();
   await assert.rejects(experimental_push(lying, 'app:1', { store }), SubjectMismatchError);
   assert.equal(existsSync(store), false, 'nothing reached the store');
@@ -305,7 +307,7 @@ test('a keyed push signs one statement naming the manifest, and pull checks it a
   assert.equal(line.includes('\n'), false);
   const statement = JSON.parse(Buffer.from(bundle.dsseEnvelope.payload, 'base64'));
   assert.deepEqual(statement.subject[0], { name: 'oci-manifest', digest: { sha256: pushed.digest.slice('sha256:'.length) } });
-  assert.deepEqual(Object.keys(statement.subject[1].digest).sort(), ['blake3', 'sha256']);
+  assert.deepEqual(Object.keys(statement.subject[1].digest), ['sha256'], 'a holo v5 subject is named by its κ alone');
   assert.deepEqual(statement.predicate, { accepted: true });
   // A DSSE verifier skips a signature whose keyid is not its own; cosign's would not be this one.
   assert.equal(bundle.dsseEnvelope.signatures[0].keyid, '');
@@ -319,11 +321,11 @@ test('a keyed push signs one statement naming the manifest, and pull checks it a
 
 /** The Calculator with a signed provenance statement and a signed proof statement about its guest, which check takes to P2. */
 async function reachesP2() {
-  const { provenance, identities } = resolveArchive(parseArchive(plain));
+  const { provenance } = resolveArchive(parseArchive(signable));
   const predicate = structuredClone(JSON.parse(readFileSync(new URL('../../spec/test/fixtures/attestation/statement/calculator.json', import.meta.url), 'utf8')).predicate);
-  predicate.model.document = { sha256: provenance.model_id, blake3: identities.modelKappa.slice('blake3:'.length) };
+  predicate.model.document = { sha256: provenance.model_id };
   Object.assign(predicate.model, { sourceId: provenance.source_id, semanticId: provenance.semantic_id, snapshotId: provenance.snapshot_id, compilerSemanticsId: provenance.compiler_semantics_id, leanManifestSha256: provenance.lean_manifest_sha256 });
-  const { holo } = await experimental_attest(plain, { type: 'https://slsa.dev/provenance/v1', predicate: { buildDefinition: { buildType: 'https://uor.foundation/prism/holo-build/v1' } }, subjects: ['guest', 'view', 'model', 'capabilities'], key: privateKey });
+  const { holo } = await experimental_attest(signable, { type: 'https://slsa.dev/provenance/v1', predicate: { buildDefinition: { buildType: 'https://uor.foundation/prism/holo-build/v1' } }, subjects: ['guest', 'view', 'model', 'capabilities'], key: privateKey });
   return (await experimental_attest(holo, { type: PROOF, predicate, subjects: ['guest'], key: privateKey })).holo;
 }
 
@@ -366,7 +368,7 @@ test('the same holo with no signer or the wrong one is P0: a policy above that r
 });
 
 test('a proof statement that does not hold keeps the level down, whoever signed it', needsSigstore, async () => {
-  const { holo } = await experimental_attest(plain, { type: PROOF, predicate: { accepted: true }, subjects: ['guest'], key: privateKey });
+  const { holo } = await experimental_attest(signable, { type: PROOF, predicate: { accepted: true }, subjects: ['guest'], key: privateKey });
   const store = fresh();
   await experimental_push(holo, 'app:1', { store });
   const output = join(dir, 'never-h.holo');

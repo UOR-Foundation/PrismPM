@@ -81,11 +81,11 @@ fn refused(message: impl Into<String>) -> PrismError {
     PrismError::new(REFUSED, message.into())
 }
 
-fn dual_digest(bytes: &[u8]) -> Value {
-    json!({
-        "blake3": blake3::hash(bytes).to_hex().to_string(),
-        "sha256": format!("{:x}", Sha256::digest(bytes)),
-    })
+/// The digest set of one subject or material: sha256 alone, the κ of the
+/// bytes it names (ADR-017). Only a holo v5 is signed, so nothing here names
+/// BLAKE3.
+fn kappa_digest(bytes: &[u8]) -> Value {
+    json!({ "sha256": format!("{:x}", Sha256::digest(bytes)) })
 }
 
 fn is_hex64(value: &str) -> bool {
@@ -139,7 +139,7 @@ fn resolved_dependencies(
             refused("the lock's sdk_image is not an image reference pinned by @sha256:<digest>")
         })?;
     let mut rows = vec![
-        json!({"name": "sdk-lock", "uri": LOCK_URI, "digest": dual_digest(lock), "mediaType": media_type}),
+        json!({"name": "sdk-lock", "uri": LOCK_URI, "digest": kappa_digest(lock), "mediaType": media_type}),
         json!({"name": "standards-lock", "uri": STANDARDS_LOCK_URI, "digest": {"sha256": standards}}),
         json!({"name": "sdk-image", "uri": image, "digest": {"sha256": image_digest}}),
     ];
@@ -156,7 +156,6 @@ fn resolved_dependencies(
                 "name": "world",
                 "uri": contract,
                 "digest": {
-                    "blake3": hex_of(&world["blake3"], "inputs.world.blake3")?,
                     "sha256": hex_of(&world["sha256"], "inputs.world.sha256")?,
                 },
             }));
@@ -198,17 +197,13 @@ fn resolved_dependencies(
 /// validate.
 pub fn statement(holo: &[u8], lock: &[u8], max: Option<&MaxDetails>) -> Result<Value, PrismError> {
     let parsed = parse_application(holo)?;
-    let directory: Value = serde_json::from_slice(&parsed.directory)
-        .map_err(|error| refused(format!("the application directory: {error}")))?;
     let extension: Value = serde_json::from_slice(&parsed.prism_extension)
         .map_err(|error| refused(format!("the model extension: {error}")))?;
     let cargo_name = extension["cargo_name"]
         .as_str()
         .filter(|name| !name.is_empty())
         .ok_or_else(|| refused("the model extension names no cargo_name"))?;
-    let capabilities = directory["requires_kappa"]
-        .as_str()
-        .ok_or_else(|| refused("the application directory names no capability set"))?;
+    let capabilities = parsed.capability_kappa.as_str();
     let roles = [
         (
             format!("core-wasm/{}_core_wasm.wasm", cargo_name.replace('-', "_")),
@@ -233,7 +228,7 @@ pub fn statement(holo: &[u8], lock: &[u8], max: Option<&MaxDetails>) -> Result<V
             .blobs
             .get(*label)
             .ok_or_else(|| refused(format!("{label} is not a content blob of this archive")))?;
-        subject.push(json!({"name": name, "digest": dual_digest(content)}));
+        subject.push(json!({"name": name, "digest": kappa_digest(content)}));
     }
     let model = subject[2]["digest"].clone();
 
@@ -241,7 +236,9 @@ pub fn statement(holo: &[u8], lock: &[u8], max: Option<&MaxDetails>) -> Result<V
     let mut external = json!({"model": model});
     let mut builder = json!({"id": document["sdk_image"]});
     if document["schema"] == SDK_LOCK_V3 {
-        if document["inputs"]["model"] != model {
+        // An sdk-lock/3 still records the model's BLAKE3 beside its sha256; the
+        // κ (sha256) is what identifies it (ADR-017).
+        if document["inputs"]["model"]["sha256"] != model["sha256"] {
             return Err(refused(
                 "the lock's inputs.model is not the model document of this archive; the lock does not describe this build",
             ));

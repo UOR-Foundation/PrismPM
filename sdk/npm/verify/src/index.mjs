@@ -13,6 +13,7 @@ import { validate } from './vendor/json-schema.mjs';
 import { SCHEMA_FILES } from './vendor/schemas.mjs';
 import { sha256Hex } from './sha256.mjs';
 import { readStructure } from './reader.mjs';
+import { analyzeV5, isUorc } from './holo5.mjs';
 import * as assurance from './vendor/assurance-levels.mjs';
 import * as transparency from './transparency.mjs';
 import { levelOf } from './level.mjs';
@@ -102,6 +103,9 @@ function digestsOf(bytes) {
   return { sha256: sha256Hex(bytes), blake3: blake3Hex(bytes) };
 }
 
+/** The digest set of the whole file: its κ alone for a holo v5 (ADR-017), both digests for v4. */
+const archiveDigests = (bytes, facts) => (facts.v5 ? { sha256: sha256Hex(bytes) } : digestsOf(bytes));
+
 function isLabel(bytes) {
   if (bytes.length !== spec.LABEL_LENGTH) return false;
   for (let i = 0; i < spec.LABEL_PREFIX.length; i++) if (bytes[i] !== spec.LABEL_PREFIX.charCodeAt(i)) return false;
@@ -167,6 +171,9 @@ function decodeSection(bytes, row) {
 
 /** Every check, and the facts both entry points report, computed once. */
 function analyze(bytes) {
+  if (isUorc(bytes)) {
+    return analyzeV5(bytes, { spec, schemaErrors, checkWorld, order: [...ARCHIVE_IDS, ...DOCUMENT_IDS], structureIds: STRUCTURE_IDS, archiveIds: ARCHIVE_IDS, documentIds: DOCUMENT_IDS });
+  }
   const structure = readStructure(bytes);
   const checks = structure.checks.map((c) => ({ ...c, level: 'archive' }));
   const facts = { structure, sections: [], documents: {}, roles: {}, revision: null, layoutRevision: null, footer: null, fingerprint: null };
@@ -831,7 +838,7 @@ function predicateOf(entry, reasons, prefix) {
 function inputOf(bytes, evidence, capabilities) {
   const { facts, reasons, contract, world, replay, attested, level } = evidence;
   const blob = (role) => (facts.roles[role] ? facts.sections.find((s) => s.label === facts.roles[role]) : undefined);
-  const digests = { archive: digestsOf(bytes) };
+  const digests = { archive: archiveDigests(bytes, facts) };
   for (const role of ['capabilities', 'guest', 'view', 'model']) {
     const section = blob(role);
     if (section?.digests) digests[role] = section.digests;
@@ -921,7 +928,7 @@ export async function verify(source, policy) {
   }
   for (const [target, expected] of Object.entries(wanted.digests)) {
     let actual = null;
-    if (target === 'archive') actual = digestsOf(bytes);
+    if (target === 'archive') actual = archiveDigests(bytes, facts);
     else if (facts.roles[target]) actual = facts.sections.find((s) => s.label === facts.roles[target])?.digests ?? null;
     const mismatches = actual
       ? Object.entries(expected)

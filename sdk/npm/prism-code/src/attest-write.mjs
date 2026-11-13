@@ -14,7 +14,6 @@
 import { createHash } from 'node:crypto';
 import { SigningError, SubjectMismatchError } from './errors.mjs';
 import { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
-import { blake3Hex } from './blake3.mjs';
 import { readAttestations, appendAttestations, stripAttestations, STATEMENT_TYPE } from './attestations.mjs';
 import { holoBytes } from './attest.mjs';
 import { auth } from './auth.mjs';
@@ -46,9 +45,9 @@ function predicateOf(predicate) {
 }
 
 /**
- * The subjects of a statement, as `{ name, digest: { sha256, blake3 } }` over
+ * The subjects of a statement, as `{ name, digest: { sha256 } }` (the κ) over
  * content blobs of the holo. A request is a role (`guest`, `view`, `model`,
- * `capabilities`), a blob label (`blake3:<hex>`), or `name=<role or label>`.
+ * `capabilities`), a κ-label (`sha256:<hex>`), or `name=<role or label>`.
  * Without a request the subject is the guest, which is what the proof and
  * provenance predicates describe (#266, #268).
  */
@@ -64,11 +63,11 @@ export function resolveSubjects(parsed, requests = []) {
     if (ROLES.includes(target)) {
       roles ??= resolveArchive(parsed).identities;
       label = roles[`${target}Kappa`];
-    } else if (/^blake3:[0-9a-f]{64}$/.test(target)) label = target;
-    else throw new SigningError(`subject ${JSON.stringify(request)} is neither a role (${ROLES.join(', ')}) nor a blake3 label`, { check: 'sign.subject' });
+    } else if (/^sha256:[0-9a-f]{64}$/.test(target)) label = target;
+    else throw new SigningError(`subject ${JSON.stringify(request)} is neither a role (${ROLES.join(', ')}) nor a κ-label (sha256:<hex>)`, { check: 'sign.subject' });
     const blob = parsed.blobs.find((b) => b.label === label);
     if (!blob) throw new SigningError(`subject ${label} is not a content blob of this holo`, { check: 'sign.subject' });
-    return { name: name ?? (ROLES.includes(target) ? target : label), digest: { sha256: sha256Hex(blob.content), blake3: blake3Hex(blob.content) } };
+    return { name: name ?? (ROLES.includes(target) ? target : label), digest: { sha256: sha256Hex(blob.content) } };
   });
   if (new Set(subjects.map((s) => s.name)).size !== subjects.length) throw new SigningError('two subjects have the same name', { check: 'sign.subject' });
   return subjects;
@@ -110,7 +109,7 @@ export async function experimental_attest(source, options) {
 /**
  * A whole statement someone else wrote, such as the proof statement
  * `prismpm verify` writes (#266): an in-toto Statement v1 whose every subject
- * is a content blob of this holo with both digests equal. Returns the bytes
+ * is an object of this holo named by its κ (sha256) alone. Returns the bytes
  * to sign, its canonical JSON.
  */
 function statementBytes(parsed, statement) {
@@ -126,9 +125,9 @@ function statementBytes(parsed, statement) {
   if (typeof value.predicateType !== 'string' || !URI.test(value.predicateType)) throw new SigningError('the statement has no predicateType URI', { check: 'sign.statement' });
   if (!Array.isArray(value.subject) || value.subject.length === 0) throw new SigningError('the statement has no subject', { check: 'sign.statement' });
   for (const subject of value.subject) {
-    const blob = parsed.blobs.find((b) => b.label === `blake3:${subject?.digest?.blake3}`);
-    if (!blob || sha256Hex(blob.content) !== subject.digest.sha256) {
-      throw new SubjectMismatchError(`subject ${JSON.stringify(subject?.name)} is not a content blob of this holo with both digests equal`, { check: 'sign.subject' });
+    const blob = parsed.blobs.find((b) => b.label === `sha256:${subject?.digest?.sha256}`);
+    if (!blob || Object.keys(subject.digest).length !== 1) {
+      throw new SubjectMismatchError(`subject ${JSON.stringify(subject?.name)} is not an object of this holo named by its κ alone`, { check: 'sign.subject' });
     }
   }
   return { statement: value, bytes: encoder.encode(canonicalJson(value)) };

@@ -3,7 +3,8 @@ use crate::holo::archive::{strip_attestations, validate_application};
 use crate::inspect::verdict::{verify, Level, Policy};
 
 /// The reference archive, `calculator-example` `artifacts/Calculator.holo`.
-const CALCULATOR: &[u8] = include_bytes!("../../../../sdk/npm/prism-code/fixtures/Calculator.holo");
+const CALCULATOR: &[u8] =
+    include_bytes!("../../../../sdk/npm/prism-code/fixtures/Calculator.v5.holo");
 const LOCK: &[u8] =
     include_bytes!("../../../../sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json");
 /// What `sdk/npm/prism-code/src/provenance.mjs` writes for the same archive and lock.
@@ -85,9 +86,10 @@ fn ho_33_the_statement_equals_the_lock_and_the_archive() {
     let lock: Value = serde_json::from_slice(LOCK).unwrap();
     let definition = &statement["predicate"]["buildDefinition"];
     assert_eq!(definition["buildType"], HOLO_BUILD_TYPE);
+    // The lock still records two digests (sdk-lock/3); the statement names the κ.
     assert_eq!(
-        definition["externalParameters"]["model"],
-        lock["inputs"]["model"]
+        definition["externalParameters"]["model"]["sha256"],
+        lock["inputs"]["model"]["sha256"]
     );
     assert_eq!(
         definition["externalParameters"]["spec"],
@@ -101,13 +103,13 @@ fn ho_33_the_statement_equals_the_lock_and_the_archive() {
     let subjects = statement["subject"].as_array().unwrap();
     assert_eq!(subjects.len(), 4);
     for subject in subjects {
-        let label = format!("blake3:{}", subject["digest"]["blake3"].as_str().unwrap());
+        let label = format!("sha256:{}", subject["digest"]["sha256"].as_str().unwrap());
         let content = parsed.blobs.get(&label).unwrap();
-        assert_eq!(subject["digest"], dual_digest(content));
+        assert_eq!(subject["digest"], kappa_digest(content));
     }
     let rows = definition["resolvedDependencies"].as_array().unwrap();
     let row = |name: &str| rows.iter().find(|row| row["name"] == name).unwrap();
-    assert_eq!(row("sdk-lock")["digest"], dual_digest(LOCK));
+    assert_eq!(row("sdk-lock")["digest"], kappa_digest(LOCK));
     assert_eq!(row("sdk-image")["uri"], lock["sdk_image"]);
     assert_eq!(row("world")["uri"], lock["inputs"]["world"]["contract"]);
     assert_eq!(

@@ -149,6 +149,10 @@ path = "crates/prismpm/src/holo/attestation.rs"
 module = "verify"
 
 [[owner]]
+path = "crates/prismpm/src/holo/v5.rs"
+module = "verify"
+
+[[owner]]
 path = "crates/prismpm/src/holo/canonical.rs"
 module = "errors"
 
@@ -354,6 +358,10 @@ module = "verify"
 
 [[owner]]
 path = "sdk/npm/prism-code/src/attestations.mjs"
+module = "verify"
+
+[[owner]]
+path = "sdk/npm/prism-code/src/uorc.mjs"
 module = "verify"
 
 [[owner]]

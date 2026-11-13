@@ -207,7 +207,6 @@ pub(crate) fn write(evidence: &Evidence<'_>) -> Result<Outcome, PrismError> {
     let hex = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
     let values: Values = [
         evidence.guest.to_owned(),
-        blake3::hash(guest).to_hex().to_string(),
         hex(guest),
         lexlean::LEAN_VERSION.to_owned(),
         lexlean::LEAN_GITHASH.to_owned(),
@@ -222,7 +221,6 @@ pub(crate) fn write(evidence: &Evidence<'_>) -> Result<Outcome, PrismError> {
         member(&lock, "sdk_version")?.to_owned(),
         member(&extension, "snapshot_id")?.to_owned(),
         hex(model),
-        blake3::hash(model).to_hex().to_string(),
         member(&extension, "source_id")?.to_owned(),
         member(&extension, "semantic_id")?.to_owned(),
         member(&extension, "compiler_semantics_id")?.to_owned(),
@@ -234,13 +232,13 @@ pub(crate) fn write(evidence: &Evidence<'_>) -> Result<Outcome, PrismError> {
     project(values, modules, theorems, exits)
 }
 
-/// The model's input, in [`write`]'s order: subject name, blake3 and
-/// sha256; Lean version and commit; LexLean version, commit and crate
+/// The model's input, in [`write`]'s order: subject name and sha256 (its
+/// κ, ADR-017); Lean version and commit; LexLean version, commit and crate
 /// SHA-256; the lean4-prod commit; rustc; wasm-bindgen; prismpm; the SDK image
-/// and version; the snapshot id; the model's SHA-256 and BLAKE3; the source,
+/// and version; the snapshot id; the model's SHA-256; the source,
 /// semantic and compiler-semantics ids; the Lean manifest SHA-256; the
 /// attestation and verification manifest SHA-256; the time.
-type Values = [String; 24];
+type Values = [String; 22];
 
 /// Run the generated writer on its input and read the statement back as
 /// canonical JSON.
@@ -254,11 +252,10 @@ fn project(
         .name("prism-proof-statement".into())
         .stack_size(STACK)
         .spawn(move || {
-            let [subject_name, subject_blake3, subject_sha256, lean_version, lean_commit, lexlean_version, lexlean_commit, lexlean_crate, lean4_prod, rustc, wasm_bindgen, prismpm, sdk_image, sdk_version, snapshot, model_sha256, model_blake3, source, semantic, compiler, lean_manifest, attestation, manifest, time] =
+            let [subject_name, subject_sha256, lean_version, lean_commit, lexlean_version, lexlean_commit, lexlean_crate, lean4_prod, rustc, wasm_bindgen, prismpm, sdk_image, sdk_version, snapshot, model_sha256, source, semantic, compiler, lean_manifest, attestation, manifest, time] =
                 values;
             let input = Adt0::C0(
                 text(&subject_name),
-                text(&subject_blake3),
                 text(&subject_sha256),
                 text(&lean_version),
                 text(&lean_commit),
@@ -273,7 +270,6 @@ fn project(
                 text(&sdk_version),
                 text(&snapshot),
                 text(&model_sha256),
-                text(&model_blake3),
                 text(&source),
                 text(&semantic),
                 text(&compiler),

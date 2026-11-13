@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { generateKeyPairSync } from 'node:crypto';
 
 const bin = fileURLToPath(new URL('../bin/prism-code.mjs', import.meta.url));
-const fixture = fileURLToPath(new URL('../fixtures/Calculator.holo', import.meta.url));
+const fixture = fileURLToPath(new URL('../fixtures/Calculator.v5.holo', import.meta.url));
 const PROOF = 'https://uor.foundation/prism/proof/v1';
 
 const run = (...args) => {
