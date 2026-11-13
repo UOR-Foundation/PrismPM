@@ -23,11 +23,6 @@ on:
         required: true
         default: true
         type: boolean
-      cut:
-        description: After a fully green rehearsal on main or a release branch, tag vVERSION at this commit and dispatch its publication run
-        required: true
-        default: false
-        type: boolean
   push:
     # Every release-branch update qualifies its exact merge commit. Branch
     # pushes are always rehearsals; only a version tag publishes. main
