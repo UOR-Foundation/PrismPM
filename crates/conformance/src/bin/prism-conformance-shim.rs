@@ -72,11 +72,15 @@ fn code_for_check(check: &str) -> &'static str {
 }
 
 /// A verdict that did not pass, as the error `holo.verify({ throw: true })`
-/// raises (`errorFromVerdict`): a rule the caller pinned first, then a world
-/// outside the grant, then the first reason that withholds a level up to the
-/// minimum, carrying the whole verdict.
+/// raises (`errorFromVerdict`): damage first, since it fails every policy
+/// (`policy.integrity`) and is the reason to name, then a rule the caller
+/// pinned, then a world outside the grant, then the first reason that
+/// withholds a level up to the minimum, carrying the whole verdict.
 fn failed(verdict: &Verdict) -> Answer {
     let reasons = &verdict.reasons;
+    let damaged = reasons
+        .iter()
+        .find(|reason| reason.check == "holo.integrity");
     let pinned = reasons
         .iter()
         .find(|reason| reason.withholds.is_none() && reason.check != "policy.level");
@@ -88,7 +92,8 @@ fn failed(verdict: &Verdict) -> Answer {
             .withholds
             .is_some_and(|level| level.rank() <= verdict.minimum.rank())
     });
-    let reason = pinned
+    let reason = damaged
+        .or(pinned)
         .or(outside)
         .or(blocking)
         .or_else(|| reasons.iter().find(|reason| reason.check != "policy.level"))
