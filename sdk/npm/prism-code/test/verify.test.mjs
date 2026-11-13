@@ -54,7 +54,7 @@ test('the level is the honest one: P0 today, however low the policy and whatever
   assert.equal(lenient.passed, true);
   const claim = {
     _type: 'https://in-toto.io/Statement/v1',
-    subject: [{ name: 'guest', digest: { sha256: '0'.repeat(64), blake3: '0'.repeat(64) } }],
+    subject: [{ name: 'guest', digest: { sha256: '0'.repeat(64) } }],
     predicateType: 'https://uor.foundation/prism/proof/v1',
     predicate: { verifiedLevels: ['P3'] },
   };
@@ -63,7 +63,8 @@ test('the level is the honest one: P0 today, however low the policy and whatever
     verificationMaterial: { publicKey: { hint: 'placeholder' }, tlogEntries: [] },
     dsseEnvelope: { payload: Buffer.from(JSON.stringify(claim)).toString('base64'), payloadType: 'application/vnd.in-toto+json', signatures: [{ keyid: '', sig: 'AA==' }] },
   };
-  const claimed = appendAttestations(original, [bundle]);
+  // Only a holo v5 takes attestations (ADR-017).
+  const claimed = appendAttestations(new Uint8Array(readFileSync(new URL('../fixtures/Calculator.v5.holo', import.meta.url))), [bundle]);
   // The package reads format revision 2026-10-23, which has no attestation row, so a holo with one has no verdict yet.
   // Whatever it learns to read, an unsigned claim of P3 must not raise the level.
   const withClaim = await experimental_verify(claimed, { minimum: 'P0', env: {} }).catch((error) => {
