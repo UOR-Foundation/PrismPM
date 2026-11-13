@@ -3686,6 +3686,18 @@ three-module package, wrote byte-identical `kernel.ir`, `roots.json` and
 `coverage.json` when no two definitions share a last component, and distinct
 qualified names when they do.
 
+The unchanged Text Request application (`tests/fixtures/holo/ho-11-text-application`)
+was built in the same image with `prismpm build --no-provenance`, by `prismpm`
+from `0e9d75de` (old archive) and from `4f4ba8bd` (new archive). Its
+`Text Request.holo` is the same bytes from both,
+`1d9608c0d4bf22e0b55d885d63c3eb5649def6c85e7c0f7eaf5ca5b90767863e`, and so are
+`cargo/kernel.ir`, `cargo/roots.json`, `cargo/coverage.json`, the generated crate,
+the Core-Wasm guest and the browser Wasm. Only `application/exporter-identity.json`,
+which records the exporter archive and executable, differs, and with it the
+build identity. `--no-provenance` was needed because the fixture has no
+`prismpm.lock`; it omits the provenance statement. A build with a statement was
+not compared.
+
 What this does not show: the native library profile, which still requires a
 distinct last component for every definition of its closure, and two types that
 share a last component, which `prod-codegen` refuses with `DuplicateTypeName`.
