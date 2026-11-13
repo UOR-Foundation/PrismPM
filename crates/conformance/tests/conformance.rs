@@ -85,6 +85,7 @@ test_case!(conformance_ho_42, "HO-42");
 test_case!(conformance_ho_43, "HO-43");
 test_case!(conformance_ho_44, "HO-44");
 test_case!(conformance_ho_45, "HO-45");
+test_case!(conformance_ho_46, "HO-46");
 
 test_case!(conformance_al_03, "AL-03");
 test_case!(conformance_al_05, "AL-05");

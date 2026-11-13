@@ -1142,6 +1142,24 @@ the text profile carries strictly validated UTF-8 byte requests/responses.
 Both call only the generated crate API; JavaScript domain arithmetic is
 forbidden.
 
+`kernel.ir` names every exported definition once, and a call names the
+definition it reaches. A requested root is named by the last component of its
+Lean name, which is its public Rust name. Any other definition of the closure
+is named by its last component while no other definition of the closure has
+that component. Otherwise it is named by its qualified name: `__prod_q`, then
+for each component in order `_`, the component's length in characters, `_`
+and the component, a numeric component being `_n` and its value. So
+`Kernel.Admission.answer` and `Kernel.Range.answer` in one application are
+`__prod_q_6_Kernel_9_Admission_6_answer` and
+`__prod_q_6_Kernel_5_Range_6_answer`. A definition that is not a root and
+whose last component starts with `__prod_q` is named the same way, so a
+qualified name never equals another definition's name. An application in which
+no two definitions share a last component exports the `kernel.ir` it exported
+before this rule. Two requested roots that share a last component have no
+distinct public name: `prod-export` refuses them by name and the build fails
+with `PP5004`. HO-46 owns this rule. The native library profile (§12.6) still
+requires every definition of its closure to have a distinct last component.
+
 The application owner composes the generated Core-Wasm package's exact
 target Rust flags with its owned workspace and registry path remaps. It passes
 each argument through Cargo's encoded Rust-flags environment, retaining memory,
@@ -4412,6 +4430,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-43` | `holo` | The generated host trait of a server application has two defaulted per-request methods, request_begin and request_end, and the served driver calls each once per answered request: request_begin before the core runs with the request's number in the process and its body, request_end after the answer is written with the same number, the request body and the answer body, including a request the adapter or the core refuses; the number pairs each end with its begin when requests on other connections interleave; the defaults do nothing, the shared host forwards both, and the core, its vectors and the effect table are unchanged. | §3 |
 | `HO-44` | `holo` | The session world hologram:guest/core-wasm@2 is a new contract with its own WIT file and registry row, import-free, exporting exactly memory, holo_alloc and holo_step; its guest package is generated from the model's Bytes -> Bytes root as rendered by prod-codegen and a fixed shim rendered from the declared request, state, response, response-count, page and stack bounds alone; the shim keeps the state inside the instance, traps on a state, response, response count or trailing byte over its declaration and on a step over a region holo_alloc did not reserve, and compacts its arena after every step so the memory a step uses is a function of its state and request; bounds that cannot be generated and an entry that is not Bytes -> Bytes are refused with PP5101, and the @1 row and file are unchanged. | §3 |
 | `HO-45` | `holo` | prism-code runs a session-world guest as sessions: one instance per session with an empty first state, steps in order returning zero or more responses through dispatch and stream, every failure ending the session, session.closed for a later step, session.busy for a concurrent step, session.required for dispatch on the application and session.unsupported for open on a stateless one; acceptance sessions are compared step by step; prism/history/2 records sessions as steps and the failure that ended them, and replay re-executes each on a fresh session, reporting every divergence as a DeterminismViolationError and refusing a history of the other world with replay.history. | §3 |
+| `HO-46` | `holo` | Definitions of one application that share a last name component build: prod-export names a requested root by its last component and any other definition of the closure by its last component while no other definition has it, and otherwise by a reserved prefix followed by the length and text of each component of its qualified name, so distinct definitions have distinct names and calls reach the definition they name; an application with no shared last component exports the same bytes as before, and two requested roots that share a last component are refused by name with PP5004. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
