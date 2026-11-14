@@ -8,7 +8,7 @@ import test from 'node:test';
 const {load}=createRequire('/opt/prismpm/oracles/package.json')('js-yaml');
 const path=new URL('../.github/workflows/sdk-candidate.yml',import.meta.url);
 const raw=()=>readFileSync(path,'utf8');
-const predicate="github.repository == 'UOR-Foundation/prismpm' && github.event_name == 'workflow_dispatch' && inputs.construction_source_revision != '' && !inputs.development_only";
+const predicate="github.repository == 'UOR-Foundation/PrismPM' && github.event_name == 'workflow_dispatch' && inputs.construction_source_revision != '' && !inputs.development_only";
 function validate(text){
  const w=load(text),j=w.jobs['unpublished-construction'];
  assert.deepEqual(w.permissions,{});assert(j,'a separate no-publication construction owner is required');
@@ -18,7 +18,7 @@ function validate(text){
  assert.equal(j.environment,undefined);assert.equal(j.needs,'input-policy');
  assert.equal(w.jobs.policy.needs,'input-policy');
  const input=w.jobs['input-policy'];assert.deepEqual(input.permissions,{});
- assert.equal(input.if,"github.repository == 'UOR-Foundation/prismpm'");
+ assert.equal(input.if,"github.repository == 'UOR-Foundation/PrismPM'");
  assert.equal(input.steps.length,1);
  assert.deepEqual(input.steps[0].env,{SOURCE_REVISION:'${{ inputs.construction_source_revision }}',DEVELOPMENT_ONLY:'${{ inputs.development_only }}',WORKFLOW_REVISION:'${{ github.workflow_sha }}',INTEGRITY_SELECTION:'${{ inputs.construction_integrity }}',QUALIFICATION_SELECTION:'${{ inputs.unpublished_qualification }}'});
  assert.equal(input.steps[0].run,'[[ "$DEVELOPMENT_ONLY" = true || "$DEVELOPMENT_ONLY" = false ]]\nif test -n "$SOURCE_REVISION"; then\n  [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]\n  test "$DEVELOPMENT_ONLY" = false\n  test "$SOURCE_REVISION" = "$WORKFLOW_REVISION"\nfi\nif test -n "$INTEGRITY_SELECTION"; then\n  test "$DEVELOPMENT_ONLY" = false\n  test -z "$SOURCE_REVISION"\nfi\nif test -n "$QUALIFICATION_SELECTION"; then\n  test "$DEVELOPMENT_ONLY" = false\n  test -z "$SOURCE_REVISION"\n  test -z "$INTEGRITY_SELECTION"\n  test "$WORKFLOW_REVISION" = "$GITHUB_SHA"\nfi\n');

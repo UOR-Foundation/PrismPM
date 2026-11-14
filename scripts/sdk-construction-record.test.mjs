@@ -11,6 +11,8 @@ import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import test from 'node:test';
 import {constructionRecord} from './sdk-construction-record.mjs';
+// The workspace version the image label carries (scripts/workspace-version.mjs).
+const workspaceVersion=()=>/^version = "([^"]+)"$/m.exec(readFileSync(new URL('../Cargo.toml',import.meta.url),'utf8').split('[workspace.package]')[1])[1];
 const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
 
 function fixture(t){
@@ -24,7 +26,7 @@ function fixture(t){
  const layer=execFileSync('/usr/bin/tar',['--format=ustar','-cf','-','-C',layerRoot,'unit-only'],{timeout:5000,maxBuffer:1048576});
  const config=Buffer.from(JSON.stringify({os:'linux',architecture:arch,rootfs:{type:'layers',diff_ids:[sha(layer)]},config:{Labels:{
   'org.opencontainers.image.revision':source,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/prismpm',
-  'org.opencontainers.image.version':'0.4.0','org.opencontainers.image.created':'1970-01-01T00:00:00Z'}}}));
+  'org.opencontainers.image.version':workspaceVersion(),'org.opencontainers.image.created':'1970-01-01T00:00:00Z'}}}));
  const manifest=Buffer.from(JSON.stringify({schemaVersion:2,mediaType:'application/vnd.oci.image.manifest.v1+json',
   config:{...put(config),mediaType:'application/vnd.oci.image.config.v1+json'},
   layers:[{...put(layer),mediaType:'application/vnd.oci.image.layer.v1.tar'}]}));

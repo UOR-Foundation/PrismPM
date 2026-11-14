@@ -68,7 +68,7 @@ const definitions = [
   ['sdk-metadata-credentials', 'schema', '1', '/opt/prismpm/metadata-credentials.mjs'],
   ['sdk-metadata-helper', 'schema', '1', '/opt/prismpm/metadata-helper.mjs'],
   ['sdk-metadata-helper-supervisor', 'schema', '1', '/opt/prismpm/metadata-helper-supervisor.py'],
-  ['action', 'workflow', '0.4.0', 'action', 'tree'],
+  ['action', 'workflow', '0.5.0', 'action', 'tree'], // x-release-please-version
   ['adapter-compose', 'adapter', 'compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d', 'adapters/compose.json'],
   ['adapter-github-pages', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages.json'],
   ['adapter-github-pages-browser', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages-browser.json'],
@@ -117,9 +117,9 @@ const definitions = [
   ['playwright-chromium', 'oracle', '1.62.1', null, 'sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e'],
   ['playwright-driver', 'oracle', '1.62.1', '/opt/prismpm/oracles/node_modules/playwright', 'tree'],
   ['playwright-core', 'oracle', '1.62.1', '/opt/prismpm/oracles/node_modules/playwright-core', 'tree'],
-  ['prismpm', 'binary', '0.4.0', '/usr/local/bin/prismpm'],
-  ['prismpm-conformance', 'binary', '0.4.0', '/usr/local/bin/prismpm-conformance'],
-  ['prismpm-platform-equivalence', 'binary', '0.4.0', '/usr/local/bin/prismpm-platform-equivalence'],
+  ['prismpm', 'binary', '0.5.0', '/usr/local/bin/prismpm'], // x-release-please-version
+  ['prismpm-conformance', 'binary', '0.5.0', '/usr/local/bin/prismpm-conformance'], // x-release-please-version
+  ['prismpm-platform-equivalence', 'binary', '0.5.0', '/usr/local/bin/prismpm-platform-equivalence'], // x-release-please-version
   ['prism-stdlib', 'crate', '0.2.0', 'stdlib/generated/prism-stdlib-0.2.0.crate'],
   ['runtime-base', 'base-image', 'playwright-v1.62.1-noble', null, 'sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e'],
   ['runtime-os-lock', 'dependency-lock', 'ubuntu-noble@20260901T000000Z', 'sdk/runtime-os.lock'],
@@ -133,7 +133,7 @@ const definitions = [
   ['timeout', 'binary', 'coreutils-9.4', '/usr/bin/timeout'],
   ['unicode-17.0.0-normalization-corpus', 'test-corpus', '17.0.0', 'standards/corpora/unicode-17.0.0', 'tree'],
   ['opentelemetry-0.136.0-signal-corpus', 'test-corpus', '0.136.0', 'standards/corpora/opentelemetry-0.136.0', 'tree'],
-  ['workflow-reusable-sdk', 'workflow', '0.4.0', '.github/workflows/sdk.yml'],
+  ['workflow-reusable-sdk', 'workflow', '0.5.0', '.github/workflows/sdk.yml'], // x-release-please-version
 ];
 const inputRoot = '/opt/prismpm/share/vv-inputs';
 const inputPolicyBytes = await readFile('/opt/prismpm/share/vv-input-policy.json');

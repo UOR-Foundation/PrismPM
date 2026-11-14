@@ -224,7 +224,7 @@ function sdkContract(value) {
   assert.deepEqual(mutable.outputs, readonly.outputs);
   assert.deepEqual(validation.steps, [{id: 'validate', env: {LC_ALL: 'C', INVOCATION_KEY: '${{ inputs.invocation-key }}'}, run: 'set -euo pipefail\n[[ "$INVOCATION_KEY" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]\nprintf \'key=%s\\n\' "$INVOCATION_KEY" >> "$GITHUB_OUTPUT"\n'}]);
   assert.deepEqual(mutable.steps, [readonly.steps[0], {...readonly.steps[1], if: readOnly}, readonly.steps[2]]);
-  assert.equal(readonly.steps[1].uses, 'UOR-Foundation/prismpm/action@f785ee46d794886c29b7efe80c2b261e48733a15');
+  assert.equal(readonly.steps[1].uses, 'UOR-Foundation/PrismPM/action@f785ee46d794886c29b7efe80c2b261e48733a15');
   assert.deepEqual(readonly.steps[1].with, {'sdk-image': '${{ inputs.sdk-image }}', command: 'fetch', context: '${{ inputs.context }}'});
   assert.equal(readonly.steps[2].uses, readonly.steps[1].uses);
   const inputs = value.on.workflow_call.inputs;

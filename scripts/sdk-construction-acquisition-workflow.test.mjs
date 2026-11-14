@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 const {load}=createRequire('/opt/prismpm/oracles/package.json')('js-yaml');
 const text=()=>readFileSync(new URL('../.github/workflows/sdk-candidate.yml',import.meta.url),'utf8');
-const predicate="github.repository == 'UOR-Foundation/prismpm' && github.event_name == 'workflow_dispatch' && inputs.construction_integrity != '' && !inputs.development_only && inputs.construction_source_revision == ''";
+const predicate="github.repository == 'UOR-Foundation/PrismPM' && github.event_name == 'workflow_dispatch' && inputs.construction_integrity != '' && !inputs.development_only && inputs.construction_source_revision == ''";
 function validate(raw){
  const w=load(raw),j=w.jobs['construction-integrity'];assert.deepEqual(w.permissions,{});assert.equal(j.if,predicate);assert.equal(j.needs,'input-policy');
  assert.equal(j['runs-on'],'ubuntu-24.04');assert.equal(j['timeout-minutes'],90);assert.deepEqual(j.permissions,{contents:'read',actions:'read'});
