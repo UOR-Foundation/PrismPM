@@ -2054,8 +2054,12 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
     )?
     .trim()
     .to_owned();
+    let version =
+        repo_model::release::workspace_version(&std::fs::read_to_string(root.join("Cargo.toml"))?)
+            .ok_or("Cargo.toml has no [workspace.package] version")?;
+    let prefix = format!("--prefix=PrismPM-{version}/");
     let archive = Command::new("git")
-        .args(["archive", "--format=tar", "--prefix=PrismPM-0.4.0/", "HEAD"])
+        .args(["archive", "--format=tar", &prefix, "HEAD"])
         .current_dir(root)
         .output()?;
     if !archive.status.success() {
@@ -2065,7 +2069,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         )
         .into());
     }
-    let source_name = "PrismPM-0.4.0-source.tar";
+    let source_name = &format!("PrismPM-{version}-source.tar");
     std::fs::write(destination.join(source_name), archive.stdout)?;
 
     let metadata = Command::new("cargo")
@@ -2131,11 +2135,11 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "components": components,
         "source_commit": head,
         "spec": "prismpm/sbom/1",
-        "version": "0.4.0"
+        "version": version
     });
     let mut sbom_bytes = prismpm::holo::canonical::encode_value(&sbom)?;
     sbom_bytes.push(b'\n');
-    let sbom_name = "PrismPM-0.4.0-sbom.json";
+    let sbom_name = &format!("PrismPM-{version}-sbom.json");
     std::fs::write(destination.join(sbom_name), &sbom_bytes)?;
 
     let artifact_rows = [
@@ -2155,7 +2159,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "artifacts": artifact_rows.iter().map(|(path, sha256)| serde_json::json!({"path": path, "sha256": sha256})).collect::<Vec<_>>(),
         "commit": head,
         "schema": "prismpm/release-manifest/1",
-        "version": "0.4.0"
+        "version": version
     });
     let mut manifest_bytes = prismpm::holo::canonical::encode_value(&manifest)?;
     manifest_bytes.push(b'\n');
