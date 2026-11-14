@@ -174,7 +174,10 @@ impl<'a> Fields<'a> {
             })
     }
 
-    /// The elements of a list literal, in source order.
+    /// The elements of a list literal, in source order. A long literal may
+    /// be written as the `append` of shorter ones (LexLean's own long
+    /// literals are balanced appends), so its depth stays bounded however
+    /// many elements it has; the term is walked with a stack, not recursion.
     fn list(&self, name: &str) -> Result<Vec<&'a Value>, PrismError> {
         let malformed = || {
             refuse(
@@ -183,17 +186,32 @@ impl<'a> Fields<'a> {
             )
         };
         let mut out = Vec::new();
-        let mut term = self.field(name)?;
-        loop {
+        let mut pending = vec![self.field(name)?];
+        while let Some(term) = pending.pop() {
             match term.get("kind").and_then(Value::as_str) {
-                Some("nil") => return Ok(out),
+                Some("nil") => {}
                 Some("cons") => {
                     out.push(term.get("head").ok_or_else(malformed)?);
-                    term = term.get("tail").ok_or_else(malformed)?;
+                    pending.push(term.get("tail").ok_or_else(malformed)?);
+                }
+                Some("primitive")
+                    if term.get("operation").and_then(Value::as_str) == Some("append")
+                        && term.pointer("/result/kind").and_then(Value::as_str) == Some("list") =>
+                {
+                    let Some([left, right]) = term
+                        .get("arguments")
+                        .and_then(Value::as_array)
+                        .map(Vec::as_slice)
+                    else {
+                        return Err(malformed());
+                    };
+                    pending.push(right);
+                    pending.push(left);
                 }
                 _ => return Err(malformed()),
             }
         }
+        Ok(out)
     }
 
     fn texts(&self, name: &str) -> Result<Vec<String>, PrismError> {
