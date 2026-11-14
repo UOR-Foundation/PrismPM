@@ -100,7 +100,7 @@ test('completion reads as strictly as spec.json is read', () => {
   refusedWith({ title: 'T', fields: DRAFT.fields, rules: DRAFT.rules }, 'rules.otherwise');
 });
 
-test('a number field compared with another field written as a bare word is refused with the way to write it', () => {
+test('a number field compared with a bare word that names a number field is read as that field, and named', () => {
   const draft = {
     title: 'Payment',
     fields: [{ name: 'amount', kind: 'number', max: 1000 }, { name: 'limit', kind: 'number', max: 1000 }],
@@ -108,10 +108,20 @@ test('a number field compared with another field written as a bare word is refus
     otherwise: 'refused',
   };
   const checked = checkSpec(draft);
-  assert.equal(checked.refusal.rule, 'condition.operand');
-  assert.match(repairMessage(checked), /to compare with the field `limit`, write the value as \{"field": "limit"\}\./);
-  draft.rules[0].when[0].value = { field: 'limit' };
-  assert.equal(checkSpec(draft).ok, true);
+  assert.equal(checked.ok, true);
+  assert.deepEqual(checked.spec.rules[0].when, [when('amount', '<=', { field: 'limit' })]);
+  assert.deepEqual(checked.notes.filter((n) => /^Read/.test(n)), ['Read `amount <= "limit"` as a comparison with the field limit: a number is never compared with text.']);
+  // The stored spec is the one with the field written out, and it is the same spec as the draft that wrote it so.
+  const written = { ...draft, rules: [{ when: [when('amount', '<=', { field: 'limit' })], then: 'approved' }] };
+  assert.equal(canonicalJson(checked.spec), canonicalJson(completeSpec(written).spec));
+  assert.deepEqual(completeSpec(written).notes, []);
+  // In a guarantee too; and the strict reader still refuses the bare word, saying how to write it.
+  const stated = completeSpec({ ...written, properties: [{ kind: 'never', when: [when('amount', '>', 'limit')], then: 'approved' }] });
+  assert.deepEqual(stated.spec.properties[0].when, [when('amount', '>', { field: 'limit' })]);
+  assert.throws(() => readSpecFile({ ...completeSpec(written).spec, rules: draft.rules }), /to compare with the field `limit`, write the value as \{"field": "limit"\}\./);
+  // A choice compared with a word is a choice, never a field.
+  const choice = completeSpec({ title: 'Role', fields: [{ name: 'role', kind: 'choice', values: ['limit', 'other'] }, { name: 'limit', kind: 'number', max: 9 }], rules: [{ when: [when('role', 'is', 'limit')], then: 'yes' }], otherwise: 'no' });
+  assert.deepEqual([choice.spec.rules[0].when, choice.notes], [[when('role', 'is', 'limit')], []]);
   // A word that names no number field keeps the plain refusal.
   assert.match(checkSpec({ ...draft, rules: [{ when: [when('amount', '<=', 'ceiling')], then: 'approved' }] }).refusal.message, /`"ceiling"` is not a number field\./);
 });

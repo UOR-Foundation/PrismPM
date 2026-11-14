@@ -107,7 +107,8 @@ A spec that already holds `purpose`, `outcomes`, `properties` and `examples` is
 not a draft: it is taken as written and nothing is proposed again, so a
 guarantee you struck stays struck. Prism also drops, and says so in `notes`, an
 `invalid` listed among the answers that no rule answers, and a guarantee whose
-conditions no request can meet. The completed spec is what `prism/spec.json`
+conditions no request can meet; and it reads a number field compared with a
+bare word that names another number field (`"value": "limit"`) as that field. The completed spec is what `prism/spec.json`
 holds and what the app's seal names.
 
 For a caller that can hold a model's answer to a JSON schema,

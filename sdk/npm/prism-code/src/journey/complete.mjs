@@ -12,6 +12,11 @@
  *   examples    the first request each rule decides, and one for `otherwise`
  *   properties  guarantees read off the rules, each marked as proposed
  *
+ * It also reads the few slips that have one meaning, and names each in a note:
+ * an `invalid` listed among the answers that nothing answers, a guarantee no
+ * request can meet, and a number field compared with a bare word that names
+ * another number field.
+ *
  * A spec is a draft when it leaves out any of `purpose`, `outcomes`,
  * `properties` or `examples`. A stored spec holds all four (Prism writes them,
  * empty when there is nothing), so it is never completed again and a guarantee
@@ -111,6 +116,22 @@ export function completeSpec(input) {
   const draft = isDraft(raw);
   const notes = [];
   const work = { ...raw };
+
+  // A number is never compared with text, so a bare word that names a number field, where a number
+  // field is compared, has one meaning: that field. Measured with Qwen3 30B (#666), this was every
+  // refusal of a rules-only draft, six runs of thirty. It is read as the field, and named.
+  const numbers = new Set(listOf(work.fields).filter((f) => isObject(f) && f.kind === 'number' && typeof f.name === 'string').map((f) => f.name));
+  const readField = (item) => {
+    if (!isObject(item) || !Array.isArray(item.when)) return item;
+    const when = item.when.map((c) => {
+      if (!isObject(c) || !numbers.has(c.field) || typeof c.value !== 'string' || !numbers.has(c.value)) return c;
+      notes.push(`Read \`${c.field} ${c.op} "${c.value}"\` as a comparison with the field ${c.value}: a number is never compared with text.`);
+      return { ...c, value: { field: c.value } };
+    });
+    return { ...item, when };
+  };
+  if (Array.isArray(work.rules)) work.rules = work.rules.map(readField);
+  if (Array.isArray(work.properties)) work.properties = work.properties.map(readField);
   const rules = listOf(work.rules).filter(isObject);
 
   if (draft && listOf(work.outcomes).length === 0) {
