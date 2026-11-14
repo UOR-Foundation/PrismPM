@@ -38,6 +38,10 @@ categories = [
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/UOR-Foundation/LexLean"
 
+[features]
+default = ["production-data"]
+production-data = []
+
 [lib]
 name = "lexlean"
 path = "src/lib.rs"

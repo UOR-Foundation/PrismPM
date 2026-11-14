@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      LEXLEAN_SOURCE_SHA: e0b74b81e6f49c83596a957d232c8383a5db1a25
+      LEXLEAN_SOURCE_SHA: cce7271be1d21db322ca57456ea1e973302d7c63
       CARGO_INCREMENTAL: "0"
       CARGO_NET_OFFLINE: "true"
       CARGO_HOME: ${{ github.workspace }}/target/m0-locked-cargo-inputs
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: UOR-Foundation/LexLean
-          ref: e0b74b81e6f49c83596a957d232c8383a5db1a25
+          ref: cce7271be1d21db322ca57456ea1e973302d7c63
           path: _m0/lexlean
           fetch-depth: 1
           persist-credentials: false
@@ -112,8 +112,10 @@ jobs:
             exec > target/m0-reconciliation-diagnostics/generation-step.log 2>&1
             just codegen
             just fixtures-write
-            just golden-write "M0 issue #5: reconcile reviewed LexLean PR68 e0b74b81e6f49c83596a957d232c8383a5db1a25"
+            just golden-write "M0 issue #5: reconcile reviewed LexLean PR68 cce7271be1d21db322ca57456ea1e973302d7c63"
             just stdlib-package-write
+            just bindings-package-write
+            just factory-write
             stage="$(mktemp -d)"
             cp -a stdlib/generated/package "$stage/stdlib"
             (
@@ -145,6 +147,8 @@ jobs:
             just stdlib-package-check
             just check-fixtures
             just package-release-crates-check
+            just bindings-package-check
+            bash prism-factory/check.sh
             rm -r -- "$stage"
 
       - name: Preserve an inert patch and its selected-source identity

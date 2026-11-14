@@ -81,6 +81,24 @@ bindings-package-check:
 bindings-package-write:
     cargo run --locked --package xtask -- bindings-package --write
 
+# Re-export the certified factory bundle and its workflows with the pinned LexLean (README "Rebuilding").
+factory-write:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target="${CARGO_TARGET_DIR:-$PWD/target}/lexlean"
+    cargo build --quiet --release --locked --manifest-path vendor/lexlean/Cargo.toml --bin lexlean --target-dir "$target"
+    lexlean="$target/release/lexlean"
+    result=$(cd prism-factory/model && "$lexlean" lock --check >&2 && "$lexlean" verify --all >&2 && "$lexlean" production build --request ../production-request.json | sed -n 's/.*; result \([0-9a-f]\{64\}\);.*/\1/p')
+    test -n "$result"
+    rm -rf prism-factory/certified
+    cp -r "prism-factory/model/.lexlean/production/$result" prism-factory/certified
+    rm -rf prism-factory/model/.lexlean
+    cargo build --quiet --release --locked --manifest-path prism-factory/host/Cargo.toml
+    host=prism-factory/host/target/release/prism-factory
+    "$host" workflow --name factory --write .github/workflows/factory.yml
+    "$host" workflow --name release --jobs prism-factory/jobs --write .github/workflows/release.yml
+    "$host" workflow --name cut --write .github/workflows/release-cut.yml
+
 # Verify examples and standard library
 verify-examples:
     cargo run --package xtask -- verify-examples
