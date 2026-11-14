@@ -259,6 +259,10 @@ result type is one of its row types and whose body is a closed literal record:
 | `ThreatMapping` | the `controls` that answer the threat named by `threat` |
 | `AcceptedRisk` | the `rationale` for accepting the threat named by `threat` |
 
+A list a row states (`evidence`, `controls`) is a list literal: `nil`, a `cons`
+of an element and a list literal, or the `append` of two list literals, the
+form LexLean gives a long literal, so a row's nesting stays bounded however
+many elements it lists.
 Each reference is the qualified `<module>::<declaration>` identifier the model
 document gives the record. `Stride` is `spoofing`, `tampering`, `repudiation`,
 `informationDisclosure`, `denialOfService` or `elevationOfPrivilege`. An

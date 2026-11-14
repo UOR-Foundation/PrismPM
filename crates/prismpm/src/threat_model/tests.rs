@@ -436,3 +436,85 @@ fn the_diagnostic_probe_runs_the_real_check() {
     answered["accepted"] = json!({"Probe::threat": "Accepted."});
     probe(&answered).unwrap();
 }
+
+fn appended(left: Value, right: Value, kind: &str) -> Value {
+    json!({"kind": "primitive", "operation": "append", "result": {"kind": kind}, "arguments": [left, right]})
+}
+
+fn review(reference: &str) -> Value {
+    body(vec![
+        (
+            "kind",
+            choice("Production.ThreatModel::EvidenceKind.review"),
+        ),
+        ("reference", string(reference)),
+    ])
+}
+
+#[test]
+fn an_appended_list_literal_is_the_list_of_its_parts() {
+    let items: Vec<Value> = (0..5).map(|i| review(&format!("src/lib.rs:{i}"))).collect();
+    let consed = replaced("closure", control(items.clone()));
+    // ((a ++ b) ++ (c ++ (d e))), as LexLean balances a long literal.
+    let tree = appended(
+        appended(
+            list(items[..1].to_vec()),
+            list(items[1..2].to_vec()),
+            "list",
+        ),
+        appended(
+            list(items[2..3].to_vec()),
+            list(items[3..].to_vec()),
+            "list",
+        ),
+        "list",
+    );
+    let mut control_row = control(vec![]);
+    control_row["body"]["fields"][3]["value"] = tree;
+    let appended_rows = replaced("closure", control_row);
+    check(&declared(&appended_rows)).unwrap();
+    assert_eq!(
+        format!("{:?}", declared(&appended_rows)),
+        format!("{:?}", declared(&consed))
+    );
+    // An append whose result is no list, or with other than two arguments,
+    // is not a list literal.
+    for wrong in [
+        appended(
+            list(items[..1].to_vec()),
+            list(items[1..].to_vec()),
+            "string",
+        ),
+        json!({"kind": "primitive", "operation": "append", "result": {"kind": "list"}, "arguments": [list(items.clone())]}),
+    ] {
+        let mut row = control(vec![]);
+        row["body"]["fields"][3]["value"] = wrong;
+        assert_eq!(code(&replaced("closure", row)), "PP2022");
+    }
+}
+
+#[test]
+fn a_long_appended_list_literal_is_read_without_recursion() {
+    // Ten thousand elements as one cons chain would nest past any JSON
+    // reader's limit; as balanced appends of short chains it nests a few
+    // levels, and it is read with a stack.
+    let items: Vec<Value> = (0..10_000)
+        .map(|i| review(&format!("src/lib.rs:{i}")))
+        .collect();
+    let mut runs: Vec<Value> = items.chunks(32).map(|c| list(c.to_vec())).collect();
+    while runs.len() > 1 {
+        runs = runs
+            .chunks(2)
+            .filter_map(|pair| {
+                pair.iter()
+                    .cloned()
+                    .reduce(|left, right| appended(left, right, "list"))
+            })
+            .collect();
+    }
+    let mut row = control(vec![]);
+    row["body"]["fields"][3]["value"] = runs.remove(0);
+    let declared = declared(&replaced("closure", row));
+    check(&declared).unwrap();
+    assert_eq!(declared.controls[CONTROL].evidence.len(), 10_000);
+}
