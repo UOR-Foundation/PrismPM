@@ -8,6 +8,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {bootstrapNames, canonical, captureBootstrap, hash, readOriginal, validateBootstrapBytes} from './sdk-bootstrap-retention.mjs';
 import {assembleVvEvidence, validateVvPart, vvParts} from './sdk-vv-run.mjs';
 import {isAncestor, kappa} from './factory.mjs';
+import {workspaceVersion} from './workspace-version.mjs';
 
 export function releaseContext(revision, architecture, image, runId, attempt) {
   assert.match(revision, /^[0-9a-f]{40}$/); assert(['amd64', 'arm64'].includes(architecture));
@@ -218,7 +219,8 @@ export function validateNative(files, context) {
   assert.equal(result.schema, 'prismpm/native-equivalence-retention/1'); assert.equal(result.scope, 'original-native-sdk-comparison-only');
   assert.equal(resolve(result.root), result.root); assert(!result.root.includes(','));
   assert.deepEqual(Object.keys(result.archive).sort(), ['byte_length', 'path', 'sha256']);
-  assert.match(result.archive.path, /^prismpm-0\.4\.0-(?:aarch64|x86_64)-unknown-linux-gnu\.tar\.gz$/);
+  const version = workspaceVersion().replaceAll('.', '\\.');
+  assert.match(result.archive.path, new RegExp(`^prismpm-${version}-(?:aarch64|x86_64)-unknown-linux-gnu\\.tar\\.gz$`));
   assert.equal(result.archive.path.includes('aarch64'), context.architecture === 'arm64');
   assert(Number.isSafeInteger(result.archive.byte_length) && result.archive.byte_length > 0);
   assert.match(result.archive.sha256, /^[0-9a-f]{64}$/);

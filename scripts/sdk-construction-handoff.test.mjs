@@ -4,6 +4,8 @@ import {createHash} from 'node:crypto';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {validateConstructionAuthority,validateConstructionMetadata,composeConstructionIndex} from './sdk-construction-handoff.mjs';
+// The workspace version the image label carries (scripts/workspace-version.mjs).
+const workspaceVersion=()=>/^version = "([^"]+)"$/m.exec(readFileSync(new URL('../Cargo.toml',import.meta.url),'utf8').split('[workspace.package]')[1])[1];
 const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
 const bytes=v=>Buffer.from(JSON.stringify(v));
 const now=Date.parse('2026-10-08T00:00:00Z');
@@ -38,7 +40,7 @@ function fixture(runId=123,attempt=1){
  const standards=bytes({schema:'prismpm/standards-lock/1',authorities:[],oracles:[]});
  function lane(arch){
   const config=bytes({os:'linux',architecture:arch,config:{Labels:{'org.opencontainers.image.revision':source,
-   'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.4.0',
+   'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':workspaceVersion(),
    'org.opencontainers.image.created':'1970-01-01T00:00:00Z'}}});
   const manifest=bytes({schemaVersion:2,mediaType:'application/vnd.oci.image.manifest.v1+json',
    config:{mediaType:'application/vnd.oci.image.config.v1+json',digest:sha(config),size:config.length},layers:[{

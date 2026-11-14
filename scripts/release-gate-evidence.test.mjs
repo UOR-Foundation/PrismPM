@@ -12,6 +12,7 @@ import {bootstrapNames, canonical, hash, readOriginal, validateBootstrapRetentio
 import {assembleSourceEvidence, captureCommand, nativeInvocations, releaseContext, sourceEvidenceNames, validateCommand, validateSourcePart, validateSourceReceipt} from './release-gate-evidence.mjs';
 import {captureEvidence, packEvidence} from './sdk-release-evidence.mjs';
 import {retainPart, vvParts} from './sdk-vv-run.mjs';
+import {workspaceVersion} from './workspace-version.mjs';
 const require = createRequire('/opt/prismpm/oracles/package.json'), {load} = require('js-yaml');
 const revision = 'a'.repeat(40), image = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:' + 'b'.repeat(64);
 const context = releaseContext(revision, 'amd64', image, '123', '1');
@@ -48,7 +49,7 @@ function nativeFixture(root) {
   const source = '/unit-only/source';
   for (const [prefix, args, status] of nativeInvocations(source, image, 'amd64', 1000, 1000)) commandFixture(root, prefix, 'docker', args, status);
   put(root, 'native-result.json', {schema: 'prismpm/native-equivalence-retention/1', scope: 'original-native-sdk-comparison-only',
-    ...context, root: source, uid: 1000, gid: 1000, archive: descriptor('prismpm-0.4.0-x86_64-unknown-linux-gnu.tar.gz', Buffer.from('fixture archive'))});
+    ...context, root: source, uid: 1000, gid: 1000, archive: descriptor(`prismpm-${workspaceVersion()}-x86_64-unknown-linux-gnu.tar.gz`, Buffer.from('fixture archive'))});
 }
 
 test('native and container mutable references use the PP6101 exit class', () => {
@@ -400,7 +401,7 @@ test('missing bootstrap, failed command, substituted bytes and wrong native invo
       root => {const row = JSON.parse(readFileSync(join(root, 'native-error.json'))); row.status = 6; put(root, 'native-error.json', row);},
       root => commandFixture(root, 'container-error', 'docker', ['run', 'changed'], 6),
       root => {const row = JSON.parse(readFileSync(join(root, 'native-error.json'))); row.status = 0; put(root, 'native-error.json', row);},
-      root => {const row = JSON.parse(readFileSync(join(root, 'native-result.json'))); row.archive.path = 'prismpm-0.4.0-aarch64-unknown-linux-gnu.tar.gz'; put(root, 'native-result.json', row);},
+      root => {const row = JSON.parse(readFileSync(join(root, 'native-result.json'))); row.archive.path = `prismpm-${workspaceVersion()}-aarch64-unknown-linux-gnu.tar.gz`; put(root, 'native-result.json', row);},
       root => {const row = JSON.parse(readFileSync(join(root, 'container-check.json'))); commandFixture(root, 'container-check', row.command, row.arguments, 0, 'different success');},
     ]],
   ]) for (const mutate of changes) {

@@ -28,7 +28,11 @@
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-model.version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-conformance.version" },
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" }
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" },
+        { "type": "generic", "path": "sdk/generate-inventory.mjs" },
+        { "type": "generic", "path": "sdk/Dockerfile" },
+        { "type": "json", "path": "sdk/oracles/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "sdk/runtime/package.json", "jsonpath": "$.version" }
       ]
     },
     "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code", "extra-files": [{ "type": "generic", "path": "src/version.mjs" }] },

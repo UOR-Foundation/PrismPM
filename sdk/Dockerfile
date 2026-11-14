@@ -315,7 +315,9 @@ RUN /usr/bin/python3 -I -B scripts/normalize-cargo-git.py /usr/local/cargo \
     && rm -f /usr/local/cargo/.global-cache /usr/local/cargo/.global-cache-journal /usr/local/cargo/.global-cache-wal /usr/local/cargo/.global-cache-shm
 
 FROM build AS cli-archive-package
-ARG SDK_VERSION=0.4.0
+# x-release-please-start-version
+ARG SDK_VERSION=0.5.0
+# x-release-please-end
 ARG TARGETARCH
 COPY --from=source_inputs /prepared/source/LICENSE-APACHE /prepared/source/LICENSE-MIT /prepared/source/README.md /tmp/native-licenses/
 RUN set -eu; \
