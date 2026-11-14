@@ -2,12 +2,6 @@
 
 ## [0.2.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-conformance-v0.1.0...prism-code-conformance-v0.2.0) (2026-11-14)
 
-
-### ⚠ BREAKING CHANGES
-
-* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
-* **prism-code:** statements is no longer an option of experimental_verify, experimental_createClient or Application.experimental_verify.
-
 ### Features Added
 
 * **author:** examples and intent in, agent-written LexLean, proof as the gate (Refs [#325](https://github.com/UOR-Foundation/prismpm/issues/325)) ([#421](https://github.com/UOR-Foundation/prismpm/issues/421)) ([b5c8318](https://github.com/UOR-Foundation/prismpm/commit/b5c83187302cb8a147b6fd9200d33182030f0d52))
@@ -22,13 +16,16 @@
 * **spec:** @prism-code/conformance and COMPLIANCE.md (Refs [#287](https://github.com/UOR-Foundation/prismpm/issues/287)) ([#420](https://github.com/UOR-Foundation/prismpm/issues/420)) ([b20e883](https://github.com/UOR-Foundation/prismpm/commit/b20e883a18867287053a33f239c0fb22ec3fd7cd))
 * **view:** Hologram design system for every Prism app, closure v2 and build provenance ([18a60a3](https://github.com/UOR-Foundation/prismpm/commit/18a60a32769fdbe8bd88b75d1e00fd5e992af672))
 
+### Breaking Changes
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
+* **prism-code:** statements is no longer an option of experimental_verify, experimental_createClient or Application.experimental_verify.
 
 ### Bugs Fixed
 
 * **ci:** pass the format gate, the prism-code size cap and the docs lint on PR 550 ([68104d7](https://github.com/UOR-Foundation/prismpm/commit/68104d7d8dfb922308c3a0b38d7f4c63262cf5f9))
 * **prism-code:** experimental_verify refuses caller-supplied statements ([#459](https://github.com/UOR-Foundation/prismpm/issues/459)) ([9f4d04f](https://github.com/UOR-Foundation/prismpm/commit/9f4d04fe2cdf377ea0585ec08562a2ddc785a8fd))
 * **prism-code:** load refuses an altered holo (Fixes [#583](https://github.com/UOR-Foundation/prismpm/issues/583)) ([#591](https://github.com/UOR-Foundation/prismpm/issues/591)) ([62cbf2a](https://github.com/UOR-Foundation/prismpm/commit/62cbf2a633bdac47a2a48d42a3310ad77b5b121c))
-
 
 ### Other Changes
 
