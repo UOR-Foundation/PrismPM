@@ -2,11 +2,6 @@
 
 ## [0.2.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-verify-v0.1.0...prism-code-verify-v0.2.0) (2026-11-14)
 
-
-### ⚠ BREAKING CHANGES
-
-* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
-
 ### Features Added
 
 * **conformance:** the Rust runtime runs @prism-code/conformance ([#590](https://github.com/UOR-Foundation/prismpm/issues/590)) ([d9373f9](https://github.com/UOR-Foundation/prismpm/commit/d9373f952cfc5ef1524b79791346085ef60f7a9d))
@@ -22,6 +17,9 @@
 * **verify:** histories and prism replay with the prism/replay/v1 statement (Refs [#284](https://github.com/UOR-Foundation/prismpm/issues/284)) ([#415](https://github.com/UOR-Foundation/prismpm/issues/415)) ([1466f53](https://github.com/UOR-Foundation/prismpm/commit/1466f537dbb9c2d3653ff67db9f8e2bd2c8a7e5c))
 * **verify:** policy files for prism-code check, in Rego (Refs [#285](https://github.com/UOR-Foundation/prismpm/issues/285)) ([#414](https://github.com/UOR-Foundation/prismpm/issues/414)) ([cc5ff83](https://github.com/UOR-Foundation/prismpm/commit/cc5ff83cc76d626296a732c411983920d7b2b0aa))
 
+### Breaking Changes
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
 
 ### Bugs Fixed
 
