@@ -72,11 +72,12 @@ Claude Desktop included: `prism-code mcp` on stdio.
 ## Build a verified app from one sentence (experimental)
 
 With the `prism` server connected, ask the agent for a Prism app in one
-sentence, such as "build me a Prism app for loan approval". The agent drafts
-the whole spec, passes it to `prism_spec` to be checked, and shows it to you
-once for approval, properties first: Lean proves them, so they must be the ones
-you mean. Nothing is built until you approve. The spec has six parts, and the
-agent asks about a part only when it cannot infer it:
+sentence, such as "build me a Prism app for loan approval". The agent
+translates the sentence into a draft, passes it to `prism_spec` to be completed
+and checked, and shows it to you once for approval, properties first: Lean
+proves them, so they must be the ones you mean. Nothing is built until you
+approve. The spec has six parts, and the agent asks about a part only when it
+cannot infer it:
 
 | Part | Says | Becomes |
 | --- | --- | --- |
@@ -86,6 +87,39 @@ agent asks about a part only when it cannot infer it:
 | rules | `when ... then ...`, in order, then `otherwise`, each with its reason | the decision the guest runs |
 | properties | what must `never` or `always` happen, each with the harm it prevents | one theorem each, proved by Lean |
 | examples | real requests and their answers | acceptance vectors |
+
+A model writes only what you said: a `title`, the `fields`, the `rules` and
+the `otherwise` answer, and a property only when you stated one. That is the
+draft form of `prism/spec/1`, and Prism completes it, the same way every time
+(`completeSpec` in `src/journey/complete.mjs`, a pure function):
+
+| Left out | Prism derives |
+| --- | --- |
+| `outcomes` | the answers the rules and `otherwise` give, in first-appearance order; never `invalid` |
+| `purpose`, `name` | one sentence from the answers and the fields; the name from the title |
+| `examples` | the first request each rule decides, and one for `otherwise`, at most six |
+| `properties` (fewer than three) | proposals, up to three in all: `always <answer> when <conditions>` for each rule no earlier rule overrides, then `never <answer> when <field> is <value>` for each answer a choice never gets |
+
+A proposal is kept only when no request breaks it, every candidate request
+having been tried, and its `why` starts "Proposed by Prism", so the review
+shows it as proposed, first, and you keep or strike it before Lean proves it.
+A spec that already holds `purpose`, `outcomes`, `properties` and `examples` is
+not a draft: it is taken as written and nothing is proposed again, so a
+guarantee you struck stays struck. Prism also drops, and says so in `notes`, an
+`invalid` listed among the answers that no rule answers, and a guarantee whose
+conditions no request can meet; and it reads a number field compared with a
+bare word that names another number field (`"value": "limit"`) as that field. The completed spec is what `prism/spec.json`
+holds and what the app's seal names.
+
+For a caller that can hold a model's answer to a JSON schema,
+`src/journey/spec-schema.mjs` exports `DRAFT_JSON_SCHEMA` (the draft form,
+about 2 KiB, closed, whole non-negative bounds) and `SPEC_JSON_SCHEMA` (the
+whole spec). `checkSpec` completes and checks a spec in one call, and
+`repairMessage` turns a refusal into what to tell the model: each false
+guarantee as the JSON it wrote, beside the rule that decides against it and the
+request that shows it, with the two ways out. Why: [#666][issue-666].
+
+[issue-666]: https://github.com/UOR-Foundation/PrismPM/issues/666
 
 Beside these, `limits` lists what the app does not decide. Reasons, meanings
 and limits are for people: no proof depends on them, and they are kept with
@@ -107,8 +141,8 @@ guest. Wrong axiom sets are corrected without asking. Proving takes about a
 minute; a first build takes ten minutes or more. The properties are proved;
 the reading of requests and the examples are tested.
 
-The tools are `prism_start`, `prism_answer`, `prism_spec` (read or replace the
-whole spec as `prism/spec/1` JSON), `prism_prove`, `prism_build`, `prism_try`
+The tools are `prism_start`, `prism_answer`, `prism_spec` (read the whole spec
+as `prism/spec/1` JSON, or replace it with a draft or a whole spec), `prism_prove`, `prism_build`, `prism_try`
 (answer one request) and `prism_status`. Proving and building run as jobs, so a
 call returns `running` and the next call picks the job up. Design:
 [docs/proposals/325-prism-journey.md](../../../docs/proposals/325-prism-journey.md).
