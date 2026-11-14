@@ -1,6 +1,6 @@
 {
   "name": "@prism-code/verify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Check a Prism .holo offline in a browser, a worker or Node, without the runtime: archive integrity, both digests of every part, the documents inside, and a Verdict with an assurance level.",
   "license": "MIT",
   "type": "module",
