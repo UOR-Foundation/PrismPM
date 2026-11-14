@@ -1,6 +1,6 @@
 {
   "name": "@prism-code/conformance",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The executable suite every Prism runtime runs in CI through an entrypoint shim: the .holo format and the runtime contract as data, with expected failures, stable check ids and a generated compliance matrix.",
   "license": "MIT",
   "type": "module",
