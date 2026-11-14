@@ -88,7 +88,7 @@ factory-write:
     target="${CARGO_TARGET_DIR:-$PWD/target}/lexlean"
     cargo build --quiet --release --locked --manifest-path vendor/lexlean/Cargo.toml --bin lexlean --target-dir "$target"
     lexlean="$target/release/lexlean"
-    result=$(cd prism-factory/model && "$lexlean" lock --check && "$lexlean" verify --all >&2 && "$lexlean" production build --request ../production-request.json | sed -n 's/.*; result \([0-9a-f]\{64\}\);.*/\1/p')
+    result=$(cd prism-factory/model && "$lexlean" lock --check >&2 && "$lexlean" verify --all >&2 && "$lexlean" production build --request ../production-request.json | sed -n 's/.*; result \([0-9a-f]\{64\}\);.*/\1/p')
     test -n "$result"
     rm -rf prism-factory/certified
     cp -r "prism-factory/model/.lexlean/production/$result" prism-factory/certified
