@@ -1,6 +1,6 @@
 {
   "name": "@prism-code/spec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "The Prism formats as data: TypeScript types, JSON Schemas and WIT for the .holo archive, its documents, in-toto attestations, predicate types and the Core-Wasm guest world. No functions, no dependencies.",
   "license": "MIT",
