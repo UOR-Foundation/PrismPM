@@ -17,11 +17,6 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 
 ## [0.5.0](https://github.com/UOR-Foundation/prismpm/compare/v0.4.0...v0.5.0) (2026-11-14)
 
-
-### ⚠ BREAKING CHANGES
-
-* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
-
 ### Features Added
 
 * **factory:** release cut by the certified plan; one workspace version for the release line ([96aa797](https://github.com/UOR-Foundation/prismpm/commit/96aa797d1abd88dae2fa9907f452d14cf240d38e))
@@ -53,46 +48,6 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 * **stream:** retain source-owned state through cleanup ([#532](https://github.com/UOR-Foundation/prismpm/issues/532)) ([39ce746](https://github.com/UOR-Foundation/prismpm/commit/39ce74683bbb5f392ff126bb5cf8a01580af2004))
 * **system:** hold a host-effect system to its server application's effects (Part of [#217](https://github.com/UOR-Foundation/prismpm/issues/217)) ([#617](https://github.com/UOR-Foundation/prismpm/issues/617)) ([9d2bcdc](https://github.com/UOR-Foundation/prismpm/commit/9d2bcdcd1bdb9e3ab09f1b2216c84c42bd5d3ba0))
 
-
-### Bugs Fixed
-
-* **codegen:** name definitions that share a last component by their qualified name ([#646](https://github.com/UOR-Foundation/prismpm/issues/646)) ([d650d94](https://github.com/UOR-Foundation/prismpm/commit/d650d940b980e4689761994245c1361be1a4a185))
-* **codegen:** refuse a let-bound list read as a value in builder mode ([#602](https://github.com/UOR-Foundation/prismpm/issues/602)) ([#606](https://github.com/UOR-Foundation/prismpm/issues/606)) ([4fe5d84](https://github.com/UOR-Foundation/prismpm/commit/4fe5d849b5abb3a5fcf062e73752da77d24755c5))
-* **deps:** rustix 1.1.6 for RUSTSEC-2026-0486 ([#596](https://github.com/UOR-Foundation/prismpm/issues/596)) ([a615b3d](https://github.com/UOR-Foundation/prismpm/commit/a615b3d677cc93a3d3ba163585a8f4c239ecaeff))
-* **merge:** keep main's workbench runtime; the busy-focus fix stays with [#514](https://github.com/UOR-Foundation/prismpm/issues/514) ([34f2be0](https://github.com/UOR-Foundation/prismpm/commit/34f2be0b8cfbf64d75ecb76de5c4426e239c698d))
-* **merge:** keep the SDK check closure, V&V disk checkpoints and construction pin ([06a0373](https://github.com/UOR-Foundation/prismpm/commit/06a0373d1d300e941132831d441242d07a02cce8))
-* **merge:** resolve standards.lock from the merged catalog; workspace_version before tests ([08a7dda](https://github.com/UOR-Foundation/prismpm/commit/08a7dda58cc7f9331e75fd2220776f861a1871f1))
-* **model:** drop the registers of the removed author module (Refs [#648](https://github.com/UOR-Foundation/prismpm/issues/648)) ([#650](https://github.com/UOR-Foundation/prismpm/issues/650)) ([7118c61](https://github.com/UOR-Foundation/prismpm/commit/7118c61b054e9ced359d659c37a08a75de51fcff))
-* **prism-code:** load refuses an altered holo (Fixes [#583](https://github.com/UOR-Foundation/prismpm/issues/583)) ([#591](https://github.com/UOR-Foundation/prismpm/issues/591)) ([62cbf2a](https://github.com/UOR-Foundation/prismpm/commit/62cbf2a633bdac47a2a48d42a3310ad77b5b121c))
-* **prism-code:** refuse an altered holo as an integrity failure, never a TypeError ([#651](https://github.com/UOR-Foundation/prismpm/issues/651)) ([20eea45](https://github.com/UOR-Foundation/prismpm/commit/20eea45f13893ccba1f5dc7806187ff7c697cac9))
-* **prism-code:** remove check without a holo, announced for 0.4.0 ([#597](https://github.com/UOR-Foundation/prismpm/issues/597)) ([3d99181](https://github.com/UOR-Foundation/prismpm/commit/3d99181d3697a4d115dc6f50cedf5fc2f8c4933f))
-* **prism-code:** the 0.8.0 changelog entry lists its sections in the required order ([#671](https://github.com/UOR-Foundation/prismpm/issues/671)) ([d017786](https://github.com/UOR-Foundation/prismpm/commit/d017786d78e20993f8732712882d34b165b26f31))
-* **prism-code:** the version constant is 0.9.0, and release-please writes it from now on ([#674](https://github.com/UOR-Foundation/prismpm/issues/674)) ([e7b75b0](https://github.com/UOR-Foundation/prismpm/commit/e7b75b00a299f65e9c74a90d128e2ac1a5692d97))
-* **threat-model:** read a list literal written as appends of shorter ones ([#673](https://github.com/UOR-Foundation/prismpm/issues/673)) ([c34f791](https://github.com/UOR-Foundation/prismpm/commit/c34f791b832a926ca4cab5b95a9f4e7ac4aa7f06))
-* **verify:** report a stage's own diagnostic when it fails after the exporter build ([#643](https://github.com/UOR-Foundation/prismpm/issues/643)) ([#645](https://github.com/UOR-Foundation/prismpm/issues/645)) ([f8b2ea0](https://github.com/UOR-Foundation/prismpm/commit/f8b2ea0f944b266012e3706097ac24b569d815b7))
-* **verify:** say plainly that a built holo does not carry its proof ([#600](https://github.com/UOR-Foundation/prismpm/issues/600)) ([46b13cc](https://github.com/UOR-Foundation/prismpm/commit/46b13cc72be35af3919a654438096adcbf0cd6bd))
-* **view:** ship browser closure v2 for Application/1 and Text/1 pages, and accept it in the Hologram oracle ([#612](https://github.com/UOR-Foundation/prismpm/issues/612)) ([#615](https://github.com/UOR-Foundation/prismpm/issues/615)) ([359d7f5](https://github.com/UOR-Foundation/prismpm/commit/359d7f5bfa8e01272ba6028c30c94459420ebb6a))
-
-
-### Other Changes
-
-* **conformance:** the five replay checks, now that replay is on main ([#588](https://github.com/UOR-Foundation/prismpm/issues/588)) ([a6233ca](https://github.com/UOR-Foundation/prismpm/commit/a6233caf01476f38353a1e900ae0f1f9a3f59796))
-* **factory:** drop the unused cut input from the release workflow ([#662](https://github.com/UOR-Foundation/prismpm/issues/662)) ([80f57c5](https://github.com/UOR-Foundation/prismpm/commit/80f57c57988163abf635162654110577871979b4))
-* **lexlean:** bump LexLean with one dispatch ([#642](https://github.com/UOR-Foundation/prismpm/issues/642)) ([585ee8e](https://github.com/UOR-Foundation/prismpm/commit/585ee8eb3123e624a189edbcba1001b6b7c57855))
-* **main:** release prism-code 0.9.0 ([#670](https://github.com/UOR-Foundation/prismpm/issues/670)) ([8b63e97](https://github.com/UOR-Foundation/prismpm/commit/8b63e97394109d582177a695c09ce3c8de7741bd))
-* **prism-code:** release 0.8.0, and the spec document is a function of the spec alone ([#656](https://github.com/UOR-Foundation/prismpm/issues/656)) ([aaedb51](https://github.com/UOR-Foundation/prismpm/commit/aaedb51449191695a4e01ca77e5e94c303cdcda0))
-* **prism-code:** sum the package cap from one allowance file per change (Part of [#441](https://github.com/UOR-Foundation/prismpm/issues/441)) ([#618](https://github.com/UOR-Foundation/prismpm/issues/618)) ([02d5acc](https://github.com/UOR-Foundation/prismpm/commit/02d5acc473a40c0246a4da8ee69252c1828c2d03))
-* **prismpm:** process helpers move to verify, the last pending module cut (Part of [#448](https://github.com/UOR-Foundation/prismpm/issues/448)) ([#628](https://github.com/UOR-Foundation/prismpm/issues/628)) ([dd2cf14](https://github.com/UOR-Foundation/prismpm/commit/dd2cf14330f323a79ffe4b737833be31fe649d33))
-* **prismpm:** Rust module cuts for contracts, canonical, advisory and reference syntax (Part of [#448](https://github.com/UOR-Foundation/prismpm/issues/448)) ([#626](https://github.com/UOR-Foundation/prismpm/issues/626)) ([089dcf1](https://github.com/UOR-Foundation/prismpm/commit/089dcf1e0c7d21d23ccc7a4ca56146276d146a2a))
-* **proposals:** binary application profile with inputs referenced by digest (Part of [#630](https://github.com/UOR-Foundation/prismpm/issues/630)) ([#635](https://github.com/UOR-Foundation/prismpm/issues/635)) ([7300323](https://github.com/UOR-Foundation/prismpm/commit/7300323313a0a4e759cc678af65a85b9f21c8950))
-* **proposals:** host effects for guests by replay (Part of [#631](https://github.com/UOR-Foundation/prismpm/issues/631)) ([#636](https://github.com/UOR-Foundation/prismpm/issues/636)) ([f2ecf09](https://github.com/UOR-Foundation/prismpm/commit/f2ecf091b717998d5582448a5749ca07e92bc8c9))
-* **proposals:** speed of generated guests, kernels under contract (Part of [#632](https://github.com/UOR-Foundation/prismpm/issues/632)) ([#634](https://github.com/UOR-Foundation/prismpm/issues/634)) ([aeeaf2a](https://github.com/UOR-Foundation/prismpm/commit/aeeaf2a222cf044852a9a2271e06ff295b714172))
-* release status reads the npm version from package.json; agents guide says what ships ([#601](https://github.com/UOR-Foundation/prismpm/issues/601)) ([d023697](https://github.com/UOR-Foundation/prismpm/commit/d02369743c8e5162f824fb52b2ec86910f87ea86))
-* **release:** bring the v0.4.0 release pipeline and the certified factory to main ([b2053c3](https://github.com/UOR-Foundation/prismpm/commit/b2053c3224d2ef4fa90143a248de6ab1a63ff9cf))
-
-## [Unreleased]
-
-### Features Added
 - Conformance DK-43 (#443): the `prism.containers` namespace of `prism-code`, with `dispatch`, `inspect`, `logs`, a recorded `allowUnverified` bypass, and volumes refused through `prism.volumes` with the refusal on the record. DK-40 now counts the two container-volume tests.
 - `prismpm <module> <verb>` (#441): the Rust CLI groups its commands under the modules of `model/modules.toml`, as `prism-code` does: `prismpm images build|inspect|pull|push|verify|export-browser`, `prismpm verify check|attestation|signature|release|replay|model|conformance|acceptance|browser-publication`, `prismpm auth attest|sign|sign-evidence`, `prismpm system lock|update|fetch|authority|clean`, `prismpm containers run|status` and `prismpm client generate|completion|template`. Each group verb runs its flat command with the same arguments, output and result schema, and the flat commands stay. The table is the `[[group]]` rows of `model/commands.toml`: the model gate checks that each names a registered command, the CLI parses its groups from the same rows, and `CONTRACTS.md` lists them. `prismpm <module>` prints the module's verbs; an unknown verb is `PP1001`. A module that is also a command (`verify`) is a group only when the next word is one of its verbs.
 - The developer view of #346 is a LexLean model (#347, experimental): `bindings/src/Foundation/Views/V1/Developer.lex.tex` declares the developer glossary once, each Docker-aligned term over the canonical term it names, the other words of the surface and the deprecated aliases. Its certified export runs in `cargo xtask check-developer-view` (part of `cargo xtask validate`), which checks every verb, flag, namespace and method of the `prism-code` surface against it and renders [docs/developer-glossary.md](docs/developer-glossary.md). Canonical model terms, schema identifiers, predicate URIs and error codes do not change; the renamed `prism-code` spellings are in its own changelog.
@@ -133,6 +88,9 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - The OSCAL structural validator is bound through `standards.lock` as the `oscal-1.1.0-structural` oracle, the `oscal` profile of `prismpm oracle` (#209, SPEC §10.1). Acceptance is JSON structural validity only, not control implementation or whole-standard conformance.
 
 ### Breaking Changes
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
+
 - The proof statement's `timeVerified` is `SOURCE_DATE_EPOCH` when that is set, so the same inputs give the same statement bytes; otherwise it is the time of the run, as before.
 - An integrity failure fails every policy, P0 included. The Rust verdict, `@prism-code/verify` and `prism-code check` add the reason `policy.integrity` with no level withheld whenever `holo.integrity` fails, so a damaged holo never passes a policy whose minimum is P0. The verdict golden `calculator.tampered-guest.json` gains the reason.
 
@@ -147,7 +105,40 @@ To move to 1.0, read the [migration guide](docs/site/migration/to-1-0.md).
 - Histories and replay (#284, `docs/proposals/284-histories-replay.md`, experimental). A history, `prism/history/1` (schema and types in `@prism-code/spec`), is the dispatches of one application in order with their recorded outcomes; acceptance vectors are its first source, and it can also record a refusal. `prism-code replay <history | dir>... --holo <holo>` and `prismpm replay` re-execute histories against a build and compare every outcome byte for byte: exit 0 unchanged, 1 diverged (`DeterminismViolationError`, `replay.divergence`, `PP5701`), 2 could not replay (`ReplayError`, `PP5706`). Both write a deterministic `prism/replay/v1` statement with `--statement`, also on a divergence: the guest as its subject, the model, every history's dual digest, the divergence count and the runtime. `prism-code history` writes a holo's vectors as a history, `prism-code run --record` records live dispatches, and `experimental_replay`, `experimental_recorder` and `Application.history` expose the same to code. `checkReplayStatement` in `@prism-code/verify` fails a statement from another guest or model or one that records a divergence, each withholding P3, so a changed model cannot reach it; `verify` joins it when it reads statements, after #267's wire model change, and until then every holo stays P0.
 - A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
 
+### Bugs Fixed
+
+* **codegen:** name definitions that share a last component by their qualified name ([#646](https://github.com/UOR-Foundation/prismpm/issues/646)) ([d650d94](https://github.com/UOR-Foundation/prismpm/commit/d650d940b980e4689761994245c1361be1a4a185))
+* **codegen:** refuse a let-bound list read as a value in builder mode ([#602](https://github.com/UOR-Foundation/prismpm/issues/602)) ([#606](https://github.com/UOR-Foundation/prismpm/issues/606)) ([4fe5d84](https://github.com/UOR-Foundation/prismpm/commit/4fe5d849b5abb3a5fcf062e73752da77d24755c5))
+* **deps:** rustix 1.1.6 for RUSTSEC-2026-0486 ([#596](https://github.com/UOR-Foundation/prismpm/issues/596)) ([a615b3d](https://github.com/UOR-Foundation/prismpm/commit/a615b3d677cc93a3d3ba163585a8f4c239ecaeff))
+* **merge:** keep main's workbench runtime; the busy-focus fix stays with [#514](https://github.com/UOR-Foundation/prismpm/issues/514) ([34f2be0](https://github.com/UOR-Foundation/prismpm/commit/34f2be0b8cfbf64d75ecb76de5c4426e239c698d))
+* **merge:** keep the SDK check closure, V&V disk checkpoints and construction pin ([06a0373](https://github.com/UOR-Foundation/prismpm/commit/06a0373d1d300e941132831d441242d07a02cce8))
+* **merge:** resolve standards.lock from the merged catalog; workspace_version before tests ([08a7dda](https://github.com/UOR-Foundation/prismpm/commit/08a7dda58cc7f9331e75fd2220776f861a1871f1))
+* **model:** drop the registers of the removed author module (Refs [#648](https://github.com/UOR-Foundation/prismpm/issues/648)) ([#650](https://github.com/UOR-Foundation/prismpm/issues/650)) ([7118c61](https://github.com/UOR-Foundation/prismpm/commit/7118c61b054e9ced359d659c37a08a75de51fcff))
+* **prism-code:** load refuses an altered holo (Fixes [#583](https://github.com/UOR-Foundation/prismpm/issues/583)) ([#591](https://github.com/UOR-Foundation/prismpm/issues/591)) ([62cbf2a](https://github.com/UOR-Foundation/prismpm/commit/62cbf2a633bdac47a2a48d42a3310ad77b5b121c))
+* **prism-code:** refuse an altered holo as an integrity failure, never a TypeError ([#651](https://github.com/UOR-Foundation/prismpm/issues/651)) ([20eea45](https://github.com/UOR-Foundation/prismpm/commit/20eea45f13893ccba1f5dc7806187ff7c697cac9))
+* **prism-code:** remove check without a holo, announced for 0.4.0 ([#597](https://github.com/UOR-Foundation/prismpm/issues/597)) ([3d99181](https://github.com/UOR-Foundation/prismpm/commit/3d99181d3697a4d115dc6f50cedf5fc2f8c4933f))
+* **prism-code:** the 0.8.0 changelog entry lists its sections in the required order ([#671](https://github.com/UOR-Foundation/prismpm/issues/671)) ([d017786](https://github.com/UOR-Foundation/prismpm/commit/d017786d78e20993f8732712882d34b165b26f31))
+* **prism-code:** the version constant is 0.9.0, and release-please writes it from now on ([#674](https://github.com/UOR-Foundation/prismpm/issues/674)) ([e7b75b0](https://github.com/UOR-Foundation/prismpm/commit/e7b75b00a299f65e9c74a90d128e2ac1a5692d97))
+* **threat-model:** read a list literal written as appends of shorter ones ([#673](https://github.com/UOR-Foundation/prismpm/issues/673)) ([c34f791](https://github.com/UOR-Foundation/prismpm/commit/c34f791b832a926ca4cab5b95a9f4e7ac4aa7f06))
+* **verify:** report a stage's own diagnostic when it fails after the exporter build ([#643](https://github.com/UOR-Foundation/prismpm/issues/643)) ([#645](https://github.com/UOR-Foundation/prismpm/issues/645)) ([f8b2ea0](https://github.com/UOR-Foundation/prismpm/commit/f8b2ea0f944b266012e3706097ac24b569d815b7))
+* **verify:** say plainly that a built holo does not carry its proof ([#600](https://github.com/UOR-Foundation/prismpm/issues/600)) ([46b13cc](https://github.com/UOR-Foundation/prismpm/commit/46b13cc72be35af3919a654438096adcbf0cd6bd))
+* **view:** ship browser closure v2 for Application/1 and Text/1 pages, and accept it in the Hologram oracle ([#612](https://github.com/UOR-Foundation/prismpm/issues/612)) ([#615](https://github.com/UOR-Foundation/prismpm/issues/615)) ([359d7f5](https://github.com/UOR-Foundation/prismpm/commit/359d7f5bfa8e01272ba6028c30c94459420ebb6a))
+
 ### Other Changes
+
+* **conformance:** the five replay checks, now that replay is on main ([#588](https://github.com/UOR-Foundation/prismpm/issues/588)) ([a6233ca](https://github.com/UOR-Foundation/prismpm/commit/a6233caf01476f38353a1e900ae0f1f9a3f59796))
+* **factory:** drop the unused cut input from the release workflow ([#662](https://github.com/UOR-Foundation/prismpm/issues/662)) ([80f57c5](https://github.com/UOR-Foundation/prismpm/commit/80f57c57988163abf635162654110577871979b4))
+* **lexlean:** bump LexLean with one dispatch ([#642](https://github.com/UOR-Foundation/prismpm/issues/642)) ([585ee8e](https://github.com/UOR-Foundation/prismpm/commit/585ee8eb3123e624a189edbcba1001b6b7c57855))
+* **main:** release prism-code 0.9.0 ([#670](https://github.com/UOR-Foundation/prismpm/issues/670)) ([8b63e97](https://github.com/UOR-Foundation/prismpm/commit/8b63e97394109d582177a695c09ce3c8de7741bd))
+* **prism-code:** release 0.8.0, and the spec document is a function of the spec alone ([#656](https://github.com/UOR-Foundation/prismpm/issues/656)) ([aaedb51](https://github.com/UOR-Foundation/prismpm/commit/aaedb51449191695a4e01ca77e5e94c303cdcda0))
+* **prism-code:** sum the package cap from one allowance file per change (Part of [#441](https://github.com/UOR-Foundation/prismpm/issues/441)) ([#618](https://github.com/UOR-Foundation/prismpm/issues/618)) ([02d5acc](https://github.com/UOR-Foundation/prismpm/commit/02d5acc473a40c0246a4da8ee69252c1828c2d03))
+* **prismpm:** process helpers move to verify, the last pending module cut (Part of [#448](https://github.com/UOR-Foundation/prismpm/issues/448)) ([#628](https://github.com/UOR-Foundation/prismpm/issues/628)) ([dd2cf14](https://github.com/UOR-Foundation/prismpm/commit/dd2cf14330f323a79ffe4b737833be31fe649d33))
+* **prismpm:** Rust module cuts for contracts, canonical, advisory and reference syntax (Part of [#448](https://github.com/UOR-Foundation/prismpm/issues/448)) ([#626](https://github.com/UOR-Foundation/prismpm/issues/626)) ([089dcf1](https://github.com/UOR-Foundation/prismpm/commit/089dcf1e0c7d21d23ccc7a4ca56146276d146a2a))
+* **proposals:** binary application profile with inputs referenced by digest (Part of [#630](https://github.com/UOR-Foundation/prismpm/issues/630)) ([#635](https://github.com/UOR-Foundation/prismpm/issues/635)) ([7300323](https://github.com/UOR-Foundation/prismpm/commit/7300323313a0a4e759cc678af65a85b9f21c8950))
+* **proposals:** host effects for guests by replay (Part of [#631](https://github.com/UOR-Foundation/prismpm/issues/631)) ([#636](https://github.com/UOR-Foundation/prismpm/issues/636)) ([f2ecf09](https://github.com/UOR-Foundation/prismpm/commit/f2ecf091b717998d5582448a5749ca07e92bc8c9))
+* **proposals:** speed of generated guests, kernels under contract (Part of [#632](https://github.com/UOR-Foundation/prismpm/issues/632)) ([#634](https://github.com/UOR-Foundation/prismpm/issues/634)) ([aeeaf2a](https://github.com/UOR-Foundation/prismpm/commit/aeeaf2a222cf044852a9a2271e06ff295b714172))
+* release status reads the npm version from package.json; agents guide says what ships ([#601](https://github.com/UOR-Foundation/prismpm/issues/601)) ([d023697](https://github.com/UOR-Foundation/prismpm/commit/d02369743c8e5162f824fb52b2ec86910f87ea86))
+* **release:** bring the v0.4.0 release pipeline and the certified factory to main ([b2053c3](https://github.com/UOR-Foundation/prismpm/commit/b2053c3224d2ef4fa90143a248de6ab1a63ff9cf))
 
 - Module cuts for the nine modules (#448, #449): each contract's semantic check moved from `contracts` to the module that owns it, the SDK advisory disposition moved from `supply_chain` to `sdk/advisory.rs` (verify), and OCI reference syntax moved from `oci` to `reference.rs` (verify). `oci` and `supply_chain` re-export what moved. `cargo xtask check-modules` now holds 3 pending cuts instead of 15, and `contracts` and `workbench` have left the old cycle.
 - The spec digest in `prismpm/sdk-lock/3` covers `intent.md` in place of the `intent/` directory reserved by #264, and the lock gains an optional `authoring` record. A lock with that record needs an SDK image built from this change.
