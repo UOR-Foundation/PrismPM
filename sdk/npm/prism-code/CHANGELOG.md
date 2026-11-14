@@ -6,9 +6,13 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
-## [Unreleased]
+## [0.9.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-v0.8.0...prism-code-v0.9.0) (2026-11-14)
 
 ### Features Added
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663)) ([7b48b4d](https://github.com/UOR-Foundation/prismpm/commit/7b48b4d4939a7fa42c623c4a596357384fbe1566))
+* **prism-code:** a draft form of prism/spec/1, so a model only translates ([#667](https://github.com/UOR-Foundation/prismpm/issues/667)) ([cdced92](https://github.com/UOR-Foundation/prismpm/commit/cdced9240fd8456c215d56bb4982fa38136a8ad5))
+* **prism-code:** prism/spec/2, a sealed JSON spec for apps that keep state ([#665](https://github.com/UOR-Foundation/prismpm/issues/665)) ([33a4b48](https://github.com/UOR-Foundation/prismpm/commit/33a4b48e477bfe1d1a0855e4150160cb87294707))
 
 - A draft form of `prism/spec/1`, so a model only translates (#666, experimental). A draft holds what the user said: a `title`, the `fields`, the `rules` and the `otherwise` answer, and leaves out any of `purpose`, `outcomes`, `properties` and `examples`. `completeSpec` (`src/journey/complete.mjs`, pure: no clock, no randomness, no I/O) turns it into an ordinary whole spec, the same bytes from the same draft: the answers the rules give, in first-appearance order; a purpose from the answers and the fields and a name from the title; the first request each rule decides and one for `otherwise` as examples, at most six; and, when the draft has fewer than three guarantees, proposals read off the rules, up to three in all, each kept only when no request breaks it and each with a `why` that starts "Proposed by Prism". A spec that holds all four members is not a draft: it comes back as before and nothing is proposed again, so a struck guarantee stays struck. It is still `prism/spec/1`; there is no new schema version.
 - `prism_spec` takes a draft and completes it, returning `proposed` (the ids of proposed guarantees) and `notes`; a draft written to `prism/spec.json` is completed when Prism next reads it. The review lists proposed guarantees first, marked as proposed. The `prism_spec` input no longer requires `purpose` and `outcomes`. The MCP instructions and the skill tell a model to write only what the user said, compactly, and a guarantee only when the user stated one.
@@ -18,6 +22,14 @@ To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.m
 - `DRAFT_JSON_SCHEMA` and `SPEC_JSON_SCHEMA` (`src/journey/spec-schema.mjs`): `prism/spec/1` as JSON Schema, the draft form and the whole spec, for a caller that can hold a model's answer to a schema. Both are closed, and number bounds are whole and not negative.
 - `prism/spec/2`, the JSON spec of an app that keeps state between steps (#664, `docs/proposals/664-stateful-spec.md`, experimental). Bounded `state` with a start, `actions` with inputs and ordered rules whose `change` sets, adds to or subtracts from the state, an `otherwise` per action, properties over every reachable state, and examples as sessions. It is read as strictly as `prism/spec/1`, with its own registered refusals (`STATEFUL_REFUSALS`), renders to the same bytes from the same JSON, and carries the same seal, `[prism/spec/2 blake3:<hex>]`, so `prism-code check --spec` holds a stateful app to its JSON. Lean proves the bounds and each property by induction over a session's steps, every theorem `linear_arithmetic`. A session runs on the text profile as one request, its steps separated by `;`, answered with the last outcome and the state. `prism_spec` takes either schema; a model still writes only JSON. A stateful app builds on this machine only for now: the GitHub template is for decision apps.
 - An unknown `schema` in a spec is refused as `spec.schema`, naming both schemas, rather than as an unknown member.
+
+### Breaking Changes
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
+
+### Bugs Fixed
+
+* **prism-code:** the 0.8.0 changelog entry lists its sections in the required order ([#671](https://github.com/UOR-Foundation/prismpm/issues/671)) ([d017786](https://github.com/UOR-Foundation/prismpm/commit/d017786d78e20993f8732712882d34b165b26f31))
 
 ## [0.8.0] - 2026-11-13
 
