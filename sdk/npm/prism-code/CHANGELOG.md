@@ -6,6 +6,16 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [0.9.1](https://github.com/UOR-Foundation/prismpm/compare/prism-code-v0.9.0...prism-code-v0.9.1) (2026-11-14)
+
+### Breaking Changes
+
+None.
+
+### Bugs Fixed
+
+* **prism-code:** the version constant is 0.9.0, and release-please writes it from now on ([#674](https://github.com/UOR-Foundation/prismpm/issues/674)) ([e7b75b0](https://github.com/UOR-Foundation/prismpm/commit/e7b75b00a299f65e9c74a90d128e2ac1a5692d97))
+
 ## [0.9.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-v0.8.0...prism-code-v0.9.0) (2026-11-14)
 
 ### Features Added
