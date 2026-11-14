@@ -32,7 +32,8 @@ test('the manifest and the config name the same packages, and each exists', () =
   for (const [path, settings] of Object.entries(config.packages)) {
     assert.ok(existsSync(join(ROOT, path)), `${path} does not exist`);
     if (settings['release-type'] === 'node') assert.ok(existsSync(join(ROOT, path, 'package.json')), `${path} has no package.json`);
-    for (const file of settings['extra-files'] ?? []) assert.ok(existsSync(join(ROOT, file.path)), `${file.path} does not exist`);
+    // release-please reads an extra file's path from the package's own directory.
+    for (const file of settings['extra-files'] ?? []) assert.ok(existsSync(join(ROOT, path, file.path)), `${path}/${file.path} does not exist`);
   }
 });
 
