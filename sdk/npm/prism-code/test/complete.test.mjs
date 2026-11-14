@@ -100,6 +100,22 @@ test('completion reads as strictly as spec.json is read', () => {
   refusedWith({ title: 'T', fields: DRAFT.fields, rules: DRAFT.rules }, 'rules.otherwise');
 });
 
+test('a number field compared with another field written as a bare word is refused with the way to write it', () => {
+  const draft = {
+    title: 'Payment',
+    fields: [{ name: 'amount', kind: 'number', max: 1000 }, { name: 'limit', kind: 'number', max: 1000 }],
+    rules: [{ when: [when('amount', '<=', 'limit')], then: 'approved' }],
+    otherwise: 'refused',
+  };
+  const checked = checkSpec(draft);
+  assert.equal(checked.refusal.rule, 'condition.operand');
+  assert.match(repairMessage(checked), /to compare with the field `limit`, write the value as \{"field": "limit"\}\./);
+  draft.rules[0].when[0].value = { field: 'limit' };
+  assert.equal(checkSpec(draft).ok, true);
+  // A word that names no number field keeps the plain refusal.
+  assert.match(checkSpec({ ...draft, rules: [{ when: [when('amount', '<=', 'ceiling')], then: 'approved' }] }).refusal.message, /`"ceiling"` is not a number field\./);
+});
+
 test('every rule completion refuses by is a registered refusal, and it is pure', () => {
   const source = readFileSync(new URL('../src/journey/complete.mjs', import.meta.url), 'utf8');
   const named = [...source.matchAll(/refuse\(.*, '([a-z]+\.[a-z-]+)'\);/g)].map((m) => m[1]);

@@ -284,7 +284,11 @@ export function validateSpec(input) {
         if (!OPS.includes(c.op)) refuse(`\`${c.op}\` is not a comparison.`, where, 'condition.comparison');
         if (typeof c.value === 'number') {
           if (!(Number.isSafeInteger(c.value) && c.value >= 0)) refuse('Compare numbers with whole numbers.', where, 'condition.number');
-        } else if (!(c.value && fields.some((x) => x.name === c.value.field && x.kind === 'number'))) refuse(`\`${JSON.stringify(c.value)}\` is not a number field.`, where, 'condition.operand');
+        } else if (!(c.value && fields.some((x) => x.name === c.value.field && x.kind === 'number'))) {
+          // Measured with Qwen3 30B (#666): the other field written as a bare word, six runs of thirty, and the bare refusal was not repaired once.
+          const meant = typeof c.value === 'string' && fields.some((x) => x.name === c.value && x.kind === 'number');
+          refuse(meant ? `\`${c.field} ${c.op} ${JSON.stringify(c.value)}\` compares with the text ${JSON.stringify(c.value)}; to compare with the field \`${c.value}\`, write the value as {"field": ${JSON.stringify(c.value)}}.` : `\`${JSON.stringify(c.value)}\` is not a number field.`, where, 'condition.operand');
+        }
       }
     }
   };
