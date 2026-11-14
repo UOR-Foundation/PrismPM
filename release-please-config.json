@@ -31,7 +31,7 @@
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" }
       ]
     },
-    "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code" },
+    "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code", "extra-files": ["src/version.mjs"] },
     "sdk/npm/spec": { "release-type": "node", "component": "prism-code-spec" },
     "sdk/npm/verify": { "release-type": "node", "component": "prism-code-verify" },
     "sdk/npm/create-prism-code": { "release-type": "node", "component": "create-prism-code" },
