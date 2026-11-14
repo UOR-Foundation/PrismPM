@@ -2,11 +2,6 @@
 
 ## [0.2.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-spec-v0.1.0...prism-code-spec-v0.2.0) (2026-11-14)
 
-
-### ⚠ BREAKING CHANGES
-
-* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
-
 ### Features Added
 
 * **author:** examples and intent in, agent-written LexLean, proof as the gate (Refs [#325](https://github.com/UOR-Foundation/prismpm/issues/325)) ([#421](https://github.com/UOR-Foundation/prismpm/issues/421)) ([b5c8318](https://github.com/UOR-Foundation/prismpm/commit/b5c83187302cb8a147b6fd9200d33182030f0d52))
@@ -21,6 +16,9 @@
 * **view:** Hologram design system for every Prism app, closure v2 and build provenance ([18a60a3](https://github.com/UOR-Foundation/prismpm/commit/18a60a32769fdbe8bd88b75d1e00fd5e992af672))
 * **view:** ship browser closure v2 with Hologram fonts, icons and a web app manifest ([898dcdf](https://github.com/UOR-Foundation/prismpm/commit/898dcdf66821e9ae0c0423efc6758b3554cb411f))
 
+### Breaking Changes
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
 
 ### Bugs Fixed
 
