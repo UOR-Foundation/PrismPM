@@ -1,6 +1,6 @@
 {
   "name": "@prism-code/testing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Test a Prism application without a network or a clock: a deterministic mock host with time-skipping, scripted dispatch that throws on an unexpected call, and history fixtures in the prism/history/1 format.",
   "license": "MIT",
   "type": "module",
