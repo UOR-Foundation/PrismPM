@@ -19,7 +19,7 @@ commands:
   request           print the plan request for a revision (tree, contexts, receipts, weights)
   plan              print the certified plan for a revision
   run               run every obligation the plan routes to `observe` on this host
-  workflow          print a generated GitHub workflow (`--name factory|release|cut`), or --check/--write it
+  workflow          print a generated GitHub workflow (`--name factory|release|cut|delegate`), or --check/--write it
   plan-request      print the certified plan for a request on stdin (as `request` prints it)
   reweigh           print the next weights for `weight` and `outcome` lines on stdin
   actions-route     write the routes of a release run to $GITHUB_OUTPUT (the Actions adapter)
@@ -30,7 +30,7 @@ commands:
 options:
   --rev REV          the revision to plan (default HEAD)
   --context KEY=VAL  a context input (`@KEY`) only the obligations that declare it read (repeatable)
-  --name NAME        workflow: `factory` (default), `release` or `cut`
+  --name NAME        workflow: `factory` (default), `release`, `cut` or `delegate`
   --jobs DIR         workflow: the job fragments of `release` (default prism-factory/jobs)
   --receipts DIR     the receipt store (default target/factory/receipts)
   --only NAME        run only these obligations (repeatable)
