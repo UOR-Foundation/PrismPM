@@ -26,9 +26,11 @@ pub fn reweigh(request: &[u8]) -> Result<Vec<u8>, Overflow> {
 
 /// A generated GitHub workflow projection: `b"release"` for the release
 /// skeleton (job fragments are placed by the host), `b"cut"` for the release
-/// cut, anything else for the pull-request workflow.
-pub fn workflow(selector: &[u8]) -> Vec<u8> {
-    factory_workflow::run(factory_workflow::Bytes::lit(selector)).octets().to_vec()
+/// cut, `b"delegate"` for the forge's delegation wrapper, anything else for the pull-request workflow.
+pub fn workflow(selector: &[u8]) -> Result<Vec<u8>, Overflow> {
+    factory_workflow::run(factory_workflow::Bytes::lit(selector))
+        .map(|out| out.octets().to_vec())
+        .map_err(|_| Overflow)
 }
 
 /// The WebAssembly ABI for the page: the caller writes a request into memory
@@ -83,6 +85,6 @@ mod wasm {
 
     #[no_mangle]
     pub extern "C" fn factory_workflow() -> u64 {
-        give(super::workflow(b""))
+        super::workflow(b"").map(give).unwrap_or(0)
     }
 }

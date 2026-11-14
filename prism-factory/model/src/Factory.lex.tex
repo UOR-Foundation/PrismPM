@@ -1,6 +1,7 @@
 \begin{lexlean}{Factory}
 \useglossary{lexlean.std.nat@1.2.0}
 \importmodule{LexLeanStd.Text}
+\importmodule{Factory.Delegation}
 \importmodule{Factory.Engine}
 \importmodule{Factory.PrismPM}
 \importmodule{Factory.Workflow}
@@ -227,7 +228,7 @@ definition{
   name: workflow,
   parameters: [selector : Bytes],
   result: Bytes,
-  body: (if (prim equal selector (Factory.Engine::text "release") : Bool) then (releaseWorkflow) else (if (prim equal selector (Factory.Engine::text "cut") : Bool) then (Factory.Workflow::render 0x (Factory.Workflow::cutLines)) else (Factory.Workflow::render 0x (Factory.Workflow::factoryLines)))),
+  body: (if (prim equal selector (Factory.Engine::text "release") : Bool) then (releaseWorkflow) else (if (prim equal selector (Factory.Engine::text "cut") : Bool) then (Factory.Workflow::render 0x (Factory.Workflow::cutLines)) else (if (prim equal selector (Factory.Engine::text "delegate") : Bool) then (Factory.Delegation::projection) else (Factory.Workflow::render 0x (Factory.Workflow::factoryLines))))),
   executable: true,
   production: {effects: [allocation, overflow, recursion], targets: [rust-std]}
 }
