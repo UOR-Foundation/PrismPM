@@ -114,6 +114,8 @@ jobs:
             just fixtures-write
             just golden-write "M0 issue #5: reconcile reviewed LexLean PR68 cce7271be1d21db322ca57456ea1e973302d7c63"
             just stdlib-package-write
+            just bindings-package-write
+            just factory-write
             stage="$(mktemp -d)"
             cp -a stdlib/generated/package "$stage/stdlib"
             (
@@ -145,6 +147,8 @@ jobs:
             just stdlib-package-check
             just check-fixtures
             just package-release-crates-check
+            just bindings-package-check
+            bash prism-factory/check.sh
             rm -r -- "$stage"
 
       - name: Preserve an inert patch and its selected-source identity
