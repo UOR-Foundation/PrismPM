@@ -6,6 +6,24 @@ Version 0.1.0 was a canonicalization library with no entry here; its API lives o
 
 To move to 1.0, read the [migration guide](../../../docs/site/migration/to-1-0.md).
 
+## [0.9.0](https://github.com/UOR-Foundation/prismpm/compare/prism-code-v0.8.0...prism-code-v0.9.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663))
+
+### Features Added
+
+* **holo:** holo v5 is a UORC archive named by κ (ADR-017) ([#663](https://github.com/UOR-Foundation/prismpm/issues/663)) ([7b48b4d](https://github.com/UOR-Foundation/prismpm/commit/7b48b4d4939a7fa42c623c4a596357384fbe1566))
+* **prism-code:** a draft form of prism/spec/1, so a model only translates ([#667](https://github.com/UOR-Foundation/prismpm/issues/667)) ([cdced92](https://github.com/UOR-Foundation/prismpm/commit/cdced9240fd8456c215d56bb4982fa38136a8ad5))
+* **prism-code:** prism/spec/2, a sealed JSON spec for apps that keep state ([#665](https://github.com/UOR-Foundation/prismpm/issues/665)) ([33a4b48](https://github.com/UOR-Foundation/prismpm/commit/33a4b48e477bfe1d1a0855e4150160cb87294707))
+
+
+### Bugs Fixed
+
+* **prism-code:** the 0.8.0 changelog entry lists its sections in the required order ([#671](https://github.com/UOR-Foundation/prismpm/issues/671)) ([d017786](https://github.com/UOR-Foundation/prismpm/commit/d017786d78e20993f8732712882d34b165b26f31))
+
 ## [Unreleased]
 
 ### Features Added
