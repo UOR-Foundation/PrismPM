@@ -11,6 +11,7 @@ import {
   counterexample,
   describeCondition,
   describeConditions,
+  isProposed,
   judge,
   decodeRequest,
   nameFromPurpose,
@@ -129,7 +130,12 @@ export function summary(spec) {
   if (!spec?.fields) return '';
   const because = (why) => (why ? `, because ${why}` : '');
   const purpose = [`${spec.title}: ${spec.purpose}`];
-  const properties = spec.properties.map((p) => `${p.id}: ${p.kind} ${p.then} when ${describeConditions(p.when)}${because(p.why)} (to be proved)`);
+  // A guarantee Prism proposed comes first and says so: the user did not state it, and Lean will prove it once they agree.
+  const said = (p) => `${p.kind} ${p.then} when ${describeConditions(p.when)}`;
+  const properties = [
+    ...spec.properties.filter(isProposed).map((p) => `${p.id}, proposed by Prism${/ from (REQ-\d+):/.exec(p.why) ? ` from ${/ from (REQ-\d+):/.exec(p.why)[1]}` : ''}: ${said(p)} (strike it if it is wrong; to be proved)`),
+    ...spec.properties.filter((p) => !isProposed(p)).map((p) => `${p.id}: ${said(p)}${because(p.why)} (to be proved)`),
+  ];
   const rules = [...spec.rules.map((r) => `${r.id}: when ${describeConditions(r.when)}, ${r.then}${because(r.why)}`), `Otherwise: ${spec.otherwise}${because(spec.otherwiseWhy)}`];
   const tail = [
     `Request: ${spec.fields.map((f) => `${f.name} (${f.kind === 'choice' ? f.values.join('|') : `number${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''}`}${f.means ? `; ${f.means}` : ''})`).join(', ')}`,
@@ -362,12 +368,15 @@ export function nextTurn(answers) {
     const unexplained = full.properties.filter((p) => !p.why).map((p) => p.id);
     if (unexplained.length) notes.push(`${unexplained.join(', ')} ${unexplained.length === 1 ? 'has' : 'have'} no reason. Lean proves ${unexplained.length === 1 ? 'it' : 'them'}, so say why each matters, or ask the user.`);
   }
+  const proposed = full && step === 'review' ? full.properties.filter(isProposed).map((p) => p.id) : [];
+  if (proposed.length) notes.push(`${proposed.join(', ')} ${proposed.length === 1 ? 'is a guarantee' : 'are guarantees'} Prism proposed from the rules, not something the user said. Show ${proposed.length === 1 ? 'it' : 'them'} first, as proposed, and let the user keep or strike each: Lean proves what stays.`);
   return {
     step,
     ...(issue ? { issue } : {}),
     ...(notes.length ? { notes } : {}),
     ...question(step, full ?? spec),
     ...(step === 'fields' || step === 'outcomes' ? { inferred: `The app is called ${spec.name}.` } : {}),
+    ...(proposed.length ? { proposed } : {}),
     progress: `${Math.min(done, 6)} of 6 answered`,
     spec: full,
     refusal: refusal ?? null,

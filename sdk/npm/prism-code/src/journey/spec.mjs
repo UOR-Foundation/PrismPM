@@ -21,6 +21,10 @@ export const INVALID = 'invalid';
 export const MAX_DIGITS = 18;
 export const NAT_MAX = 10n ** 18n - 1n;
 
+/** How the reason of a guarantee Prism proposed starts (complete.mjs). A surface shows a guarantee whose `why` starts so as proposed. */
+export const PROPOSED = 'Proposed by Prism';
+export const isProposed = (property) => typeof property?.why === 'string' && property.why.startsWith(PROPOSED);
+
 const WORD = /^[a-z][a-z0-9-]{0,31}$/;
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const OPS = ['<', '<=', '>', '>=', '=', '!='];
@@ -280,7 +284,11 @@ export function validateSpec(input) {
         if (!OPS.includes(c.op)) refuse(`\`${c.op}\` is not a comparison.`, where, 'condition.comparison');
         if (typeof c.value === 'number') {
           if (!(Number.isSafeInteger(c.value) && c.value >= 0)) refuse('Compare numbers with whole numbers.', where, 'condition.number');
-        } else if (!(c.value && fields.some((x) => x.name === c.value.field && x.kind === 'number'))) refuse(`\`${JSON.stringify(c.value)}\` is not a number field.`, where, 'condition.operand');
+        } else if (!(c.value && fields.some((x) => x.name === c.value.field && x.kind === 'number'))) {
+          // Measured with Qwen3 30B (#666): the other field written as a bare word, six runs of thirty, and the bare refusal was not repaired once.
+          const meant = typeof c.value === 'string' && fields.some((x) => x.name === c.value && x.kind === 'number');
+          refuse(meant ? `\`${c.field} ${c.op} ${JSON.stringify(c.value)}\` compares with the text ${JSON.stringify(c.value)}; to compare with the field \`${c.value}\`, write the value as {"field": ${JSON.stringify(c.value)}}.` : `\`${JSON.stringify(c.value)}\` is not a number field.`, where, 'condition.operand');
+        }
       }
     }
   };
@@ -406,6 +414,9 @@ function candidates(spec) {
     return sorted.filter((n) => (f.min === undefined || n >= BigInt(f.min)) && (f.max === undefined || n <= BigInt(f.max)));
   });
 }
+
+/** How many requests the candidate values make. A search that tried this many tried every one of them. */
+export const sampleSize = (spec) => candidates(spec).reduce((n, list) => n * list.length, 1);
 
 /** Every decoded request over the candidate values, up to `limit`. */
 export function* sampleRequests(spec, limit = 200000) {

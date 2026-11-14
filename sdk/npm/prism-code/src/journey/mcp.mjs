@@ -21,7 +21,8 @@ import { answersFromSpec, nextTurn, roundTrip, STEPS } from './session.mjs';
 import { appDir, modelPath, readProjectSpec, readSession, writeSession, writeSpecDocument } from './project.mjs';
 import { build, prove, tryRequest } from './engine.mjs';
 import { gapLedger } from '../gaps.mjs';
-import { readSpecFile } from './spec-file.mjs';
+import { SPEC_FILE, readSpecFile } from './spec-file.mjs';
+import { checkSpec, completeSpec, repairMessage } from './complete.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../../package.json');
@@ -29,11 +30,11 @@ const { version } = require('../../package.json');
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export const INSTRUCTIONS = `Prism builds formally verified apps. For Prism or /prism, call prism_start.
-Every app has one input: prism/spec.json: prism/spec/1, stateful apps prism/spec/2. Draft it from the user's sentence, a reason per rule and property, and pass it to prism_spec; to change it, edit spec.json or pass the new spec. The same JSON gives the same model. Ask only what you cannot infer; on an issue, fix the draft or ask.
-Show the checked draft once for approval, properties first: Lean proves them, so the user must agree they are right. If you can draw HTML, draw one editable card, never a multiple-choice question.
+Every app has one input: prism/spec.json: prism/spec/1, stateful apps prism/spec/2. Translate the user's sentence only: pass prism_spec compact JSON with title, fields, rules and otherwise, plus a property only if the user stated one. Prism derives the rest, proposing guarantees. The same JSON gives the same model. Ask only what you cannot infer; on an issue, fix the draft.
+Show the checked draft for approval, proposed guarantees first, marked proposed: Lean proves them, so the user must agree or strike. If you can draw HTML, draw one editable card, never a multiple-choice question.
 On approval, answer the review yes, then call prism_build.
 Never write LexLean; spec.json is the one file you write.
-prism_prove and prism_build take minutes: while they return "running", say so and call again.
+prism_prove and prism_build take minutes: while "running", say so and call again.
 Say "proved" only for what Lean proved, and "tested" for what acceptance vectors cover.`;
 
 const GREETING = 'Prism turns one sentence into an app whose rules are proved by Lean, not just tested. I will draft the spec for your approval, then prove and build it.';
@@ -55,14 +56,17 @@ const CONDITIONS = {
 
 const WHY = { type: 'string', description: 'Why, in a few words, such as "it enforces INV-001".' };
 
-/** The prism/spec/1 shape, so an agent can draft a whole spec from one sentence. */
+/**
+ * The prism/spec/1 shape. A draft needs only what the user said: fields, rules and
+ * otherwise, with a title. Prism derives the rest (complete.mjs).
+ */
 const SPEC_INPUT = {
   type: 'object',
-  description: 'A whole prism/spec/1 spec. Omit to read.',
+  description: 'A prism/spec/1 spec, or a draft of one: write title, fields, rules and otherwise from what the user said, compactly, and leave out the rest. Prism derives outcomes, purpose and examples, and proposes guarantees from the rules. Omit to read.',
   properties: {
     name: { type: 'string', description: 'Lower case and hyphens, such as loan-approval.' },
     title: { type: 'string' },
-    purpose: { type: 'string', description: 'What the app decides, in one sentence.' },
+    purpose: { type: 'string', description: 'What the app decides, in one sentence. Omit it and Prism writes one from the answers and the fields.' },
     fields: {
       type: 'array',
       minItems: 1,
@@ -81,16 +85,16 @@ const SPEC_INPUT = {
         required: ['name', 'kind'],
       },
     },
-    outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Lower-case words; invalid is reserved.' },
+    outcomes: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'Omit it: Prism lists the answers the rules and otherwise give. Lower-case words; invalid is reserved.' },
     meanings: { type: 'object', additionalProperties: { type: 'string' }, description: 'What each answer means, such as {"review": "a person must decide"}.' },
     rules: { type: 'array', minItems: 1, maxItems: 24, description: 'In order; the first that matches decides.', items: { type: 'object', properties: { when: CONDITIONS, then: { type: 'string' }, why: WHY }, required: ['when', 'then'] } },
     otherwise: { type: 'string', description: 'The answer when no rule matches.' },
     otherwiseWhy: WHY,
-    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' }, why: { type: 'string', description: 'The harm it prevents, such as "poor credit history predicts default". Ask the user when you cannot tell.' } }, required: ['kind', 'when', 'then'] } },
+    properties: { type: 'array', description: 'What must never or always happen; each becomes a theorem Lean proves. Write one only when the user stated it. A draft with fewer than three gets guarantees Prism proposes from the rules, each checked against every request and marked as proposed.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['never', 'always'] }, when: CONDITIONS, then: { type: 'string' }, why: { type: 'string', description: 'The harm it prevents, such as "poor credit history predicts default". Ask the user when you cannot tell.' } }, required: ['kind', 'when', 'then'] } },
     limits: { type: 'array', items: { type: 'string' }, description: 'What the app does not decide, and choices the rules make silently, such as "fair credit is treated as good".' },
-    examples: { type: 'array', description: 'Requests and their expected answers; each becomes an acceptance vector.', items: { type: 'object', properties: { request: { type: 'string' }, response: { type: 'string' } }, required: ['request', 'response'] } },
+    examples: { type: 'array', description: 'Requests and their expected answers; each becomes an acceptance vector. Omit it and Prism takes the first request each rule decides.', items: { type: 'object', properties: { request: { type: 'string' }, response: { type: 'string' } }, required: ['request', 'response'] } },
   },
-  required: ['purpose', 'fields', 'outcomes', 'rules', 'otherwise'],
+  required: ['fields', 'rules', 'otherwise'],
 };
 
 const NAMED_VALUE = (state) => ({
@@ -184,7 +188,7 @@ const TOOLS = [
   },
   {
     name: 'prism_spec',
-    description: 'Read the whole spec as JSON, or replace it in one call with a spec you drafted from the user\'s request: prism/spec/1 for an app that decides one answer from one request, prism/spec/2 for an app that keeps state between steps. A replaced spec is checked exactly as answers are: each example against the rules, each property for a counterexample. The result is the review step, with a summary to show the user for approval.',
+    description: 'Read the whole spec as JSON, or replace it in one call with a spec you drafted from the user\'s request: prism/spec/1 for an app that decides one answer from one request, prism/spec/2 for an app that keeps state between steps. A prism/spec/1 draft needs only title, fields, rules and otherwise: Prism completes it, the same way every time, with the answers, a purpose, examples and up to three proposed guarantees, and returns `proposed` (their ids) and `notes` (what it dropped). A spec that already holds purpose, outcomes, properties and examples is taken as written and nothing is proposed, so pass the whole spec back to change it. It is checked exactly as answers are: each example against the rules, each property for a counterexample; when one fails, `repair` says what to fix. The result is the review step, with a summary to show the user for approval.',
     inputSchema: { type: 'object', properties: { spec: { anyOf: [SPEC_INPUT, STATEFUL_SPEC_INPUT], description: 'A whole spec. Omit to read.' } }, additionalProperties: false },
   },
   {
@@ -241,11 +245,26 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
    * it had been passed to prism_spec. A spec.json that does not read is left
    * on disk and its refusal kept, so the next call can say what to fix.
    */
+  /**
+   * spec.json as it reads strictly; or, when it holds a draft (what a model
+   * writes: fields, rules and otherwise), the spec Prism completes it to.
+   */
+  const readOrComplete = () => {
+    try {
+      return readProjectSpec(dir);
+    } catch (error) {
+      if (!(error instanceof SpecError)) throw error;
+      const done = completeSpec(readFileSync(join(dir, SPEC_FILE), 'utf8'));
+      if (!done.draft && done.notes.length === 0) throw error;
+      return { ...readSpecFile(done.spec), completed: done };
+    }
+  };
+
   const load = () => {
     const session = readSession(dir);
     let read;
     try {
-      read = readProjectSpec(dir);
+      read = readOrComplete();
     } catch (error) {
       if (!(error instanceof SpecError)) throw error;
       session.specFileIssue = { message: error.message, where: error.where, rule: error.rule };
@@ -257,7 +276,10 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
       session.spec = null;
       session.step = nextTurn(session.answers).step;
       session.status = { ...(session.status ?? {}), specHash: read.specHash };
-      session.adopted = 'spec.json was edited since Prism last wrote it; that edit is now the spec.';
+      session.adopted = [
+        read.completed?.draft ? 'spec.json held a draft; Prism completed it, and that is now the spec.' : 'spec.json was edited since Prism last wrote it; that edit is now the spec.',
+        ...(read.completed?.notes ?? []),
+      ].join(' ');
     }
     return session;
   };
@@ -379,18 +401,29 @@ export function createServer({ cwd = process.cwd(), send, gaps = gapLedger() }) 
         const spec = session.spec ?? nextTurn(session.answers).spec ?? null;
         return { spec, step: session.step, specHash: session.status?.specHash ?? null, ...(session.adopted ? { note: session.adopted } : {}), ...(session.specFileIssue ? { issue: session.specFileIssue } : {}) };
       }
+      let done;
+      let given;
       try {
         // The same strict reading spec.json gets: no member its schema does not define, whole numbers only.
-        readSpecFile(args.spec);
-        session.answers = { ...answersFromSpec(args.spec), review: undefined };
+        // A draft is completed first: what the user did not say is derived, the same way every time.
+        done = completeSpec(args.spec);
+        // A spec that was whole and needed nothing is taken exactly as it was passed.
+        const { name, ...unnamed } = done.spec;
+        given = done.draft ? done.spec : done.notes.length ? (args.spec.name ? done.spec : unnamed) : args.spec;
+        readSpecFile(given);
+        session.answers = { ...answersFromSpec(given), review: undefined };
       } catch (error) {
         if (error instanceof SpecError) gaps.record({ kind: 'refusal', construct: error.rule });
         throw error;
       }
       // The spec was valid, so a refusal of its answers is Prism's, recorded by the round trip.
-      checkRoundTrip(args.spec);
+      checkRoundTrip(given);
       delete session.answers.review;
-      return turn(session);
+      const t = turn(session);
+      const notes = [...done.notes, ...(t.notes ?? [])];
+      // A guarantee or example the rules break: say which, beside the rule that decides, and the ways out.
+      const repair = t.issue ? repairMessage(checkSpec(args.spec)) : null;
+      return { ...t, ...(notes.length ? { notes } : {}), ...(repair ? { repair } : {}) };
     },
     prism_prove: (args, progress) => longTool('prove', args, progress),
     prism_build: (args, progress) => longTool('build', args, progress),
